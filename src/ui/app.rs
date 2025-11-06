@@ -6,6 +6,7 @@ use iced::{
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::menu::{Item, Menu, MenuBar};
+use iced_aw::Modal;
 use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use std::sync::{Arc, Mutex};
@@ -22,6 +23,8 @@ pub struct CalendarApp {
     current_view: ViewType,
     /// Database connection (wrapped in Arc<Mutex<>> for thread safety)
     db: Arc<Mutex<Database>>,
+    /// Show/hide settings dialog
+    show_settings_dialog: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +49,10 @@ pub enum Message {
     SwitchView(ViewType),
     /// Open settings dialog
     OpenSettings,
+    /// Close settings dialog
+    CloseSettings,
+    /// Exit the application
+    Exit,
 }
 
 impl Application for CalendarApp {
@@ -99,6 +106,7 @@ impl Application for CalendarApp {
                 show_ribbon: settings.show_ribbon,
                 current_view,
                 db: Arc::new(Mutex::new(db)),
+                show_settings_dialog: false,
             },
             Command::none(),
         )
@@ -131,7 +139,13 @@ impl Application for CalendarApp {
                 self.save_settings();
             }
             Message::OpenSettings => {
-                // TODO: Open settings dialog
+                self.show_settings_dialog = true;
+            }
+            Message::CloseSettings => {
+                self.show_settings_dialog = false;
+            }
+            Message::Exit => {
+                std::process::exit(0);
             }
         }
         Command::none()
@@ -164,10 +178,18 @@ impl Application for CalendarApp {
         
         content = content.push(main_content);
 
-        container(content)
+        let base_view = container(content)
             .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+            .height(Length::Fill);
+
+        // Show modal dialog if settings is open
+        if self.show_settings_dialog {
+            Modal::new(base_view, Some(self.create_settings_dialog()))
+                .backdrop(Message::CloseSettings)
+                .into()
+        } else {
+            base_view.into()
+        }
     }
 
     fn theme(&self) -> Self::Theme {
@@ -183,6 +205,7 @@ impl CalendarApp {
             Menu::new(vec![
                 Item::new(
                     button(text("Exit").size(13))
+                        .on_press(Message::Exit)
                         .padding([8, 20])
                         .width(Length::Fill)
                 ),
@@ -402,5 +425,38 @@ impl CalendarApp {
         if let Err(e) = settings_service.update(&settings) {
             eprintln!("Error: Failed to save settings: {}", e);
         }
+    }
+
+    /// Create the settings dialog
+    fn create_settings_dialog(&self) -> Element<Message> {
+        let theme_info = text(format!("Current Theme: {:?}", self.theme)).size(14);
+        let view_info = text(format!("Current View: {:?}", self.current_view)).size(14);
+        let my_day_info = text(format!("My Day Panel: {}", if self.show_my_day { "Visible" } else { "Hidden" })).size(14);
+        let ribbon_info = text(format!("Ribbon: {}", if self.show_ribbon { "Visible" } else { "Hidden" })).size(14);
+
+        let close_button = button(text("Close").size(14))
+            .on_press(Message::CloseSettings)
+            .padding([10, 20]);
+
+        let dialog = container(
+            column![
+                text("Settings").size(20),
+                text("").size(10),
+                theme_info,
+                view_info,
+                my_day_info,
+                ribbon_info,
+                text("").size(10),
+                text("Use the View menu to change these settings.").size(12),
+                text("").size(10),
+                close_button,
+            ]
+            .spacing(10)
+        )
+        .padding(30)
+        .width(400)
+        .center_x();
+
+        dialog.into()
     }
 }
