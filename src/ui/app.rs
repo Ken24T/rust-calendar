@@ -15,6 +15,7 @@ use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
 use crate::ui::view_type::ViewType;
 use crate::ui::helpers;
+use crate::ui::dialogs;
 use std::sync::{Arc, Mutex};
 use chrono::{Local, Datelike, NaiveDate, Duration};
 
@@ -408,7 +409,7 @@ impl Application for CalendarApp {
                 .backdrop(Message::ToggleDatePicker)
                 .into()
         } else if self.show_theme_picker {
-            Modal::new(base_view, Some(self.create_theme_picker_dialog()))
+            Modal::new(base_view, Some(dialogs::create_theme_picker_dialog(&self.available_themes, &self.theme_name)))
                 .backdrop(Message::CloseThemePicker)
                 .into()
         } else {
@@ -813,53 +814,6 @@ impl CalendarApp {
     }
 
     /// Create theme picker dialog
-    fn create_theme_picker_dialog(&self) -> Element<Message> {
-        let theme_buttons: Vec<Element<Message>> = self.available_themes.iter()
-            .map(|theme_name| {
-                let is_current = theme_name == &self.theme_name;
-                let button_text = if is_current {
-                    format!("✓ {}", theme_name)
-                } else {
-                    theme_name.clone()
-                };
-                
-                button(text(button_text).size(14))
-                    .on_press(Message::SelectTheme(theme_name.clone()))
-                    .padding([10, 20])
-                    .width(Length::Fill)
-                    .into()
-            })
-            .collect();
-
-        let cancel_button = button(text("Cancel").size(14))
-            .on_press(Message::CloseThemePicker)
-            .padding([10, 30]);
-
-        // Custom header with close button
-        let close_btn = button(text("×").size(24))
-            .on_press(Message::CloseThemePicker)
-            .padding(5);
-        
-        let header = row![
-            text("Select Theme").size(20),
-            text("").width(Length::Fill),
-            close_btn
-        ]
-        .align_items(iced::Alignment::Center);
-
-        Card::new(
-            header,
-            column(theme_buttons).spacing(10)
-        )
-        .foot(
-            row![cancel_button]
-                .spacing(10)
-                .padding([0, 10, 10, 10])
-        )
-        .max_width(300.0)
-        .into()
-    }
-
     /// Create theme manager dialog
     fn create_theme_manager_dialog(&self) -> Element<Message> {
         let mut theme_list: Vec<Element<Message>> = vec![

@@ -6,6 +6,7 @@ pub mod theme;
 pub mod messages;
 pub mod view_type;
 pub mod helpers;
+pub mod dialogs;
 
 pub mod views;
 pub mod components;
