@@ -14,6 +14,7 @@ pub fn save_settings(
     time_format: &str,
     first_day_of_week: u8,
     date_format: &str,
+    time_slot_interval: u32,
 ) {
     let db = match db.lock() {
         Ok(db) => db,
@@ -51,6 +52,7 @@ pub fn save_settings(
     settings.time_format = time_format.to_string();
     settings.first_day_of_week = first_day_of_week;
     settings.date_format = date_format.to_string();
+    settings.time_slot_interval = time_slot_interval;
 
     // Save to database
     if let Err(e) = settings_service.update(&settings) {

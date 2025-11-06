@@ -6,14 +6,16 @@ use iced::alignment::{Horizontal, Vertical};
 use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
 
-/// Create the Day view with hourly time slots
+/// Create the Day view with configurable time slots
 pub fn create_day_view(
     current_date: NaiveDate,
     calendar_theme: &CalendarTheme,
     time_format: &str,
+    time_slot_interval: u32,
 ) -> Element<'static, Message> {
     let today = Local::now().naive_local().date();
     let is_today = current_date == today;
+    let now = Local::now().naive_local();
     
     // Header with date and navigation
     let day_name = current_date.format("%A").to_string();
@@ -22,7 +24,7 @@ pub fn create_day_view(
     let header = column![
         row![
             button(text("◀").size(16))
-                .on_press(Message::PreviousMonth) // Reusing month navigation for now
+                .on_press(Message::PreviousDay)
                 .padding(8),
             button(text("Today").size(14))
                 .on_press(Message::GoToToday)
@@ -37,7 +39,7 @@ pub fn create_day_view(
             .width(Length::Fill)
             .center_x(),
             button(text("▶").size(16))
-                .on_press(Message::NextMonth) // Reusing month navigation for now
+                .on_press(Message::NextDay)
                 .padding(8),
         ]
         .spacing(10)
@@ -46,31 +48,61 @@ pub fn create_day_view(
     ]
     .spacing(5);
 
-    // Time slots (24 hours)
+    // Calculate number of slots and slot height based on interval
+    let slots_per_hour = 60 / time_slot_interval;
+    let total_slots = 24 * slots_per_hour;
+    let slot_height = time_slot_interval; // 15min=15px, 30min=30px, 45min=45px, 60min=60px
+    
+    // Time slots
     let mut time_slots = column![].spacing(0);
     
     let use_24h = time_format == "24h";
     
-    for hour in 0..24 {
-        // Format time based on preference
-        let time_label = if use_24h {
-            format!("{:02}:00", hour)
-        } else {
-            let (display_hour, period) = if hour == 0 {
-                (12, "AM")
-            } else if hour < 12 {
-                (hour, "AM")
-            } else if hour == 12 {
-                (12, "PM")
+    // Generate time slots based on interval
+    for slot_index in 0..total_slots {
+        let hour = slot_index / slots_per_hour;
+        let minute = (slot_index % slots_per_hour) * time_slot_interval;
+        
+        // Only show time label for on-the-hour slots
+        let time_label = if minute == 0 {
+            if use_24h {
+                format!("{:02}:00", hour)
             } else {
-                (hour - 12, "PM")
-            };
-            format!("{:2}:00 {}", display_hour, period)
+                let (display_hour, period) = if hour == 0 {
+                    (12, "AM")
+                } else if hour < 12 {
+                    (hour, "AM")
+                } else if hour == 12 {
+                    (12, "PM")
+                } else {
+                    (hour - 12, "PM")
+                };
+                format!("{:2}:00 {}", display_hour, period)
+            }
+        } else {
+            // Show minutes for non-hour slots
+            if use_24h {
+                format!("{:02}:{:02}", hour, minute)
+            } else {
+                let (display_hour, period) = if hour == 0 {
+                    (12, "AM")
+                } else if hour < 12 {
+                    (hour, "AM")
+                } else if hour == 12 {
+                    (12, "PM")
+                } else {
+                    (hour - 12, "PM")
+                };
+                format!("{:2}:{:02} {}", display_hour, minute, period)
+            }
         };
 
-        // Highlight current hour if viewing today
-        let is_current_hour = if is_today {
-            Local::now().hour() as usize == hour
+        // Highlight current time slot if viewing today
+        let is_current_slot = if is_today {
+            let current_hour = now.hour() as u32;
+            let current_minute = now.minute();
+            let current_slot = current_hour * slots_per_hour + (current_minute / time_slot_interval);
+            slot_index == current_slot
         } else {
             false
         };
@@ -83,11 +115,11 @@ pub fn create_day_view(
                     .padding([8, 10]),
                 container(text("")) // Event area - will be populated later
                     .width(Length::Fill)
-                    .height(60)
+                    .height(Length::Fixed(slot_height as f32))
                     .style(move |_theme: &Theme| {
                         container::Appearance {
                             background: Some(iced::Background::Color(
-                                if is_current_hour {
+                                if is_current_slot {
                                     theme_colors.today_background
                                 } else {
                                     theme_colors.day_background

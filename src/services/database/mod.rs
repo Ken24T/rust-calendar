@@ -45,11 +45,26 @@ impl Database {
                 my_day_position_right INTEGER NOT NULL DEFAULT 0,
                 show_ribbon INTEGER NOT NULL DEFAULT 0,
                 current_view TEXT NOT NULL DEFAULT 'Month',
+                time_slot_interval INTEGER NOT NULL DEFAULT 60,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )",
             [],
         ).context("Failed to create settings table")?;
+        
+        // Migrate: Add time_slot_interval if it doesn't exist
+        let column_exists = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name='time_slot_interval'",
+            [],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        
+        if !column_exists {
+            self.conn.execute(
+                "ALTER TABLE settings ADD COLUMN time_slot_interval INTEGER NOT NULL DEFAULT 60",
+                [],
+            ).context("Failed to add time_slot_interval column")?;
+        }
         
         // Custom themes table
         self.conn.execute(
@@ -74,8 +89,8 @@ impl Database {
         
         // Insert default settings if not exists
         self.conn.execute(
-            "INSERT OR IGNORE INTO settings (id, theme, first_day_of_week, time_format, date_format)
-             VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY')",
+            "INSERT OR IGNORE INTO settings (id, theme, first_day_of_week, time_format, date_format, time_slot_interval)
+             VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 60)",
             [],
         ).context("Failed to insert default settings")?;
         

@@ -21,7 +21,8 @@ impl<'a> SettingsService<'a> {
         
         let settings = conn.query_row(
             "SELECT id, theme, first_day_of_week, time_format, date_format, 
-                    show_my_day, my_day_position_right, show_ribbon, current_view
+                    show_my_day, my_day_position_right, show_ribbon, current_view,
+                    time_slot_interval
              FROM settings WHERE id = 1",
             [],
             |row| Ok(Self::row_to_settings(row)?),
@@ -48,6 +49,7 @@ impl<'a> SettingsService<'a> {
                  my_day_position_right = ?6,
                  show_ribbon = ?7,
                  current_view = ?8,
+                 time_slot_interval = ?9,
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             (
@@ -59,6 +61,7 @@ impl<'a> SettingsService<'a> {
                 settings.my_day_position_right as i32,
                 settings.show_ribbon as i32,
                 &settings.current_view,
+                settings.time_slot_interval,
             ),
         ).context("Failed to update settings")?;
         
@@ -83,6 +86,7 @@ impl<'a> SettingsService<'a> {
             my_day_position_right: row.get::<_, i32>(6)? != 0,
             show_ribbon: row.get::<_, i32>(7)? != 0,
             current_view: row.get(8)?,
+            time_slot_interval: row.get(9)?,
         })
     }
 }

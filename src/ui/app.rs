@@ -50,6 +50,8 @@ pub struct CalendarApp {
     show_theme_picker: bool,
     /// Show/hide theme management dialog
     show_theme_manager: bool,
+    /// Time slot interval in minutes (15, 30, 45, or 60)
+    time_slot_interval: u32,
 }
 
 impl Application for CalendarApp {
@@ -80,6 +82,7 @@ impl Application for CalendarApp {
                 show_date_picker: false,
                 show_theme_picker: false,
                 show_theme_manager: false,
+                time_slot_interval: init_data.time_slot_interval,
             },
             Command::none(),
         )
@@ -279,6 +282,16 @@ impl Application for CalendarApp {
                 };
                 self.current_date = next_month;
             }
+            Message::PreviousDay => {
+                if let Some(prev_day) = self.current_date.checked_sub_signed(Duration::days(1)) {
+                    self.current_date = prev_day;
+                }
+            }
+            Message::NextDay => {
+                if let Some(next_day) = self.current_date.checked_add_signed(Duration::days(1)) {
+                    self.current_date = next_day;
+                }
+            }
             Message::GoToToday => {
                 self.current_date = Local::now().naive_local().date();
             }
@@ -296,6 +309,13 @@ impl Application for CalendarApp {
                     self.current_date = new_date;
                 }
                 self.show_date_picker = false;
+            }
+            Message::UpdateTimeSlotInterval(interval) => {
+                // Validate interval
+                if [15, 30, 45, 60].contains(&interval) {
+                    self.time_slot_interval = interval;
+                    self.save_settings();
+                }
             }
         }
         Command::none()
@@ -341,15 +361,20 @@ impl CalendarApp {
             &self.time_format,
             self.first_day_of_week,
             &self.date_format,
+            self.time_slot_interval,
         );
     }
 
-    /// Create the multi-day event ribbon
     /// Create the main calendar view
     fn create_calendar_view(&self) -> Element<Message> {
         match self.current_view {
             ViewType::Month => views::create_month_view(self.current_date, &self.calendar_theme),
-            ViewType::Day => views::create_day_view(self.current_date, &self.calendar_theme, &self.time_format),
+            ViewType::Day => views::create_day_view(
+                self.current_date,
+                &self.calendar_theme,
+                &self.time_format,
+                self.time_slot_interval,
+            ),
             ViewType::WorkWeek => helpers::create_placeholder_view("Work Week View - Coming Soon"),
             ViewType::Week => helpers::create_placeholder_view("Week View - Coming Soon"),
             ViewType::Quarter => helpers::create_placeholder_view("Quarter View - Coming Soon"),

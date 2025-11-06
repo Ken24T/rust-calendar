@@ -19,6 +19,7 @@ pub fn create_settings_dialog<'a>(
     show_ribbon: bool,
     time_format: &'a str,
     first_day_of_week: u8,
+    time_slot_interval: u32,
 ) -> Element<'a, Message> {
     // Theme setting - use available themes from database
     let theme_label = text("Theme:").size(14);

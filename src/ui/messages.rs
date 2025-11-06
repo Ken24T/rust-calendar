@@ -52,6 +52,10 @@ pub enum Message {
     PreviousMonth,
     /// Navigate to next month
     NextMonth,
+    /// Navigate to previous day
+    PreviousDay,
+    /// Navigate to next day
+    NextDay,
     /// Navigate to today
     GoToToday,
     /// Toggle date picker visibility
@@ -60,4 +64,6 @@ pub enum Message {
     ChangeMonth(u32),
     /// Change to specific year
     ChangeYear(i32),
+    /// Update time slot interval (15, 30, 45, or 60 minutes)
+    UpdateTimeSlotInterval(u32),
 }

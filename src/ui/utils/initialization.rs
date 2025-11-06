@@ -23,6 +23,7 @@ pub struct AppInitData {
     pub first_day_of_week: u8,
     pub date_format: String,
     pub current_date: chrono::NaiveDate,
+    pub time_slot_interval: u32,
 }
 
 /// Initialize the application by loading database, settings, and themes
@@ -86,5 +87,6 @@ pub fn initialize_app(db_path: &str) -> AppInitData {
         first_day_of_week: settings.first_day_of_week,
         date_format: settings.date_format.clone(),
         current_date: Local::now().naive_local().date(),
+        time_slot_interval: settings.time_slot_interval,
     }
 }

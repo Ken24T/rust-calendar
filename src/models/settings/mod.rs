@@ -14,6 +14,7 @@ pub struct Settings {
     pub my_day_position_right: bool,
     pub show_ribbon: bool,
     pub current_view: String,
+    pub time_slot_interval: u32,
 }
 
 impl Default for Settings {
@@ -28,6 +29,7 @@ impl Default for Settings {
             my_day_position_right: false,
             show_ribbon: false,
             current_view: "Month".to_string(),
+            time_slot_interval: 60,
         }
     }
 }
@@ -55,6 +57,11 @@ impl Settings {
             return Err(format!("Invalid current_view: {}", self.current_view));
         }
         
+        // Validate time_slot_interval
+        if ![15, 30, 45, 60].contains(&self.time_slot_interval) {
+            return Err(format!("Invalid time_slot_interval: {}", self.time_slot_interval));
+        }
+        
         Ok(())
     }
     
@@ -73,6 +80,11 @@ impl Settings {
         // Validate current_view
         if !["Day", "WorkWeek", "Week", "Month", "Quarter"].contains(&self.current_view.as_str()) {
             return Err(format!("Invalid current_view: {}", self.current_view));
+        }
+        
+        // Validate time_slot_interval
+        if ![15, 30, 45, 60].contains(&self.time_slot_interval) {
+            return Err(format!("Invalid time_slot_interval: {}", self.time_slot_interval));
         }
         
         Ok(())
