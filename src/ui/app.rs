@@ -36,6 +36,8 @@ pub enum Message {
     ToggleRibbon,
     /// Switch to a different view
     SwitchView(ViewType),
+    /// Open settings dialog
+    OpenSettings,
 }
 
 impl Application for CalendarApp {
@@ -48,8 +50,8 @@ impl Application for CalendarApp {
         (
             Self {
                 theme: Theme::Light,
-                show_my_day: true,
-                show_ribbon: true,
+                show_my_day: false,
+                show_ribbon: false,
                 current_view: ViewType::Month,
             },
             Command::none(),
@@ -77,6 +79,9 @@ impl Application for CalendarApp {
             }
             Message::SwitchView(view_type) => {
                 self.current_view = view_type;
+            }
+            Message::OpenSettings => {
+                // TODO: Open settings dialog
             }
         }
         Command::none()
@@ -121,44 +126,55 @@ impl Application for CalendarApp {
 }
 
 impl CalendarApp {
-    /// Create the top menu bar
+    /// Create the top menu bar with standard Windows menu structure
     fn create_menu_bar(&self) -> Element<Message> {
-        let theme_icon = if matches!(self.theme, Theme::Light) {
-            "🌙"
-        } else {
-            "☀️"
-        };
-
-        let my_day_label = if self.show_my_day {
-            "Hide My Day"
-        } else {
-            "Show My Day"
-        };
-
-        let ribbon_label = if self.show_ribbon {
-            "Hide Ribbon"
-        } else {
-            "Show Ribbon"
-        };
-
-        let view_label = match self.current_view {
-            ViewType::Day => "Day View",
-            ViewType::Week => "Week View",
-            ViewType::Month => "Month View",
-        };
-
         row![
-            text("Rust Calendar").size(20),
-            button(text(theme_icon)).on_press(Message::ToggleTheme),
-            button(text(my_day_label)).on_press(Message::ToggleMyDay),
-            button(text(ribbon_label)).on_press(Message::ToggleRibbon),
-            button(text("Day")).on_press(Message::SwitchView(ViewType::Day)),
-            button(text("Week")).on_press(Message::SwitchView(ViewType::Week)),
-            button(text("Month")).on_press(Message::SwitchView(ViewType::Month)),
-            text(view_label).size(16),
+            // File menu placeholder
+            text("File").size(14),
+            text("  ").size(14),
+            
+            // Edit menu
+            button(text("Edit").size(14))
+                .padding(5),
+            button(text("  Settings").size(13))
+                .on_press(Message::OpenSettings)
+                .padding([2, 10]),
+            text("  ").size(14),
+            
+            // View menu
+            button(text("View").size(14))
+                .padding(5),
+            button(
+                text(if self.show_my_day { "✓ My Day" } else { "  My Day" }).size(13)
+            )
+            .on_press(Message::ToggleMyDay)
+            .padding([2, 10]),
+            button(
+                text(if self.show_ribbon { "✓ Ribbon" } else { "  Ribbon" }).size(13)
+            )
+            .on_press(Message::ToggleRibbon)
+            .padding([2, 10]),
+            text("  |  ").size(14),
+            
+            // Theme toggle
+            button(text(if matches!(self.theme, Theme::Light) { "🌙" } else { "☀️" }).size(16))
+                .on_press(Message::ToggleTheme)
+                .padding(5),
+            text("  |  ").size(14),
+            
+            // View switcher
+            button(text("Day").size(13))
+                .on_press(Message::SwitchView(ViewType::Day))
+                .padding([5, 15]),
+            button(text("Week").size(13))
+                .on_press(Message::SwitchView(ViewType::Week))
+                .padding([5, 15]),
+            button(text("Month").size(13))
+                .on_press(Message::SwitchView(ViewType::Month))
+                .padding([5, 15]),
         ]
-        .spacing(10)
         .padding(10)
+        .spacing(5)
         .into()
     }
 
