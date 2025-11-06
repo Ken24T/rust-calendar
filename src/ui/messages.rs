@@ -1,7 +1,7 @@
 // UI Messages
 // All application messages for the iced event system
 
-use super::app::ViewType;
+use super::view_type::ViewType;
 
 /// Messages for the application
 #[derive(Debug, Clone)]

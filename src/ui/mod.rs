@@ -4,9 +4,11 @@
 mod app;
 pub mod theme;
 pub mod messages;
+pub mod view_type;
 
 pub mod views;
 pub mod components;
 
 // Re-export the main application
 pub use app::CalendarApp;
+pub use view_type::ViewType;

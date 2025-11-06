@@ -13,6 +13,7 @@ use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
 use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
+use crate::ui::view_type::ViewType;
 use std::sync::{Arc, Mutex};
 use chrono::{Local, Datelike, NaiveDate, Duration};
 
@@ -52,15 +53,6 @@ pub struct CalendarApp {
     show_theme_picker: bool,
     /// Show/hide theme management dialog
     show_theme_manager: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ViewType {
-    Day,
-    WorkWeek,
-    Week,
-    Month,
-    Quarter,
 }
 
 impl Application for CalendarApp {
