@@ -57,6 +57,26 @@ impl Settings {
         
         Ok(())
     }
+    
+    /// Validate settings values without checking theme (theme validated by app.rs)
+    pub fn validate_without_theme(&self) -> Result<(), String> {
+        // Validate first_day_of_week (0-6, Sunday to Saturday)
+        if self.first_day_of_week > 6 {
+            return Err(format!("Invalid first_day_of_week: {}", self.first_day_of_week));
+        }
+        
+        // Validate time_format
+        if !["12h", "24h"].contains(&self.time_format.as_str()) {
+            return Err(format!("Invalid time_format: {}", self.time_format));
+        }
+        
+        // Validate current_view
+        if !["Day", "WorkWeek", "Week", "Month", "Quarter"].contains(&self.current_view.as_str()) {
+            return Err(format!("Invalid current_view: {}", self.current_view));
+        }
+        
+        Ok(())
+    }
 }
 
 #[cfg(test)]

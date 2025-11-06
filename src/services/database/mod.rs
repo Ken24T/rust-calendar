@@ -51,12 +51,54 @@ impl Database {
             [],
         ).context("Failed to create settings table")?;
         
+        // Custom themes table
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS custom_themes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                is_dark INTEGER NOT NULL DEFAULT 0,
+                app_background TEXT NOT NULL,
+                calendar_background TEXT NOT NULL,
+                weekend_background TEXT NOT NULL,
+                today_background TEXT NOT NULL,
+                today_border TEXT NOT NULL,
+                day_background TEXT NOT NULL,
+                day_border TEXT NOT NULL,
+                text_primary TEXT NOT NULL,
+                text_secondary TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        ).context("Failed to create custom_themes table")?;
+        
         // Insert default settings if not exists
         self.conn.execute(
             "INSERT OR IGNORE INTO settings (id, theme, first_day_of_week, time_format, date_format)
              VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY')",
             [],
         ).context("Failed to insert default settings")?;
+        
+        // Insert default custom themes if not exists
+        self.conn.execute(
+            "INSERT OR IGNORE INTO custom_themes (name, is_dark, app_background, calendar_background, 
+             weekend_background, today_background, today_border, day_background, day_border, 
+             text_primary, text_secondary)
+             VALUES ('Light', 0, '0.98,0.98,0.98', '1.0,1.0,1.0', '0.96,0.96,0.96', 
+                     '0.85,0.92,1.0', '0.3,0.5,0.9', '1.0,1.0,1.0', '0.85,0.85,0.85',
+                     '0.1,0.1,0.1', '0.4,0.4,0.4')",
+            [],
+        ).context("Failed to insert light theme")?;
+        
+        self.conn.execute(
+            "INSERT OR IGNORE INTO custom_themes (name, is_dark, app_background, calendar_background, 
+             weekend_background, today_background, today_border, day_background, day_border, 
+             text_primary, text_secondary)
+             VALUES ('Dark', 1, '0.12,0.12,0.12', '0.15,0.15,0.15', '0.18,0.18,0.18', 
+                     '0.2,0.3,0.5', '0.4,0.6,1.0', '0.15,0.15,0.15', '0.3,0.3,0.3',
+                     '0.95,0.95,0.95', '0.7,0.7,0.7')",
+            [],
+        ).context("Failed to insert dark theme")?;
         
         Ok(())
     }

@@ -3,7 +3,7 @@
 
 use crate::models::settings::Settings;
 use crate::services::database::Database;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use rusqlite::Row;
 
 pub struct SettingsService<'a> {
@@ -32,9 +32,9 @@ impl<'a> SettingsService<'a> {
     
     /// Update settings
     pub fn update(&self, settings: &Settings) -> Result<()> {
-        // Validate before saving
-        settings.validate()
-            .map_err(|e| anyhow::anyhow!("Invalid settings: {}", e))?;
+        // Validate before updating (skip theme validation - handled by app.rs)
+        settings.validate_without_theme()
+            .map_err(|e| anyhow!("Invalid settings: {}", e))?;
         
         let conn = self.db.connection();
         

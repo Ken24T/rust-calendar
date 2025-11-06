@@ -2,6 +2,7 @@
 // Main application and components
 
 mod app;
+pub mod theme;
 
 pub mod views;
 pub mod components;
