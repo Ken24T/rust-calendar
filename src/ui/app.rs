@@ -340,6 +340,7 @@ impl Application for CalendarApp {
             self.current_date.month(),
             &self.time_format,
             self.first_day_of_week,
+            self.time_slot_interval,
         )
     }
 

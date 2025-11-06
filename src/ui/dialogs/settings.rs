@@ -107,6 +107,29 @@ pub fn create_settings_dialog<'a>(
         }
     );
 
+    // Time slot interval setting
+    let interval_label = text("Time Slot Interval:").size(14);
+    let current_interval_str = match time_slot_interval {
+        15 => "15 minutes",
+        30 => "30 minutes",
+        45 => "45 minutes",
+        60 => "60 minutes (1 hour)",
+        _ => "60 minutes (1 hour)",
+    };
+    let interval_picker = pick_list(
+        vec!["15 minutes", "30 minutes", "45 minutes", "60 minutes (1 hour)"],
+        Some(current_interval_str),
+        |selected| {
+            let interval = match selected {
+                "15 minutes" => 15,
+                "30 minutes" => 30,
+                "45 minutes" => 45,
+                _ => 60,
+            };
+            Message::UpdateTimeSlotInterval(interval)
+        }
+    );
+
     let save_button = button(text("Save").size(14))
         .on_press(Message::SaveSettings)
         .padding([10, 30]);
@@ -140,6 +163,7 @@ pub fn create_settings_dialog<'a>(
             text("General Settings:").size(16),
             row![time_format_label, time_format_picker].spacing(10),
             row![first_day_label, first_day_picker].spacing(10),
+            row![interval_label, interval_picker].spacing(10),
         ]
         .spacing(8)
     )

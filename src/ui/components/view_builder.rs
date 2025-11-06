@@ -26,6 +26,7 @@ pub fn build_view<'a>(
     current_date_month: u32,
     time_format: &'a str,
     first_day_of_week: u8,
+    time_slot_interval: u32,
 ) -> Element<'a, Message> {
     // Main layout structure
     let mut content = column![].spacing(0);
@@ -87,7 +88,8 @@ pub fn build_view<'a>(
             my_day_position_right,
             show_ribbon,
             time_format,
-            first_day_of_week
+            first_day_of_week,
+            time_slot_interval,
         )))
             .backdrop(Message::CloseSettings)
             .into()
