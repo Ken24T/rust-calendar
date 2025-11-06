@@ -2,7 +2,7 @@
 // Core iced Application implementation
 
 use iced::{
-    widget::{button, column, container, row, text},
+    widget::{button, column, container, row, text, pick_list},
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::menu::{Item, Menu, MenuBar};
@@ -25,6 +25,12 @@ pub struct CalendarApp {
     db: Arc<Mutex<Database>>,
     /// Show/hide settings dialog
     show_settings_dialog: bool,
+    /// Time format (12h or 24h)
+    time_format: String,
+    /// First day of week (0=Sunday, 1=Monday, etc.)
+    first_day_of_week: u8,
+    /// Date format
+    date_format: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +57,12 @@ pub enum Message {
     OpenSettings,
     /// Close settings dialog
     CloseSettings,
+    /// Update time format setting
+    UpdateTimeFormat(String),
+    /// Update first day of week setting
+    UpdateFirstDayOfWeek(String),
+    /// Save settings from dialog
+    SaveSettings,
     /// Exit the application
     Exit,
 }
@@ -107,6 +119,9 @@ impl Application for CalendarApp {
                 current_view,
                 db: Arc::new(Mutex::new(db)),
                 show_settings_dialog: false,
+                time_format: settings.time_format.clone(),
+                first_day_of_week: settings.first_day_of_week,
+                date_format: settings.date_format.clone(),
             },
             Command::none(),
         )
@@ -142,6 +157,20 @@ impl Application for CalendarApp {
                 self.show_settings_dialog = true;
             }
             Message::CloseSettings => {
+                self.show_settings_dialog = false;
+            }
+            Message::UpdateTimeFormat(format) => {
+                self.time_format = format;
+            }
+            Message::UpdateFirstDayOfWeek(day) => {
+                if let Ok(day_num) = day.parse::<u8>() {
+                    if day_num <= 6 {
+                        self.first_day_of_week = day_num;
+                    }
+                }
+            }
+            Message::SaveSettings => {
+                self.save_settings();
                 self.show_settings_dialog = false;
             }
             Message::Exit => {
@@ -420,6 +449,9 @@ impl CalendarApp {
         settings.show_my_day = self.show_my_day;
         settings.show_ribbon = self.show_ribbon;
         settings.current_view = view_str.to_string();
+        settings.time_format = self.time_format.clone();
+        settings.first_day_of_week = self.first_day_of_week;
+        settings.date_format = self.date_format.clone();
 
         // Save to database
         if let Err(e) = settings_service.update(&settings) {
@@ -429,34 +461,81 @@ impl CalendarApp {
 
     /// Create the settings dialog
     fn create_settings_dialog(&self) -> Element<Message> {
+        // Current UI state (read-only)
         let theme_info = text(format!("Current Theme: {:?}", self.theme)).size(14);
         let view_info = text(format!("Current View: {:?}", self.current_view)).size(14);
         let my_day_info = text(format!("My Day Panel: {}", if self.show_my_day { "Visible" } else { "Hidden" })).size(14);
         let ribbon_info = text(format!("Ribbon: {}", if self.show_ribbon { "Visible" } else { "Hidden" })).size(14);
 
-        let close_button = button(text("Close").size(14))
+        // Editable settings
+        let time_format_label = text("Time Format:").size(14);
+        let time_format_picker = pick_list(
+            vec!["12h", "24h"],
+            Some(self.time_format.as_str()),
+            |format| Message::UpdateTimeFormat(format.to_string())
+        );
+
+        let first_day_label = text("First Day of Week:").size(14);
+        let current_day_idx = self.first_day_of_week as usize;
+        let day_names = vec!["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        let current_day_name = if current_day_idx < day_names.len() {
+            day_names[current_day_idx]
+        } else {
+            "Sunday"
+        };
+        
+        let first_day_picker = pick_list(
+            day_names,
+            Some(current_day_name),
+            |selected| {
+                let day_num = match selected {
+                    "Sunday" => "0",
+                    "Monday" => "1",
+                    "Tuesday" => "2",
+                    "Wednesday" => "3",
+                    "Thursday" => "4",
+                    "Friday" => "5",
+                    "Saturday" => "6",
+                    _ => "0",
+                };
+                Message::UpdateFirstDayOfWeek(day_num.to_string())
+            }
+        );
+
+        let date_format_info = text(format!("Date Format: {}", self.date_format)).size(14);
+
+        let save_button = button(text("Save").size(14))
+            .on_press(Message::SaveSettings)
+            .padding([10, 30]);
+
+        let cancel_button = button(text("Cancel").size(14))
             .on_press(Message::CloseSettings)
             .padding([10, 30]);
 
         Card::new(
             text("Settings").size(24),
             column![
-                text("").size(5),
+                text("Current Display:").size(16),
                 theme_info,
                 view_info,
                 my_day_info,
                 ribbon_info,
-                text("").size(10),
-                text("Use the View menu to change these settings.").size(12),
+                text("").size(5),
+                text("Use the View menu to change display settings.").size(12),
+                text("").size(15),
+                text("General Settings:").size(16),
+                row![time_format_label, time_format_picker].spacing(10),
+                row![first_day_label, first_day_picker].spacing(10),
+                date_format_info,
             ]
             .spacing(8)
         )
         .foot(
-            row![close_button]
+            row![save_button, cancel_button]
                 .spacing(10)
                 .padding([0, 10, 10, 10])
         )
-        .max_width(500.0)
+        .max_width(550.0)
         .on_close(Message::CloseSettings)
         .into()
     }
