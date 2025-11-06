@@ -310,88 +310,25 @@ impl Application for CalendarApp {
     }
 
     fn view(&self) -> Element<Self::Message> {
-        // Main layout structure
-        let mut content = column![].spacing(0);
-
-        // Top menu bar
-        let menu_bar = components::create_menu_bar(
+        components::build_view(
             self.current_view,
             self.show_my_day,
             self.show_ribbon,
+            self.my_day_position_right,
             &self.theme,
-        );
-        content = content.push(menu_bar);
-
-        // Multi-day ribbon (if visible)
-        if self.show_ribbon {
-            let ribbon = helpers::create_ribbon();
-            content = content.push(ribbon);
-        }
-
-        // Main content area: My Day panel + Calendar view
-        let main_content = if self.show_my_day {
-            if self.my_day_position_right {
-                row![
-                    self.create_calendar_view(),
-                    helpers::create_my_day_panel(),
-                ]
-                .spacing(2)
-            } else {
-                row![
-                    helpers::create_my_day_panel(),
-                    self.create_calendar_view(),
-                ]
-                .spacing(2)
-            }
-        } else {
-            row![self.create_calendar_view()]
-        };
-        
-        content = content.push(main_content);
-
-        let app_bg = self.calendar_theme.app_background;
-        let base_view = container(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(move |_theme: &Theme| {
-                container::Appearance {
-                    background: Some(iced::Background::Color(app_bg)),
-                    ..Default::default()
-                }
-            });
-
-        // Show modal dialog if settings or date picker is open
-        if self.show_settings_dialog {
-            Modal::new(base_view, Some(dialogs::create_settings_dialog(
-                &self.available_themes,
-                &self.theme_name,
-                self.current_view,
-                self.show_my_day,
-                self.my_day_position_right,
-                self.show_ribbon,
-                &self.time_format,
-                self.first_day_of_week
-            )))
-                .backdrop(Message::CloseSettings)
-                .into()
-        } else if self.show_theme_manager {
-            Modal::new(base_view, Some(dialogs::create_theme_manager_dialog(&self.available_themes, &self.theme_name)))
-                .backdrop(Message::CloseThemeManager)
-                .into()
-        } else if self.show_date_picker {
-            Modal::new(base_view, Some(dialogs::create_date_picker_dialog(
-                self.current_date.year(),
-                self.current_date.month()
-            )))
-                .backdrop(Message::ToggleDatePicker)
-                .into()
-        } else if self.show_theme_picker {
-            Modal::new(base_view, Some(dialogs::create_theme_picker_dialog(&self.available_themes, &self.theme_name)))
-                .backdrop(Message::CloseThemePicker)
-                .into()
-        } else {
-            base_view.into()
-        }
+            &self.calendar_theme,
+            self.create_calendar_view(),
+            self.show_settings_dialog,
+            self.show_theme_manager,
+            self.show_date_picker,
+            self.show_theme_picker,
+            &self.available_themes,
+            &self.theme_name,
+            self.current_date.year(),
+            self.current_date.month(),
+            &self.time_format,
+            self.first_day_of_week,
+        )
     }
 
     fn theme(&self) -> Self::Theme {
