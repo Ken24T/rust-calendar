@@ -21,6 +21,7 @@ fn main() -> iced::Result {
             min_size: Some(iced::Size::new(800.0, 600.0)),
             ..Default::default()
         },
+        default_font: iced::Font::with_name("Segoe UI Emoji"),
         ..Default::default()
     })
 }
