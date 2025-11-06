@@ -67,67 +67,24 @@ impl Application for CalendarApp {
     type Flags = String;
 
     fn new(db_path: Self::Flags) -> (Self, Command<Self::Message>) {
-        // Initialize database
-        let db = match Database::new(&db_path) {
-            Ok(db) => {
-                if let Err(e) = db.initialize_schema() {
-                    eprintln!("Warning: Failed to initialize database schema: {}", e);
-                }
-                db
-            }
-            Err(e) => {
-                eprintln!("Warning: Failed to open database, using defaults: {}", e);
-                // Create in-memory database as fallback
-                Database::new(":memory:").expect("Failed to create fallback in-memory database")
-            }
-        };
-
-        // Load settings from database
-        let settings_service = SettingsService::new(&db);
-        let settings = settings_service.get().unwrap_or_else(|e| {
-            eprintln!("Warning: Failed to load settings, using defaults: {}", e);
-            crate::models::settings::Settings::default()
-        });
-
-        // Load available themes
-        let theme_service = ThemeService::new(&db);
-        let available_themes = theme_service.list_themes().unwrap_or_else(|e| {
-            eprintln!("Warning: Failed to load themes: {}", e);
-            vec!["Light".to_string(), "Dark".to_string()]
-        });
-        
-        // Load the selected theme from database or use default
-        let theme_name = settings.theme.clone();
-        let calendar_theme = theme_service.get_theme(&theme_name)
-            .unwrap_or_else(|_| CalendarTheme::light());
-        
-        let theme = calendar_theme.base.clone();
-
-        // Parse current view
-        let current_view = match settings.current_view.as_str() {
-            "Day" => ViewType::Day,
-            "WorkWeek" => ViewType::WorkWeek,
-            "Week" => ViewType::Week,
-            "Quarter" => ViewType::Quarter,
-            _ => ViewType::Month,
-        };
+        let init_data = utils::initialize_app(&db_path);
 
         (
             Self {
-                theme,
-                calendar_theme,
-                theme_name,
-                available_themes,
-                show_my_day: settings.show_my_day,
-                my_day_position_right: settings.my_day_position_right,
-                show_ribbon: settings.show_ribbon,
-                current_view,
-                db: Arc::new(Mutex::new(db)),
+                theme: init_data.theme,
+                calendar_theme: init_data.calendar_theme,
+                theme_name: init_data.theme_name,
+                available_themes: init_data.available_themes,
+                show_my_day: init_data.show_my_day,
+                my_day_position_right: init_data.my_day_position_right,
+                show_ribbon: init_data.show_ribbon,
+                current_view: init_data.current_view,
+                db: init_data.db,
                 show_settings_dialog: false,
-                time_format: settings.time_format.clone(),
-                first_day_of_week: settings.first_day_of_week,
-                date_format: settings.date_format.clone(),
-                current_date: Local::now().naive_local().date(),
+                time_format: init_data.time_format,
+                first_day_of_week: init_data.first_day_of_week,
+                date_format: init_data.date_format,
+                current_date: init_data.current_date,
                 show_date_picker: false,
                 show_theme_picker: false,
                 show_theme_manager: false,
