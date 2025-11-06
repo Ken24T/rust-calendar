@@ -6,19 +6,22 @@ mod services;
 mod ui;
 mod utils;
 
-fn main() {
+use iced::{Application, Settings};
+
+fn main() -> iced::Result {
     // Initialize logging
     env_logger::init();
     
     log::info!("Starting Rust Calendar Application");
     
-    // TODO: Initialize application
-    // - Load settings
-    // - Initialize database
-    // - Create main window
-    // - Start event loop
-    
-    println!("Rust Calendar - Planning Phase");
-    println!("Implementation will begin with Phase 1: Foundation");
-    println!("See docs/PROJECT_PLAN.md for details");
+    // Run the iced application
+    ui::CalendarApp::run(Settings {
+        window: iced::window::Settings {
+            size: iced::Size::new(1200.0, 800.0),
+            min_size: Some(iced::Size::new(800.0, 600.0)),
+            ..Default::default()
+        },
+        default_font: iced::Font::with_name("Segoe UI Emoji"),
+        ..Default::default()
+    })
 }
