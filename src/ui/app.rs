@@ -6,7 +6,7 @@ use iced::{
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::menu::{Item, Menu, MenuBar};
-use iced_aw::Modal;
+use iced_aw::{Modal, Card};
 use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use std::sync::{Arc, Mutex};
@@ -436,27 +436,28 @@ impl CalendarApp {
 
         let close_button = button(text("Close").size(14))
             .on_press(Message::CloseSettings)
-            .padding([10, 20]);
+            .padding([10, 30]);
 
-        let dialog = container(
+        Card::new(
+            text("Settings").size(24),
             column![
-                text("Settings").size(20),
-                text("").size(10),
+                text("").size(5),
                 theme_info,
                 view_info,
                 my_day_info,
                 ribbon_info,
                 text("").size(10),
                 text("Use the View menu to change these settings.").size(12),
-                text("").size(10),
-                close_button,
             ]
-            .spacing(10)
+            .spacing(8)
         )
-        .padding(30)
-        .width(400)
-        .center_x();
-
-        dialog.into()
+        .foot(
+            row![close_button]
+                .spacing(10)
+                .padding([0, 10, 10, 10])
+        )
+        .max_width(500.0)
+        .on_close(Message::CloseSettings)
+        .into()
     }
 }
