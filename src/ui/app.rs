@@ -14,6 +14,7 @@ use crate::services::theme::ThemeService;
 use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
 use crate::ui::view_type::ViewType;
+use crate::ui::helpers;
 use std::sync::{Arc, Mutex};
 use chrono::{Local, Datelike, NaiveDate, Duration};
 
@@ -357,7 +358,7 @@ impl Application for CalendarApp {
 
         // Multi-day ribbon (if visible)
         if self.show_ribbon {
-            let ribbon = self.create_ribbon();
+            let ribbon = helpers::create_ribbon();
             content = content.push(ribbon);
         }
 
@@ -366,12 +367,12 @@ impl Application for CalendarApp {
             if self.my_day_position_right {
                 row![
                     self.create_calendar_view(),
-                    self.create_my_day_panel(),
+                    helpers::create_my_day_panel(),
                 ]
                 .spacing(2)
             } else {
                 row![
-                    self.create_my_day_panel(),
+                    helpers::create_my_day_panel(),
                     self.create_calendar_view(),
                 ]
                 .spacing(2)
@@ -550,60 +551,15 @@ impl CalendarApp {
     }
 
     /// Create the multi-day event ribbon
-    fn create_ribbon(&self) -> Element<Message> {
-        container(
-            text("Multi-Day Event Ribbon (Coming Soon)")
-                .size(14)
-        )
-        .padding(10)
-        .width(Length::Fill)
-        .into()
-    }
-
-    /// Create the My Day panel
-    fn create_my_day_panel(&self) -> Element<Message> {
-        container(
-            column![
-                text("My Day").size(18),
-                text("Thu, Nov 6, 2025").size(14),
-                text(""),
-                text("No events today").size(12),
-            ]
-            .spacing(10)
-        )
-        .padding(15)
-        .width(250)
-        .height(Length::Fill)
-        .into()
-    }
-
     /// Create the main calendar view
     fn create_calendar_view(&self) -> Element<Message> {
         match self.current_view {
             ViewType::Month => self.create_month_view(),
-            ViewType::Day => self.create_placeholder_view("Day View - Coming Soon"),
-            ViewType::WorkWeek => self.create_placeholder_view("Work Week View - Coming Soon"),
-            ViewType::Week => self.create_placeholder_view("Week View - Coming Soon"),
-            ViewType::Quarter => self.create_placeholder_view("Quarter View - Coming Soon"),
+            ViewType::Day => helpers::create_placeholder_view("Day View - Coming Soon"),
+            ViewType::WorkWeek => helpers::create_placeholder_view("Work Week View - Coming Soon"),
+            ViewType::Week => helpers::create_placeholder_view("Week View - Coming Soon"),
+            ViewType::Quarter => helpers::create_placeholder_view("Quarter View - Coming Soon"),
         }
-    }
-
-    /// Create a placeholder view for unimplemented views
-    fn create_placeholder_view(&self, title: &str) -> Element<Message> {
-        container(
-            column![
-                text(title).size(24),
-                text(""),
-                text("This view is under development").size(14),
-            ]
-            .spacing(20)
-        )
-        .padding(20)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x()
-        .center_y()
-        .into()
     }
 
     /// Create the Month view with calendar grid
