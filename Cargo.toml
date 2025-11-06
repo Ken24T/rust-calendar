@@ -9,6 +9,14 @@ repository = "https://github.com/yourusername/rust-calendar"
 keywords = ["calendar", "gui", "desktop", "events", "windows"]
 categories = ["gui", "date-and-time"]
 
+[lib]
+name = "rust_calendar"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rust-calendar"
+path = "src/main.rs"
+
 [dependencies]
 # GUI Framework - Using iced for modern reactive UI
 iced = { version = "0.12", features = ["tokio", "image"] }
