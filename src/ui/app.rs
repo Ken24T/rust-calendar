@@ -12,6 +12,7 @@ use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
 use crate::ui::theme::CalendarTheme;
+use crate::ui::messages::Message;
 use std::sync::{Arc, Mutex};
 use chrono::{Local, Datelike, NaiveDate, Duration};
 
@@ -60,65 +61,6 @@ pub enum ViewType {
     Week,
     Month,
     Quarter,
-}
-
-/// Messages for the application
-#[derive(Debug, Clone)]
-pub enum Message {
-    /// Toggle between light and dark theme (or show picker if 3+ themes)
-    ToggleTheme,
-    /// Show theme picker
-    ShowThemePicker,
-    /// Close theme picker
-    CloseThemePicker,
-    /// Select a theme from picker
-    SelectTheme(String),
-    /// Toggle My Day panel visibility
-    ToggleMyDay,
-    /// Toggle multi-day ribbon visibility
-    ToggleRibbon,
-    /// Switch to a different view
-    SwitchView(ViewType),
-    /// Open settings dialog
-    OpenSettings,
-    /// Close settings dialog
-    CloseSettings,
-    /// Update theme setting from dialog
-    UpdateTheme(String),
-    /// Update view setting from dialog
-    UpdateView(String),
-    /// Update My Day panel visibility from dialog
-    UpdateShowMyDay(bool),
-    /// Update My Day panel position from dialog
-    UpdateMyDayPosition(String),
-    /// Update Ribbon visibility from dialog
-    UpdateShowRibbon(bool),
-    /// Update time format setting
-    UpdateTimeFormat(String),
-    /// Update first day of week setting
-    UpdateFirstDayOfWeek(String),
-    /// Save settings from dialog
-    SaveSettings,
-    /// Open theme manager
-    OpenThemeManager,
-    /// Close theme manager
-    CloseThemeManager,
-    /// Delete a custom theme
-    DeleteTheme(String),
-    /// Exit the application
-    Exit,
-    /// Navigate to previous month
-    PreviousMonth,
-    /// Navigate to next month
-    NextMonth,
-    /// Navigate to today
-    GoToToday,
-    /// Toggle date picker visibility
-    ToggleDatePicker,
-    /// Change to specific month
-    ChangeMonth(u32),
-    /// Change to specific year
-    ChangeYear(i32),
 }
 
 impl Application for CalendarApp {

@@ -3,6 +3,7 @@
 
 mod app;
 pub mod theme;
+pub mod messages;
 
 pub mod views;
 pub mod components;
