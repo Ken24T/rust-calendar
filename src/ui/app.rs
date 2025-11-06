@@ -132,11 +132,15 @@ impl CalendarApp {
         let file_menu = Item::with_menu(
             button(text("File").size(14)).padding([5, 10]),
             Menu::new(vec![
-                Item::new(button(text("Exit").size(13)).padding([5, 15])),
+                Item::new(
+                    button(text("Exit").size(13))
+                        .padding([8, 20])
+                        .width(Length::Fill)
+                ),
             ])
             .max_width(180.0)
             .offset(0.0)
-            .spacing(5.0)
+            .spacing(0.0)
         );
 
         let edit_menu = Item::with_menu(
@@ -145,12 +149,13 @@ impl CalendarApp {
                 Item::new(
                     button(text("Settings").size(13))
                         .on_press(Message::OpenSettings)
-                        .padding([5, 15])
+                        .padding([8, 20])
+                        .width(Length::Fill)
                 ),
             ])
             .max_width(180.0)
             .offset(0.0)
-            .spacing(5.0)
+            .spacing(0.0)
         );
 
         let view_menu = Item::with_menu(
@@ -161,19 +166,21 @@ impl CalendarApp {
                         text(if self.show_my_day { "✓ My Day" } else { "  My Day" }).size(13)
                     )
                     .on_press(Message::ToggleMyDay)
-                    .padding([5, 15])
+                    .padding([8, 20])
+                    .width(Length::Fill)
                 ),
                 Item::new(
                     button(
                         text(if self.show_ribbon { "✓ Ribbon" } else { "  Ribbon" }).size(13)
                     )
                     .on_press(Message::ToggleRibbon)
-                    .padding([5, 15])
+                    .padding([8, 20])
+                    .width(Length::Fill)
                 ),
             ])
             .max_width(180.0)
             .offset(0.0)
-            .spacing(5.0)
+            .spacing(0.0)
         );
 
         let menu_bar = MenuBar::new(vec![file_menu, edit_menu, view_menu]);
