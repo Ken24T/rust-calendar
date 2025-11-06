@@ -292,6 +292,16 @@ impl Application for CalendarApp {
                     self.current_date = next_day;
                 }
             }
+            Message::PreviousWeek => {
+                if let Some(prev_week) = self.current_date.checked_sub_signed(Duration::days(7)) {
+                    self.current_date = prev_week;
+                }
+            }
+            Message::NextWeek => {
+                if let Some(next_week) = self.current_date.checked_add_signed(Duration::days(7)) {
+                    self.current_date = next_week;
+                }
+            }
             Message::GoToToday => {
                 self.current_date = Local::now().naive_local().date();
             }
@@ -376,8 +386,14 @@ impl CalendarApp {
                 &self.time_format,
                 self.time_slot_interval,
             ),
+            ViewType::Week => views::create_week_view(
+                self.current_date,
+                &self.calendar_theme,
+                &self.time_format,
+                self.time_slot_interval,
+                self.first_day_of_week,
+            ),
             ViewType::WorkWeek => helpers::create_placeholder_view("Work Week View - Coming Soon"),
-            ViewType::Week => helpers::create_placeholder_view("Week View - Coming Soon"),
             ViewType::Quarter => helpers::create_placeholder_view("Quarter View - Coming Soon"),
         }
     }

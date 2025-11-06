@@ -56,6 +56,10 @@ pub enum Message {
     PreviousDay,
     /// Navigate to next day
     NextDay,
+    /// Navigate to previous week
+    PreviousWeek,
+    /// Navigate to next week
+    NextWeek,
     /// Navigate to today
     GoToToday,
     /// Toggle date picker visibility

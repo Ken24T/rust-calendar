@@ -1,0 +1,283 @@
+use chrono::{Datelike, Local, NaiveDate, Timelike, Weekday};
+use iced::widget::{button, column, container, row, scrollable, text};
+use iced::{Border, Element, Length, Theme};
+use iced_aw::menu::{Item, Menu, MenuBar};
+
+use crate::ui::theme::CalendarTheme;
+use crate::ui::messages::Message;
+
+/// Create the Week view with configurable time slots showing 7 days
+pub fn create_week_view(
+    current_date: NaiveDate,
+    theme: &CalendarTheme,
+    time_format: &str,
+    time_slot_interval: u32,
+    first_day_of_week: u8,
+) -> Element<'static, Message> {
+    let iced_theme = &theme.base;
+    
+    // Calculate the start of the week based on first_day_of_week setting
+    let current_weekday = current_date.weekday().num_days_from_sunday();
+    let start_weekday = first_day_of_week as u32;
+    
+    // Calculate days to subtract to get to the start of the week
+    let days_back = if current_weekday >= start_weekday {
+        current_weekday - start_weekday
+    } else {
+        7 + current_weekday - start_weekday
+    };
+    
+    let week_start = current_date - chrono::Duration::days(days_back as i64);
+    
+    // Get all 7 days of the week
+    let week_days: Vec<NaiveDate> = (0..7)
+        .map(|i| week_start + chrono::Duration::days(i))
+        .collect();
+    
+    // Week navigation header
+    let week_end = week_days[6];
+    let date_range = if week_start.month() == week_end.month() {
+        format!("{} {} - {}, {}", 
+            week_start.format("%B"),
+            week_start.day(),
+            week_end.day(),
+            week_start.year()
+        )
+    } else if week_start.year() == week_end.year() {
+        format!("{} {} - {} {}, {}", 
+            week_start.format("%B"),
+            week_start.day(),
+            week_end.format("%B"),
+            week_end.day(),
+            week_start.year()
+        )
+    } else {
+        format!("{} {}, {} - {} {}, {}", 
+            week_start.format("%B"),
+            week_start.day(),
+            week_start.year(),
+            week_end.format("%B"),
+            week_end.day(),
+            week_end.year()
+        )
+    };
+    
+    // Interval display text
+    let interval_text = match time_slot_interval {
+        15 => "Interval: 15 min",
+        30 => "Interval: 30 min",
+        45 => "Interval: 45 min",
+        60 => "Interval: 1 hour",
+        _ => "Interval: 1 hour",
+    };
+    
+    // Create interval menu with checkmarks for current selection
+    let interval_menu = Menu::new(vec![
+        Item::new(
+            button(
+                text(if time_slot_interval == 15 { "✓ 15 minutes" } else { "  15 minutes" }).size(12)
+            )
+            .on_press(Message::UpdateTimeSlotInterval(15))
+            .padding([6, 12])
+            .width(Length::Fill)
+        ),
+        Item::new(
+            button(
+                text(if time_slot_interval == 30 { "✓ 30 minutes" } else { "  30 minutes" }).size(12)
+            )
+            .on_press(Message::UpdateTimeSlotInterval(30))
+            .padding([6, 12])
+            .width(Length::Fill)
+        ),
+        Item::new(
+            button(
+                text(if time_slot_interval == 45 { "✓ 45 minutes" } else { "  45 minutes" }).size(12)
+            )
+            .on_press(Message::UpdateTimeSlotInterval(45))
+            .padding([6, 12])
+            .width(Length::Fill)
+        ),
+        Item::new(
+            button(
+                text(if time_slot_interval == 60 { "✓ 60 minutes (1 hour)" } else { "  60 minutes (1 hour)" }).size(12)
+            )
+            .on_press(Message::UpdateTimeSlotInterval(60))
+            .padding([6, 12])
+            .width(Length::Fill)
+        ),
+    ])
+    .max_width(200.0)
+    .offset(0.0)
+    .spacing(0.0);
+    
+    let interval_menu_item = Item::with_menu(
+        button(text(interval_text).size(12))
+            .padding([4, 8]),
+        interval_menu
+    );
+    
+    let interval_menu_bar = MenuBar::new(vec![interval_menu_item]);
+    
+    let header = column![
+        row![
+            button(text("◀").size(16))
+                .on_press(Message::PreviousWeek)
+                .padding(8),
+            button(text("Today").size(14))
+                .on_press(Message::GoToToday)
+                .padding([8, 16]),
+            container(text(&date_range).size(16))
+                .width(Length::Fill)
+                .center_x(),
+            interval_menu_bar,
+            button(text("▶").size(16))
+                .on_press(Message::NextWeek)
+                .padding(8),
+        ]
+        .spacing(10)
+        .padding(10)
+        .align_items(iced::Alignment::Center),
+    ]
+    .spacing(0);
+    
+    // Calculate total time slots for the day
+    let total_slots = 1440 / time_slot_interval; // Total minutes in a day / interval
+    
+    // Get current time for highlighting
+    let now = Local::now().naive_local();
+    let today = now.date();
+    let current_total_minutes = now.hour() * 60 + now.minute();
+    
+    // Day headers
+    let day_headers: Vec<Element<Message>> = week_days.iter().map(|date| {
+        let day_name = date.format("%a").to_string(); // Mon, Tue, etc.
+        let day_number = date.day();
+        let is_today = *date == today;
+        
+        let header_text = column![
+            text(&day_name).size(12),
+            text(format!("{}", day_number)).size(16),
+        ]
+        .align_items(iced::Alignment::Center)
+        .spacing(2);
+        
+        container(header_text)
+            .padding(8)
+            .width(Length::FillPortion(1))
+            .center_x()
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Appearance {
+                    background: if is_today {
+                        Some(palette.primary.weak.color.into())
+                    } else {
+                        None
+                    },
+                    border: Border {
+                        color: palette.background.strong.color,
+                        width: 0.5,
+                        radius: 0.0.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+            .into()
+    }).collect();
+    
+    let day_headers_row = row(day_headers)
+        .spacing(0)
+        .width(Length::Fill);
+    
+    // Time column (left side) and day columns
+    let mut grid_rows: Vec<Element<Message>> = Vec::new();
+    
+    for slot_index in 0..total_slots {
+        let total_minutes_elapsed = slot_index * time_slot_interval;
+        let hour = total_minutes_elapsed / 60;
+        let minute = total_minutes_elapsed % 60;
+        
+        // Format time based on user preference
+        let time_string = if time_format == "12-hour" {
+            let period = if hour < 12 { "AM" } else { "PM" };
+            let display_hour = if hour == 0 { 12 } else if hour > 12 { hour - 12 } else { hour };
+            format!("{:2}:{:02} {}", display_hour, minute, period)
+        } else {
+            format!("{:2}:{:02}", hour, minute)
+        };
+        
+        // Time label
+        let time_label = container(text(&time_string).size(10))
+            .padding(4)
+            .width(Length::Fixed(70.0))
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Appearance {
+                    border: Border {
+                        color: palette.background.strong.color,
+                        width: 0.5,
+                        radius: 0.0.into(),
+                    },
+                    ..Default::default()
+                }
+            });
+        
+        // Create cells for each day
+        let day_cells: Vec<Element<Message>> = week_days.iter().map(|date| {
+            let is_today = *date == today;
+            let is_current_slot = is_today && 
+                current_total_minutes >= total_minutes_elapsed && 
+                current_total_minutes < (total_minutes_elapsed + time_slot_interval);
+            
+            container(text(""))
+                .padding(0)
+                .height(Length::Fixed(40.0))
+                .width(Length::FillPortion(1))
+                .style(move |theme: &Theme| {
+                    let palette = theme.extended_palette();
+                    container::Appearance {
+                        background: if is_current_slot {
+                            Some(palette.primary.weak.color.into())
+                        } else {
+                            None
+                        },
+                        border: Border {
+                            color: palette.background.strong.color,
+                            width: 0.5,
+                            radius: 0.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+                .into()
+        }).collect();
+        
+        let row_content = row![
+            time_label,
+            row(day_cells).spacing(0).width(Length::Fill),
+        ]
+        .spacing(0)
+        .width(Length::Fill);
+        
+        grid_rows.push(row_content.into());
+    }
+    
+    let grid = column(grid_rows)
+        .spacing(0)
+        .width(Length::Fill);
+    
+    let content = column![
+        header,
+        day_headers_row,
+        scrollable(grid)
+            .height(Length::Fill)
+            .width(Length::Fill),
+    ]
+    .spacing(0)
+    .width(Length::Fill)
+    .height(Length::Fill);
+    
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
