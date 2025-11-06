@@ -3,7 +3,6 @@
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
-use std::path::Path;
 
 pub struct Database {
     conn: Connection,
@@ -70,6 +69,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     
     #[test]
     fn test_new_database_in_memory() {

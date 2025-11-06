@@ -6,6 +6,9 @@ use iced::{
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::menu::{Item, Menu, MenuBar};
+use crate::services::database::Database;
+use crate::services::settings::SettingsService;
+use std::sync::{Arc, Mutex};
 
 /// Main Calendar Application
 pub struct CalendarApp {
@@ -17,10 +20,12 @@ pub struct CalendarApp {
     show_ribbon: bool,
     /// Current view type
     current_view: ViewType,
+    /// Database connection (wrapped in Arc<Mutex<>> for thread safety)
+    db: Arc<Mutex<Database>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ViewType {
+pub enum ViewType {
     Day,
     WorkWeek,
     Week,
@@ -47,15 +52,53 @@ impl Application for CalendarApp {
     type Executor = iced::executor::Default;
     type Message = Message;
     type Theme = Theme;
-    type Flags = ();
+    type Flags = String;
 
-    fn new(_flags: Self::Flags) -> (Self, Command<Self::Message>) {
+    fn new(db_path: Self::Flags) -> (Self, Command<Self::Message>) {
+        // Initialize database
+        let db = match Database::new(&db_path) {
+            Ok(db) => {
+                if let Err(e) = db.initialize_schema() {
+                    eprintln!("Warning: Failed to initialize database schema: {}", e);
+                }
+                db
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to open database, using defaults: {}", e);
+                // Create in-memory database as fallback
+                Database::new(":memory:").expect("Failed to create fallback in-memory database")
+            }
+        };
+
+        // Load settings from database
+        let settings_service = SettingsService::new(&db);
+        let settings = settings_service.get().unwrap_or_else(|e| {
+            eprintln!("Warning: Failed to load settings, using defaults: {}", e);
+            crate::models::settings::Settings::default()
+        });
+
+        // Parse theme
+        let theme = match settings.theme.as_str() {
+            "dark" => Theme::Dark,
+            _ => Theme::Light,
+        };
+
+        // Parse current view
+        let current_view = match settings.current_view.as_str() {
+            "Day" => ViewType::Day,
+            "WorkWeek" => ViewType::WorkWeek,
+            "Week" => ViewType::Week,
+            "Quarter" => ViewType::Quarter,
+            _ => ViewType::Month,
+        };
+
         (
             Self {
-                theme: Theme::Light,
-                show_my_day: false,
-                show_ribbon: false,
-                current_view: ViewType::Month,
+                theme,
+                show_my_day: settings.show_my_day,
+                show_ribbon: settings.show_ribbon,
+                current_view,
+                db: Arc::new(Mutex::new(db)),
             },
             Command::none(),
         )
@@ -73,15 +116,19 @@ impl Application for CalendarApp {
                     Theme::Dark => Theme::Light,
                     _ => Theme::Light,
                 };
+                self.save_settings();
             }
             Message::ToggleMyDay => {
                 self.show_my_day = !self.show_my_day;
+                self.save_settings();
             }
             Message::ToggleRibbon => {
                 self.show_ribbon = !self.show_ribbon;
+                self.save_settings();
             }
             Message::SwitchView(view_type) => {
                 self.current_view = view_type;
+                self.save_settings();
             }
             Message::OpenSettings => {
                 // TODO: Open settings dialog
@@ -308,5 +355,52 @@ impl CalendarApp {
         .center_x()
         .center_y()
         .into()
+    }
+
+    /// Save current settings to database
+    fn save_settings(&self) {
+        let db = match self.db.lock() {
+            Ok(db) => db,
+            Err(e) => {
+                eprintln!("Error: Failed to acquire database lock: {}", e);
+                return;
+            }
+        };
+
+        let settings_service = SettingsService::new(&db);
+
+        // Create settings from current state
+        let theme_str = match self.theme {
+            Theme::Dark => "dark",
+            _ => "light",
+        };
+
+        let view_str = match self.current_view {
+            ViewType::Day => "Day",
+            ViewType::WorkWeek => "WorkWeek",
+            ViewType::Week => "Week",
+            ViewType::Month => "Month",
+            ViewType::Quarter => "Quarter",
+        };
+
+        // Load existing settings to preserve other fields
+        let mut settings = match settings_service.get() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Warning: Failed to load settings for update: {}", e);
+                crate::models::settings::Settings::default()
+            }
+        };
+
+        // Update with current UI state
+        settings.theme = theme_str.to_string();
+        settings.show_my_day = self.show_my_day;
+        settings.show_ribbon = self.show_ribbon;
+        settings.current_view = view_str.to_string();
+
+        // Save to database
+        if let Err(e) = settings_service.update(&settings) {
+            eprintln!("Error: Failed to save settings: {}", e);
+        }
     }
 }
