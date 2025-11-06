@@ -349,7 +349,7 @@ impl CalendarApp {
     fn create_calendar_view(&self) -> Element<Message> {
         match self.current_view {
             ViewType::Month => views::create_month_view(self.current_date, &self.calendar_theme),
-            ViewType::Day => helpers::create_placeholder_view("Day View - Coming Soon"),
+            ViewType::Day => views::create_day_view(self.current_date, &self.calendar_theme, &self.time_format),
             ViewType::WorkWeek => helpers::create_placeholder_view("Work Week View - Coming Soon"),
             ViewType::Week => helpers::create_placeholder_view("Week View - Coming Soon"),
             ViewType::Quarter => helpers::create_placeholder_view("Quarter View - Coming Soon"),
