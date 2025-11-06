@@ -184,9 +184,14 @@ pub fn create_week_view(
             .into()
     }).collect();
     
-    let day_headers_row = row(day_headers)
-        .spacing(0)
-        .width(Length::Fill);
+    // Add spacer for time column, then day headers
+    let day_headers_row = row![
+        // Spacer to match time label width
+        container(text("")).width(Length::Fixed(70.0)),
+        row(day_headers).spacing(0).width(Length::Fill),
+    ]
+    .spacing(0)
+    .width(Length::Fill);
     
     // Time column (left side) and day columns
     let mut grid_rows: Vec<Element<Message>> = Vec::new();

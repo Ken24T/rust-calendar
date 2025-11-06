@@ -106,11 +106,11 @@ pub fn create_day_view(
     ]
     .spacing(5);
 
-    // Calculate number of slots and slot height based on interval
+    // Calculate number of slots based on interval
     // Total minutes in a day: 24 * 60 = 1440
     let total_minutes = 24 * 60;
     let total_slots = total_minutes / time_slot_interval;
-    let slot_height = time_slot_interval; // 15min=15px, 30min=30px, 45min=45px, 60min=60px
+    let slot_height = 40.0; // Fixed height regardless of interval
     
     // Time slots
     let mut time_slots = column![].spacing(0);
@@ -123,38 +123,20 @@ pub fn create_day_view(
         let hour = total_minutes_elapsed / 60;
         let minute = total_minutes_elapsed % 60;
         
-        // Only show time label for on-the-hour slots
-        let time_label = if minute == 0 {
-            if use_24h {
-                format!("{:02}:00", hour)
-            } else {
-                let (display_hour, period) = if hour == 0 {
-                    (12, "AM")
-                } else if hour < 12 {
-                    (hour, "AM")
-                } else if hour == 12 {
-                    (12, "PM")
-                } else {
-                    (hour - 12, "PM")
-                };
-                format!("{:2}:00 {}", display_hour, period)
-            }
+        // Format time label based on format preference
+        let time_label = if use_24h {
+            format!("{:02}:{:02}", hour, minute)
         } else {
-            // Show minutes for non-hour slots
-            if use_24h {
-                format!("{:02}:{:02}", hour, minute)
+            let (display_hour, period) = if hour == 0 {
+                (12, "AM")
+            } else if hour < 12 {
+                (hour, "AM")
+            } else if hour == 12 {
+                (12, "PM")
             } else {
-                let (display_hour, period) = if hour == 0 {
-                    (12, "AM")
-                } else if hour < 12 {
-                    (hour, "AM")
-                } else if hour == 12 {
-                    (12, "PM")
-                } else {
-                    (hour - 12, "PM")
-                };
-                format!("{:2}:{:02} {}", display_hour, minute, period)
-            }
+                (hour - 12, "PM")
+            };
+            format!("{:2}:{:02} {}", display_hour, minute, period)
         };
 
         // Highlight current time slot if viewing today
@@ -176,7 +158,7 @@ pub fn create_day_view(
                     .padding([8, 10]),
                 container(text("")) // Event area - will be populated later
                     .width(Length::Fill)
-                    .height(Length::Fixed(slot_height as f32))
+                    .height(Length::Fixed(slot_height))
                     .style(move |_theme: &Theme| {
                         container::Appearance {
                             background: Some(iced::Background::Color(
