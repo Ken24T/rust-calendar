@@ -1,0 +1,58 @@
+[theme]
+name = "Light"
+type = "light"
+
+[colors]
+# Base colors
+background = "#ffffff"
+surface = "#f5f5f5"
+surface_hover = "#eeeeee"
+
+# Primary colors
+primary = "#0078d4"
+primary_hover = "#106ebe"
+secondary = "#8764b8"
+
+# Text colors
+text = "#000000"
+text_secondary = "#666666"
+text_disabled = "#999999"
+
+# Border and dividers
+border = "#d1d1d1"
+divider = "#e0e0e0"
+
+# Status colors
+success = "#107c10"
+warning = "#ff8c00"
+error = "#e81123"
+info = "#0078d4"
+
+[calendar]
+# Calendar specific colors
+weekend = "#f9f9f9"
+today = "#e6f3ff"
+today_border = "#0078d4"
+selected = "#cce4ff"
+selected_border = "#0078d4"
+other_month = "#cccccc"
+
+# Event colors
+event_default = "#8764b8"
+event_work = "#0078d4"
+event_personal = "#00cc6a"
+event_holiday = "#ff8c00"
+event_birthday = "#e81123"
+
+[typography]
+font_family = "Segoe UI"
+font_size_small = 12
+font_size_normal = 14
+font_size_large = 16
+font_size_title = 20
+
+[spacing]
+padding_small = 4
+padding_normal = 8
+padding_large = 16
+border_radius = 4

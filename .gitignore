@@ -1,0 +1,48 @@
+# Rust files
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock
+**/*.rs.bk
+*.orig
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# User data
+/data/
+/config/
+/logs/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Backup files
+*.bak
+*.tmp
+
+# OS specific
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Testing
+/test_output/
+/coverage/

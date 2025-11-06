@@ -1,0 +1,58 @@
+[theme]
+name = "Dark"
+type = "dark"
+
+[colors]
+# Base colors
+background = "#1e1e1e"
+surface = "#252526"
+surface_hover = "#2d2d30"
+
+# Primary colors
+primary = "#007acc"
+primary_hover = "#1c97ea"
+secondary = "#68217a"
+
+# Text colors
+text = "#ffffff"
+text_secondary = "#cccccc"
+text_disabled = "#6b6b6b"
+
+# Border and dividers
+border = "#3e3e42"
+divider = "#2d2d30"
+
+# Status colors
+success = "#89d185"
+warning = "#ddb100"
+error = "#f48771"
+info = "#3794ff"
+
+[calendar]
+# Calendar specific colors
+weekend = "#2a2a2d"
+today = "#094771"
+today_border = "#007acc"
+selected = "#0e4a7a"
+selected_border = "#1c97ea"
+other_month = "#5a5a5a"
+
+# Event colors
+event_default = "#8b6fb8"
+event_work = "#007acc"
+event_personal = "#16825d"
+event_holiday = "#ddb100"
+event_birthday = "#f48771"
+
+[typography]
+font_family = "Segoe UI"
+font_size_small = 12
+font_size_normal = 14
+font_size_large = 16
+font_size_title = 20
+
+[spacing]
+padding_small = 4
+padding_normal = 8
+padding_large = 16
+border_radius = 4
