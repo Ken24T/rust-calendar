@@ -5,6 +5,7 @@ use iced::{
     widget::{button, column, container, row, text},
     Application, Command, Element, Length, Theme,
 };
+use iced_aw::menu::{Item, Menu, MenuBar};
 
 /// Main Calendar Application
 pub struct CalendarApp {
@@ -128,40 +129,55 @@ impl Application for CalendarApp {
 impl CalendarApp {
     /// Create the top menu bar with standard Windows menu structure
     fn create_menu_bar(&self) -> Element<Message> {
-        row![
-            // File menu placeholder
-            text("File").size(14),
-            text("  ").size(14),
-            
-            // Edit menu
-            button(text("Edit").size(14))
-                .padding(5),
-            button(text("  Settings").size(13))
-                .on_press(Message::OpenSettings)
-                .padding([2, 10]),
-            text("  ").size(14),
-            
-            // View menu
-            button(text("View").size(14))
-                .padding(5),
-            button(
-                text(if self.show_my_day { "✓ My Day" } else { "  My Day" }).size(13)
-            )
-            .on_press(Message::ToggleMyDay)
-            .padding([2, 10]),
-            button(
-                text(if self.show_ribbon { "✓ Ribbon" } else { "  Ribbon" }).size(13)
-            )
-            .on_press(Message::ToggleRibbon)
-            .padding([2, 10]),
-            text("  |  ").size(14),
-            
+        let file_menu = Item::with_menu(
+            button(text("File").size(14)).padding([5, 10]),
+            Menu::new(vec![
+                Item::new(button(text("Exit").size(13)).padding([5, 15])),
+            ])
+        );
+
+        let edit_menu = Item::with_menu(
+            button(text("Edit").size(14)).padding([5, 10]),
+            Menu::new(vec![
+                Item::new(
+                    button(text("Settings").size(13))
+                        .on_press(Message::OpenSettings)
+                        .padding([5, 15])
+                ),
+            ])
+        );
+
+        let view_menu = Item::with_menu(
+            button(text("View").size(14)).padding([5, 10]),
+            Menu::new(vec![
+                Item::new(
+                    button(
+                        text(if self.show_my_day { "✓ My Day" } else { "  My Day" }).size(13)
+                    )
+                    .on_press(Message::ToggleMyDay)
+                    .padding([5, 15])
+                ),
+                Item::new(
+                    button(
+                        text(if self.show_ribbon { "✓ Ribbon" } else { "  Ribbon" }).size(13)
+                    )
+                    .on_press(Message::ToggleRibbon)
+                    .padding([5, 15])
+                ),
+            ])
+        );
+
+        let menu_bar = MenuBar::new(vec![file_menu, edit_menu, view_menu]);
+
+        let toolbar = row![
+            menu_bar,
+            // Spacer
+            text("").width(Length::Fill),
             // Theme toggle
             button(text(if matches!(self.theme, Theme::Light) { "🌙" } else { "☀️" }).size(16))
                 .on_press(Message::ToggleTheme)
                 .padding(5),
             text("  |  ").size(14),
-            
             // View switcher
             button(text("Day").size(13))
                 .on_press(Message::SwitchView(ViewType::Day))
@@ -173,9 +189,10 @@ impl CalendarApp {
                 .on_press(Message::SwitchView(ViewType::Month))
                 .padding([5, 15]),
         ]
-        .padding(10)
-        .spacing(5)
-        .into()
+        .padding(5)
+        .spacing(5);
+
+        toolbar.into()
     }
 
     /// Create the multi-day event ribbon
