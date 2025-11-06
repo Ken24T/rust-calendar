@@ -393,7 +393,13 @@ impl CalendarApp {
                 self.time_slot_interval,
                 self.first_day_of_week,
             ),
-            ViewType::WorkWeek => helpers::create_placeholder_view("Work Week View - Coming Soon"),
+            ViewType::WorkWeek => views::create_workweek_view(
+                self.current_date,
+                &self.calendar_theme,
+                &self.time_format,
+                self.time_slot_interval,
+                self.first_day_of_week,
+            ),
             ViewType::Quarter => helpers::create_placeholder_view("Quarter View - Coming Soon"),
         }
     }
