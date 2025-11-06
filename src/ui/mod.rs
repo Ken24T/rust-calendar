@@ -14,4 +14,3 @@ pub mod utils;
 
 // Re-export the main application
 pub use app::CalendarApp;
-pub use view_type::ViewType;

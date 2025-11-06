@@ -1,21 +1,13 @@
 // Main Calendar Application
 // Core iced Application implementation
 
-use iced::{
-    widget::{button, column, container, row, text, pick_list, checkbox},
-    Application, Command, Element, Length, Theme, Border,
-    alignment::Horizontal,
-};
-use iced_aw::menu::{Item, Menu, MenuBar};
-use iced_aw::{Modal, Card};
+use iced::{Application, Command, Element, Theme};
 use crate::services::database::Database;
-use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
 use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
 use crate::ui::view_type::ViewType;
 use crate::ui::helpers;
-use crate::ui::dialogs;
 use crate::ui::views;
 use crate::ui::components;
 use crate::ui::utils;
