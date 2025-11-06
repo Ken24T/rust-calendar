@@ -22,8 +22,10 @@ pub struct CalendarApp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ViewType {
     Day,
+    WorkWeek,
     Week,
     Month,
+    Quarter,
 }
 
 /// Messages for the application
@@ -158,6 +160,53 @@ impl CalendarApp {
             .spacing(0.0)
         );
 
+        // Views submenu
+        let views_submenu = Menu::new(vec![
+            Item::new(
+                button(
+                    text(if self.current_view == ViewType::Day { "✓ Day" } else { "  Day" }).size(13)
+                )
+                .on_press(Message::SwitchView(ViewType::Day))
+                .padding([8, 20])
+                .width(Length::Fill)
+            ),
+            Item::new(
+                button(
+                    text(if self.current_view == ViewType::WorkWeek { "✓ Work Week" } else { "  Work Week" }).size(13)
+                )
+                .on_press(Message::SwitchView(ViewType::WorkWeek))
+                .padding([8, 20])
+                .width(Length::Fill)
+            ),
+            Item::new(
+                button(
+                    text(if self.current_view == ViewType::Week { "✓ Week" } else { "  Week" }).size(13)
+                )
+                .on_press(Message::SwitchView(ViewType::Week))
+                .padding([8, 20])
+                .width(Length::Fill)
+            ),
+            Item::new(
+                button(
+                    text(if self.current_view == ViewType::Month { "✓ Month" } else { "  Month" }).size(13)
+                )
+                .on_press(Message::SwitchView(ViewType::Month))
+                .padding([8, 20])
+                .width(Length::Fill)
+            ),
+            Item::new(
+                button(
+                    text(if self.current_view == ViewType::Quarter { "✓ Quarter" } else { "  Quarter" }).size(13)
+                )
+                .on_press(Message::SwitchView(ViewType::Quarter))
+                .padding([8, 20])
+                .width(Length::Fill)
+            ),
+        ])
+        .max_width(180.0)
+        .offset(0.0)
+        .spacing(0.0);
+
         let view_menu = Item::with_menu(
             button(text("View").size(14)).padding([5, 10]),
             Menu::new(vec![
@@ -177,6 +226,12 @@ impl CalendarApp {
                     .padding([8, 20])
                     .width(Length::Fill)
                 ),
+                Item::with_menu(
+                    button(text("Views ▶").size(13))
+                        .padding([8, 20])
+                        .width(Length::Fill),
+                    views_submenu
+                ),
             ])
             .max_width(180.0)
             .offset(0.0)
@@ -189,21 +244,11 @@ impl CalendarApp {
             menu_bar,
             // Spacer
             text("").width(Length::Fill),
-            // Theme toggle
+            // Theme toggle with fixed width
             button(text(if matches!(self.theme, Theme::Light) { "🌙" } else { "☀️" }).size(16))
                 .on_press(Message::ToggleTheme)
-                .padding(5),
-            text("  |  ").size(14),
-            // View switcher
-            button(text("Day").size(13))
-                .on_press(Message::SwitchView(ViewType::Day))
-                .padding([5, 15]),
-            button(text("Week").size(13))
-                .on_press(Message::SwitchView(ViewType::Week))
-                .padding([5, 15]),
-            button(text("Month").size(13))
-                .on_press(Message::SwitchView(ViewType::Month))
-                .padding([5, 15]),
+                .padding(8)
+                .width(45),
         ]
         .padding(5)
         .spacing(5);
@@ -243,8 +288,10 @@ impl CalendarApp {
     fn create_calendar_view(&self) -> Element<Message> {
         let view_content = match self.current_view {
             ViewType::Day => "Day View - Coming Soon",
+            ViewType::WorkWeek => "Work Week View - Coming Soon",
             ViewType::Week => "Week View - Coming Soon",
             ViewType::Month => "Month View - Coming Soon",
+            ViewType::Quarter => "Quarter View - Coming Soon",
         };
 
         container(
