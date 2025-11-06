@@ -1,5 +1,10 @@
 // UI module exports
-// This file will be populated as UI components are implemented
+// Main application and components
+
+mod app;
 
 pub mod views;
 pub mod components;
+
+// Re-export the main application
+pub use app::CalendarApp;
