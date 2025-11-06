@@ -10,6 +10,7 @@ pub mod dialogs;
 
 pub mod views;
 pub mod components;
+pub mod utils;
 
 // Re-export the main application
 pub use app::CalendarApp;

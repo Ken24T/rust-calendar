@@ -18,6 +18,7 @@ use crate::ui::helpers;
 use crate::ui::dialogs;
 use crate::ui::views;
 use crate::ui::components;
+use crate::ui::utils;
 use std::sync::{Arc, Mutex};
 use chrono::{Local, Datelike, NaiveDate, Duration};
 
@@ -442,6 +443,21 @@ impl Application for CalendarApp {
 }
 
 impl CalendarApp {
+    /// Save current settings to database
+    fn save_settings(&self) {
+        utils::save_settings(
+            &self.db,
+            &self.theme_name,
+            self.show_my_day,
+            self.my_day_position_right,
+            self.show_ribbon,
+            self.current_view,
+            &self.time_format,
+            self.first_day_of_week,
+            &self.date_format,
+        );
+    }
+
     /// Create the multi-day event ribbon
     /// Create the main calendar view
     fn create_calendar_view(&self) -> Element<Message> {
@@ -451,51 +467,6 @@ impl CalendarApp {
             ViewType::WorkWeek => helpers::create_placeholder_view("Work Week View - Coming Soon"),
             ViewType::Week => helpers::create_placeholder_view("Week View - Coming Soon"),
             ViewType::Quarter => helpers::create_placeholder_view("Quarter View - Coming Soon"),
-        }
-    }
-
-    /// Save current settings to database
-    fn save_settings(&self) {
-        let db = match self.db.lock() {
-            Ok(db) => db,
-            Err(e) => {
-                eprintln!("Error: Failed to acquire database lock: {}", e);
-                return;
-            }
-        };
-
-        let settings_service = SettingsService::new(&db);
-
-        let view_str = match self.current_view {
-            ViewType::Day => "Day",
-            ViewType::WorkWeek => "WorkWeek",
-            ViewType::Week => "Week",
-            ViewType::Month => "Month",
-            ViewType::Quarter => "Quarter",
-        };
-
-        // Load existing settings to preserve other fields
-        let mut settings = match settings_service.get() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Warning: Failed to load settings for update: {}", e);
-                crate::models::settings::Settings::default()
-            }
-        };
-
-        // Update with current UI state
-        settings.theme = self.theme_name.clone();
-        settings.show_my_day = self.show_my_day;
-        settings.my_day_position_right = self.my_day_position_right;
-        settings.show_ribbon = self.show_ribbon;
-        settings.current_view = view_str.to_string();
-        settings.time_format = self.time_format.clone();
-        settings.first_day_of_week = self.first_day_of_week;
-        settings.date_format = self.date_format.clone();
-
-        // Save to database
-        if let Err(e) = settings_service.update(&settings) {
-            eprintln!("Error: Failed to save settings: {}", e);
         }
     }
 }
