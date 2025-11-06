@@ -1,14 +1,4 @@
-fn main() {
-    // Initialize logging
-    env_logger::init();
-    
-    log::info!("Starting Rust Calendar Application");
-    
-    // TODO: Initialize application
-    // TODO: Setup database
-    // TODO: Launch GUI
-    
-    // Rust Calendar Application
+// Rust Calendar Application
 // Main entry point
 
 mod models;
@@ -31,6 +21,4 @@ fn main() {
     println!("Rust Calendar - Planning Phase");
     println!("Implementation will begin with Phase 1: Foundation");
     println!("See docs/PROJECT_PLAN.md for details");
-}
-    println!("See docs/PROJECT_PLAN.md for the development roadmap");
 }

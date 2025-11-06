@@ -84,5 +84,5 @@ opt-level = 0
 debug = true
 
 [[bench]]
-name = "recurrence_benchmark"
+name = "recurrence_bench"
 harness = false
