@@ -1,0 +1,100 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Planning Phase
+
+#### Added
+- Initial project structure and build configuration
+- Comprehensive documentation:
+  - PROJECT_PLAN.md - 12-week implementation roadmap
+  - ARCHITECTURE.md - System design and patterns
+  - MODULARITY.md - Code organization guidelines (max 300 lines per file)
+  - TESTING.md - Testing strategy (>90% coverage requirement)
+  - UI_SYSTEM.md - Complete UI specifications
+  - COUNTDOWN_TIMER_FEATURE.md - Desktop countdown timer widget specs
+  - MY_DAY_AND_RIBBON_FEATURES.md - My Day panel and multi-day ribbon specs
+- Cargo.toml with all dependencies configured
+- Database schema design (7 tables):
+  - events - Event storage with recurrence rules
+  - reminders - Configurable event reminders
+  - settings - Application settings
+  - ui_preferences - UI customization and layout preferences
+  - column_widths - Per-view column width persistence
+  - row_heights - Per-view row height persistence
+  - countdown_timers - Desktop countdown timer widget state
+- Test infrastructure:
+  - Unit test examples (recurrence_frequency_tests.rs)
+  - Property-based test examples (recurrence_properties.rs)
+  - Test fixtures (mod.rs)
+  - Benchmark examples (recurrence_bench.rs)
+- Theme assets (light.toml, dark.toml)
+- .gitignore configuration
+- Dual licensing (MIT OR Apache-2.0)
+
+#### Features (Planned)
+- Multiple calendar views:
+  - Day view - Detailed hourly schedule
+  - Work week view - Monday through Friday
+  - Full week view - Complete 7-day view
+  - Month view - Traditional calendar grid
+  - Quarter view - 3-month overview
+  - Year view - Annual 12-month display
+  - Agenda view - Linear event list
+- My Day panel:
+  - Sidebar showing selected day's events
+  - Configurable position (left/right/hidden)
+  - Adjustable width (180-400px)
+  - Auto-updates with calendar navigation
+- Multi-day event ribbon:
+  - Horizontal strip for events spanning 2+ days
+  - Multiple display modes (compact/expanded/auto)
+  - Progress indicators for ongoing events
+  - Keeps main calendar grid uncluttered
+- Desktop countdown timer widgets:
+  - Drag events to desktop to create countdown timers
+  - Always-on-top, movable windows
+  - Live countdown updates
+  - Auto-dismiss when event starts (optional)
+- Event management:
+  - Single and repeating events
+  - Recurrence patterns: Daily, Weekly, Fortnightly, Monthly, Quarterly, Yearly
+  - All-day events
+  - Event categories with color coding
+- UI customization:
+  - Adjustable column widths (drag to resize)
+  - Customizable fonts (family, size, weight, style)
+  - Resizable row heights
+  - Configurable time granularity (15/30/60 minute intervals)
+  - Adjustable default event duration (default: 45 minutes)
+  - All preferences persist between sessions
+- Reminder system:
+  - Multiple reminders per event
+  - Windows native notifications
+  - Snooze functionality
+- Drag-and-drop:
+  - .ics file import
+  - Event rescheduling
+  - Event duration adjustment
+  - Tear events to desktop for countdown timers
+- Theme support:
+  - Light and Dark modes
+  - Customizable color schemes
+  - Theme persistence
+
+## [0.1.0] - 2025-11-06
+
+### Added
+- Initial project setup
+- Git repository initialized
+- Documentation framework established
+- Project structure created
+
+---
+
+**Note**: This project is currently in the planning phase. Implementation will begin with Phase 1 (Foundation) following the 12-week roadmap outlined in PROJECT_PLAN.md.
