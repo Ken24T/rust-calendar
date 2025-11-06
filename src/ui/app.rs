@@ -362,6 +362,13 @@ impl Application for CalendarApp {
                 }
                 self.show_date_picker = false;
             }
+            Message::GoToDateInWeekView(year, month, day) => {
+                // Navigate to the specified date and switch to Week view
+                if let Some(new_date) = NaiveDate::from_ymd_opt(year, month, day) {
+                    self.current_date = new_date;
+                    self.current_view = ViewType::Week;
+                }
+            }
             Message::UpdateTimeSlotInterval(interval) => {
                 // Validate interval
                 if [15, 30, 45, 60].contains(&interval) {

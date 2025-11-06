@@ -82,11 +82,18 @@ fn create_mini_month(
                 let is_weekend = date.weekday().num_days_from_sunday() == 0 
                     || date.weekday().num_days_from_sunday() == 6;
                 
-                let day_text = text(format!("{}", day_counter))
-                    .size(10)
-                    .horizontal_alignment(Horizontal::Center);
+                // Make the day clickable to navigate to Week view
+                let day_button = button(
+                    text(format!("{}", day_counter))
+                        .size(10)
+                        .horizontal_alignment(Horizontal::Center)
+                )
+                .on_press(Message::GoToDateInWeekView(year, month, day_counter as u32))
+                .padding(0)
+                .width(Length::Fill)
+                .height(Length::Fill);
                 
-                let mut cell_container = container(day_text)
+                let mut cell_container = container(day_button)
                     .width(Length::FillPortion(1))
                     .height(30)
                     .padding(2)

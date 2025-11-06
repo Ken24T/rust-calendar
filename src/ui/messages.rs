@@ -72,6 +72,8 @@ pub enum Message {
     ChangeMonth(u32),
     /// Change to specific year
     ChangeYear(i32),
+    /// Navigate to specific date and switch to Week view
+    GoToDateInWeekView(i32, u32, u32), // year, month, day
     /// Update time slot interval (15, 30, 45, or 60 minutes)
     UpdateTimeSlotInterval(u32),
 }
