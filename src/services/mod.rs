@@ -5,3 +5,4 @@ pub mod database;
 pub mod event;
 pub mod reminder;
 pub mod notification;
+pub mod settings;
