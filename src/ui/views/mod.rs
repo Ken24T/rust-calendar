@@ -1,6 +1,3 @@
-// UI views module
-// Implementation pending - Phase 3
+mod month_view;
 
-pub struct CalendarView {
-    // Implementation pending
-}
+pub use month_view::create_month_view;
