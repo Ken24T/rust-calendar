@@ -21,7 +21,7 @@ impl<'a> SettingsService<'a> {
         
         let settings = conn.query_row(
             "SELECT id, theme, first_day_of_week, time_format, date_format, 
-                    show_my_day, show_ribbon, current_view
+                    show_my_day, my_day_position_right, show_ribbon, current_view
              FROM settings WHERE id = 1",
             [],
             |row| Ok(Self::row_to_settings(row)?),
@@ -45,8 +45,9 @@ impl<'a> SettingsService<'a> {
                  time_format = ?3, 
                  date_format = ?4,
                  show_my_day = ?5,
-                 show_ribbon = ?6,
-                 current_view = ?7,
+                 my_day_position_right = ?6,
+                 show_ribbon = ?7,
+                 current_view = ?8,
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = 1",
             (
@@ -55,6 +56,7 @@ impl<'a> SettingsService<'a> {
                 &settings.time_format,
                 &settings.date_format,
                 settings.show_my_day as i32,
+                settings.my_day_position_right as i32,
                 settings.show_ribbon as i32,
                 &settings.current_view,
             ),
@@ -78,8 +80,9 @@ impl<'a> SettingsService<'a> {
             time_format: row.get(3)?,
             date_format: row.get(4)?,
             show_my_day: row.get::<_, i32>(5)? != 0,
-            show_ribbon: row.get::<_, i32>(6)? != 0,
-            current_view: row.get(7)?,
+            my_day_position_right: row.get::<_, i32>(6)? != 0,
+            show_ribbon: row.get::<_, i32>(7)? != 0,
+            current_view: row.get(8)?,
         })
     }
 }

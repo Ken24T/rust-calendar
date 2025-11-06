@@ -11,6 +11,7 @@ pub struct Settings {
     pub time_format: String,
     pub date_format: String,
     pub show_my_day: bool,
+    pub my_day_position_right: bool,
     pub show_ribbon: bool,
     pub current_view: String,
 }
@@ -24,6 +25,7 @@ impl Default for Settings {
             time_format: "12h".to_string(),
             date_format: "MM/DD/YYYY".to_string(),
             show_my_day: false,
+            my_day_position_right: false,
             show_ribbon: false,
             current_view: "Month".to_string(),
         }

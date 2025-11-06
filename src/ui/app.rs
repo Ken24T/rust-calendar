@@ -17,6 +17,8 @@ pub struct CalendarApp {
     theme: Theme,
     /// Show/hide My Day panel
     show_my_day: bool,
+    /// My Day panel position (true = right, false = left)
+    my_day_position_right: bool,
     /// Show/hide multi-day ribbon
     show_ribbon: bool,
     /// Current view type
@@ -63,6 +65,8 @@ pub enum Message {
     UpdateView(String),
     /// Update My Day panel visibility from dialog
     UpdateShowMyDay(bool),
+    /// Update My Day panel position from dialog
+    UpdateMyDayPosition(String),
     /// Update Ribbon visibility from dialog
     UpdateShowRibbon(bool),
     /// Update time format setting
@@ -123,6 +127,7 @@ impl Application for CalendarApp {
             Self {
                 theme,
                 show_my_day: settings.show_my_day,
+                my_day_position_right: settings.my_day_position_right,
                 show_ribbon: settings.show_ribbon,
                 current_view,
                 db: Arc::new(Mutex::new(db)),
@@ -187,6 +192,9 @@ impl Application for CalendarApp {
             Message::UpdateShowMyDay(show) => {
                 self.show_my_day = show;
             }
+            Message::UpdateMyDayPosition(position) => {
+                self.my_day_position_right = position == "Right";
+            }
             Message::UpdateShowRibbon(show) => {
                 self.show_ribbon = show;
             }
@@ -227,11 +235,19 @@ impl Application for CalendarApp {
 
         // Main content area: My Day panel + Calendar view
         let main_content = if self.show_my_day {
-            row![
-                self.create_my_day_panel(),
-                self.create_calendar_view(),
-            ]
-            .spacing(2)
+            if self.my_day_position_right {
+                row![
+                    self.create_calendar_view(),
+                    self.create_my_day_panel(),
+                ]
+                .spacing(2)
+            } else {
+                row![
+                    self.create_my_day_panel(),
+                    self.create_calendar_view(),
+                ]
+                .spacing(2)
+            }
         } else {
             row![self.create_calendar_view()]
         };
@@ -478,6 +494,7 @@ impl CalendarApp {
         // Update with current UI state
         settings.theme = theme_str.to_string();
         settings.show_my_day = self.show_my_day;
+        settings.my_day_position_right = self.my_day_position_right;
         settings.show_ribbon = self.show_ribbon;
         settings.current_view = view_str.to_string();
         settings.time_format = self.time_format.clone();
@@ -528,6 +545,15 @@ impl CalendarApp {
         // My Day panel checkbox
         let my_day_checkbox = checkbox("Show My Day Panel", self.show_my_day)
             .on_toggle(Message::UpdateShowMyDay);
+
+        // My Day position setting
+        let my_day_position_label = text("My Day Position:").size(14);
+        let current_position = if self.my_day_position_right { "Right" } else { "Left" };
+        let my_day_position_picker = pick_list(
+            vec!["Left", "Right"],
+            Some(current_position),
+            |position| Message::UpdateMyDayPosition(position.to_string())
+        );
 
         // Ribbon checkbox
         let ribbon_checkbox = checkbox("Show Multi-Day Ribbon", self.show_ribbon)
@@ -584,6 +610,7 @@ impl CalendarApp {
                 row![theme_label, theme_picker].spacing(10),
                 row![view_label, view_picker].spacing(10),
                 my_day_checkbox,
+                row![my_day_position_label, my_day_position_picker].spacing(10),
                 ribbon_checkbox,
                 text("").size(15),
                 text("General Settings:").size(16),

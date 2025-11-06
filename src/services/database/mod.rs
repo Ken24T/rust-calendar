@@ -42,6 +42,7 @@ impl Database {
                 time_format TEXT NOT NULL DEFAULT '12h',
                 date_format TEXT NOT NULL DEFAULT 'MM/DD/YYYY',
                 show_my_day INTEGER NOT NULL DEFAULT 0,
+                my_day_position_right INTEGER NOT NULL DEFAULT 0,
                 show_ribbon INTEGER NOT NULL DEFAULT 0,
                 current_view TEXT NOT NULL DEFAULT 'Month',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
