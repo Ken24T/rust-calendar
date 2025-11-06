@@ -134,6 +134,9 @@ impl CalendarApp {
             Menu::new(vec![
                 Item::new(button(text("Exit").size(13)).padding([5, 15])),
             ])
+            .max_width(180.0)
+            .offset(0.0)
+            .spacing(5.0)
         );
 
         let edit_menu = Item::with_menu(
@@ -145,6 +148,9 @@ impl CalendarApp {
                         .padding([5, 15])
                 ),
             ])
+            .max_width(180.0)
+            .offset(0.0)
+            .spacing(5.0)
         );
 
         let view_menu = Item::with_menu(
@@ -165,6 +171,9 @@ impl CalendarApp {
                     .padding([5, 15])
                 ),
             ])
+            .max_width(180.0)
+            .offset(0.0)
+            .spacing(5.0)
         );
 
         let menu_bar = MenuBar::new(vec![file_menu, edit_menu, view_menu]);
