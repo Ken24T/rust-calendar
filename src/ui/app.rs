@@ -569,8 +569,6 @@ impl CalendarApp {
             }
         );
 
-        let date_format_info = text(format!("Date Format: {}", self.date_format)).size(14);
-
         let save_button = button(text("Save").size(14))
             .on_press(Message::SaveSettings)
             .padding([10, 30]);
@@ -591,7 +589,6 @@ impl CalendarApp {
                 text("General Settings:").size(16),
                 row![time_format_label, time_format_picker].spacing(10),
                 row![first_day_label, first_day_picker].spacing(10),
-                date_format_info,
             ]
             .spacing(8)
         )
