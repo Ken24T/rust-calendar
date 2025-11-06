@@ -405,7 +405,10 @@ impl Application for CalendarApp {
                 .backdrop(Message::CloseThemeManager)
                 .into()
         } else if self.show_date_picker {
-            Modal::new(base_view, Some(self.create_date_picker_dialog()))
+            Modal::new(base_view, Some(dialogs::create_date_picker_dialog(
+                self.current_date.year(),
+                self.current_date.month()
+            )))
                 .backdrop(Message::ToggleDatePicker)
                 .into()
         } else if self.show_theme_picker {
@@ -733,87 +736,6 @@ impl CalendarApp {
         .num_days() as i32
     }
 
-    /// Create the date picker dialog
-    fn create_date_picker_dialog(&self) -> Element<Message> {
-        let current_year = self.current_date.year();
-        let current_month = self.current_date.month();
-        
-        // Year selector - show current year +/- 5 years
-        let year_label = text("Year:").size(14);
-        let years: Vec<i32> = ((current_year - 5)..=(current_year + 5)).collect();
-        let year_picker = pick_list(
-            years,
-            Some(current_year),
-            Message::ChangeYear
-        );
-        
-        // Month selector
-        let month_label = text("Month:").size(14);
-        const MONTH_NAMES: [&str; 12] = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ];
-        
-        let current_month_name = MONTH_NAMES.get((current_month - 1) as usize)
-            .unwrap_or(&"January");
-        
-        let month_picker = pick_list(
-            MONTH_NAMES.to_vec(),
-            Some(*current_month_name),
-            |selected| {
-                let month_num = match selected {
-                    "January" => 1,
-                    "February" => 2,
-                    "March" => 3,
-                    "April" => 4,
-                    "May" => 5,
-                    "June" => 6,
-                    "July" => 7,
-                    "August" => 8,
-                    "September" => 9,
-                    "October" => 10,
-                    "November" => 11,
-                    "December" => 12,
-                    _ => 1,
-                };
-                Message::ChangeMonth(month_num)
-            }
-        );
-        
-        let cancel_button = button(text("Cancel").size(14))
-            .on_press(Message::ToggleDatePicker)
-            .padding([10, 30]);
-
-        // Custom header with close button
-        let close_btn = button(text("×").size(24))
-            .on_press(Message::ToggleDatePicker)
-            .padding(5);
-        
-        let header = row![
-            text("Select Date").size(20),
-            text("").width(Length::Fill),
-            close_btn
-        ]
-        .align_items(iced::Alignment::Center);
-
-        Card::new(
-            header,
-            column![
-                row![year_label, year_picker].spacing(10),
-                row![month_label, month_picker].spacing(10),
-            ]
-            .spacing(15)
-        )
-        .foot(
-            row![cancel_button]
-                .spacing(10)
-                .padding([0, 10, 10, 10])
-        )
-        .max_width(350.0)
-        .into()
-    }
-
-    /// Create theme picker dialog
     /// Create theme manager dialog
     fn create_theme_manager_dialog(&self) -> Element<Message> {
         let mut theme_list: Vec<Element<Message>> = vec![
