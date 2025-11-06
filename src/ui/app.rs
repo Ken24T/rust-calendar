@@ -2,7 +2,7 @@
 // Core iced Application implementation
 
 use iced::{
-    widget::{button, column, container, row, text, pick_list},
+    widget::{button, column, container, row, text, pick_list, checkbox},
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::menu::{Item, Menu, MenuBar};
@@ -57,6 +57,14 @@ pub enum Message {
     OpenSettings,
     /// Close settings dialog
     CloseSettings,
+    /// Update theme setting from dialog
+    UpdateTheme(String),
+    /// Update view setting from dialog
+    UpdateView(String),
+    /// Update My Day panel visibility from dialog
+    UpdateShowMyDay(bool),
+    /// Update Ribbon visibility from dialog
+    UpdateShowRibbon(bool),
     /// Update time format setting
     UpdateTimeFormat(String),
     /// Update first day of week setting
@@ -158,6 +166,29 @@ impl Application for CalendarApp {
             }
             Message::CloseSettings => {
                 self.show_settings_dialog = false;
+            }
+            Message::UpdateTheme(theme_str) => {
+                self.theme = match theme_str.as_str() {
+                    "dark" => Theme::Dark,
+                    "light" => Theme::Light,
+                    _ => Theme::Light,
+                };
+            }
+            Message::UpdateView(view_str) => {
+                self.current_view = match view_str.as_str() {
+                    "Day" => ViewType::Day,
+                    "WorkWeek" => ViewType::WorkWeek,
+                    "Week" => ViewType::Week,
+                    "Month" => ViewType::Month,
+                    "Quarter" => ViewType::Quarter,
+                    _ => ViewType::Month,
+                };
+            }
+            Message::UpdateShowMyDay(show) => {
+                self.show_my_day = show;
+            }
+            Message::UpdateShowRibbon(show) => {
+                self.show_ribbon = show;
             }
             Message::UpdateTimeFormat(format) => {
                 self.time_format = format;
@@ -461,13 +492,48 @@ impl CalendarApp {
 
     /// Create the settings dialog
     fn create_settings_dialog(&self) -> Element<Message> {
-        // Current UI state (read-only)
-        let theme_info = text(format!("Current Theme: {:?}", self.theme)).size(14);
-        let view_info = text(format!("Current View: {:?}", self.current_view)).size(14);
-        let my_day_info = text(format!("My Day Panel: {}", if self.show_my_day { "Visible" } else { "Hidden" })).size(14);
-        let ribbon_info = text(format!("Ribbon: {}", if self.show_ribbon { "Visible" } else { "Hidden" })).size(14);
+        // Theme setting
+        let theme_label = text("Theme:").size(14);
+        let current_theme = match self.theme {
+            Theme::Dark => "Dark",
+            _ => "Light",
+        };
+        let theme_picker = pick_list(
+            vec!["Light", "Dark"],
+            Some(current_theme),
+            |theme| Message::UpdateTheme(theme.to_lowercase())
+        );
 
-        // Editable settings
+        // View setting
+        let view_label = text("Default View:").size(14);
+        let current_view_str = match self.current_view {
+            ViewType::Day => "Day",
+            ViewType::WorkWeek => "Work Week",
+            ViewType::Week => "Week",
+            ViewType::Month => "Month",
+            ViewType::Quarter => "Quarter",
+        };
+        let view_picker = pick_list(
+            vec!["Day", "Work Week", "Week", "Month", "Quarter"],
+            Some(current_view_str),
+            |view| {
+                let view_enum = match view {
+                    "Work Week" => "WorkWeek",
+                    _ => view,
+                };
+                Message::UpdateView(view_enum.to_string())
+            }
+        );
+
+        // My Day panel checkbox
+        let my_day_checkbox = checkbox("Show My Day Panel", self.show_my_day)
+            .on_toggle(Message::UpdateShowMyDay);
+
+        // Ribbon checkbox
+        let ribbon_checkbox = checkbox("Show Multi-Day Ribbon", self.show_ribbon)
+            .on_toggle(Message::UpdateShowRibbon);
+
+        // Time format setting
         let time_format_label = text("Time Format:").size(14);
         let time_format_picker = pick_list(
             vec!["12h", "24h"],
@@ -475,6 +541,7 @@ impl CalendarApp {
             |format| Message::UpdateTimeFormat(format.to_string())
         );
 
+        // First day of week setting
         let first_day_label = text("First Day of Week:").size(14);
         let current_day_idx = self.first_day_of_week as usize;
         let day_names = vec!["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -515,13 +582,11 @@ impl CalendarApp {
         Card::new(
             text("Settings").size(24),
             column![
-                text("Current Display:").size(16),
-                theme_info,
-                view_info,
-                my_day_info,
-                ribbon_info,
-                text("").size(5),
-                text("Use the View menu to change display settings.").size(12),
+                text("Display Settings:").size(16),
+                row![theme_label, theme_picker].spacing(10),
+                row![view_label, view_picker].spacing(10),
+                my_day_checkbox,
+                ribbon_checkbox,
                 text("").size(15),
                 text("General Settings:").size(16),
                 row![time_format_label, time_format_picker].spacing(10),
