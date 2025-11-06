@@ -60,6 +60,10 @@ pub enum Message {
     PreviousWeek,
     /// Navigate to next week
     NextWeek,
+    /// Navigate to previous quarter
+    PreviousQuarter,
+    /// Navigate to next quarter
+    NextQuarter,
     /// Navigate to today
     GoToToday,
     /// Toggle date picker visibility

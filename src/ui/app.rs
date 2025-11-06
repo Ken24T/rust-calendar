@@ -302,6 +302,48 @@ impl Application for CalendarApp {
                     self.current_date = next_week;
                 }
             }
+            Message::PreviousQuarter => {
+                // Go back 3 months
+                let current_month = self.current_date.month();
+                let current_year = self.current_date.year();
+                
+                let new_month = if current_month <= 3 {
+                    current_month + 9
+                } else {
+                    current_month - 3
+                };
+                
+                let new_year = if current_month <= 3 {
+                    current_year - 1
+                } else {
+                    current_year
+                };
+                
+                if let Some(new_date) = NaiveDate::from_ymd_opt(new_year, new_month, 1) {
+                    self.current_date = new_date;
+                }
+            }
+            Message::NextQuarter => {
+                // Go forward 3 months
+                let current_month = self.current_date.month();
+                let current_year = self.current_date.year();
+                
+                let new_month = if current_month >= 10 {
+                    current_month - 9
+                } else {
+                    current_month + 3
+                };
+                
+                let new_year = if current_month >= 10 {
+                    current_year + 1
+                } else {
+                    current_year
+                };
+                
+                if let Some(new_date) = NaiveDate::from_ymd_opt(new_year, new_month, 1) {
+                    self.current_date = new_date;
+                }
+            }
             Message::GoToToday => {
                 self.current_date = Local::now().naive_local().date();
             }
@@ -400,7 +442,7 @@ impl CalendarApp {
                 self.time_slot_interval,
                 self.first_day_of_week,
             ),
-            ViewType::Quarter => helpers::create_placeholder_view("Quarter View - Coming Soon"),
+            ViewType::Quarter => views::create_quarter_view(self.current_date, &self.calendar_theme),
         }
     }
 }
