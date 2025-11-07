@@ -1,7 +1,9 @@
 // Event creation/edit dialog
 
 use iced::widget::{button, checkbox, column, container, pick_list, row, text, text_input, Column, Row};
-use iced::{Alignment, Element, Length};
+use iced::{Element, Length};
+use iced::widget::text_input::Id;
+use iced_aw::DatePicker;
 use crate::models::event::Event;
 use crate::ui::messages::Message;
 use crate::ui::theme::CalendarTheme;
@@ -24,6 +26,8 @@ pub struct EventDialogState {
     pub recurrence: String,
     pub is_editing: bool,
     pub validation_error: Option<String>,
+    pub show_start_date_picker: bool,
+    pub show_end_date_picker: bool,
 }
 
 impl EventDialogState {
@@ -47,6 +51,8 @@ impl EventDialogState {
             recurrence: "None".to_string(),
             is_editing: false,
             validation_error: None,
+            show_start_date_picker: false,
+            show_end_date_picker: false,
         }
     }
     
@@ -66,6 +72,8 @@ impl EventDialogState {
             recurrence: event.recurrence_rule.clone().unwrap_or_else(|| "None".to_string()),
             is_editing: true,
             validation_error: None,
+            show_start_date_picker: false,
+            show_end_date_picker: false,
         }
     }
     
@@ -175,155 +183,226 @@ pub fn create_event_dialog<'a>(
         "Create Event"
     };
     
-    let iced_theme = &theme.base;
+    let _iced_theme = &theme.base;
     
     let mut content = Column::new()
-        .spacing(20)
-        .padding(20)
-        .width(Length::Fixed(500.0));
+        .spacing(12)
+        .padding(16)
+        .width(Length::Fixed(450.0));
     
     // Title
     content = content.push(
         text(title_text)
-            .size(24)
+            .size(20)
     );
     
     // Validation error
     if let Some(error) = &state.validation_error {
         content = content.push(
             container(text(error).style(iced::theme::Text::Color(iced::Color::from_rgb(0.8, 0.2, 0.2))))
-                .padding(10)
+                .padding(8)
+                .style(|_theme: &iced::Theme| {
+                    container::Appearance {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(0.8, 0.2, 0.2, 0.1))),
+                        border: iced::Border {
+                            color: iced::Color::from_rgb(0.8, 0.2, 0.2),
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
         );
     }
     
     // Title input
     content = content.push(
         column![
-            text("Title *").size(14),
+            text("Title *").size(12),
             text_input("Event title", &state.title)
                 .on_input(Message::UpdateEventTitle)
-                .padding(10)
+                .id(Id::new("title"))
+                .padding(8)
         ]
-        .spacing(5)
+        .spacing(4)
     );
     
     // Description
     content = content.push(
         column![
-            text("Description").size(14),
+            text("Description").size(12),
             text_input("Event description", &state.description)
                 .on_input(Message::UpdateEventDescription)
-                .padding(10)
+                .id(Id::new("description"))
+                .padding(8)
         ]
-        .spacing(5)
+        .spacing(4)
     );
     
     // Location
     content = content.push(
         column![
-            text("Location").size(14),
+            text("Location").size(12),
             text_input("Event location", &state.location)
                 .on_input(Message::UpdateEventLocation)
-                .padding(10)
+                .id(Id::new("location"))
+                .padding(8)
         ]
-        .spacing(5)
+        .spacing(4)
     );
     
     // All-day checkbox
     content = content.push(
         checkbox("All-day event", state.all_day)
             .on_toggle(Message::ToggleEventAllDay)
+            .size(16)
     );
     
     // Start date/time
     if state.all_day {
+        // Parse current start date for date picker
+        let start_date_parsed = NaiveDate::parse_from_str(&state.start_date, "%Y-%m-%d")
+            .unwrap_or_else(|_| Local::now().date_naive());
+        let aw_date: iced_aw::date_picker::Date = start_date_parsed.into();
+        
         content = content.push(
             column![
-                text("Start Date *").size(14),
-                text_input("YYYY-MM-DD", &state.start_date)
-                    .on_input(Message::UpdateEventStartDate)
-                    .padding(10)
+                text("Start Date *").size(12),
+                DatePicker::new(
+                    state.show_start_date_picker,
+                    aw_date,
+                    button(text(&state.start_date).size(12))
+                        .on_press(Message::OpenStartDatePicker)
+                        .padding(8)
+                        .width(Length::Fill),
+                    Message::CancelStartDatePicker,
+                    Message::SubmitStartDate
+                )
             ]
-            .spacing(5)
+            .spacing(4)
         );
     } else {
+        // Parse current start date for date picker
+        let start_date_parsed = NaiveDate::parse_from_str(&state.start_date, "%Y-%m-%d")
+            .unwrap_or_else(|_| Local::now().date_naive());
+        let aw_date: iced_aw::date_picker::Date = start_date_parsed.into();
+        
         content = content.push(
             column![
-                text("Start *").size(14),
+                text("Start *").size(12),
                 row![
-                    text_input("YYYY-MM-DD", &state.start_date)
-                        .on_input(Message::UpdateEventStartDate)
-                        .padding(10)
-                        .width(Length::FillPortion(2)),
+                    container(
+                        DatePicker::new(
+                            state.show_start_date_picker,
+                            aw_date,
+                            button(text(&state.start_date).size(12))
+                                .on_press(Message::OpenStartDatePicker)
+                                .padding(8)
+                                .width(Length::Fill),
+                            Message::CancelStartDatePicker,
+                            Message::SubmitStartDate
+                        )
+                    )
+                    .width(Length::FillPortion(2)),
                     text_input("HH:MM", &state.start_time)
                         .on_input(Message::UpdateEventStartTime)
-                        .padding(10)
+                        .id(Id::new("start_time"))
+                        .padding(8)
                         .width(Length::FillPortion(1)),
                 ]
-                .spacing(10)
+                .spacing(8)
             ]
-            .spacing(5)
+            .spacing(4)
         );
     }
     
     // End date/time
     if state.all_day {
+        // Parse current end date for date picker
+        let end_date_parsed = NaiveDate::parse_from_str(&state.end_date, "%Y-%m-%d")
+            .unwrap_or_else(|_| Local::now().date_naive());
+        let aw_date: iced_aw::date_picker::Date = end_date_parsed.into();
+        
         content = content.push(
             column![
-                text("End Date *").size(14),
-                text_input("YYYY-MM-DD", &state.end_date)
-                    .on_input(Message::UpdateEventEndDate)
-                    .padding(10)
+                text("End Date *").size(12),
+                DatePicker::new(
+                    state.show_end_date_picker,
+                    aw_date,
+                    button(text(&state.end_date).size(12))
+                        .on_press(Message::OpenEndDatePicker)
+                        .padding(8)
+                        .width(Length::Fill),
+                    Message::CancelEndDatePicker,
+                    Message::SubmitEndDate
+                )
             ]
-            .spacing(5)
+            .spacing(4)
         );
     } else {
+        // Parse current end date for date picker
+        let end_date_parsed = NaiveDate::parse_from_str(&state.end_date, "%Y-%m-%d")
+            .unwrap_or_else(|_| Local::now().date_naive());
+        let aw_date: iced_aw::date_picker::Date = end_date_parsed.into();
+        
         content = content.push(
             column![
-                text("End *").size(14),
+                text("End *").size(12),
                 row![
-                    text_input("YYYY-MM-DD", &state.end_date)
-                        .on_input(Message::UpdateEventEndDate)
-                        .padding(10)
-                        .width(Length::FillPortion(2)),
+                    container(
+                        DatePicker::new(
+                            state.show_end_date_picker,
+                            aw_date,
+                            button(text(&state.end_date).size(12))
+                                .on_press(Message::OpenEndDatePicker)
+                                .padding(8)
+                                .width(Length::Fill),
+                            Message::CancelEndDatePicker,
+                            Message::SubmitEndDate
+                        )
+                    )
+                    .width(Length::FillPortion(2)),
                     text_input("HH:MM", &state.end_time)
                         .on_input(Message::UpdateEventEndTime)
-                        .padding(10)
+                        .id(Id::new("end_time"))
+                        .padding(8)
                         .width(Length::FillPortion(1)),
                 ]
-                .spacing(10)
+                .spacing(8)
             ]
-            .spacing(5)
+            .spacing(4)
         );
     }
     
     // Category
     content = content.push(
         column![
-            text("Category").size(14),
+            text("Category").size(12),
             text_input("e.g., Work, Personal", &state.category)
                 .on_input(Message::UpdateEventCategory)
-                .padding(10)
+                .id(Id::new("category"))
+                .padding(8)
         ]
-        .spacing(5)
+        .spacing(4)
     );
     
     // Color
     content = content.push(
         column![
-            text("Color").size(14),
+            text("Color").size(12),
             row![
                 text_input("#RRGGBB", &state.color)
                     .on_input(Message::UpdateEventColor)
-                    .padding(10)
+                    .id(Id::new("color"))
+                    .padding(8)
                     .width(Length::FillPortion(3)),
                 container(text("  "))
-                    .width(Length::Fixed(40.0))
-                    .height(Length::Fixed(40.0))
+                    .width(Length::Fixed(30.0))
+                    .height(Length::Fixed(30.0))
             ]
-            .spacing(10)
+            .spacing(8)
         ]
-        .spacing(5)
+        .spacing(4)
     );
     
     // Recurrence
@@ -337,45 +416,75 @@ pub fn create_event_dialog<'a>(
     
     content = content.push(
         column![
-            text("Recurrence").size(14),
+            text("Recurrence").size(12),
             pick_list(
                 recurrence_options,
                 Some(state.recurrence.clone()),
                 Message::UpdateEventRecurrence
             )
-            .padding(10)
+            .padding(8)
         ]
-        .spacing(5)
+        .spacing(4)
     );
     
     // Buttons
-    let mut button_row = Row::new().spacing(10);
+    let mut button_row = Row::new().spacing(8);
     
     button_row = button_row.push(
-        button(text("Save"))
+        button(text("Save").size(14))
             .on_press(Message::SaveEvent)
-            .padding(10)
+            .padding(8)
     );
     
     button_row = button_row.push(
-        button(text("Cancel"))
+        button(text("Cancel").size(14))
             .on_press(Message::CloseEventDialog)
-            .padding(10)
+            .padding(8)
     );
     
     if state.is_editing {
         if let Some(id) = state.event_id {
             button_row = button_row.push(
-                button(text("Delete"))
+                button(text("Delete").size(14))
                     .on_press(Message::ConfirmDeleteEvent(id))
-                    .padding(10)
+                    .padding(8)
             );
         }
     }
     
     content = content.push(button_row);
     
-    container(content)
+    // Wrap in scrollable with max height and proper background
+    let scrollable_content = iced::widget::scrollable(content)
+        .height(Length::Fixed(500.0));
+    
+    let dialog_container = container(scrollable_content)
+        .width(Length::Fixed(450.0))
+        .padding(0)
+        .style(|theme: &iced::Theme| {
+            container::Appearance {
+                background: Some(iced::Background::Color(
+                    if theme.palette().background == iced::Color::WHITE {
+                        iced::Color::WHITE
+                    } else {
+                        iced::Color::from_rgb(0.15, 0.15, 0.15)
+                    }
+                )),
+                border: iced::Border {
+                    color: iced::Color::from_rgb(0.5, 0.5, 0.5),
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                shadow: iced::Shadow {
+                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.3),
+                    offset: iced::Vector::new(0.0, 4.0),
+                    blur_radius: 10.0,
+                },
+                ..Default::default()
+            }
+        });
+    
+    container(dialog_container)
         .width(Length::Fill)
         .height(Length::Fill)
         .center_x()

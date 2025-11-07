@@ -756,6 +756,23 @@ impl Application for CalendarApp {
                     state.validation_error = None;
                 }
             }
+            Message::OpenStartDatePicker => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.show_start_date_picker = true;
+                }
+            }
+            Message::SubmitStartDate(date) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.start_date = format!("{:04}-{:02}-{:02}", date.year, date.month, date.day);
+                    state.show_start_date_picker = false;
+                    state.validation_error = None;
+                }
+            }
+            Message::CancelStartDatePicker => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.show_start_date_picker = false;
+                }
+            }
             Message::UpdateEventStartTime(time) => {
                 if let Some(state) = &mut self.event_dialog_state {
                     state.start_time = time;
@@ -766,6 +783,23 @@ impl Application for CalendarApp {
                 if let Some(state) = &mut self.event_dialog_state {
                     state.end_date = date;
                     state.validation_error = None;
+                }
+            }
+            Message::OpenEndDatePicker => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.show_end_date_picker = true;
+                }
+            }
+            Message::SubmitEndDate(date) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.end_date = format!("{:04}-{:02}-{:02}", date.year, date.month, date.day);
+                    state.show_end_date_picker = false;
+                    state.validation_error = None;
+                }
+            }
+            Message::CancelEndDatePicker => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.show_end_date_picker = false;
                 }
             }
             Message::UpdateEventEndTime(time) => {

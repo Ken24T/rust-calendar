@@ -177,7 +177,7 @@ pub fn create_day_view(
             false
         };
         
-        // Find events that occur in this time slot
+        // Find events that START in this time slot (to avoid duplicates)
         let slot_start_minutes = total_minutes_elapsed;
         let slot_end_minutes = total_minutes_elapsed + time_slot_interval;
         
@@ -186,8 +186,8 @@ pub fn create_day_view(
             let event_start_minutes = (event.start.hour() * 60 + event.start.minute()) as u32;
             let event_end_minutes = (event.end.hour() * 60 + event.end.minute()) as u32;
             
-            // Check if event overlaps with this slot
-            if event_start_minutes < slot_end_minutes && event_end_minutes > slot_start_minutes {
+            // Only show event in the slot where it STARTS
+            if event_start_minutes >= slot_start_minutes && event_start_minutes < slot_end_minutes {
                 // Parse event color
                 let event_color = event.color.as_ref()
                     .and_then(|c| parse_hex_color(c))

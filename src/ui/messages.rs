@@ -120,10 +120,22 @@ pub enum Message {
     UpdateEventLocation(String),
     /// Update event start date
     UpdateEventStartDate(String), // YYYY-MM-DD format
+    /// Open start date picker
+    OpenStartDatePicker,
+    /// Submit start date from picker
+    SubmitStartDate(iced_aw::date_picker::Date),
+    /// Cancel start date picker
+    CancelStartDatePicker,
     /// Update event start time
     UpdateEventStartTime(String), // HH:MM format
     /// Update event end date
     UpdateEventEndDate(String), // YYYY-MM-DD format
+    /// Open end date picker
+    OpenEndDatePicker,
+    /// Submit end date from picker
+    SubmitEndDate(iced_aw::date_picker::Date),
+    /// Cancel end date picker
+    CancelEndDatePicker,
     /// Update event end time
     UpdateEventEndTime(String), // HH:MM format
     /// Toggle all-day event
