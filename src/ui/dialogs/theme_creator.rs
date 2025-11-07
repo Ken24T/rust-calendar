@@ -5,6 +5,39 @@ use iced_aw::{Card, Modal};
 use crate::ui::messages::Message;
 use crate::ui::theme::CalendarTheme;
 
+/// Calculate relative luminance for WCAG contrast ratio
+fn relative_luminance(color: iced::Color) -> f32 {
+    let r = if color.r <= 0.03928 { color.r / 12.92 } else { ((color.r + 0.055) / 1.055).powf(2.4) };
+    let g = if color.g <= 0.03928 { color.g / 12.92 } else { ((color.g + 0.055) / 1.055).powf(2.4) };
+    let b = if color.b <= 0.03928 { color.b / 12.92 } else { ((color.b + 0.055) / 1.055).powf(2.4) };
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/// Calculate WCAG contrast ratio between two colors
+fn contrast_ratio(color1: iced::Color, color2: iced::Color) -> f32 {
+    let lum1 = relative_luminance(color1);
+    let lum2 = relative_luminance(color2);
+    let lighter = lum1.max(lum2);
+    let darker = lum1.min(lum2);
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+/// Check if text color has sufficient contrast with background (WCAG AA requires 4.5:1 for normal text)
+fn has_sufficient_contrast(text_color: iced::Color, bg_color: iced::Color) -> bool {
+    contrast_ratio(text_color, bg_color) >= 4.5
+}
+
+/// Suggest a better text color (black or white) based on background
+fn suggest_text_color(bg_color: iced::Color) -> iced::Color {
+    let luminance = relative_luminance(bg_color);
+    // Use white text for dark backgrounds, black for light backgrounds
+    if luminance > 0.5 {
+        Color::BLACK
+    } else {
+        Color::WHITE
+    }
+}
+
 /// Helper to convert Color to hex string
 fn color_to_hex(color: iced::Color) -> String {
     format!(
@@ -150,10 +183,22 @@ pub fn view<'a>(
 
         column![
             text(display_name).size(14),
-            // Color swatch display
-            container(text(""))
+            // Color swatch display with sample text in black and white
+            container(
+                row![
+                    text("Abc")
+                        .size(16)
+                        .style(Color::BLACK),
+                    text("Abc")
+                        .size(16)
+                        .style(Color::WHITE),
+                ]
+                .spacing(10)
+            )
                 .width(Length::Fixed(120.0))
                 .height(Length::Fixed(40.0))
+                .center_x()
+                .center_y()
                 .style(move |_theme: &iced::Theme| {
                     container::Appearance {
                         background: Some(iced::Background::Color(color_picker_color)),
@@ -220,6 +265,71 @@ pub fn view<'a>(
                 }).width(Length::Fill),
             ]
             .spacing(8),
+            // Contrast warnings
+            {
+                let mut warnings = column![].spacing(6);
+                
+                // Check contrast based on which field is being edited
+                let (bg_color, text_color, context) = match color_picker_field {
+                    "today_background" | "weekend_background" | "day_background" => {
+                        (color_picker_color, theme.text_primary, "with primary text")
+                    },
+                    "text_primary" => {
+                        // Check against multiple backgrounds
+                        let mut has_issues = false;
+                        if !has_sufficient_contrast(color_picker_color, theme.today_background) {
+                            has_issues = true;
+                        }
+                        if !has_sufficient_contrast(color_picker_color, theme.day_background) {
+                            has_issues = true;
+                        }
+                        if has_issues {
+                            (theme.day_background, color_picker_color, "on some backgrounds")
+                        } else {
+                            (theme.day_background, color_picker_color, "")
+                        }
+                    },
+                    "text_secondary" => {
+                        (theme.calendar_background, color_picker_color, "on calendar background")
+                    },
+                    _ => (color_picker_color, theme.text_primary, ""),
+                };
+                
+                if !context.is_empty() && !has_sufficient_contrast(text_color, bg_color) {
+                    let ratio = contrast_ratio(text_color, bg_color);
+                    let suggested = suggest_text_color(bg_color);
+                    warnings = warnings.push(
+                        container(
+                            column![
+                                text(format!("⚠ Low contrast {}", context))
+                                    .size(11)
+                                    .style(Color::from_rgb(0.9, 0.6, 0.0)),
+                                text(format!("Ratio: {:.1}:1 (need 4.5:1)", ratio))
+                                    .size(10)
+                                    .style(Color::from_rgb(0.7, 0.7, 0.7)),
+                                text(format!("Suggest: {}", color_to_hex(suggested)))
+                                    .size(10)
+                                    .style(Color::from_rgb(0.7, 0.7, 0.7)),
+                            ]
+                            .spacing(2)
+                        )
+                        .padding(8)
+                        .style(|_theme: &iced::Theme| {
+                            container::Appearance {
+                                background: Some(iced::Background::Color(Color::from_rgba(0.9, 0.6, 0.0, 0.2))),
+                                border: iced::Border {
+                                    color: Color::from_rgb(0.9, 0.6, 0.0),
+                                    width: 1.0,
+                                    radius: 4.0.into(),
+                                },
+                                ..Default::default()
+                            }
+                        })
+                    );
+                }
+                
+                warnings
+            },
         ]
         .spacing(12)
         .padding(10)
