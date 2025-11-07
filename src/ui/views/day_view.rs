@@ -4,8 +4,27 @@ use iced::{Border, Element, Length, Theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced_aw::menu::{Item, Menu, MenuBar};
 
+use crate::models::event::Event;
 use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
+
+/// Helper function to parse hex color string
+fn parse_hex_color(hex: &str) -> Option<iced::Color> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    
+    Some(iced::Color::from_rgb(
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+    ))
+}
 
 /// Create the Day view with configurable time slots
 pub fn create_day_view(
@@ -13,6 +32,7 @@ pub fn create_day_view(
     calendar_theme: &CalendarTheme,
     time_format: &str,
     time_slot_interval: u32,
+    events: &[Event],
 ) -> Element<'static, Message> {
     let today = Local::now().naive_local().date();
     let is_today = current_date == today;
@@ -112,6 +132,13 @@ pub fn create_day_view(
     let total_slots = total_minutes / time_slot_interval;
     let slot_height = 40.0; // Fixed height regardless of interval
     
+    // Filter events for this day
+    let day_events: Vec<&Event> = events.iter()
+        .filter(|event| {
+            event.start.date_naive() == current_date || event.end.date_naive() == current_date
+        })
+        .collect();
+    
     // Time slots
     let mut time_slots = column![].spacing(0);
     
@@ -149,6 +176,50 @@ pub fn create_day_view(
         } else {
             false
         };
+        
+        // Find events that occur in this time slot
+        let slot_start_minutes = total_minutes_elapsed;
+        let slot_end_minutes = total_minutes_elapsed + time_slot_interval;
+        
+        let mut event_widgets = column![].spacing(2);
+        for event in &day_events {
+            let event_start_minutes = (event.start.hour() * 60 + event.start.minute()) as u32;
+            let event_end_minutes = (event.end.hour() * 60 + event.end.minute()) as u32;
+            
+            // Check if event overlaps with this slot
+            if event_start_minutes < slot_end_minutes && event_end_minutes > slot_start_minutes {
+                // Parse event color
+                let event_color = event.color.as_ref()
+                    .and_then(|c| parse_hex_color(c))
+                    .unwrap_or(iced::Color::from_rgb(0.23, 0.51, 0.96));
+                
+                let event_time = if use_24h {
+                    format!("{:02}:{:02}-{:02}:{:02}", 
+                        event.start.hour(), event.start.minute(),
+                        event.end.hour(), event.end.minute())
+                } else {
+                    let start_hour = event.start.hour();
+                    let end_hour = event.end.hour();
+                    let (sh, sp) = if start_hour == 0 { (12, "AM") } else if start_hour < 12 { (start_hour, "AM") } else if start_hour == 12 { (12, "PM") } else { (start_hour - 12, "PM") };
+                    let (eh, ep) = if end_hour == 0 { (12, "AM") } else if end_hour < 12 { (end_hour, "AM") } else if end_hour == 12 { (12, "PM") } else { (end_hour - 12, "PM") };
+                    format!("{}:{:02}{}-{}:{:02}{}", 
+                        sh, event.start.minute(), sp,
+                        eh, event.end.minute(), ep)
+                };
+                
+                let event_btn = button(
+                    column![
+                        text(&event.title).size(12),
+                        text(&event_time).size(10),
+                    ]
+                    .spacing(2)
+                )
+                .on_press(Message::EditEvent(event.id.unwrap_or(0)))
+                .padding([4, 8]);
+                
+                event_widgets = event_widgets.push(event_btn);
+            }
+        }
 
         let theme_colors = calendar_theme.clone();
         let slot_container = container(
@@ -156,9 +227,9 @@ pub fn create_day_view(
                 container(text(&time_label).size(12))
                     .width(80)
                     .padding([8, 10]),
-                container(text("")) // Event area - will be populated later
+                container(event_widgets)
                     .width(Length::Fill)
-                    .height(Length::Fixed(slot_height))
+                    .padding(4)
                     .style(move |_theme: &Theme| {
                         container::Appearance {
                             background: Some(iced::Background::Color(

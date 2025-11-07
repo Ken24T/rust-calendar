@@ -92,6 +92,8 @@ pub struct CalendarApp {
     show_event_dialog: bool,
     /// Event dialog state
     event_dialog_state: Option<crate::ui::dialogs::EventDialogState>,
+    /// Loaded events for current view range
+    events: Vec<crate::models::event::Event>,
 }
 
 impl Application for CalendarApp {
@@ -103,40 +105,43 @@ impl Application for CalendarApp {
     fn new(db_path: Self::Flags) -> (Self, Command<Self::Message>) {
         let init_data = utils::initialize_app(&db_path);
 
-        (
-            Self {
-                theme: init_data.theme,
-                calendar_theme: init_data.calendar_theme,
-                theme_name: init_data.theme_name,
-                available_themes: init_data.available_themes,
-                show_my_day: init_data.show_my_day,
-                my_day_position_right: init_data.my_day_position_right,
-                show_ribbon: init_data.show_ribbon,
-                current_view: init_data.current_view,
-                db: init_data.db,
-                show_settings_dialog: false,
-                time_format: init_data.time_format,
-                first_day_of_week: init_data.first_day_of_week,
-                date_format: init_data.date_format,
-                current_date: init_data.current_date,
-                show_date_picker: false,
-                show_theme_picker: false,
-                show_theme_manager: false,
-                time_slot_interval: init_data.time_slot_interval,
-                show_create_theme: false,
-                is_editing_theme: false,
-                editing_theme_original_name: String::new(),
-                creating_theme_name: String::new(),
-                creating_base_theme: "Light".to_string(),
-                creating_theme: None,
-                show_color_picker: false,
-                color_picker_field: String::new(),
-                color_picker_color: Color::BLACK,
-                show_event_dialog: false,
-                event_dialog_state: None,
-            },
-            Command::none(),
-        )
+        let mut app = Self {
+            theme: init_data.theme,
+            calendar_theme: init_data.calendar_theme,
+            theme_name: init_data.theme_name,
+            available_themes: init_data.available_themes,
+            show_my_day: init_data.show_my_day,
+            my_day_position_right: init_data.my_day_position_right,
+            show_ribbon: init_data.show_ribbon,
+            current_view: init_data.current_view,
+            db: init_data.db,
+            show_settings_dialog: false,
+            time_format: init_data.time_format,
+            first_day_of_week: init_data.first_day_of_week,
+            date_format: init_data.date_format,
+            current_date: init_data.current_date,
+            show_date_picker: false,
+            show_theme_picker: false,
+            show_theme_manager: false,
+            time_slot_interval: init_data.time_slot_interval,
+            show_create_theme: false,
+            is_editing_theme: false,
+            editing_theme_original_name: String::new(),
+            creating_theme_name: String::new(),
+            creating_base_theme: "Light".to_string(),
+            creating_theme: None,
+            show_color_picker: false,
+            color_picker_field: String::new(),
+            color_picker_color: Color::BLACK,
+            show_event_dialog: false,
+            event_dialog_state: None,
+            events: Vec::new(),
+        };
+        
+        // Load events for initial view
+        app.load_events();
+        
+        (app, Command::none())
     }
 
     fn title(&self) -> String {
@@ -212,6 +217,7 @@ impl Application for CalendarApp {
             Message::SwitchView(view_type) => {
                 self.current_view = view_type;
                 self.save_settings();
+                self.load_events();
             }
             Message::OpenSettings => {
                 self.show_settings_dialog = true;
@@ -607,21 +613,25 @@ impl Application for CalendarApp {
             Message::PreviousDay => {
                 if let Some(prev_day) = self.current_date.checked_sub_signed(Duration::days(1)) {
                     self.current_date = prev_day;
+                    self.load_events();
                 }
             }
             Message::NextDay => {
                 if let Some(next_day) = self.current_date.checked_add_signed(Duration::days(1)) {
                     self.current_date = next_day;
+                    self.load_events();
                 }
             }
             Message::PreviousWeek => {
                 if let Some(prev_week) = self.current_date.checked_sub_signed(Duration::days(7)) {
                     self.current_date = prev_week;
+                    self.load_events();
                 }
             }
             Message::NextWeek => {
                 if let Some(next_week) = self.current_date.checked_add_signed(Duration::days(7)) {
                     self.current_date = next_week;
+                    self.load_events();
                 }
             }
             Message::PreviousQuarter => {
@@ -643,6 +653,7 @@ impl Application for CalendarApp {
                 
                 if let Some(new_date) = NaiveDate::from_ymd_opt(new_year, new_month, 1) {
                     self.current_date = new_date;
+                    self.load_events();
                 }
             }
             Message::NextQuarter => {
@@ -664,10 +675,12 @@ impl Application for CalendarApp {
                 
                 if let Some(new_date) = NaiveDate::from_ymd_opt(new_year, new_month, 1) {
                     self.current_date = new_date;
+                    self.load_events();
                 }
             }
             Message::GoToToday => {
                 self.current_date = Local::now().naive_local().date();
+                self.load_events();
             }
             Message::ToggleDatePicker => {
                 self.show_date_picker = !self.show_date_picker;
@@ -675,12 +688,14 @@ impl Application for CalendarApp {
             Message::ChangeMonth(month) => {
                 if let Some(new_date) = NaiveDate::from_ymd_opt(self.current_date.year(), month, 1) {
                     self.current_date = new_date;
+                    self.load_events();
                 }
                 self.show_date_picker = false;
             }
             Message::ChangeYear(year) => {
                 if let Some(new_date) = NaiveDate::from_ymd_opt(year, self.current_date.month(), 1) {
                     self.current_date = new_date;
+                    self.load_events();
                 }
                 self.show_date_picker = false;
             }
@@ -689,6 +704,7 @@ impl Application for CalendarApp {
                 if let Some(new_date) = NaiveDate::from_ymd_opt(year, month, day) {
                     self.current_date = new_date;
                     self.current_view = ViewType::Week;
+                    self.load_events();
                 }
             }
             Message::UpdateTimeSlotInterval(interval) => {
@@ -783,26 +799,32 @@ impl Application for CalendarApp {
                     match state.to_event() {
                         Ok(event) => {
                             // Save to database
-                            if let Ok(db) = self.db.lock() {
-                                let service = crate::services::event::EventService::new(db.connection());
-                                
-                                let result = if state.is_editing {
-                                    service.update(&event)
-                                } else {
-                                    service.create(event).map(|_| ())
-                                };
-                                
-                                match result {
-                                    Ok(_) => {
-                                        // Close dialog on success
-                                        self.show_event_dialog = false;
-                                        self.event_dialog_state = None;
+                            let save_result = {
+                                if let Ok(db) = self.db.lock() {
+                                    let service = crate::services::event::EventService::new(db.connection());
+                                    
+                                    if state.is_editing {
+                                        service.update(&event)
+                                    } else {
+                                        service.create(event).map(|_| ())
                                     }
-                                    Err(e) => {
-                                        // Show error
-                                        if let Some(dialog_state) = &mut self.event_dialog_state {
-                                            dialog_state.validation_error = Some(format!("Failed to save event: {}", e));
-                                        }
+                                } else {
+                                    Err(anyhow::anyhow!("Failed to acquire database lock"))
+                                }
+                            }; // Lock is released here
+                            
+                            match save_result {
+                                Ok(_) => {
+                                    // Close dialog on success
+                                    self.show_event_dialog = false;
+                                    self.event_dialog_state = None;
+                                    // Reload events to show the new/updated event
+                                    self.load_events();
+                                }
+                                Err(e) => {
+                                    // Show error
+                                    if let Some(dialog_state) = &mut self.event_dialog_state {
+                                        dialog_state.validation_error = Some(format!("Failed to save event: {}", e));
                                     }
                                 }
                             }
@@ -824,6 +846,7 @@ impl Application for CalendarApp {
                 }
                 self.show_event_dialog = false;
                 self.event_dialog_state = None;
+                self.load_events();
             }
             Message::ConfirmDeleteEvent(event_id) => {
                 // For now, just delete directly. Could add a confirmation dialog later
@@ -833,6 +856,7 @@ impl Application for CalendarApp {
                 }
                 self.show_event_dialog = false;
                 self.event_dialog_state = None;
+                self.load_events();
             }
             Message::CancelDeleteEvent => {
                 // Just dismiss any delete confirmation
@@ -880,6 +904,116 @@ impl Application for CalendarApp {
 }
 
 impl CalendarApp {
+    /// Load events for the currently displayed date range
+    fn load_events(&mut self) {
+        use crate::services::event::EventService;
+        use chrono::{Datelike, TimeZone};
+        
+        // Calculate date range based on current view
+        let (start, end) = match self.current_view {
+            ViewType::Day => {
+                let start = self.current_date.and_hms_opt(0, 0, 0)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                let end = self.current_date.and_hms_opt(23, 59, 59)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                (start, end)
+            },
+            ViewType::WorkWeek | ViewType::Week => {
+                // Get start of week
+                let weekday = self.current_date.weekday().num_days_from_sunday();
+                let days_from_start = (weekday as i64 - self.first_day_of_week as i64 + 7) % 7;
+                let week_start = self.current_date - Duration::days(days_from_start);
+                
+                let days_in_view = if matches!(self.current_view, ViewType::WorkWeek) { 5 } else { 7 };
+                let week_end = week_start + Duration::days(days_in_view - 1);
+                
+                let start = week_start.and_hms_opt(0, 0, 0)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                let end = week_end.and_hms_opt(23, 59, 59)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                (start, end)
+            },
+            ViewType::Month => {
+                // Get first and last day of month
+                let first_day = NaiveDate::from_ymd_opt(
+                    self.current_date.year(),
+                    self.current_date.month(),
+                    1
+                ).unwrap();
+                let last_day = if self.current_date.month() == 12 {
+                    NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1)
+                        .map(|d| d.pred_opt())
+                        .flatten()
+                } else {
+                    NaiveDate::from_ymd_opt(
+                        self.current_date.year(),
+                        self.current_date.month() + 1,
+                        1
+                    ).map(|d| d.pred_opt())
+                    .flatten()
+                }.unwrap();
+                
+                let start = first_day.and_hms_opt(0, 0, 0)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                let end = last_day.and_hms_opt(23, 59, 59)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                (start, end)
+            },
+            ViewType::Quarter => {
+                // Get first day of quarter
+                let quarter_start_month = ((self.current_date.month() - 1) / 3) * 3 + 1;
+                let first_day = NaiveDate::from_ymd_opt(
+                    self.current_date.year(),
+                    quarter_start_month,
+                    1
+                ).unwrap();
+                
+                // Get last day of quarter (3 months later)
+                let quarter_end_month = quarter_start_month + 2;
+                let last_day = if quarter_end_month == 12 {
+                    NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1)
+                        .map(|d| d.pred_opt())
+                        .flatten()
+                } else {
+                    NaiveDate::from_ymd_opt(
+                        self.current_date.year(),
+                        quarter_end_month + 1,
+                        1
+                    ).map(|d| d.pred_opt())
+                    .flatten()
+                }.unwrap();
+                
+                let start = first_day.and_hms_opt(0, 0, 0)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                let end = last_day.and_hms_opt(23, 59, 59)
+                    .map(|naive| Local.from_local_datetime(&naive).single())
+                    .flatten();
+                (start, end)
+            },
+        };
+        
+        // Load events from database
+        if let (Some(start), Some(end)) = (start, end) {
+            if let Ok(db) = self.db.lock() {
+                let event_service = EventService::new(db.connection());
+                if let Ok(events) = event_service.find_by_date_range(start, end) {
+                    self.events = events;
+                } else {
+                    self.events = Vec::new();
+                }
+            }
+        } else {
+            self.events = Vec::new();
+        }
+    }
+
     /// Save current settings to database
     fn save_settings(&self) {
         utils::save_settings(
@@ -905,6 +1039,7 @@ impl CalendarApp {
                 &self.calendar_theme,
                 &self.time_format,
                 self.time_slot_interval,
+                &self.events,
             ),
             ViewType::Week => views::create_week_view(
                 self.current_date,
