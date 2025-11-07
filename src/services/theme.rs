@@ -15,17 +15,30 @@ impl<'a> ThemeService<'a> {
         Self { db }
     }
     
-    /// Get all available theme names
+    /// Get all available theme names (including built-in Light and Dark)
     pub fn list_themes(&self) -> Result<Vec<String>> {
         let conn = self.db.connection();
         let mut stmt = conn.prepare("SELECT name FROM custom_themes ORDER BY name")?;
-        let themes = stmt.query_map([], |row| row.get(0))?
+        let custom_themes = stmt.query_map([], |row| row.get(0))?
             .collect::<Result<Vec<String>, _>>()?;
-        Ok(themes)
+        
+        // Always include built-in themes at the start
+        let mut all_themes = vec!["Light".to_string(), "Dark".to_string()];
+        all_themes.extend(custom_themes);
+        
+        Ok(all_themes)
     }
     
-    /// Get a theme by name
+    /// Get a theme by name (handles built-in and custom themes)
     pub fn get_theme(&self, name: &str) -> Result<CalendarTheme> {
+        // Handle built-in themes
+        match name {
+            "Light" => return Ok(CalendarTheme::light()),
+            "Dark" => return Ok(CalendarTheme::dark()),
+            _ => {}
+        }
+        
+        // Load custom theme from database
         let conn = self.db.connection();
         let theme = conn.query_row(
             "SELECT name, is_dark, app_background, calendar_background, weekend_background,
