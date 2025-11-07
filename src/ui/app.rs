@@ -241,34 +241,31 @@ impl Application for CalendarApp {
                     return Command::none();
                 }
                 
-                // Delete the theme from database
-                {
-                    let db = match self.db.lock() {
-                        Ok(db) => db,
-                        Err(_) => return Command::none(),
-                    };
-                    
-                    let theme_service = ThemeService::new(&db);
-                    let _ = theme_service.delete_theme(&theme_name);
-                    
-                    // Reload available themes
-                    if let Ok(themes) = theme_service.list_themes() {
-                        self.available_themes = themes;
-                    }
+                let was_active = self.theme_name == theme_name;
+                
+                // Delete the theme from database and reload themes
+                let db = match self.db.lock() {
+                    Ok(db) => db,
+                    Err(_) => return Command::none(),
+                };
+                
+                let theme_service = ThemeService::new(&db);
+                let _ = theme_service.delete_theme(&theme_name);
+                
+                // Reload available themes
+                if let Ok(themes) = theme_service.list_themes() {
+                    self.available_themes = themes;
                 }
                 
                 // If deleted theme was active, switch to Light
-                if self.theme_name == theme_name {
-                    let db = match self.db.lock() {
-                        Ok(db) => db,
-                        Err(_) => return Command::none(),
-                    };
-                    
-                    let theme_service = ThemeService::new(&db);
+                if was_active {
                     if let Ok(calendar_theme) = theme_service.get_theme("Light") {
                         self.theme_name = "Light".to_string();
                         self.theme = calendar_theme.base.clone();
                         self.calendar_theme = calendar_theme;
+                        
+                        // Drop the lock before saving settings (which may need it)
+                        drop(db);
                         self.save_settings();
                     }
                 }
