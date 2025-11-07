@@ -115,6 +115,26 @@ impl Database {
             [],
         ).context("Failed to insert dark theme")?;
         
+        // Events table (iCalendar compatible)
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                location TEXT,
+                start_datetime TEXT NOT NULL,
+                end_datetime TEXT NOT NULL,
+                is_all_day INTEGER NOT NULL DEFAULT 0,
+                category TEXT,
+                color TEXT,
+                recurrence_rule TEXT,
+                recurrence_exceptions TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        ).context("Failed to create events table")?;
+        
         Ok(())
     }
     
@@ -218,5 +238,52 @@ mod tests {
         assert_eq!(first_day, 0);
         assert_eq!(time_fmt, "12h");
         assert_eq!(date_fmt, "MM/DD/YYYY");
+    }
+    
+    #[test]
+    fn test_events_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        
+        // Check if events table exists
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
+            [],
+            |row| row.get(0)
+        );
+        
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(result.unwrap(), 1, "Events table should exist");
+    }
+    
+    #[test]
+    fn test_events_table_schema() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        
+        // Verify we can insert and query an event
+        let result = db.connection().execute(
+            "INSERT INTO events (title, start_datetime, end_datetime, is_all_day)
+             VALUES (?, ?, ?, ?)",
+            ["Test Event", "2025-11-07T10:00:00Z", "2025-11-07T11:00:00Z", "0"]
+        );
+        
+        assert!(result.is_ok(), "Should be able to insert an event");
+        
+        // Query the event back
+        let event_result: Result<(i64, String, String, String, i64), rusqlite::Error> = 
+            db.connection().query_row(
+                "SELECT id, title, start_datetime, end_datetime, is_all_day FROM events WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+            );
+        
+        assert!(event_result.is_ok(), "Should be able to query the event");
+        let (id, title, start, end, all_day) = event_result.unwrap();
+        assert_eq!(id, 1);
+        assert_eq!(title, "Test Event");
+        assert_eq!(start, "2025-11-07T10:00:00Z");
+        assert_eq!(end, "2025-11-07T11:00:00Z");
+        assert_eq!(all_day, 0);
     }
 }
