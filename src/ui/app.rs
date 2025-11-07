@@ -1,7 +1,7 @@
 // Main Calendar Application
 // Core iced Application implementation
 
-use iced::{Application, Command, Element, Theme};
+use iced::{Application, Command, Element, Theme, Color};
 use crate::services::database::Database;
 use crate::services::theme::ThemeService;
 use crate::ui::theme::CalendarTheme;
@@ -13,6 +13,24 @@ use crate::ui::components;
 use crate::ui::utils;
 use std::sync::{Arc, Mutex};
 use chrono::{Local, Datelike, NaiveDate, Duration};
+
+/// Helper function to parse hex color string to iced Color
+fn parse_hex_color(hex: &str) -> Option<Color> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    
+    Some(Color::from_rgb(
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+    ))
+}
 
 /// Main Calendar Application
 pub struct CalendarApp {
@@ -54,6 +72,10 @@ pub struct CalendarApp {
     time_slot_interval: u32,
     /// Show theme creation dialog
     show_create_theme: bool,
+    /// Whether we're editing an existing theme (vs creating new)
+    is_editing_theme: bool,
+    /// Original theme name when editing (for updating vs inserting)
+    editing_theme_original_name: String,
     /// Name for the theme being created
     creating_theme_name: String,
     /// Base theme name to copy from
@@ -92,6 +114,8 @@ impl Application for CalendarApp {
                 show_theme_manager: false,
                 time_slot_interval: init_data.time_slot_interval,
                 show_create_theme: false,
+                is_editing_theme: false,
+                editing_theme_original_name: String::new(),
                 creating_theme_name: String::new(),
                 creating_base_theme: "Light".to_string(),
                 creating_theme: None,
@@ -278,6 +302,7 @@ impl Application for CalendarApp {
             Message::StartCreateTheme => {
                 self.show_theme_manager = false;
                 self.show_create_theme = true;
+                self.is_editing_theme = false;
                 self.creating_theme_name = String::new();
                 self.creating_base_theme = "Light".to_string();
                 
@@ -292,9 +317,33 @@ impl Application for CalendarApp {
                     self.creating_theme = Some(theme);
                 }
             }
+            Message::StartEditTheme(theme_name) => {
+                // Don't allow editing built-in themes
+                if theme_name == "Light" || theme_name == "Dark" {
+                    return Command::none();
+                }
+                
+                self.show_theme_manager = false;
+                self.show_create_theme = true;
+                self.is_editing_theme = true;
+                self.editing_theme_original_name = theme_name.clone();
+                self.creating_theme_name = theme_name.clone();
+                
+                // Load the theme to edit
+                let db = match self.db.lock() {
+                    Ok(db) => db,
+                    Err(_) => return Command::none(),
+                };
+                
+                let theme_service = ThemeService::new(&db);
+                if let Ok(theme) = theme_service.get_theme(&theme_name) {
+                    self.creating_theme = Some(theme);
+                }
+            }
             Message::CancelCreateTheme => {
                 self.show_create_theme = false;
                 self.show_theme_manager = true;
+                self.is_editing_theme = false;
                 self.creating_theme = None;
             }
             Message::UpdateThemeName(name) => {
@@ -314,9 +363,25 @@ impl Application for CalendarApp {
                     self.creating_theme = Some(theme);
                 }
             }
-            Message::UpdateThemeColor(_field_name, _hex_color) => {
-                // TODO: Parse hex color and update the specific field in creating_theme
-                // Will implement in next step with color picker UI
+            Message::UpdateThemeColor(field_name, hex_color) => {
+                // Parse hex color and update the specific field in creating_theme
+                if let Some(theme) = &mut self.creating_theme {
+                    // Parse hex color (format: #RRGGBB)
+                    if let Some(color) = parse_hex_color(&hex_color) {
+                        match field_name.as_str() {
+                            "app_background" => theme.app_background = color,
+                            "calendar_background" => theme.calendar_background = color,
+                            "weekend_background" => theme.weekend_background = color,
+                            "today_background" => theme.today_background = color,
+                            "today_border" => theme.today_border = color,
+                            "day_background" => theme.day_background = color,
+                            "day_border" => theme.day_border = color,
+                            "text_primary" => theme.text_primary = color,
+                            "text_secondary" => theme.text_secondary = color,
+                            _ => {}
+                        }
+                    }
+                }
             }
             Message::SaveCustomTheme => {
                 if self.creating_theme_name.trim().is_empty() {
@@ -330,15 +395,34 @@ impl Application for CalendarApp {
                     };
                     
                     let theme_service = ThemeService::new(&db);
+                    
+                    // If editing and name changed, delete the old theme first
+                    if self.is_editing_theme && self.creating_theme_name != self.editing_theme_original_name {
+                        let _ = theme_service.delete_theme(&self.editing_theme_original_name);
+                    }
+                    
                     if theme_service.save_theme(theme, &self.creating_theme_name).is_ok() {
                         // Reload available themes
                         if let Ok(themes) = theme_service.list_themes() {
                             self.available_themes = themes;
                         }
                         
+                        // If the edited/created theme is now active, update the active theme
+                        if self.is_editing_theme && self.editing_theme_original_name == self.theme_name {
+                            self.theme_name = self.creating_theme_name.clone();
+                            self.theme = theme.base.clone();
+                            self.calendar_theme = theme.clone();
+                            
+                            drop(db);
+                            self.save_settings();
+                        } else {
+                            drop(db);
+                        }
+                        
                         // Close create dialog and reopen theme manager
                         self.show_create_theme = false;
                         self.show_theme_manager = true;
+                        self.is_editing_theme = false;
                         self.creating_theme = None;
                     }
                 }
@@ -474,6 +558,7 @@ impl Application for CalendarApp {
             self.show_settings_dialog,
             self.show_theme_manager,
             self.show_create_theme,
+            self.is_editing_theme,
             self.show_date_picker,
             self.show_theme_picker,
             &self.available_themes,

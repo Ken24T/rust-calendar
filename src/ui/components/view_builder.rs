@@ -19,6 +19,7 @@ pub fn build_view<'a>(
     show_settings_dialog: bool,
     show_theme_manager: bool,
     show_create_theme: bool,
+    is_editing_theme: bool,
     show_date_picker: bool,
     show_theme_picker: bool,
     available_themes: &'a [String],
@@ -108,6 +109,7 @@ pub fn build_view<'a>(
             creating_base_theme,
             creating_theme,
             calendar_theme,
+            is_editing_theme,
         )
     } else if show_date_picker {
         Modal::new(base_view, Some(dialogs::create_date_picker_dialog(

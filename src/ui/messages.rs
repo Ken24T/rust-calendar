@@ -48,6 +48,8 @@ pub enum Message {
     DeleteTheme(String),
     /// Start creating a new custom theme
     StartCreateTheme,
+    /// Start editing an existing theme
+    StartEditTheme(String),
     /// Cancel theme creation
     CancelCreateTheme,
     /// Update the name of the theme being created

@@ -42,18 +42,25 @@ pub fn create_theme_manager_dialog(
                 .into()
             );
         } else {
-            // Custom themes - show with delete button (only if more than 1 theme exists)
+            // Custom themes - show with edit and delete buttons
             let mut theme_row = row![
                 text(theme_text).size(14).width(Length::Fill),
             ];
             
+            // Edit button (always show for custom themes)
+            let edit_button = button(text("Edit").size(12))
+                .on_press(Message::StartEditTheme(theme_name.clone()))
+                .padding([5, 10]);
+            theme_row = theme_row.push(edit_button);
+            
+            // Delete button (only if more than 1 theme exists)
             if can_delete {
                 let delete_button = button(text("Delete").size(12))
                     .on_press(Message::DeleteTheme(theme_name.clone()))
                     .padding([5, 10]);
                 theme_row = theme_row.push(delete_button);
             } else {
-                theme_row = theme_row.push(text("(Last theme)").size(12));
+                theme_row = theme_row.push(text("(Last)").size(12));
             }
             
             theme_list.push(
