@@ -18,6 +18,8 @@ pub fn create_theme_manager_dialog(
     ];
     
     // List all themes with delete buttons for custom themes
+    let can_delete = available_themes.len() > 1;
+    
     for theme_name in available_themes {
         let is_builtin = theme_name == "Light" || theme_name == "Dark";
         let is_current = theme_name == current_theme_name;
@@ -40,19 +42,25 @@ pub fn create_theme_manager_dialog(
                 .into()
             );
         } else {
-            // Custom themes - show with delete button
-            let delete_button = button(text("Delete").size(12))
-                .on_press(Message::DeleteTheme(theme_name.clone()))
-                .padding([5, 10]);
+            // Custom themes - show with delete button (only if more than 1 theme exists)
+            let mut theme_row = row![
+                text(theme_text).size(14).width(Length::Fill),
+            ];
+            
+            if can_delete {
+                let delete_button = button(text("Delete").size(12))
+                    .on_press(Message::DeleteTheme(theme_name.clone()))
+                    .padding([5, 10]);
+                theme_row = theme_row.push(delete_button);
+            } else {
+                theme_row = theme_row.push(text("(Last theme)").size(12));
+            }
             
             theme_list.push(
-                row![
-                    text(theme_text).size(14).width(Length::Fill),
-                    delete_button,
-                ]
-                .spacing(10)
-                .padding(5)
-                .into()
+                theme_row
+                    .spacing(10)
+                    .padding(5)
+                    .into()
             );
         }
     }

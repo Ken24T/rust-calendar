@@ -241,6 +241,11 @@ impl Application for CalendarApp {
                     return Command::none();
                 }
                 
+                // Don't allow deletion if it's the only theme left
+                if self.available_themes.len() <= 1 {
+                    return Command::none();
+                }
+                
                 let was_active = self.theme_name == theme_name;
                 
                 // Delete the theme from database and reload themes
