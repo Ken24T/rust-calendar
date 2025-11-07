@@ -24,7 +24,13 @@ impl<'a> ThemeService<'a> {
         
         // Always include built-in themes at the start
         let mut all_themes = vec!["Light".to_string(), "Dark".to_string()];
-        all_themes.extend(custom_themes);
+        
+        // Add custom themes, but skip if they're named "Light" or "Dark" (shouldn't happen, but be safe)
+        for theme in custom_themes {
+            if theme != "Light" && theme != "Dark" {
+                all_themes.push(theme);
+            }
+        }
         
         Ok(all_themes)
     }
