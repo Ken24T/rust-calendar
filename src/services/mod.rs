@@ -3,6 +3,7 @@
 
 pub mod database;
 pub mod event;
+pub mod icalendar;
 pub mod reminder;
 pub mod notification;
 pub mod settings;
