@@ -1,5 +1,5 @@
 use chrono::{Datelike, Local, NaiveDate};
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::widget::{button, column, container, mouse_area, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
 use iced::alignment::Horizontal;
 
@@ -82,27 +82,29 @@ fn create_mini_month(
                 let is_weekend = date.weekday().num_days_from_sunday() == 0 
                     || date.weekday().num_days_from_sunday() == 6;
                 
-                // Make the day clickable to navigate to Week view
-                let day_button = button(
+                // Day cell - make it clickable using mouse_area for clean styling
+                // The container provides the colored background
+                let day_text_widget = container(
                     text(format!("{}", day_counter))
                         .size(10)
                         .horizontal_alignment(Horizontal::Center)
                 )
-                .on_press(Message::GoToDateInWeekView(year, month, day_counter as u32))
-                .padding(0)
                 .width(Length::Fill)
-                .height(Length::Fill);
+                .height(Length::Fill)
+                .center_x()
+                .center_y();
                 
-                let mut cell_container = container(day_button)
-                    .width(Length::FillPortion(1))
-                    .height(30)
-                    .padding(2)
-                    .center_x();
+                let clickable_day = mouse_area(day_text_widget)
+                    .on_press(Message::GoToDateInWeekView(year, month, day_counter as u32));
                 
-                // Style based on day type
-                let theme_colors = calendar_theme.clone();
-                if is_today {
-                    cell_container = cell_container
+                // Style based on day type - apply styling to container
+                let cell_container = if is_today {
+                    let theme_colors = calendar_theme.clone();
+                    container(clickable_day)
+                        .width(Length::FillPortion(1))
+                        .height(30)
+                        .padding(2)
+                        .center_x()
                         .style(move |_theme: &Theme| {
                             container::Appearance {
                                 background: Some(iced::Background::Color(theme_colors.today_background)),
@@ -113,9 +115,14 @@ fn create_mini_month(
                                 },
                                 ..Default::default()
                             }
-                        });
+                        })
                 } else if is_weekend {
-                    cell_container = cell_container
+                    let theme_colors = calendar_theme.clone();
+                    container(clickable_day)
+                        .width(Length::FillPortion(1))
+                        .height(30)
+                        .padding(2)
+                        .center_x()
                         .style(move |_theme: &Theme| {
                             container::Appearance {
                                 background: Some(iced::Background::Color(theme_colors.weekend_background)),
@@ -126,9 +133,14 @@ fn create_mini_month(
                                 },
                                 ..Default::default()
                             }
-                        });
+                        })
                 } else {
-                    cell_container = cell_container
+                    let theme_colors = calendar_theme.clone();
+                    container(clickable_day)
+                        .width(Length::FillPortion(1))
+                        .height(30)
+                        .padding(2)
+                        .center_x()
                         .style(move |_theme: &Theme| {
                             container::Appearance {
                                 background: Some(iced::Background::Color(theme_colors.day_background)),
@@ -139,8 +151,8 @@ fn create_mini_month(
                                 },
                                 ..Default::default()
                             }
-                        });
-                }
+                        })
+                };
                 
                 cell_container
             };

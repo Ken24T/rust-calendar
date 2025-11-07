@@ -56,8 +56,22 @@ pub enum Message {
     UpdateThemeName(String),
     /// Select base theme to copy from
     SelectBaseTheme(String),
+    /// Open color picker for a specific field
+    OpenColorPicker(String),
+    /// Close color picker and cancel
+    CancelColorPicker,
+    /// Color picker value changed
+    SubmitColor(iced::Color),
+    /// Update color slider (field_name, channel, value)
+    UpdateColorSlider(String, String, u8),
     /// Update a specific color in the theme being created (field_name, hex_color)
     UpdateThemeColor(String, String),
+    /// Update hex color input (field_name, hex_value)
+    UpdateHexInput(String, String),
+    /// Update RGB input (field_name, channel, value_string)
+    UpdateRGBInput(String, String, String),
+    /// Color picker submit (from iced_aw ColorPicker)
+    ColorPickerSubmit(String, iced::Color),
     /// Save the new custom theme
     SaveCustomTheme,
     /// Exit the application

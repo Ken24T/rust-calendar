@@ -94,8 +94,8 @@ pub fn create_month_view(
                     .padding(5);
                 
                 // Style based on day type using custom theme colors
-                let theme_colors = calendar_theme.clone();
                 if is_today {
+                    let theme_colors = calendar_theme.clone();
                     cell_container = cell_container
                         .style(move |_theme: &Theme| {
                             container::Appearance {
@@ -109,6 +109,7 @@ pub fn create_month_view(
                             }
                         });
                 } else if is_weekend {
+                    let theme_colors = calendar_theme.clone();
                     cell_container = cell_container
                         .style(move |_theme: &Theme| {
                             container::Appearance {
@@ -122,6 +123,7 @@ pub fn create_month_view(
                             }
                         });
                 } else {
+                    let theme_colors = calendar_theme.clone();
                     cell_container = cell_container
                         .style(move |_theme: &Theme| {
                             container::Appearance {

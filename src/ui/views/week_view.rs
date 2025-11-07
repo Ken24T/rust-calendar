@@ -153,6 +153,8 @@ pub fn create_week_view(
         let day_name = date.format("%a").to_string(); // Mon, Tue, etc.
         let day_number = date.day();
         let is_today = *date == today;
+        let is_weekend = date.weekday().num_days_from_sunday() == 0 
+            || date.weekday().num_days_from_sunday() == 6;
         
         let header_text = column![
             text(&day_name).size(12),
@@ -161,20 +163,22 @@ pub fn create_week_view(
         .align_items(iced::Alignment::Center)
         .spacing(2);
         
+        let theme_colors = theme.clone();
         container(header_text)
             .padding(8)
             .width(Length::FillPortion(1))
             .center_x()
-            .style(move |theme: &Theme| {
-                let palette = theme.extended_palette();
+            .style(move |_theme: &Theme| {
                 container::Appearance {
                     background: if is_today {
-                        Some(palette.primary.weak.color.into())
+                        Some(iced::Background::Color(theme_colors.today_background))
+                    } else if is_weekend {
+                        Some(iced::Background::Color(theme_colors.weekend_background))
                     } else {
-                        None
+                        Some(iced::Background::Color(theme_colors.day_background))
                     },
                     border: Border {
-                        color: palette.background.strong.color,
+                        color: theme_colors.day_border,
                         width: 0.5,
                         radius: 0.0.into(),
                     },
@@ -229,24 +233,28 @@ pub fn create_week_view(
         // Create cells for each day
         let day_cells: Vec<Element<Message>> = week_days.iter().map(|date| {
             let is_today = *date == today;
+            let is_weekend = date.weekday().num_days_from_sunday() == 0 
+                || date.weekday().num_days_from_sunday() == 6;
             let is_current_slot = is_today && 
                 current_total_minutes >= total_minutes_elapsed && 
                 current_total_minutes < (total_minutes_elapsed + time_slot_interval);
             
+            let theme_colors = theme.clone();
             container(text(""))
                 .padding(0)
                 .height(Length::Fixed(40.0))
                 .width(Length::FillPortion(1))
-                .style(move |theme: &Theme| {
-                    let palette = theme.extended_palette();
+                .style(move |_theme: &Theme| {
                     container::Appearance {
                         background: if is_current_slot {
-                            Some(palette.primary.weak.color.into())
+                            Some(iced::Background::Color(theme_colors.today_background))
+                        } else if is_weekend {
+                            Some(iced::Background::Color(theme_colors.weekend_background))
                         } else {
-                            None
+                            Some(iced::Background::Color(theme_colors.day_background))
                         },
                         border: Border {
-                            color: palette.background.strong.color,
+                            color: theme_colors.day_border,
                             width: 0.5,
                             radius: 0.0.into(),
                         },

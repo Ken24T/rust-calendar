@@ -32,6 +32,9 @@ pub fn build_view<'a>(
     time_format: &'a str,
     first_day_of_week: u8,
     time_slot_interval: u32,
+    show_color_picker: bool,
+    color_picker_color: iced::Color,
+    color_picker_field: &'a str,
 ) -> Element<'a, Message> {
     // Main layout structure
     let mut content = column![].spacing(0);
@@ -110,6 +113,9 @@ pub fn build_view<'a>(
             creating_theme,
             calendar_theme,
             is_editing_theme,
+            show_color_picker,
+            color_picker_color,
+            color_picker_field,
         )
     } else if show_date_picker {
         Modal::new(base_view, Some(dialogs::create_date_picker_dialog(

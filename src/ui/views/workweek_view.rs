@@ -161,20 +161,20 @@ pub fn create_workweek_view(
         .align_items(iced::Alignment::Center)
         .spacing(2);
         
+        let theme_colors = theme.clone();
         container(header_text)
             .padding(8)
             .width(Length::FillPortion(1))
             .center_x()
-            .style(move |theme: &Theme| {
-                let palette = theme.extended_palette();
+            .style(move |_theme: &Theme| {
                 container::Appearance {
                     background: if is_today {
-                        Some(palette.primary.weak.color.into())
+                        Some(iced::Background::Color(theme_colors.today_background))
                     } else {
-                        None
+                        Some(iced::Background::Color(theme_colors.day_background))
                     },
                     border: Border {
-                        color: palette.background.strong.color,
+                        color: theme_colors.day_border,
                         width: 0.5,
                         radius: 0.0.into(),
                     },
@@ -233,20 +233,20 @@ pub fn create_workweek_view(
                 current_total_minutes >= total_minutes_elapsed && 
                 current_total_minutes < (total_minutes_elapsed + time_slot_interval);
             
+            let theme_colors = theme.clone();
             container(text(""))
                 .padding(0)
                 .height(Length::Fixed(40.0))
                 .width(Length::FillPortion(1))
-                .style(move |theme: &Theme| {
-                    let palette = theme.extended_palette();
+                .style(move |_theme: &Theme| {
                     container::Appearance {
                         background: if is_current_slot {
-                            Some(palette.primary.weak.color.into())
+                            Some(iced::Background::Color(theme_colors.today_background))
                         } else {
-                            None
+                            Some(iced::Background::Color(theme_colors.day_background))
                         },
                         border: Border {
-                            color: palette.background.strong.color,
+                            color: theme_colors.day_border,
                             width: 0.5,
                             radius: 0.0.into(),
                         },

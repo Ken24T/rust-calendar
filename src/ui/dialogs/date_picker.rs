@@ -62,9 +62,9 @@ pub fn create_date_picker_dialog(
         .padding([10, 30]);
 
     // Custom header with close button
-    let close_btn = button(text("×").size(24))
+    let close_btn = button(text("X").size(20))
         .on_press(Message::ToggleDatePicker)
-        .padding(5);
+        .padding(8);
     
     let header = row![
         text("Select Date").size(20),

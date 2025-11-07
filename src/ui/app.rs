@@ -82,6 +82,12 @@ pub struct CalendarApp {
     creating_base_theme: String,
     /// Theme being created/edited
     creating_theme: Option<CalendarTheme>,
+    /// Show color picker dialog
+    show_color_picker: bool,
+    /// Field name being edited in color picker
+    color_picker_field: String,
+    /// Current color in the picker
+    color_picker_color: Color,
 }
 
 impl Application for CalendarApp {
@@ -119,6 +125,9 @@ impl Application for CalendarApp {
                 creating_theme_name: String::new(),
                 creating_base_theme: "Light".to_string(),
                 creating_theme: None,
+                show_color_picker: false,
+                color_picker_field: String::new(),
+                color_picker_color: Color::BLACK,
             },
             Command::none(),
         )
@@ -363,6 +372,147 @@ impl Application for CalendarApp {
                     self.creating_theme = Some(theme);
                 }
             }
+            Message::OpenColorPicker(field_name) => {
+                // Get the current color for the field
+                if let Some(theme) = &self.creating_theme {
+                    let color = match field_name.as_str() {
+                        "app_background" => theme.app_background,
+                        "calendar_background" => theme.calendar_background,
+                        "weekend_background" => theme.weekend_background,
+                        "today_background" => theme.today_background,
+                        "today_border" => theme.today_border,
+                        "day_background" => theme.day_background,
+                        "day_border" => theme.day_border,
+                        "text_primary" => theme.text_primary,
+                        "text_secondary" => theme.text_secondary,
+                        _ => Color::BLACK,
+                    };
+                    
+                    self.show_color_picker = true;
+                    self.color_picker_field = field_name;
+                    self.color_picker_color = color;
+                }
+            }
+            Message::CancelColorPicker => {
+                self.show_color_picker = false;
+            }
+            Message::UpdateColorSlider(field_name, channel, value) => {
+                // Update the color in real-time as sliders move
+                if let Some(theme) = &mut self.creating_theme {
+                    let current_color = match field_name.as_str() {
+                        "app_background" => &mut theme.app_background,
+                        "calendar_background" => &mut theme.calendar_background,
+                        "weekend_background" => &mut theme.weekend_background,
+                        "today_background" => &mut theme.today_background,
+                        "today_border" => &mut theme.today_border,
+                        "day_background" => &mut theme.day_background,
+                        "day_border" => &mut theme.day_border,
+                        "text_primary" => &mut theme.text_primary,
+                        "text_secondary" => &mut theme.text_secondary,
+                        _ => return Command::none(),
+                    };
+
+                    let val = value as f32 / 255.0;
+                    match channel.as_str() {
+                        "r" => *current_color = Color::from_rgb(val, current_color.g, current_color.b),
+                        "g" => *current_color = Color::from_rgb(current_color.r, val, current_color.b),
+                        "b" => *current_color = Color::from_rgb(current_color.r, current_color.g, val),
+                        _ => {}
+                    }
+                    
+                    // Update the color picker color to show the new value
+                    self.color_picker_color = *current_color;
+                }
+            }
+            Message::SubmitColor(_color) => {
+                // Color is already updated via UpdateColorSlider messages
+                // Just close the picker
+                self.show_color_picker = false;
+            }
+            Message::UpdateHexInput(field_name, hex_input) => {
+                // Parse and update color from hex input
+                if let Some(theme) = &mut self.creating_theme {
+                    // Remove any # prefix and try to parse
+                    let hex = hex_input.trim_start_matches('#');
+                    
+                    // Only parse if we have exactly 6 hex characters
+                    if hex.len() == 6 {
+                        if let (Ok(r), Ok(g), Ok(b)) = (
+                            u8::from_str_radix(&hex[0..2], 16),
+                            u8::from_str_radix(&hex[2..4], 16),
+                            u8::from_str_radix(&hex[4..6], 16),
+                        ) {
+                            let color = Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                            
+                            match field_name.as_str() {
+                                "app_background" => theme.app_background = color,
+                                "calendar_background" => theme.calendar_background = color,
+                                "weekend_background" => theme.weekend_background = color,
+                                "today_background" => theme.today_background = color,
+                                "today_border" => theme.today_border = color,
+                                "day_background" => theme.day_background = color,
+                                "day_border" => theme.day_border = color,
+                                "text_primary" => theme.text_primary = color,
+                                "text_secondary" => theme.text_secondary = color,
+                                _ => {}
+                            }
+                            
+                            // Update the color picker color to show the new value
+                            self.color_picker_color = color;
+                        }
+                    }
+                }
+            }
+            Message::UpdateRGBInput(field_name, channel, value_str) => {
+                // Parse and update color from RGB input
+                if let Some(theme) = &mut self.creating_theme {
+                    if let Ok(value) = value_str.parse::<u8>() {
+                        let current_color = match field_name.as_str() {
+                            "app_background" => &mut theme.app_background,
+                            "calendar_background" => &mut theme.calendar_background,
+                            "weekend_background" => &mut theme.weekend_background,
+                            "today_background" => &mut theme.today_background,
+                            "today_border" => &mut theme.today_border,
+                            "day_background" => &mut theme.day_background,
+                            "day_border" => &mut theme.day_border,
+                            "text_primary" => &mut theme.text_primary,
+                            "text_secondary" => &mut theme.text_secondary,
+                            _ => return Command::none(),
+                        };
+
+                        let val = value as f32 / 255.0;
+                        match channel.as_str() {
+                            "r" => *current_color = Color::from_rgb(val, current_color.g, current_color.b),
+                            "g" => *current_color = Color::from_rgb(current_color.r, val, current_color.b),
+                            "b" => *current_color = Color::from_rgb(current_color.r, current_color.g, val),
+                            _ => {}
+                        }
+                        
+                        // Update the color picker color to show the new value
+                        self.color_picker_color = *current_color;
+                    }
+                }
+            }
+            Message::ColorPickerSubmit(field_name, color) => {
+                // Update color from iced_aw ColorPicker
+                if let Some(theme) = &mut self.creating_theme {
+                    match field_name.as_str() {
+                        "app_background" => theme.app_background = color,
+                        "calendar_background" => theme.calendar_background = color,
+                        "weekend_background" => theme.weekend_background = color,
+                        "today_background" => theme.today_background = color,
+                        "today_border" => theme.today_border = color,
+                        "day_background" => theme.day_background = color,
+                        "day_border" => theme.day_border = color,
+                        "text_primary" => theme.text_primary = color,
+                        "text_secondary" => theme.text_secondary = color,
+                        _ => {}
+                    }
+                    
+                    // Update the color picker color to show the new value
+                    self.color_picker_color = color;
+                }
+            }
             Message::UpdateThemeColor(field_name, hex_color) => {
                 // Parse hex color and update the specific field in creating_theme
                 if let Some(theme) = &mut self.creating_theme {
@@ -571,6 +721,9 @@ impl Application for CalendarApp {
             &self.time_format,
             self.first_day_of_week,
             self.time_slot_interval,
+            self.show_color_picker,
+            self.color_picker_color,
+            &self.color_picker_field,
         )
     }
 
