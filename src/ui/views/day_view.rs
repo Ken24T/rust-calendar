@@ -249,7 +249,8 @@ pub fn create_day_view(
                     }),
             ]
             .spacing(0)
-        );
+        )
+        .height(Length::Fixed(60.0));  // Set explicit height for each slot
 
         time_slots = time_slots.push(slot_container);
     }

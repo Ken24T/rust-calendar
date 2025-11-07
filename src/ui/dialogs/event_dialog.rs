@@ -1,7 +1,7 @@
 // Event creation/edit dialog
 
 use iced::widget::{button, checkbox, column, container, pick_list, row, text, text_input, Column, Row};
-use iced::{Element, Length};
+use iced::{Element, Length, Theme};
 use iced::widget::text_input::Id;
 use iced_aw::DatePicker;
 use crate::models::event::Event;
@@ -74,6 +74,51 @@ impl EventDialogState {
             validation_error: None,
             show_start_date_picker: false,
             show_end_date_picker: false,
+        }
+    }
+    
+    /// Check if the form is valid for saving
+    pub fn is_valid(&self) -> bool {
+        // Title is required
+        if self.title.trim().is_empty() {
+            return false;
+        }
+        
+        // Try to parse dates
+        let start_date_valid = NaiveDate::parse_from_str(&self.start_date, "%Y-%m-%d").is_ok();
+        let end_date_valid = NaiveDate::parse_from_str(&self.end_date, "%Y-%m-%d").is_ok();
+        
+        if !start_date_valid || !end_date_valid {
+            return false;
+        }
+        
+        // If not all-day, times must be valid
+        if !self.all_day {
+            let start_time_valid = NaiveTime::parse_from_str(&self.start_time, "%H:%M").is_ok();
+            let end_time_valid = NaiveTime::parse_from_str(&self.end_time, "%H:%M").is_ok();
+            
+            if !start_time_valid || !end_time_valid {
+                return false;
+            }
+        }
+        
+        // Parse full datetimes to check ordering
+        let start_datetime = if self.all_day {
+            Self::parse_date(&self.start_date).ok()
+        } else {
+            Self::parse_datetime(&self.start_date, &self.start_time).ok()
+        };
+        
+        let end_datetime = if self.all_day {
+            Self::parse_date(&self.end_date).ok()
+        } else {
+            Self::parse_datetime(&self.end_date, &self.end_time).ok()
+        };
+        
+        // Both must parse and end must be after start
+        match (start_datetime, end_datetime) {
+            (Some(start), Some(end)) => end > start,
+            _ => false,
         }
     }
     
@@ -427,14 +472,45 @@ pub fn create_event_dialog<'a>(
         .spacing(4)
     );
     
+    // Validation hint - show when form is invalid
+    if !state.is_valid() {
+        let hint_text = if state.title.trim().is_empty() {
+            "Title is required"
+        } else {
+            "End date/time must be after start date/time"
+        };
+        
+        content = content.push(
+            container(text(hint_text).size(12))
+                .padding(8)
+                .style(|_theme: &Theme| {
+                    container::Appearance {
+                        background: Some(iced::Background::Color(iced::Color::from_rgb(1.0, 0.9, 0.9))),
+                        border: iced::Border {
+                            color: iced::Color::from_rgb(0.8, 0.0, 0.0),
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+        );
+    }
+    
     // Buttons
     let mut button_row = Row::new().spacing(8);
     
-    button_row = button_row.push(
-        button(text("Save").size(14))
-            .on_press(Message::SaveEvent)
-            .padding(8)
-    );
+    // Save button - only enabled if form is valid
+    let save_button = button(text("Save").size(14))
+        .padding(8);
+    
+    let save_button = if state.is_valid() {
+        save_button.on_press(Message::SaveEvent)
+    } else {
+        save_button
+    };
+    
+    button_row = button_row.push(save_button);
     
     button_row = button_row.push(
         button(text("Cancel").size(14))
