@@ -16,6 +16,12 @@ pub fn create_menu_bar(
         button(text("File").size(14)).padding([5, 10]),
         Menu::new(vec![
             Item::new(
+                button(text("New Event...").size(13))
+                    .on_press(Message::OpenEventDialog)
+                    .padding([8, 20])
+                    .width(Length::Fill)
+            ),
+            Item::new(
                 button(text("Exit").size(13))
                     .on_press(Message::Exit)
                     .padding([8, 20])
