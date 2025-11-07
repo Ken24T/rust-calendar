@@ -35,6 +35,8 @@ pub fn build_view<'a>(
     show_color_picker: bool,
     color_picker_color: iced::Color,
     color_picker_field: &'a str,
+    show_event_dialog: bool,
+    event_dialog_state: Option<&'a dialogs::EventDialogState>,
 ) -> Element<'a, Message> {
     // Main layout structure
     let mut content = column![].spacing(0);
@@ -128,6 +130,14 @@ pub fn build_view<'a>(
         Modal::new(base_view, Some(dialogs::create_theme_picker_dialog(available_themes, theme_name)))
             .backdrop(Message::CloseThemePicker)
             .into()
+    } else if show_event_dialog {
+        if let Some(state) = event_dialog_state {
+            Modal::new(base_view, Some(dialogs::create_event_dialog(state, calendar_theme)))
+                .backdrop(Message::CloseEventDialog)
+                .into()
+        } else {
+            base_view.into()
+        }
     } else {
         base_view.into()
     }

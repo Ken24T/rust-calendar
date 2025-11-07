@@ -88,6 +88,10 @@ pub struct CalendarApp {
     color_picker_field: String,
     /// Current color in the picker
     color_picker_color: Color,
+    /// Show event creation/edit dialog
+    show_event_dialog: bool,
+    /// Event dialog state
+    event_dialog_state: Option<crate::ui::dialogs::EventDialogState>,
 }
 
 impl Application for CalendarApp {
@@ -128,6 +132,8 @@ impl Application for CalendarApp {
                 show_color_picker: false,
                 color_picker_field: String::new(),
                 color_picker_color: Color::BLACK,
+                show_event_dialog: false,
+                event_dialog_state: None,
             },
             Command::none(),
         )
@@ -692,6 +698,145 @@ impl Application for CalendarApp {
                     self.save_settings();
                 }
             }
+            
+            // Event dialog messages
+            Message::OpenEventDialog => {
+                self.event_dialog_state = Some(crate::ui::dialogs::EventDialogState::new());
+                self.show_event_dialog = true;
+            }
+            Message::EditEvent(event_id) => {
+                // Load event from database and populate dialog
+                if let Ok(db) = self.db.lock() {
+                    let service = crate::services::event::EventService::new(db.connection());
+                    if let Ok(Some(event)) = service.get(event_id) {
+                        self.event_dialog_state = Some(crate::ui::dialogs::EventDialogState::from_event(&event));
+                        self.show_event_dialog = true;
+                    }
+                }
+            }
+            Message::CloseEventDialog => {
+                self.show_event_dialog = false;
+                self.event_dialog_state = None;
+            }
+            Message::UpdateEventTitle(title) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.title = title;
+                    state.validation_error = None;
+                }
+            }
+            Message::UpdateEventDescription(desc) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.description = desc;
+                }
+            }
+            Message::UpdateEventLocation(location) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.location = location;
+                }
+            }
+            Message::UpdateEventStartDate(date) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.start_date = date;
+                    state.validation_error = None;
+                }
+            }
+            Message::UpdateEventStartTime(time) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.start_time = time;
+                    state.validation_error = None;
+                }
+            }
+            Message::UpdateEventEndDate(date) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.end_date = date;
+                    state.validation_error = None;
+                }
+            }
+            Message::UpdateEventEndTime(time) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.end_time = time;
+                    state.validation_error = None;
+                }
+            }
+            Message::ToggleEventAllDay(all_day) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.all_day = all_day;
+                }
+            }
+            Message::UpdateEventCategory(category) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.category = category;
+                }
+            }
+            Message::UpdateEventColor(color) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.color = color;
+                }
+            }
+            Message::UpdateEventRecurrence(recurrence) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    state.recurrence = recurrence;
+                }
+            }
+            Message::SaveEvent => {
+                if let Some(state) = &self.event_dialog_state {
+                    match state.to_event() {
+                        Ok(event) => {
+                            // Save to database
+                            if let Ok(db) = self.db.lock() {
+                                let service = crate::services::event::EventService::new(db.connection());
+                                
+                                let result = if state.is_editing {
+                                    service.update(&event)
+                                } else {
+                                    service.create(event).map(|_| ())
+                                };
+                                
+                                match result {
+                                    Ok(_) => {
+                                        // Close dialog on success
+                                        self.show_event_dialog = false;
+                                        self.event_dialog_state = None;
+                                    }
+                                    Err(e) => {
+                                        // Show error
+                                        if let Some(dialog_state) = &mut self.event_dialog_state {
+                                            dialog_state.validation_error = Some(format!("Failed to save event: {}", e));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // Show validation error
+                            if let Some(dialog_state) = &mut self.event_dialog_state {
+                                dialog_state.validation_error = Some(e);
+                            }
+                        }
+                    }
+                }
+            }
+            Message::DeleteEvent(event_id) => {
+                // Direct delete without confirmation (if we want confirmation, we'd use ConfirmDeleteEvent)
+                if let Ok(db) = self.db.lock() {
+                    let service = crate::services::event::EventService::new(db.connection());
+                    let _ = service.delete(event_id);
+                }
+                self.show_event_dialog = false;
+                self.event_dialog_state = None;
+            }
+            Message::ConfirmDeleteEvent(event_id) => {
+                // For now, just delete directly. Could add a confirmation dialog later
+                if let Ok(db) = self.db.lock() {
+                    let service = crate::services::event::EventService::new(db.connection());
+                    let _ = service.delete(event_id);
+                }
+                self.show_event_dialog = false;
+                self.event_dialog_state = None;
+            }
+            Message::CancelDeleteEvent => {
+                // Just dismiss any delete confirmation
+            }
         }
         Command::none()
     }
@@ -724,6 +869,8 @@ impl Application for CalendarApp {
             self.show_color_picker,
             self.color_picker_color,
             &self.color_picker_field,
+            self.show_event_dialog,
+            self.event_dialog_state.as_ref(),
         )
     }
 

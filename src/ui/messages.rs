@@ -104,4 +104,42 @@ pub enum Message {
     GoToDateInWeekView(i32, u32, u32), // year, month, day
     /// Update time slot interval (15, 30, 45, or 60 minutes)
     UpdateTimeSlotInterval(u32),
+    
+    // Event-related messages
+    /// Open event creation dialog
+    OpenEventDialog,
+    /// Open event edit dialog for specific event
+    EditEvent(i64),
+    /// Close event dialog
+    CloseEventDialog,
+    /// Update event title
+    UpdateEventTitle(String),
+    /// Update event description
+    UpdateEventDescription(String),
+    /// Update event location
+    UpdateEventLocation(String),
+    /// Update event start date
+    UpdateEventStartDate(String), // YYYY-MM-DD format
+    /// Update event start time
+    UpdateEventStartTime(String), // HH:MM format
+    /// Update event end date
+    UpdateEventEndDate(String), // YYYY-MM-DD format
+    /// Update event end time
+    UpdateEventEndTime(String), // HH:MM format
+    /// Toggle all-day event
+    ToggleEventAllDay(bool),
+    /// Update event category
+    UpdateEventCategory(String),
+    /// Update event color
+    UpdateEventColor(String),
+    /// Update event recurrence rule
+    UpdateEventRecurrence(String),
+    /// Save event (create or update)
+    SaveEvent,
+    /// Delete event
+    DeleteEvent(i64),
+    /// Confirm delete event
+    ConfirmDeleteEvent(i64),
+    /// Cancel delete confirmation
+    CancelDeleteEvent,
 }
