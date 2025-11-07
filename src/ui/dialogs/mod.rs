@@ -3,6 +3,7 @@
 pub mod date_picker;
 pub mod theme_picker;
 pub mod theme_manager;
+pub mod theme_creator;
 pub mod settings;
 
 pub use date_picker::create_date_picker_dialog;

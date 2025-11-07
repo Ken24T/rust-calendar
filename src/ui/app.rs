@@ -52,6 +52,14 @@ pub struct CalendarApp {
     show_theme_manager: bool,
     /// Time slot interval in minutes (15, 30, 45, or 60)
     time_slot_interval: u32,
+    /// Show theme creation dialog
+    show_create_theme: bool,
+    /// Name for the theme being created
+    creating_theme_name: String,
+    /// Base theme name to copy from
+    creating_base_theme: String,
+    /// Theme being created/edited
+    creating_theme: Option<CalendarTheme>,
 }
 
 impl Application for CalendarApp {
@@ -83,6 +91,10 @@ impl Application for CalendarApp {
                 show_theme_picker: false,
                 show_theme_manager: false,
                 time_slot_interval: init_data.time_slot_interval,
+                show_create_theme: false,
+                creating_theme_name: String::new(),
+                creating_base_theme: "Light".to_string(),
+                creating_theme: None,
             },
             Command::none(),
         )
@@ -261,6 +273,74 @@ impl Application for CalendarApp {
                     }
                 }
             }
+            Message::StartCreateTheme => {
+                self.show_theme_manager = false;
+                self.show_create_theme = true;
+                self.creating_theme_name = String::new();
+                self.creating_base_theme = "Light".to_string();
+                
+                // Load the Light theme as default starting point
+                let db = match self.db.lock() {
+                    Ok(db) => db,
+                    Err(_) => return Command::none(),
+                };
+                
+                let theme_service = ThemeService::new(&db);
+                if let Ok(theme) = theme_service.get_theme("Light") {
+                    self.creating_theme = Some(theme);
+                }
+            }
+            Message::CancelCreateTheme => {
+                self.show_create_theme = false;
+                self.show_theme_manager = true;
+                self.creating_theme = None;
+            }
+            Message::UpdateThemeName(name) => {
+                self.creating_theme_name = name;
+            }
+            Message::SelectBaseTheme(base_theme_name) => {
+                self.creating_base_theme = base_theme_name.clone();
+                
+                // Load the selected base theme
+                let db = match self.db.lock() {
+                    Ok(db) => db,
+                    Err(_) => return Command::none(),
+                };
+                
+                let theme_service = ThemeService::new(&db);
+                if let Ok(theme) = theme_service.get_theme(&base_theme_name) {
+                    self.creating_theme = Some(theme);
+                }
+            }
+            Message::UpdateThemeColor(_field_name, _hex_color) => {
+                // TODO: Parse hex color and update the specific field in creating_theme
+                // Will implement in next step with color picker UI
+            }
+            Message::SaveCustomTheme => {
+                if self.creating_theme_name.trim().is_empty() {
+                    return Command::none(); // Don't save without a name
+                }
+                
+                if let Some(theme) = &self.creating_theme {
+                    let db = match self.db.lock() {
+                        Ok(db) => db,
+                        Err(_) => return Command::none(),
+                    };
+                    
+                    let theme_service = ThemeService::new(&db);
+                    if theme_service.save_theme(theme, &self.creating_theme_name).is_ok() {
+                        // Reload available themes
+                        if let Ok(themes) = theme_service.list_themes() {
+                            self.available_themes = themes;
+                        }
+                        
+                        // Close create dialog and reopen theme manager
+                        self.show_create_theme = false;
+                        self.show_theme_manager = true;
+                        self.creating_theme = None;
+                    }
+                }
+            }
             Message::Exit => {
                 std::process::exit(0);
             }
@@ -391,10 +471,14 @@ impl Application for CalendarApp {
             self.create_calendar_view(),
             self.show_settings_dialog,
             self.show_theme_manager,
+            self.show_create_theme,
             self.show_date_picker,
             self.show_theme_picker,
             &self.available_themes,
             &self.theme_name,
+            &self.creating_theme_name,
+            &self.creating_base_theme,
+            self.creating_theme.as_ref(),
             self.current_date.year(),
             self.current_date.month(),
             &self.time_format,

@@ -18,10 +18,14 @@ pub fn build_view<'a>(
     calendar_view: Element<'a, Message>,
     show_settings_dialog: bool,
     show_theme_manager: bool,
+    show_create_theme: bool,
     show_date_picker: bool,
     show_theme_picker: bool,
     available_themes: &'a [String],
     theme_name: &'a str,
+    creating_theme_name: &'a str,
+    creating_base_theme: &'a str,
+    creating_theme: Option<&CalendarTheme>,
     current_date_year: i32,
     current_date_month: u32,
     time_format: &'a str,
@@ -97,6 +101,14 @@ pub fn build_view<'a>(
         Modal::new(base_view, Some(dialogs::create_theme_manager_dialog(available_themes, theme_name)))
             .backdrop(Message::CloseThemeManager)
             .into()
+    } else if show_create_theme {
+        dialogs::theme_creator::view(
+            creating_theme_name,
+            available_themes,
+            creating_base_theme,
+            creating_theme,
+            calendar_theme,
+        )
     } else if show_date_picker {
         Modal::new(base_view, Some(dialogs::create_date_picker_dialog(
             current_date_year,

@@ -46,6 +46,18 @@ pub enum Message {
     CloseThemeManager,
     /// Delete a custom theme
     DeleteTheme(String),
+    /// Start creating a new custom theme
+    StartCreateTheme,
+    /// Cancel theme creation
+    CancelCreateTheme,
+    /// Update the name of the theme being created
+    UpdateThemeName(String),
+    /// Select base theme to copy from
+    SelectBaseTheme(String),
+    /// Update a specific color in the theme being created (field_name, hex_color)
+    UpdateThemeColor(String, String),
+    /// Save the new custom theme
+    SaveCustomTheme,
     /// Exit the application
     Exit,
     /// Navigate to previous month

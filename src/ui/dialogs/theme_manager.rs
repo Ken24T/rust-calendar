@@ -60,6 +60,10 @@ pub fn create_theme_manager_dialog(
     let close_button = button(text("Close").size(14))
         .on_press(Message::CloseThemeManager)
         .padding([10, 30]);
+    
+    let create_button = button(text("Create New Theme").size(14))
+        .on_press(Message::StartCreateTheme)
+        .padding([10, 30]);
 
     // Custom header with close button
     let close_btn = button(text("×").size(24))
@@ -78,12 +82,12 @@ pub fn create_theme_manager_dialog(
         column(theme_list).spacing(5)
     )
     .foot(
-        column![
-            text("Note: Create custom themes via the database for now.").size(11),
-            row![close_button]
-                .spacing(10)
-                .padding([10, 10, 10, 10])
+        row![
+            create_button,
+            close_button,
         ]
+        .spacing(10)
+        .padding([10, 10, 10, 10])
     )
     .max_width(400.0)
     .into()
