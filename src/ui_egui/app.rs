@@ -6,6 +6,7 @@ use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::quarter_view::QuarterView;
+use crate::ui_egui::event_dialog::{EventDialogState, render_event_dialog};
 use chrono::{Local, NaiveDate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,7 @@ pub struct CalendarApp {
     show_theme_picker: bool,
     
     // Event dialog state
+    event_dialog_state: Option<EventDialogState>,
     event_dialog_date: Option<NaiveDate>,
     event_dialog_recurrence: Option<String>,
 }
@@ -64,6 +66,7 @@ impl CalendarApp {
             show_event_dialog: false,
             show_settings_dialog: false,
             show_theme_picker: false,
+            event_dialog_state: None,
             event_dialog_date: None,
             event_dialog_recurrence: None,
         }
@@ -90,6 +93,7 @@ impl eframe::App for CalendarApp {
             // Close dialogs in priority order
             if self.show_event_dialog {
                 self.show_event_dialog = false;
+                self.event_dialog_state = None;
                 self.event_dialog_date = None;
                 self.event_dialog_recurrence = None;
             } else if self.show_settings_dialog {
@@ -145,8 +149,10 @@ impl eframe::App for CalendarApp {
                 ui.menu_button("Events", |ui| {
                     if ui.button("New Event...").clicked() {
                         self.show_event_dialog = true;
-                        self.event_dialog_date = Some(self.current_date);
-                        self.event_dialog_recurrence = Some("FREQ=DAILY".to_string());
+                        self.event_dialog_state = Some(EventDialogState::new_event(
+                            self.current_date,
+                            &self.settings
+                        ));
                         ui.close_menu();
                     }
                 });
@@ -196,6 +202,29 @@ impl eframe::App for CalendarApp {
         
         // Dialogs (to be implemented)
         if self.show_event_dialog {
+            // Create dialog state if not already present
+            if self.event_dialog_state.is_none() {
+                self.event_dialog_state = Some(EventDialogState::new_event(
+                    self.event_dialog_date.unwrap_or(self.current_date),
+                    &self.settings
+                ));
+                // Apply any recurrence rule from click
+                if let (Some(ref mut state), Some(ref rrule)) = 
+                    (&mut self.event_dialog_state, &self.event_dialog_recurrence) {
+                    // Parse and set recurrence from the click handler
+                    state.is_recurring = true;
+                    if rrule.contains("WEEKLY") {
+                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Weekly;
+                    } else if rrule.contains("MONTHLY") {
+                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Monthly;
+                    } else if rrule.contains("YEARLY") {
+                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Yearly;
+                    } else {
+                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Daily;
+                    }
+                }
+            }
+            
             self.render_event_dialog(ctx);
         }
         
@@ -340,19 +369,23 @@ impl CalendarApp {
     
     // Placeholder dialog renderers
     fn render_event_dialog(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Event Editor")
-            .collapsible(false)
-            .resizable(true)
-            .default_width(600.0)
-            .show(ctx, |ui| {
-                ui.label("Event dialog - To be implemented");
-                
-                if ui.button("Close").clicked() {
-                    self.show_event_dialog = false;
-                    self.event_dialog_date = None;
-                    self.event_dialog_recurrence = None;
-                }
-            });
+        if let Some(ref mut state) = self.event_dialog_state {
+            let saved = render_event_dialog(
+                ctx,
+                state,
+                self.database,
+                &self.settings,
+                &mut self.show_event_dialog,
+            );
+            
+            // If saved, clear the dialog state
+            if saved || !self.show_event_dialog {
+                self.event_dialog_state = None;
+            }
+        } else {
+            // No state - shouldn't happen, but close dialog if it does
+            self.show_event_dialog = false;
+        }
     }
     
     fn render_settings_dialog(&mut self, ctx: &egui::Context) {
