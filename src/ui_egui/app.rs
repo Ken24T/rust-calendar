@@ -1,6 +1,11 @@
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::settings::SettingsService;
+use crate::ui_egui::views::day_view::DayView;
+use crate::ui_egui::views::week_view::WeekView;
+use crate::ui_egui::views::workweek_view::WorkWeekView;
+use crate::ui_egui::views::month_view::MonthView;
+use crate::ui_egui::views::quarter_view::QuarterView;
 use chrono::{Local, NaiveDate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -275,25 +280,62 @@ impl CalendarApp {
         };
     }
     
-    // Placeholder view renderers
+    // View renderers
     fn render_day_view(&mut self, ui: &mut egui::Ui) {
-        ui.label("Day view - To be implemented");
+        DayView::show(
+            ui,
+            &mut self.current_date,
+            self.database,
+            &self.settings,
+            &mut self.show_event_dialog,
+            &mut self.event_dialog_date,
+            &mut self.event_dialog_recurrence,
+        );
     }
     
     fn render_week_view(&mut self, ui: &mut egui::Ui) {
-        ui.label("Week view - To be implemented");
+        WeekView::show(
+            ui,
+            &mut self.current_date,
+            self.database,
+            &self.settings,
+            &mut self.show_event_dialog,
+            &mut self.event_dialog_date,
+            &mut self.event_dialog_recurrence,
+        );
     }
     
     fn render_workweek_view(&mut self, ui: &mut egui::Ui) {
-        ui.label("Work Week view - To be implemented");
+        WorkWeekView::show(
+            ui,
+            &mut self.current_date,
+            self.database,
+            &self.settings,
+            &mut self.show_event_dialog,
+            &mut self.event_dialog_date,
+            &mut self.event_dialog_recurrence,
+        );
     }
     
     fn render_month_view(&mut self, ui: &mut egui::Ui) {
-        ui.label("Month view - To be implemented");
+        MonthView::show(
+            ui,
+            &mut self.current_date,
+            self.database,
+            &mut self.show_event_dialog,
+            &mut self.event_dialog_date,
+            &mut self.event_dialog_recurrence,
+        );
     }
     
     fn render_quarter_view(&mut self, ui: &mut egui::Ui) {
-        ui.label("Quarter view - To be implemented");
+        QuarterView::show(
+            ui,
+            &mut self.current_date,
+            &mut self.show_event_dialog,
+            &mut self.event_dialog_date,
+            &mut self.event_dialog_recurrence,
+        );
     }
     
     // Placeholder dialog renderers
