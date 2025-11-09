@@ -66,6 +66,48 @@ impl Database {
             ).context("Failed to add time_slot_interval column")?;
         }
         
+        // Migrate: Add first_day_of_work_week if it doesn't exist
+        let column_exists = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name='first_day_of_work_week'",
+            [],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        
+        if !column_exists {
+            self.conn.execute(
+                "ALTER TABLE settings ADD COLUMN first_day_of_work_week INTEGER NOT NULL DEFAULT 1",
+                [],
+            ).context("Failed to add first_day_of_work_week column")?;
+        }
+        
+        // Migrate: Add last_day_of_work_week if it doesn't exist
+        let column_exists = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name='last_day_of_work_week'",
+            [],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        
+        if !column_exists {
+            self.conn.execute(
+                "ALTER TABLE settings ADD COLUMN last_day_of_work_week INTEGER NOT NULL DEFAULT 5",
+                [],
+            ).context("Failed to add last_day_of_work_week column")?;
+        }
+        
+        // Migrate: Add default_event_start_time if it doesn't exist
+        let column_exists = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name='default_event_start_time'",
+            [],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        
+        if !column_exists {
+            self.conn.execute(
+                "ALTER TABLE settings ADD COLUMN default_event_start_time TEXT NOT NULL DEFAULT '08:00'",
+                [],
+            ).context("Failed to add default_event_start_time column")?;
+        }
+        
         // Custom themes table
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS custom_themes (

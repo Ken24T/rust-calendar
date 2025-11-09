@@ -1,8 +1,10 @@
 use chrono::{Datelike, Local, NaiveDate, Timelike, Weekday};
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::widget::{button, column, container, horizontal_rule, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
+use iced::widget::rule;
 use iced_aw::menu::{Item, Menu, MenuBar};
 
+use crate::models::event::Event;
 use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
 
@@ -13,8 +15,8 @@ pub fn create_workweek_view(
     time_format: &str,
     time_slot_interval: u32,
     first_day_of_week: u8,
+    events: &[Event],
 ) -> Element<'static, Message> {
-    let iced_theme = &theme.base;
     
     // Calculate the start of the week based on first_day_of_week setting
     let current_weekday = current_date.weekday().num_days_from_sunday();
@@ -233,27 +235,62 @@ pub fn create_workweek_view(
                 current_total_minutes >= total_minutes_elapsed && 
                 current_total_minutes < (total_minutes_elapsed + time_slot_interval);
             
-            let theme_colors = theme.clone();
-            container(text(""))
-                .padding(0)
-                .height(Length::Fixed(40.0))
-                .width(Length::FillPortion(1))
-                .style(move |_theme: &Theme| {
-                    container::Appearance {
-                        background: if is_current_slot {
-                            Some(iced::Background::Color(theme_colors.today_background))
-                        } else {
-                            Some(iced::Background::Color(theme_colors.day_background))
-                        },
-                        border: Border {
-                            color: theme_colors.day_border,
-                            width: 0.5,
-                            radius: 0.0.into(),
-                        },
-                        ..Default::default()
+            // Find events for this day and time slot
+            let slot_start_minutes = total_minutes_elapsed;
+            let slot_end_minutes = total_minutes_elapsed + time_slot_interval;
+            
+            let mut event_widgets = column![].spacing(1);
+            for event in events {
+                // Check if event is on this date
+                if event.start.date_naive() == *date || event.end.date_naive() == *date {
+                    let event_start_minutes = (event.start.hour() * 60 + event.start.minute()) as u32;
+                    
+                    // Only show event in the slot where it starts
+                    if event_start_minutes >= slot_start_minutes && event_start_minutes < slot_end_minutes {
+                        let event_btn = button(
+                            text(&event.title).size(9)
+                        )
+                        .on_press(Message::EditEvent(event.id.unwrap_or(0)))
+                        .padding([2, 4]);
+                        
+                        event_widgets = event_widgets.push(event_btn);
                     }
-                })
-                .into()
+                }
+            }
+            
+            let theme_colors = theme.clone();
+            let year = date.year();
+            let month = date.month();
+            let day = date.day();
+            
+            let cell_bg = if is_current_slot {
+                theme_colors.today_background
+            } else {
+                theme_colors.day_background
+            };
+            
+            // Wrap in clickable button for creating new events
+            button(
+                container(event_widgets)
+                    .padding(1)
+                    .height(Length::Fixed(40.0))
+                    .width(Length::Fill)
+                    .style(move |_theme: &Theme| {
+                        container::Appearance {
+                            background: Some(iced::Background::Color(cell_bg)),
+                            border: Border {
+                                color: theme_colors.day_border,
+                                width: 0.5,
+                                radius: 0.0.into(),
+                            },
+                            ..Default::default()
+                        }
+                    })
+            )
+            .on_press(Message::OpenEventDialogWithDate(year, month, day, "FREQ=WEEKLY".to_string()))
+            .width(Length::FillPortion(1))
+            .style(iced::theme::Button::Text)
+            .into()
         }).collect();
         
         let row_content = row![
@@ -264,6 +301,22 @@ pub fn create_workweek_view(
         .width(Length::Fill);
         
         grid_rows.push(row_content.into());
+        
+        // Add horizontal rule between rows (except after last row)
+        if slot_index < total_slots - 1 {
+            let border_color = theme.day_border;
+            grid_rows.push(
+                horizontal_rule(1).style(move |_theme: &Theme| {
+                    rule::Appearance {
+                        color: border_color,
+                        width: 1,
+                        radius: 0.0.into(),
+                        fill_mode: rule::FillMode::Full,
+                    }
+                })
+                .into()
+            );
+        }
     }
     
     let grid = column(grid_rows)

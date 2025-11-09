@@ -88,57 +88,31 @@ pub fn create_month_view(
                 let day_text = text(format!("{}", day_counter))
                     .size(14);
                 
-                let mut cell_container = container(day_text)
-                    .width(Length::FillPortion(1))
-                    .height(80)
-                    .padding(5);
+                let year = date.year();
+                let month = date.month();
+                let day = date.day();
+                
+                // Wrap in button to make clickable
+                let cell_button = button(
+                    container(day_text)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .padding(5)
+                )
+                .on_press(Message::OpenEventDialogWithDate(year, month, day, "FREQ=MONTHLY".to_string()))
+                .width(Length::FillPortion(1))
+                .height(80);
                 
                 // Style based on day type using custom theme colors
-                if is_today {
-                    let theme_colors = calendar_theme.clone();
-                    cell_container = cell_container
-                        .style(move |_theme: &Theme| {
-                            container::Appearance {
-                                background: Some(iced::Background::Color(theme_colors.today_background)),
-                                border: Border {
-                                    color: theme_colors.today_border,
-                                    width: 2.0,
-                                    radius: 4.0.into(),
-                                },
-                                ..Default::default()
-                            }
-                        });
-                } else if is_weekend {
-                    let theme_colors = calendar_theme.clone();
-                    cell_container = cell_container
-                        .style(move |_theme: &Theme| {
-                            container::Appearance {
-                                background: Some(iced::Background::Color(theme_colors.weekend_background)),
-                                border: Border {
-                                    color: theme_colors.day_border,
-                                    width: 1.0,
-                                    radius: 2.0.into(),
-                                },
-                                ..Default::default()
-                            }
-                        });
+                let styled_button = if is_today {
+                    cell_button.style(iced::theme::Button::Primary)
                 } else {
-                    let theme_colors = calendar_theme.clone();
-                    cell_container = cell_container
-                        .style(move |_theme: &Theme| {
-                            container::Appearance {
-                                background: Some(iced::Background::Color(theme_colors.day_background)),
-                                border: Border {
-                                    color: theme_colors.day_border,
-                                    width: 1.0,
-                                    radius: 2.0.into(),
-                                },
-                                ..Default::default()
-                            }
-                        });
-                }
+                    cell_button.style(iced::theme::Button::Text)
+                };
                 
-                cell_container
+                container(styled_button)
+                    .width(Length::FillPortion(1))
+                    .height(80)
             };
             
             week_row = week_row.push(day_cell);

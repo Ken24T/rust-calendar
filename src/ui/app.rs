@@ -58,6 +58,10 @@ pub struct CalendarApp {
     time_format: String,
     /// First day of week (0=Sunday, 1=Monday, etc.)
     first_day_of_week: u8,
+    /// First day of work week (1=Monday, 5=Friday)
+    first_day_of_work_week: u8,
+    /// Last day of work week (1=Monday, 5=Friday)
+    last_day_of_work_week: u8,
     /// Date format
     date_format: String,
     /// Currently displayed date (for navigation)
@@ -70,6 +74,8 @@ pub struct CalendarApp {
     show_theme_manager: bool,
     /// Time slot interval in minutes (15, 30, 45, or 60)
     time_slot_interval: u32,
+    /// Default event start time (HH:MM format)
+    default_event_start_time: String,
     /// Show theme creation dialog
     show_create_theme: bool,
     /// Whether we're editing an existing theme (vs creating new)
@@ -118,12 +124,15 @@ impl Application for CalendarApp {
             show_settings_dialog: false,
             time_format: init_data.time_format,
             first_day_of_week: init_data.first_day_of_week,
+            first_day_of_work_week: init_data.first_day_of_work_week,
+            last_day_of_work_week: init_data.last_day_of_work_week,
             date_format: init_data.date_format,
             current_date: init_data.current_date,
             show_date_picker: false,
             show_theme_picker: false,
             show_theme_manager: false,
             time_slot_interval: init_data.time_slot_interval,
+            default_event_start_time: init_data.default_event_start_time,
             show_create_theme: false,
             is_editing_theme: false,
             editing_theme_original_name: String::new(),
@@ -714,10 +723,43 @@ impl Application for CalendarApp {
                     self.save_settings();
                 }
             }
+            Message::UpdateFirstDayOfWorkWeek(day) => {
+                if day >= 1 && day <= 5 && day <= self.last_day_of_work_week {
+                    self.first_day_of_work_week = day;
+                    self.save_settings();
+                }
+            }
+            Message::UpdateLastDayOfWorkWeek(day) => {
+                if day >= 1 && day <= 5 && day >= self.first_day_of_work_week {
+                    self.last_day_of_work_week = day;
+                    self.save_settings();
+                }
+            }
+            Message::UpdateDefaultEventStartTime(time) => {
+                // Basic validation: check for HH:MM format
+                if time.contains(':') {
+                    self.default_event_start_time = time;
+                    self.save_settings();
+                }
+            }
             
             // Event dialog messages
             Message::OpenEventDialog => {
-                self.event_dialog_state = Some(crate::ui::dialogs::EventDialogState::new());
+                self.event_dialog_state = Some(crate::ui::dialogs::EventDialogState::with_settings(
+                    self.time_slot_interval,
+                    &self.default_event_start_time
+                ));
+                self.show_event_dialog = true;
+            }
+            Message::OpenEventDialogWithDate(year, month, day, recurrence) => {
+                self.event_dialog_state = Some(crate::ui::dialogs::EventDialogState::with_date_and_recurrence(
+                    year,
+                    month,
+                    day,
+                    recurrence,
+                    self.time_slot_interval,
+                    &self.default_event_start_time
+                ));
                 self.show_event_dialog = true;
             }
             Message::EditEvent(event_id) => {
@@ -756,23 +798,6 @@ impl Application for CalendarApp {
                     state.validation_error = None;
                 }
             }
-            Message::OpenStartDatePicker => {
-                if let Some(state) = &mut self.event_dialog_state {
-                    state.show_start_date_picker = true;
-                }
-            }
-            Message::SubmitStartDate(date) => {
-                if let Some(state) = &mut self.event_dialog_state {
-                    state.start_date = format!("{:04}-{:02}-{:02}", date.year, date.month, date.day);
-                    state.show_start_date_picker = false;
-                    state.validation_error = None;
-                }
-            }
-            Message::CancelStartDatePicker => {
-                if let Some(state) = &mut self.event_dialog_state {
-                    state.show_start_date_picker = false;
-                }
-            }
             Message::UpdateEventStartTime(time) => {
                 if let Some(state) = &mut self.event_dialog_state {
                     state.start_time = time;
@@ -783,23 +808,6 @@ impl Application for CalendarApp {
                 if let Some(state) = &mut self.event_dialog_state {
                     state.end_date = date;
                     state.validation_error = None;
-                }
-            }
-            Message::OpenEndDatePicker => {
-                if let Some(state) = &mut self.event_dialog_state {
-                    state.show_end_date_picker = true;
-                }
-            }
-            Message::SubmitEndDate(date) => {
-                if let Some(state) = &mut self.event_dialog_state {
-                    state.end_date = format!("{:04}-{:02}-{:02}", date.year, date.month, date.day);
-                    state.show_end_date_picker = false;
-                    state.validation_error = None;
-                }
-            }
-            Message::CancelEndDatePicker => {
-                if let Some(state) = &mut self.event_dialog_state {
-                    state.show_end_date_picker = false;
                 }
             }
             Message::UpdateEventEndTime(time) => {
@@ -825,7 +833,21 @@ impl Application for CalendarApp {
             }
             Message::UpdateEventRecurrence(recurrence) => {
                 if let Some(state) = &mut self.event_dialog_state {
-                    state.recurrence = recurrence;
+                    state.recurrence = crate::ui::dialogs::event_dialog::display_to_recurrence(&recurrence);
+                    
+                    // Clear selected days when changing recurrence type
+                    if !recurrence.contains("Weekly") {
+                        state.recurrence_days.clear();
+                    }
+                }
+            }
+            Message::ToggleRecurrenceDay(day) => {
+                if let Some(state) = &mut self.event_dialog_state {
+                    if state.recurrence_days.contains(&day) {
+                        state.recurrence_days.retain(|d| d != &day);
+                    } else {
+                        state.recurrence_days.push(day);
+                    }
                 }
             }
             Message::SaveEvent => {
@@ -895,6 +917,35 @@ impl Application for CalendarApp {
             Message::CancelDeleteEvent => {
                 // Just dismiss any delete confirmation
             }
+            Message::KeyPressed(key, _modifiers) => {
+                use iced::keyboard::Key;
+                
+                // Handle ESC key to close dialogs
+                if key == Key::Named(iced::keyboard::key::Named::Escape) {
+                    // Close event dialog if open
+                    if self.show_event_dialog {
+                        self.show_event_dialog = false;
+                        self.event_dialog_state = None;
+                    }
+                    // Close settings dialog if open
+                    else if self.show_settings_dialog {
+                        self.show_settings_dialog = false;
+                    }
+                    // Close theme manager if open
+                    else if self.show_theme_manager {
+                        self.show_theme_manager = false;
+                        self.show_create_theme = false;
+                    }
+                    // Close theme picker if open
+                    else if self.show_theme_picker {
+                        self.show_theme_picker = false;
+                    }
+                    // Close date picker if open
+                    else if self.show_date_picker {
+                        self.show_date_picker = false;
+                    }
+                }
+            }
         }
         Command::none()
     }
@@ -923,7 +974,10 @@ impl Application for CalendarApp {
             self.current_date.month(),
             &self.time_format,
             self.first_day_of_week,
+            self.first_day_of_work_week,
+            self.last_day_of_work_week,
             self.time_slot_interval,
+            &self.default_event_start_time,
             self.show_color_picker,
             self.color_picker_color,
             &self.color_picker_field,
@@ -934,6 +988,20 @@ impl Application for CalendarApp {
 
     fn theme(&self) -> Self::Theme {
         self.theme.clone()
+    }
+    
+    fn subscription(&self) -> iced::Subscription<Self::Message> {
+        use iced::keyboard;
+        use iced::event;
+        
+        event::listen_with(|event, _status| {
+            match event {
+                iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                    Some(Message::KeyPressed(key, modifiers))
+                },
+                _ => None,
+            }
+        })
     }
 }
 
@@ -1037,7 +1105,7 @@ impl CalendarApp {
         if let (Some(start), Some(end)) = (start, end) {
             if let Ok(db) = self.db.lock() {
                 let event_service = EventService::new(db.connection());
-                if let Ok(events) = event_service.find_by_date_range(start, end) {
+                if let Ok(events) = event_service.expand_recurring_events(start, end) {
                     self.events = events;
                 } else {
                     self.events = Vec::new();
@@ -1059,8 +1127,11 @@ impl CalendarApp {
             self.current_view,
             &self.time_format,
             self.first_day_of_week,
+            self.first_day_of_work_week,
+            self.last_day_of_work_week,
             &self.date_format,
             self.time_slot_interval,
+            &self.default_event_start_time,
         );
     }
 
@@ -1081,6 +1152,7 @@ impl CalendarApp {
                 &self.time_format,
                 self.time_slot_interval,
                 self.first_day_of_week,
+                &self.events,
             ),
             ViewType::WorkWeek => views::create_workweek_view(
                 self.current_date,
@@ -1088,6 +1160,7 @@ impl CalendarApp {
                 &self.time_format,
                 self.time_slot_interval,
                 self.first_day_of_week,
+                &self.events,
             ),
             ViewType::Quarter => views::create_quarter_view(self.current_date, &self.calendar_theme),
         }

@@ -2,7 +2,7 @@
 // CRUD operations for calendar events with database integration
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Datelike, Local};
 use rusqlite::Connection;
 use crate::models::event::Event;
 
@@ -276,6 +276,176 @@ impl<'a> EventService<'a> {
         .collect::<Result<Vec<_>, _>>()?;
         
         Ok(events)
+    }
+    
+    /// Expand recurring events into individual occurrences within the date range
+    /// Non-recurring events are returned as-is
+    pub fn expand_recurring_events(&self, start: DateTime<Local>, end: DateTime<Local>) -> Result<Vec<Event>> {
+        let base_events = self.find_by_date_range(start, end)?;
+        let mut expanded_events = Vec::new();
+        
+        for event in base_events {
+            if let Some(ref rrule) = event.recurrence_rule {
+                if rrule != "None" && !rrule.is_empty() {
+                    // Parse the RRULE and generate occurrences
+                    let occurrences = self.generate_occurrences(&event, start, end)?;
+                    expanded_events.extend(occurrences);
+                } else {
+                    // Non-recurring event
+                    expanded_events.push(event);
+                }
+            } else {
+                // No recurrence rule
+                expanded_events.push(event);
+            }
+        }
+        
+        // Sort by start time
+        expanded_events.sort_by(|a, b| a.start.cmp(&b.start));
+        
+        Ok(expanded_events)
+    }
+    
+    /// Generate occurrences of a recurring event within a date range
+    fn generate_occurrences(&self, event: &Event, range_start: DateTime<Local>, range_end: DateTime<Local>) -> Result<Vec<Event>> {
+        let mut occurrences = Vec::new();
+        
+        if let Some(ref rrule) = event.recurrence_rule {
+            let duration = event.end - event.start;
+            
+            // Handle FREQ=WEEKLY with BYDAY
+            if rrule.contains("FREQ=WEEKLY") {
+                let interval = if rrule.contains("INTERVAL=2") { 2 } else { 1 }; // weeks
+                
+                // Parse BYDAY if present
+                let byday_days = if let Some(byday_start) = rrule.find("BYDAY=") {
+                    let byday_str = &rrule[byday_start + 6..];
+                    let byday_end = byday_str.find(';').unwrap_or(byday_str.len());
+                    let days_str = &byday_str[..byday_end];
+                    
+                    // Parse day codes (SU, MO, TU, WE, TH, FR, SA)
+                    days_str.split(',')
+                        .filter_map(|day| {
+                            use chrono::Weekday;
+                            match day.trim() {
+                                "SU" => Some(Weekday::Sun),
+                                "MO" => Some(Weekday::Mon),
+                                "TU" => Some(Weekday::Tue),
+                                "WE" => Some(Weekday::Wed),
+                                "TH" => Some(Weekday::Thu),
+                                "FR" => Some(Weekday::Fri),
+                                "SA" => Some(Weekday::Sat),
+                                _ => None,
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    // No BYDAY specified, use the original event's day of week
+                    vec![event.start.weekday()]
+                };
+                
+                if !byday_days.is_empty() {
+                    // Start from the beginning of the week containing the event start
+                    let mut current_week_start = event.start.date_naive()
+                        - chrono::Duration::days(event.start.weekday().num_days_from_monday() as i64);
+                    let week_start_time = event.start.time();
+                    
+                    // Generate occurrences week by week
+                    loop {
+                        // For each specified day in the week
+                        for &target_weekday in &byday_days {
+                            let days_offset = target_weekday.num_days_from_monday() as i64;
+                            let occurrence_date = current_week_start + chrono::Duration::days(days_offset);
+                            
+                            // Combine with the original time
+                            if let Some(occurrence_datetime) = occurrence_date.and_time(week_start_time).and_local_timezone(Local).single() {
+                                let occurrence_end = occurrence_datetime + duration;
+                                
+                                // Only include if within range and not before the original event
+                                if occurrence_datetime >= event.start && occurrence_datetime >= range_start && occurrence_datetime <= range_end {
+                                    let mut occurrence = event.clone();
+                                    occurrence.start = occurrence_datetime;
+                                    occurrence.end = occurrence_end;
+                                    
+                                    // Don't include if in exceptions
+                                    if let Some(ref exceptions) = event.recurrence_exceptions {
+                                        if !exceptions.iter().any(|ex| {
+                                            ex.date_naive() == occurrence_datetime.date_naive()
+                                        }) {
+                                            occurrences.push(occurrence);
+                                        }
+                                    } else {
+                                        occurrences.push(occurrence);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Move to next week (or skip weeks based on interval)
+                        current_week_start = current_week_start + chrono::Duration::weeks(interval as i64);
+                        
+                        // Safety break
+                        if current_week_start > range_end.date_naive() + chrono::Duration::days(7) {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Handle non-weekly recurrence (DAILY, MONTHLY, YEARLY)
+                let freq = if rrule.contains("FREQ=DAILY") {
+                    1 // days
+                } else if rrule.contains("FREQ=MONTHLY") {
+                    30 // approximate
+                } else if rrule.contains("FREQ=YEARLY") {
+                    365 // approximate
+                } else {
+                    return Ok(vec![event.clone()]);
+                };
+                
+                let mut current_start = event.start;
+                
+                // Generate occurrences
+                while current_start <= event.end.max(range_end) {
+                    let current_end = current_start + duration;
+                    
+                    // Only include if within range
+                    if current_start >= range_start && current_start <= range_end {
+                        let mut occurrence = event.clone();
+                        occurrence.start = current_start;
+                        occurrence.end = current_end;
+                        // Don't include if in exceptions
+                        if let Some(ref exceptions) = event.recurrence_exceptions {
+                            if !exceptions.iter().any(|ex| {
+                                ex.date_naive() == current_start.date_naive()
+                            }) {
+                                occurrences.push(occurrence);
+                            }
+                        } else {
+                            occurrences.push(occurrence);
+                        }
+                    }
+                    
+                    // Move to next occurrence
+                    if rrule.contains("FREQ=MONTHLY") {
+                        // Add approximately one month (30 days)
+                        current_start = current_start + chrono::Duration::days(30);
+                    } else if rrule.contains("FREQ=YEARLY") {
+                        // Add approximately one year (365 days)
+                        current_start = current_start + chrono::Duration::days(365);
+                    } else {
+                        // Daily
+                        current_start = current_start + chrono::Duration::days(freq);
+                    }
+                    
+                    // Safety break to prevent infinite loops
+                    if current_start > range_end + chrono::Duration::days(365) {
+                        break;
+                    }
+                }
+            }
+        }
+        
+        Ok(occurrences)
     }
 }
 

@@ -21,9 +21,12 @@ pub struct AppInitData {
     pub db: Arc<Mutex<Database>>,
     pub time_format: String,
     pub first_day_of_week: u8,
+    pub first_day_of_work_week: u8,
+    pub last_day_of_work_week: u8,
     pub date_format: String,
     pub current_date: chrono::NaiveDate,
     pub time_slot_interval: u32,
+    pub default_event_start_time: String,
 }
 
 /// Initialize the application by loading database, settings, and themes
@@ -85,8 +88,11 @@ pub fn initialize_app(db_path: &str) -> AppInitData {
         db: Arc::new(Mutex::new(db)),
         time_format: settings.time_format.clone(),
         first_day_of_week: settings.first_day_of_week,
+        first_day_of_work_week: settings.first_day_of_work_week,
+        last_day_of_work_week: settings.last_day_of_work_week,
         date_format: settings.date_format.clone(),
         current_date: Local::now().naive_local().date(),
         time_slot_interval: settings.time_slot_interval,
+        default_event_start_time: settings.default_event_start_time.clone(),
     }
 }

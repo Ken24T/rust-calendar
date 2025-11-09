@@ -31,7 +31,10 @@ pub fn build_view<'a>(
     current_date_month: u32,
     time_format: &'a str,
     first_day_of_week: u8,
+    first_day_of_work_week: u8,
+    last_day_of_work_week: u8,
     time_slot_interval: u32,
+    default_event_start_time: &'a str,
     show_color_picker: bool,
     color_picker_color: iced::Color,
     color_picker_field: &'a str,
@@ -99,7 +102,10 @@ pub fn build_view<'a>(
             show_ribbon,
             time_format,
             first_day_of_week,
+            first_day_of_work_week,
+            last_day_of_work_week,
             time_slot_interval,
+            default_event_start_time,
         )))
             .backdrop(Message::CloseSettings)
             .into()

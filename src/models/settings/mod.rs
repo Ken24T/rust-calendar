@@ -8,6 +8,8 @@ pub struct Settings {
     pub id: Option<i64>,
     pub theme: String,
     pub first_day_of_week: u8,
+    pub first_day_of_work_week: u8,
+    pub last_day_of_work_week: u8,
     pub time_format: String,
     pub date_format: String,
     pub show_my_day: bool,
@@ -15,6 +17,7 @@ pub struct Settings {
     pub show_ribbon: bool,
     pub current_view: String,
     pub time_slot_interval: u32,
+    pub default_event_start_time: String,
 }
 
 impl Default for Settings {
@@ -23,6 +26,8 @@ impl Default for Settings {
             id: Some(1),
             theme: "light".to_string(),
             first_day_of_week: 0, // Sunday
+            first_day_of_work_week: 1, // Monday
+            last_day_of_work_week: 5, // Friday
             time_format: "12h".to_string(),
             date_format: "MM/DD/YYYY".to_string(),
             show_my_day: false,
@@ -30,6 +35,7 @@ impl Default for Settings {
             show_ribbon: false,
             current_view: "Month".to_string(),
             time_slot_interval: 60,
+            default_event_start_time: "08:00".to_string(),
         }
     }
 }
@@ -47,6 +53,17 @@ impl Settings {
             return Err(format!("Invalid first_day_of_week: {}", self.first_day_of_week));
         }
         
+        // Validate work week days (1-5 for Monday to Friday)
+        if self.first_day_of_work_week < 1 || self.first_day_of_work_week > 5 {
+            return Err(format!("Invalid first_day_of_work_week: {}", self.first_day_of_work_week));
+        }
+        if self.last_day_of_work_week < 1 || self.last_day_of_work_week > 5 {
+            return Err(format!("Invalid last_day_of_work_week: {}", self.last_day_of_work_week));
+        }
+        if self.first_day_of_work_week > self.last_day_of_work_week {
+            return Err("first_day_of_work_week cannot be after last_day_of_work_week".to_string());
+        }
+        
         // Validate time_format
         if !["12h", "24h"].contains(&self.time_format.as_str()) {
             return Err(format!("Invalid time_format: {}", self.time_format));
@@ -60,6 +77,11 @@ impl Settings {
         // Validate time_slot_interval
         if ![15, 30, 45, 60].contains(&self.time_slot_interval) {
             return Err(format!("Invalid time_slot_interval: {}", self.time_slot_interval));
+        }
+        
+        // Validate default_event_start_time format (HH:MM)
+        if !self.default_event_start_time.contains(':') {
+            return Err("Invalid default_event_start_time format".to_string());
         }
         
         Ok(())
@@ -72,6 +94,17 @@ impl Settings {
             return Err(format!("Invalid first_day_of_week: {}", self.first_day_of_week));
         }
         
+        // Validate work week days (1-5 for Monday to Friday)
+        if self.first_day_of_work_week < 1 || self.first_day_of_work_week > 5 {
+            return Err(format!("Invalid first_day_of_work_week: {}", self.first_day_of_work_week));
+        }
+        if self.last_day_of_work_week < 1 || self.last_day_of_work_week > 5 {
+            return Err(format!("Invalid last_day_of_work_week: {}", self.last_day_of_work_week));
+        }
+        if self.first_day_of_work_week > self.last_day_of_work_week {
+            return Err("first_day_of_work_week cannot be after last_day_of_work_week".to_string());
+        }
+        
         // Validate time_format
         if !["12h", "24h"].contains(&self.time_format.as_str()) {
             return Err(format!("Invalid time_format: {}", self.time_format));
@@ -85,6 +118,11 @@ impl Settings {
         // Validate time_slot_interval
         if ![15, 30, 45, 60].contains(&self.time_slot_interval) {
             return Err(format!("Invalid time_slot_interval: {}", self.time_slot_interval));
+        }
+        
+        // Validate default_event_start_time format (HH:MM)
+        if !self.default_event_start_time.contains(':') {
+            return Err("Invalid default_event_start_time format".to_string());
         }
         
         Ok(())

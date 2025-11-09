@@ -94,8 +94,15 @@ fn create_mini_month(
                 .center_x()
                 .center_y();
                 
-                let clickable_day = mouse_area(day_text_widget)
-                    .on_press(Message::GoToDateInWeekView(year, month, day_counter as u32));
+                let year_val = year;
+                let month_val = month;
+                let day_val = day_counter as u32;
+                
+                let clickable_day = button(day_text_widget)
+                    .on_press(Message::OpenEventDialogWithDate(year_val, month_val, day_val, "FREQ=MONTHLY;INTERVAL=3".to_string()))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(iced::theme::Button::Text);
                 
                 // Style based on day type - apply styling to container
                 let cell_container = if is_today {

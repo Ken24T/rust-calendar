@@ -104,10 +104,18 @@ pub enum Message {
     GoToDateInWeekView(i32, u32, u32), // year, month, day
     /// Update time slot interval (15, 30, 45, or 60 minutes)
     UpdateTimeSlotInterval(u32),
+    /// Update first day of work week (1=Monday, 5=Friday)
+    UpdateFirstDayOfWorkWeek(u8),
+    /// Update last day of work week (1=Monday, 5=Friday)
+    UpdateLastDayOfWorkWeek(u8),
+    /// Update default event start time (HH:MM format)
+    UpdateDefaultEventStartTime(String),
     
     // Event-related messages
     /// Open event creation dialog
     OpenEventDialog,
+    /// Open event creation dialog with specific date and default recurrence
+    OpenEventDialogWithDate(i32, u32, u32, String), // year, month, day, recurrence
     /// Open event edit dialog for specific event
     EditEvent(i64),
     /// Close event dialog
@@ -120,22 +128,10 @@ pub enum Message {
     UpdateEventLocation(String),
     /// Update event start date
     UpdateEventStartDate(String), // YYYY-MM-DD format
-    /// Open start date picker
-    OpenStartDatePicker,
-    /// Submit start date from picker
-    SubmitStartDate(iced_aw::date_picker::Date),
-    /// Cancel start date picker
-    CancelStartDatePicker,
     /// Update event start time
     UpdateEventStartTime(String), // HH:MM format
     /// Update event end date
     UpdateEventEndDate(String), // YYYY-MM-DD format
-    /// Open end date picker
-    OpenEndDatePicker,
-    /// Submit end date from picker
-    SubmitEndDate(iced_aw::date_picker::Date),
-    /// Cancel end date picker
-    CancelEndDatePicker,
     /// Update event end time
     UpdateEventEndTime(String), // HH:MM format
     /// Toggle all-day event
@@ -146,6 +142,8 @@ pub enum Message {
     UpdateEventColor(String),
     /// Update event recurrence rule
     UpdateEventRecurrence(String),
+    /// Toggle day of week for weekly recurrence (e.g., "MO", "TU", etc.)
+    ToggleRecurrenceDay(String),
     /// Save event (create or update)
     SaveEvent,
     /// Delete event
@@ -154,4 +152,6 @@ pub enum Message {
     ConfirmDeleteEvent(i64),
     /// Cancel delete confirmation
     CancelDeleteEvent,
+    /// Keyboard event (for ESC key handling)
+    KeyPressed(iced::keyboard::Key, iced::keyboard::Modifiers),
 }

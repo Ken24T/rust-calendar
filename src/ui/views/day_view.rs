@@ -1,6 +1,7 @@
 use chrono::{Datelike, Local, NaiveDate, Timelike};
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::widget::{button, column, container, horizontal_rule, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
+use iced::widget::rule;
 use iced::alignment::{Horizontal, Vertical};
 use iced_aw::menu::{Item, Menu, MenuBar};
 
@@ -222,23 +223,31 @@ pub fn create_day_view(
         }
 
         let theme_colors = calendar_theme.clone();
-        let slot_container = container(
-            row![
-                container(text(&time_label).size(12))
-                    .width(80)
-                    .padding([8, 10]),
+        
+        // Create clickable slot that opens event dialog when double-clicked
+        let year = current_date.year();
+        let month = current_date.month();
+        let day = current_date.day();
+        
+        let theme_bg = if is_current_slot {
+            theme_colors.today_background
+        } else {
+            theme_colors.day_background
+        };
+        
+        let slot_content = row![
+            container(text(&time_label).size(12))
+                .width(80)
+                .padding([8, 10])
+                .height(Length::Fixed(60.0)),
+            button(
                 container(event_widgets)
                     .width(Length::Fill)
                     .padding(4)
+                    .height(Length::Fixed(60.0))
                     .style(move |_theme: &Theme| {
                         container::Appearance {
-                            background: Some(iced::Background::Color(
-                                if is_current_slot {
-                                    theme_colors.today_background
-                                } else {
-                                    theme_colors.day_background
-                                }
-                            )),
+                            background: Some(iced::Background::Color(theme_bg)),
                             border: Border {
                                 color: theme_colors.day_border,
                                 width: 1.0,
@@ -246,13 +255,32 @@ pub fn create_day_view(
                             },
                             ..Default::default()
                         }
-                    }),
-            ]
-            .spacing(0)
-        )
-        .height(Length::Fixed(60.0));  // Set explicit height for each slot
+                    })
+            )
+            .on_press(Message::OpenEventDialogWithDate(year, month, day, "FREQ=DAILY".to_string()))
+            .style(iced::theme::Button::Text)
+        ]
+        .spacing(0);
+        
+        let slot_container = container(slot_content)
+            .height(Length::Fixed(60.0));  // Set explicit height for each slot
 
         time_slots = time_slots.push(slot_container);
+        
+        // Add horizontal rule between slots (except after last slot)
+        if slot_index < total_slots - 1 {
+            let border_color = calendar_theme.day_border;
+            time_slots = time_slots.push(
+                horizontal_rule(1).style(move |_theme: &Theme| {
+                    rule::Appearance {
+                        color: border_color,
+                        width: 1,
+                        radius: 0.0.into(),
+                        fill_mode: rule::FillMode::Full,
+                    }
+                })
+            );
+        }
     }
 
     // Scrollable time slots

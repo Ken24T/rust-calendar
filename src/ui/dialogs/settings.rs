@@ -19,7 +19,10 @@ pub fn create_settings_dialog<'a>(
     show_ribbon: bool,
     time_format: &'a str,
     first_day_of_week: u8,
+    first_day_of_work_week: u8,
+    last_day_of_work_week: u8,
     time_slot_interval: u32,
+    default_event_start_time: &'a str,
 ) -> Element<'a, Message> {
     // Theme setting - use available themes from database
     let manage_themes_button = button(text("Manage Themes...").size(12))
@@ -41,10 +44,30 @@ pub fn create_settings_dialog<'a>(
     // First day of week setting
     let current_day_idx = first_day_of_week as usize;
     let day_names = vec!["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    let work_day_names = vec!["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
     let current_day_name = if current_day_idx < day_names.len() {
         day_names[current_day_idx]
     } else {
         "Sunday"
+    };
+    
+    // Work week days
+    let current_first_work_day = match first_day_of_work_week {
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        _ => "Monday",
+    };
+    
+    let current_last_work_day = match last_day_of_work_week {
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        _ => "Friday",
     };
 
     // Time slot interval setting
@@ -177,6 +200,58 @@ pub fn create_settings_dialog<'a>(
                         };
                         Message::UpdateTimeSlotInterval(interval)
                     }
+                )
+            ]
+            .spacing(10)
+            .align_items(iced::Alignment::Center),
+            text("").size(10),
+            text("Work Week Settings:").size(16),
+            row![
+                text("First Day of Work Week:").size(14).width(Length::Fixed(150.0)),
+                pick_list(
+                    work_day_names.clone(),
+                    Some(current_first_work_day),
+                    |selected| {
+                        let day_num = match selected {
+                            "Monday" => 1,
+                            "Tuesday" => 2,
+                            "Wednesday" => 3,
+                            "Thursday" => 4,
+                            "Friday" => 5,
+                            _ => 1,
+                        };
+                        Message::UpdateFirstDayOfWorkWeek(day_num)
+                    }
+                )
+            ]
+            .spacing(10)
+            .align_items(iced::Alignment::Center),
+            row![
+                text("Last Day of Work Week:").size(14).width(Length::Fixed(150.0)),
+                pick_list(
+                    work_day_names,
+                    Some(current_last_work_day),
+                    |selected| {
+                        let day_num = match selected {
+                            "Monday" => 1,
+                            "Tuesday" => 2,
+                            "Wednesday" => 3,
+                            "Thursday" => 4,
+                            "Friday" => 5,
+                            _ => 5,
+                        };
+                        Message::UpdateLastDayOfWorkWeek(day_num)
+                    }
+                )
+            ]
+            .spacing(10)
+            .align_items(iced::Alignment::Center),
+            row![
+                text("Default Event Start Time:").size(14).width(Length::Fixed(150.0)),
+                pick_list(
+                    vec!["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00"],
+                    Some(default_event_start_time),
+                    |time| Message::UpdateDefaultEventStartTime(time.to_string())
                 )
             ]
             .spacing(10)

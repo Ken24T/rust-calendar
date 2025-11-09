@@ -13,8 +13,11 @@ pub fn save_settings(
     current_view: ViewType,
     time_format: &str,
     first_day_of_week: u8,
+    first_day_of_work_week: u8,
+    last_day_of_work_week: u8,
     date_format: &str,
     time_slot_interval: u32,
+    default_event_start_time: &str,
 ) {
     let db = match db.lock() {
         Ok(db) => db,
@@ -51,8 +54,11 @@ pub fn save_settings(
     settings.current_view = view_str.to_string();
     settings.time_format = time_format.to_string();
     settings.first_day_of_week = first_day_of_week;
+    settings.first_day_of_work_week = first_day_of_work_week;
+    settings.last_day_of_work_week = last_day_of_work_week;
     settings.date_format = date_format.to_string();
     settings.time_slot_interval = time_slot_interval;
+    settings.default_event_start_time = default_event_start_time.to_string();
 
     // Save to database
     if let Err(e) = settings_service.update(&settings) {

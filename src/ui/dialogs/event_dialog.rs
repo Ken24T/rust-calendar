@@ -1,13 +1,12 @@
 // Event creation/edit dialog
 
 use iced::widget::{button, checkbox, column, container, pick_list, row, text, text_input, Column, Row};
-use iced::{Element, Length, Theme};
+use iced::{Element, Length, Theme, Color};
 use iced::widget::text_input::Id;
-use iced_aw::DatePicker;
 use crate::models::event::Event;
 use crate::ui::messages::Message;
 use crate::ui::theme::CalendarTheme;
-use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
+use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone, Timelike, Datelike};
 
 /// State for the event dialog
 #[derive(Debug, Clone)]
@@ -24,17 +23,45 @@ pub struct EventDialogState {
     pub category: String,
     pub color: String,
     pub recurrence: String,
+    pub recurrence_days: Vec<String>, // For weekly: ["MO", "WE", "FR"]
     pub is_editing: bool,
     pub validation_error: Option<String>,
-    pub show_start_date_picker: bool,
-    pub show_end_date_picker: bool,
 }
 
 impl EventDialogState {
     pub fn new() -> Self {
+        Self::with_settings(60, "08:00") // Default to 60 minutes, 8:00 AM
+    }
+    
+    pub fn with_duration(duration_minutes: u32) -> Self {
+        Self::with_settings(duration_minutes, "08:00")
+    }
+    
+    pub fn with_settings(duration_minutes: u32, default_start_time: &str) -> Self {
         let now = Local::now();
-        let start = now;
-        let end = now + chrono::Duration::hours(1);
+        let today = now.date_naive();
+        
+        // Parse default start time (HH:MM format)
+        let (start_hour, start_minute) = if let Some((h, m)) = default_start_time.split_once(':') {
+            (
+                h.parse::<u32>().unwrap_or(8),
+                m.parse::<u32>().unwrap_or(0)
+            )
+        } else {
+            (8, 0) // Fallback to 8:00 AM
+        };
+        
+        // Create start time at default time
+        let start = Local.with_ymd_and_hms(
+            today.year(),
+            today.month(),
+            today.day(),
+            start_hour,
+            start_minute,
+            0
+        ).single().unwrap_or(now);
+        
+        let end = start + chrono::Duration::minutes(duration_minutes as i64);
         
         Self {
             event_id: None,
@@ -49,14 +76,62 @@ impl EventDialogState {
             category: String::new(),
             color: "#3B82F6".to_string(),
             recurrence: "None".to_string(),
+            recurrence_days: Vec::new(),
             is_editing: false,
             validation_error: None,
-            show_start_date_picker: false,
-            show_end_date_picker: false,
+        }
+    }
+    
+    pub fn with_date_and_recurrence(year: i32, month: u32, day: u32, recurrence: String, duration_minutes: u32, default_start_time: &str) -> Self {
+        // Parse default start time (HH:MM format)
+        let (start_hour, start_minute) = if let Some((h, m)) = default_start_time.split_once(':') {
+            (
+                h.parse::<u32>().unwrap_or(8),
+                m.parse::<u32>().unwrap_or(0)
+            )
+        } else {
+            (8, 0) // Fallback to 8:00 AM
+        };
+        
+        // Create start time at specified date and default time
+        let start = Local.with_ymd_and_hms(
+            year,
+            month,
+            day,
+            start_hour,
+            start_minute,
+            0
+        ).single().unwrap_or_else(|| Local::now());
+        
+        let end = start + chrono::Duration::minutes(duration_minutes as i64);
+        
+        Self {
+            event_id: None,
+            title: String::new(),
+            description: String::new(),
+            location: String::new(),
+            start_date: start.format("%Y-%m-%d").to_string(),
+            start_time: start.format("%H:%M").to_string(),
+            end_date: end.format("%Y-%m-%d").to_string(),
+            end_time: end.format("%H:%M").to_string(),
+            all_day: false,
+            category: String::new(),
+            color: "#3B82F6".to_string(),
+            recurrence,
+            recurrence_days: Vec::new(),
+            is_editing: false,
+            validation_error: None,
         }
     }
     
     pub fn from_event(event: &Event) -> Self {
+        // Parse recurrence_days from RRULE if it exists
+        let recurrence_days = if let Some(rrule) = &event.recurrence_rule {
+            extract_byday_from_rrule(rrule)
+        } else {
+            Vec::new()
+        };
+        
         Self {
             event_id: event.id,
             title: event.title.clone(),
@@ -70,10 +145,9 @@ impl EventDialogState {
             category: event.category.clone().unwrap_or_default(),
             color: event.color.clone().unwrap_or_else(|| "#3B82F6".to_string()),
             recurrence: event.recurrence_rule.clone().unwrap_or_else(|| "None".to_string()),
+            recurrence_days,
             is_editing: true,
             validation_error: None,
-            show_start_date_picker: false,
-            show_end_date_picker: false,
         }
     }
     
@@ -169,7 +243,17 @@ impl EventDialogState {
         }
         
         if !self.recurrence.is_empty() && self.recurrence != "None" {
-            builder = builder.recurrence_rule(&self.recurrence);
+            let mut rrule = self.recurrence.clone();
+            
+            // For weekly recurrence, add BYDAY if days are selected
+            if self.recurrence.contains("FREQ=WEEKLY") && !self.recurrence_days.is_empty() {
+                // Check if BYDAY already exists in the rrule
+                if !rrule.contains("BYDAY=") {
+                    rrule = format!("{};BYDAY={}", rrule, self.recurrence_days.join(","));
+                }
+            }
+            
+            builder = builder.recurrence_rule(&rrule);
         }
         
         let mut event = builder.build().map_err(|e| e.to_string())?;
@@ -304,116 +388,228 @@ pub fn create_event_dialog<'a>(
     );
     
     // Start date/time
+    // Parse current start date
+    let start_date_str = state.start_date.clone();
+    let start_date_str_year = start_date_str.clone();
+    let start_date_str_month = start_date_str.clone();
+    let start_date_str_day = start_date_str.clone();
+    let start_date_parsed = NaiveDate::parse_from_str(&start_date_str, "%Y-%m-%d")
+        .unwrap_or_else(|_| Local::now().date_naive());
+    
+    let years: Vec<String> = (2020..=2030).map(|y| y.to_string()).collect();
+    let months: Vec<String> = (1..=12).map(|m| format!("{:02}", m)).collect();
+    let days: Vec<String> = (1..=31).map(|d| format!("{:02}", d)).collect();
+    
     if state.all_day {
-        // Parse current start date for date picker
-        let start_date_parsed = NaiveDate::parse_from_str(&state.start_date, "%Y-%m-%d")
-            .unwrap_or_else(|_| Local::now().date_naive());
-        let aw_date: iced_aw::date_picker::Date = start_date_parsed.into();
-        
         content = content.push(
             column![
                 text("Start Date *").size(12),
-                DatePicker::new(
-                    state.show_start_date_picker,
-                    aw_date,
-                    button(text(&state.start_date).size(12))
-                        .on_press(Message::OpenStartDatePicker)
-                        .padding(8)
-                        .width(Length::Fill),
-                    Message::CancelStartDatePicker,
-                    Message::SubmitStartDate
-                )
+                row![
+                    pick_list(
+                        years.clone(),
+                        Some(start_date_parsed.year().to_string()),
+                        move |year| {
+                            let parts: Vec<&str> = start_date_str_year.split('-').collect();
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventStartDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(2)),
+                    pick_list(
+                        months.clone(),
+                        Some(format!("{:02}", start_date_parsed.month())),
+                        move |month| {
+                            let parts: Vec<&str> = start_date_str_month.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventStartDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(2)),
+                    pick_list(
+                        days.clone(),
+                        Some(format!("{:02}", start_date_parsed.day())),
+                        move |day| {
+                            let parts: Vec<&str> = start_date_str_day.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            Message::UpdateEventStartDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(2)),
+                ]
+                .spacing(4)
             ]
             .spacing(4)
         );
     } else {
-        // Parse current start date for date picker
-        let start_date_parsed = NaiveDate::parse_from_str(&state.start_date, "%Y-%m-%d")
-            .unwrap_or_else(|_| Local::now().date_naive());
-        let aw_date: iced_aw::date_picker::Date = start_date_parsed.into();
-        
+        let start_date_str2 = state.start_date.clone();
+        let start_date_str2_year = start_date_str2.clone();
+        let start_date_str2_month = start_date_str2.clone();
+        let start_date_str2_day = start_date_str2.clone();
         content = content.push(
             column![
                 text("Start *").size(12),
                 row![
-                    container(
-                        DatePicker::new(
-                            state.show_start_date_picker,
-                            aw_date,
-                            button(text(&state.start_date).size(12))
-                                .on_press(Message::OpenStartDatePicker)
-                                .padding(8)
-                                .width(Length::Fill),
-                            Message::CancelStartDatePicker,
-                            Message::SubmitStartDate
-                        )
+                    pick_list(
+                        years.clone(),
+                        Some(start_date_parsed.year().to_string()),
+                        move |year| {
+                            let parts: Vec<&str> = start_date_str2_year.split('-').collect();
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventStartDate(format!("{}-{}-{}", year, month, day))
+                        }
                     )
-                    .width(Length::FillPortion(2)),
+                    .padding(8)
+                    .width(Length::FillPortion(1)),
+                    pick_list(
+                        months.clone(),
+                        Some(format!("{:02}", start_date_parsed.month())),
+                        move |month| {
+                            let parts: Vec<&str> = start_date_str2_month.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventStartDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(1)),
+                    pick_list(
+                        days.clone(),
+                        Some(format!("{:02}", start_date_parsed.day())),
+                        move |day| {
+                            let parts: Vec<&str> = start_date_str2_day.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            Message::UpdateEventStartDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(1)),
                     text_input("HH:MM", &state.start_time)
                         .on_input(Message::UpdateEventStartTime)
                         .id(Id::new("start_time"))
                         .padding(8)
                         .width(Length::FillPortion(1)),
                 ]
-                .spacing(8)
+                .spacing(4)
             ]
             .spacing(4)
         );
     }
     
     // End date/time
+    // Parse current end date
+    let end_date_str = state.end_date.clone();
+    let end_date_str_year = end_date_str.clone();
+    let end_date_str_month = end_date_str.clone();
+    let end_date_str_day = end_date_str.clone();
+    let end_date_parsed = NaiveDate::parse_from_str(&end_date_str, "%Y-%m-%d")
+        .unwrap_or_else(|_| Local::now().date_naive());
+    
     if state.all_day {
-        // Parse current end date for date picker
-        let end_date_parsed = NaiveDate::parse_from_str(&state.end_date, "%Y-%m-%d")
-            .unwrap_or_else(|_| Local::now().date_naive());
-        let aw_date: iced_aw::date_picker::Date = end_date_parsed.into();
-        
         content = content.push(
             column![
                 text("End Date *").size(12),
-                DatePicker::new(
-                    state.show_end_date_picker,
-                    aw_date,
-                    button(text(&state.end_date).size(12))
-                        .on_press(Message::OpenEndDatePicker)
-                        .padding(8)
-                        .width(Length::Fill),
-                    Message::CancelEndDatePicker,
-                    Message::SubmitEndDate
-                )
+                row![
+                    pick_list(
+                        years.clone(),
+                        Some(end_date_parsed.year().to_string()),
+                        move |year| {
+                            let parts: Vec<&str> = end_date_str_year.split('-').collect();
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventEndDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(2)),
+                    pick_list(
+                        months.clone(),
+                        Some(format!("{:02}", end_date_parsed.month())),
+                        move |month| {
+                            let parts: Vec<&str> = end_date_str_month.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventEndDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(2)),
+                    pick_list(
+                        days.clone(),
+                        Some(format!("{:02}", end_date_parsed.day())),
+                        move |day| {
+                            let parts: Vec<&str> = end_date_str_day.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            Message::UpdateEventEndDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(2)),
+                ]
+                .spacing(4)
             ]
             .spacing(4)
         );
     } else {
-        // Parse current end date for date picker
-        let end_date_parsed = NaiveDate::parse_from_str(&state.end_date, "%Y-%m-%d")
-            .unwrap_or_else(|_| Local::now().date_naive());
-        let aw_date: iced_aw::date_picker::Date = end_date_parsed.into();
-        
+        let end_date_str2 = state.end_date.clone();
+        let end_date_str2_year = end_date_str2.clone();
+        let end_date_str2_month = end_date_str2.clone();
+        let end_date_str2_day = end_date_str2.clone();
         content = content.push(
             column![
                 text("End *").size(12),
                 row![
-                    container(
-                        DatePicker::new(
-                            state.show_end_date_picker,
-                            aw_date,
-                            button(text(&state.end_date).size(12))
-                                .on_press(Message::OpenEndDatePicker)
-                                .padding(8)
-                                .width(Length::Fill),
-                            Message::CancelEndDatePicker,
-                            Message::SubmitEndDate
-                        )
+                    pick_list(
+                        years,
+                        Some(end_date_parsed.year().to_string()),
+                        move |year| {
+                            let parts: Vec<&str> = end_date_str2_year.split('-').collect();
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventEndDate(format!("{}-{}-{}", year, month, day))
+                        }
                     )
-                    .width(Length::FillPortion(2)),
+                    .padding(8)
+                    .width(Length::FillPortion(1)),
+                    pick_list(
+                        months,
+                        Some(format!("{:02}", end_date_parsed.month())),
+                        move |month| {
+                            let parts: Vec<&str> = end_date_str2_month.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let day = if parts.len() > 2 { parts[2] } else { "01" };
+                            Message::UpdateEventEndDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(1)),
+                    pick_list(
+                        days,
+                        Some(format!("{:02}", end_date_parsed.day())),
+                        move |day| {
+                            let parts: Vec<&str> = end_date_str2_day.split('-').collect();
+                            let year = if parts.len() > 0 { parts[0] } else { "2025" };
+                            let month = if parts.len() > 1 { parts[1] } else { "01" };
+                            Message::UpdateEventEndDate(format!("{}-{}-{}", year, month, day))
+                        }
+                    )
+                    .padding(8)
+                    .width(Length::FillPortion(1)),
                     text_input("HH:MM", &state.end_time)
                         .on_input(Message::UpdateEventEndTime)
                         .id(Id::new("end_time"))
                         .padding(8)
                         .width(Length::FillPortion(1)),
                 ]
-                .spacing(8)
+                .spacing(4)
             ]
             .spacing(4)
         );
@@ -453,10 +649,11 @@ pub fn create_event_dialog<'a>(
     // Recurrence
     let recurrence_options = vec![
         "None".to_string(),
-        "FREQ=DAILY".to_string(),
-        "FREQ=WEEKLY".to_string(),
-        "FREQ=MONTHLY".to_string(),
-        "FREQ=YEARLY".to_string(),
+        "Daily".to_string(),
+        "Weekly".to_string(),
+        "Fortnightly".to_string(),
+        "Monthly".to_string(),
+        "Yearly".to_string(),
     ];
     
     content = content.push(
@@ -464,13 +661,57 @@ pub fn create_event_dialog<'a>(
             text("Recurrence").size(12),
             pick_list(
                 recurrence_options,
-                Some(state.recurrence.clone()),
+                Some(recurrence_to_display(&state.recurrence)),
                 Message::UpdateEventRecurrence
             )
             .padding(8)
         ]
         .spacing(4)
     );
+    
+    // Show day of week selection for Weekly recurrence
+    if state.recurrence.contains("FREQ=WEEKLY") {
+        let days = vec![
+            ("Sunday", "SU"),
+            ("Monday", "MO"),
+            ("Tuesday", "TU"),
+            ("Wednesday", "WE"),
+            ("Thursday", "TH"),
+            ("Friday", "FR"),
+            ("Saturday", "SA"),
+        ];
+        
+        let mut day_checkboxes = column![
+            text("Repeat on:").size(14).style(Color::from_rgb(0.0, 0.0, 0.0)),
+        ].spacing(6);
+        
+        for (day_name, day_code) in days {
+            let is_checked = state.recurrence_days.contains(&day_code.to_string());
+            let day_code_string = day_code.to_string();
+            
+            day_checkboxes = day_checkboxes.push(
+                checkbox(day_name, is_checked)
+                    .on_toggle(move |_| Message::ToggleRecurrenceDay(day_code_string.clone()))
+                    .size(20)
+            );
+        }
+        
+        content = content.push(
+            container(day_checkboxes)
+                .padding(12)
+                .style(|_theme: &Theme| {
+                    container::Appearance {
+                        background: Some(iced::Background::Color(Color::WHITE)),
+                        border: iced::Border {
+                            color: Color::from_rgb(0.6, 0.6, 0.6),
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+        );
+    }
     
     // Validation hint - show when form is invalid
     if !state.is_valid() {
@@ -586,6 +827,40 @@ fn parse_color(hex: &str) -> iced::Color {
         }
     }
     
-    // Default color if parsing fails
-    iced::Color::from_rgb(0.23, 0.51, 0.96) // #3B82F6
+    iced::Color::from_rgb(0.23, 0.51, 0.96)
+}
+
+/// Extract BYDAY values from an RRULE string
+fn extract_byday_from_rrule(rrule: &str) -> Vec<String> {
+    for part in rrule.split(';') {
+        if part.starts_with("BYDAY=") {
+            let days_str = part.trim_start_matches("BYDAY=");
+            return days_str.split(',').map(|s| s.to_string()).collect();
+        }
+    }
+    Vec::new()
+}
+
+/// Convert RRULE format to display label
+fn recurrence_to_display(rrule: &str) -> String {
+    match rrule {
+        "FREQ=DAILY" => "Daily".to_string(),
+        "FREQ=WEEKLY" => "Weekly".to_string(),
+        "FREQ=WEEKLY;INTERVAL=2" => "Fortnightly".to_string(),
+        "FREQ=MONTHLY" => "Monthly".to_string(),
+        "FREQ=YEARLY" => "Yearly".to_string(),
+        _ => "None".to_string(),
+    }
+}
+
+/// Convert display label to RRULE format
+pub fn display_to_recurrence(display: &str) -> String {
+    match display {
+        "Daily" => "FREQ=DAILY".to_string(),
+        "Weekly" => "FREQ=WEEKLY".to_string(),
+        "Fortnightly" => "FREQ=WEEKLY;INTERVAL=2".to_string(),
+        "Monthly" => "FREQ=MONTHLY".to_string(),
+        "Yearly" => "FREQ=YEARLY".to_string(),
+        _ => "None".to_string(),
+    }
 }
