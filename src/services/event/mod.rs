@@ -461,74 +461,323 @@ impl<'a> EventService<'a> {
                 }
             } else {
                 // Handle non-weekly recurrence (DAILY, MONTHLY, YEARLY)
-                let freq = if rrule.contains("FREQ=DAILY") {
-                    1 // days
-                } else if rrule.contains("FREQ=MONTHLY") {
-                    30 // approximate
-                } else if rrule.contains("FREQ=YEARLY") {
-                    365 // approximate
+                
+                // Check for BYMONTHDAY (first/last day of month)
+                let bymonthday = if let Some(bymonthday_start) = rrule.find("BYMONTHDAY=") {
+                    let bymonthday_str = &rrule[bymonthday_start + 11..];
+                    let bymonthday_end = bymonthday_str.find(';').unwrap_or(bymonthday_str.len());
+                    bymonthday_str[..bymonthday_end].parse::<i32>().ok()
                 } else {
-                    return Ok(vec![event.clone()]);
+                    None
                 };
                 
-                let mut current_start = event.start;
-                let mut occurrence_count = 0;
-                
-                // Generate occurrences
-                while current_start <= event.end.max(range_end) {
-                    // Check if we've reached the COUNT limit
-                    if let Some(max) = max_count {
-                        if occurrence_count >= max {
-                            break;
+                // Check for positional BYDAY (e.g., "1MO" = first Monday, "-1FR" = last Friday)
+                let positional_byday = if let Some(byday_start) = rrule.find("BYDAY=") {
+                    let byday_str = &rrule[byday_start + 6..];
+                    let byday_end = byday_str.find(';').unwrap_or(byday_str.len());
+                    let day_str = &byday_str[..byday_end];
+                    
+                    // Check if it's a positional BYDAY (e.g., "1MO" or "-1FR")
+                    if day_str.len() > 2 {
+                        if day_str.starts_with("1") && day_str.len() == 3 {
+                            // First weekday (e.g., "1MO")
+                            let weekday_code = &day_str[1..];
+                            let weekday = match weekday_code {
+                                "SU" => Some(chrono::Weekday::Sun),
+                                "MO" => Some(chrono::Weekday::Mon),
+                                "TU" => Some(chrono::Weekday::Tue),
+                                "WE" => Some(chrono::Weekday::Wed),
+                                "TH" => Some(chrono::Weekday::Thu),
+                                "FR" => Some(chrono::Weekday::Fri),
+                                "SA" => Some(chrono::Weekday::Sat),
+                                _ => None,
+                            };
+                            weekday.map(|wd| (1, wd))
+                        } else if day_str.starts_with("-1") && day_str.len() == 4 {
+                            // Last weekday (e.g., "-1FR")
+                            let weekday_code = &day_str[2..];
+                            let weekday = match weekday_code {
+                                "SU" => Some(chrono::Weekday::Sun),
+                                "MO" => Some(chrono::Weekday::Mon),
+                                "TU" => Some(chrono::Weekday::Tue),
+                                "WE" => Some(chrono::Weekday::Wed),
+                                "TH" => Some(chrono::Weekday::Thu),
+                                "FR" => Some(chrono::Weekday::Fri),
+                                "SA" => Some(chrono::Weekday::Sat),
+                                _ => None,
+                            };
+                            weekday.map(|wd| (-1, wd))
+                        } else {
+                            None
                         }
-                    }
-                    
-                    // Check UNTIL date
-                    if let Some(until) = until_date {
-                        if current_start.date_naive() > until {
-                            break;
-                        }
-                    }
-                    
-                    let current_end = current_start + duration;
-                    
-                    // Check if this is a valid occurrence (not an exception)
-                    let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
-                        exceptions.iter().any(|ex| {
-                            ex.date_naive() == current_start.date_naive()
-                        })
                     } else {
-                        false
+                        None
+                    }
+                } else {
+                    None
+                };
+                
+                if rrule.contains("FREQ=MONTHLY") {
+                    // Monthly recurrence
+                    let interval = if let Some(interval_start) = rrule.find("INTERVAL=") {
+                        let interval_str = &rrule[interval_start + 9..];
+                        let interval_end = interval_str.find(';').unwrap_or(interval_str.len());
+                        interval_str[..interval_end].parse::<i64>().unwrap_or(1)
+                    } else {
+                        1
                     };
                     
-                    if !is_exception {
-                        // Count this occurrence towards the total
-                        occurrence_count += 1;
+                    let mut current_date = event.start.date_naive();
+                    let event_time = event.start.time();
+                    let mut occurrence_count = 0;
+                    
+                    loop {
+                        // Check if we've reached the COUNT limit
+                        if let Some(max) = max_count {
+                            if occurrence_count >= max {
+                                break;
+                            }
+                        }
                         
-                        // Only add to results if within the requested range
-                        if current_start >= range_start && current_start <= range_end {
-                            let mut occurrence = event.clone();
-                            occurrence.start = current_start;
-                            occurrence.end = current_end;
-                            occurrences.push(occurrence);
+                        // Check UNTIL date
+                        if let Some(until) = until_date {
+                            if current_date > until {
+                                break;
+                            }
+                        }
+                        
+                        // Calculate the actual occurrence date based on pattern
+                        let occurrence_date = if let Some(day) = bymonthday {
+                            // First or last day of month
+                            if day == 1 {
+                                // First day of month
+                                chrono::NaiveDate::from_ymd_opt(
+                                    current_date.year(),
+                                    current_date.month(),
+                                    1
+                                )
+                            } else if day == -1 {
+                                // Last day of month
+                                let next_month = if current_date.month() == 12 {
+                                    chrono::NaiveDate::from_ymd_opt(current_date.year() + 1, 1, 1)
+                                } else {
+                                    chrono::NaiveDate::from_ymd_opt(
+                                        current_date.year(),
+                                        current_date.month() + 1,
+                                        1
+                                    )
+                                };
+                                next_month.and_then(|d| d.pred_opt())
+                            } else {
+                                Some(current_date)
+                            }
+                        } else if let Some((position, weekday)) = positional_byday {
+                            // First or last weekday of month
+                            if position == 1 {
+                                // First occurrence of weekday in month
+                                let first_of_month = chrono::NaiveDate::from_ymd_opt(
+                                    current_date.year(),
+                                    current_date.month(),
+                                    1
+                                );
+                                first_of_month.and_then(|fom| {
+                                    let first_weekday = fom.weekday();
+                                    let days_until_target = ((weekday.num_days_from_monday() as i32 
+                                        - first_weekday.num_days_from_monday() as i32 + 7) % 7) as i64;
+                                    Some(fom + chrono::Duration::days(days_until_target))
+                                })
+                            } else {
+                                // Last occurrence of weekday in month
+                                let next_month = if current_date.month() == 12 {
+                                    chrono::NaiveDate::from_ymd_opt(current_date.year() + 1, 1, 1)
+                                } else {
+                                    chrono::NaiveDate::from_ymd_opt(
+                                        current_date.year(),
+                                        current_date.month() + 1,
+                                        1
+                                    )
+                                };
+                                next_month.and_then(|nm| nm.pred_opt()).and_then(|last_of_month| {
+                                    let last_weekday = last_of_month.weekday();
+                                    let days_back_to_target = ((last_weekday.num_days_from_monday() as i32 
+                                        - weekday.num_days_from_monday() as i32 + 7) % 7) as i64;
+                                    Some(last_of_month - chrono::Duration::days(days_back_to_target))
+                                })
+                            }
+                        } else {
+                            // Regular monthly recurrence on same day of month
+                            Some(current_date)
+                        };
+                        
+                        if let Some(occ_date) = occurrence_date {
+                            // Check UNTIL date again for the calculated date
+                            if let Some(until) = until_date {
+                                if occ_date > until {
+                                    break;
+                                }
+                            }
+                            
+                            if let Some(occurrence_datetime) = occ_date.and_time(event_time).and_local_timezone(Local).single() {
+                                // Check if this is a valid occurrence (not before original event, not an exception)
+                                if occurrence_datetime >= event.start {
+                                    let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
+                                        exceptions.iter().any(|ex| {
+                                            ex.date_naive() == occurrence_datetime.date_naive()
+                                        })
+                                    } else {
+                                        false
+                                    };
+                                    
+                                    if !is_exception {
+                                        // Count this occurrence
+                                        occurrence_count += 1;
+                                        
+                                        // Only add to results if within the requested range
+                                        if occurrence_datetime >= range_start && occurrence_datetime <= range_end {
+                                            let occurrence_end = occurrence_datetime + duration;
+                                            let mut occurrence = event.clone();
+                                            occurrence.start = occurrence_datetime;
+                                            occurrence.end = occurrence_end;
+                                            occurrences.push(occurrence);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Move to next month(s)
+                        let new_month = current_date.month() as i64 + interval;
+                        let years_to_add = (new_month - 1) / 12;
+                        let final_month = ((new_month - 1) % 12 + 1) as u32;
+                        let final_year = current_date.year() as i64 + years_to_add;
+                        
+                        current_date = chrono::NaiveDate::from_ymd_opt(
+                            final_year as i32,
+                            final_month,
+                            current_date.day().min(28) // Use day 28 to avoid month overflow issues
+                        ).unwrap_or(current_date + chrono::Duration::days(30));
+                        
+                        // Safety break
+                        if current_date > range_end.date_naive() + chrono::Duration::days(365) {
+                            break;
                         }
                     }
-                    
-                    // Move to next occurrence
-                    if rrule.contains("FREQ=MONTHLY") {
-                        // Add approximately one month (30 days)
-                        current_start = current_start + chrono::Duration::days(30);
-                    } else if rrule.contains("FREQ=YEARLY") {
-                        // Add approximately one year (365 days)
-                        current_start = current_start + chrono::Duration::days(365);
+                } else if rrule.contains("FREQ=YEARLY") {
+                    // Yearly recurrence
+                    let interval = if let Some(interval_start) = rrule.find("INTERVAL=") {
+                        let interval_str = &rrule[interval_start + 9..];
+                        let interval_end = interval_str.find(';').unwrap_or(interval_str.len());
+                        interval_str[..interval_end].parse::<i32>().unwrap_or(1)
                     } else {
-                        // Daily
-                        current_start = current_start + chrono::Duration::days(freq);
-                    }
+                        1
+                    };
                     
-                    // Safety break to prevent infinite loops
-                    if current_start > range_end + chrono::Duration::days(365) {
-                        break;
+                    let mut current_start = event.start;
+                    let mut occurrence_count = 0;
+                    
+                    loop {
+                        // Check if we've reached the COUNT limit
+                        if let Some(max) = max_count {
+                            if occurrence_count >= max {
+                                break;
+                            }
+                        }
+                        
+                        // Check UNTIL date
+                        if let Some(until) = until_date {
+                            if current_start.date_naive() > until {
+                                break;
+                            }
+                        }
+                        
+                        let current_end = current_start + duration;
+                        
+                        // Check if this is a valid occurrence (not an exception)
+                        let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
+                            exceptions.iter().any(|ex| {
+                                ex.date_naive() == current_start.date_naive()
+                            })
+                        } else {
+                            false
+                        };
+                        
+                        if !is_exception {
+                            // Count this occurrence
+                            occurrence_count += 1;
+                            
+                            // Only add to results if within the requested range
+                            if current_start >= range_start && current_start <= range_end {
+                                let mut occurrence = event.clone();
+                                occurrence.start = current_start;
+                                occurrence.end = current_end;
+                                occurrences.push(occurrence);
+                            }
+                        }
+                        
+                        // Move to next year(s)
+                        let new_year = current_start.year() + interval;
+                        current_start = current_start
+                            .with_year(new_year)
+                            .unwrap_or(current_start + chrono::Duration::days(365 * interval as i64));
+                        
+                        // Safety break
+                        if current_start > range_end + chrono::Duration::days(365) {
+                            break;
+                        }
+                    }
+                } else {
+                    // Daily recurrence
+                    let freq = 1; // days
+                    let mut current_start = event.start;
+                    let mut occurrence_count = 0;
+                    
+                    // Generate occurrences
+                    while current_start <= event.end.max(range_end) {
+                        // Check if we've reached the COUNT limit
+                        if let Some(max) = max_count {
+                            if occurrence_count >= max {
+                                break;
+                            }
+                        }
+                        
+                        // Check UNTIL date
+                        if let Some(until) = until_date {
+                            if current_start.date_naive() > until {
+                                break;
+                            }
+                        }
+                        
+                        let current_end = current_start + duration;
+                        
+                        // Check if this is a valid occurrence (not an exception)
+                        let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
+                            exceptions.iter().any(|ex| {
+                                ex.date_naive() == current_start.date_naive()
+                            })
+                        } else {
+                            false
+                        };
+                        
+                        if !is_exception {
+                            // Count this occurrence towards the total
+                            occurrence_count += 1;
+                            
+                            // Only add to results if within the requested range
+                            if current_start >= range_start && current_start <= range_end {
+                                let mut occurrence = event.clone();
+                                occurrence.start = current_start;
+                                occurrence.end = current_end;
+                                occurrences.push(occurrence);
+                            }
+                        }
+                        
+                        // Move to next occurrence (daily)
+                        current_start = current_start + chrono::Duration::days(freq);
+                        
+                        // Safety break to prevent infinite loops
+                        if current_start > range_end + chrono::Duration::days(365) {
+                            break;
+                        }
                     }
                 }
             }

@@ -31,6 +31,7 @@ pub struct EventDialogState {
     pub interval: u32,
     pub count: Option<u32>,
     pub until_date: Option<NaiveDate>,
+    pub pattern: RecurrencePattern,  // Positional pattern (first/last day/weekday)
     
     // BYDAY for weekly/monthly recurrence
     pub byday_enabled: bool,
@@ -72,6 +73,89 @@ impl RecurrenceFrequency {
             Self::Monthly => "MONTHLY",
             Self::Yearly => "YEARLY",
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecurrencePattern {
+    None,                           // No special pattern
+    FirstDayOfPeriod,               // First day of month/year
+    LastDayOfPeriod,                // Last day of month/year
+    FirstWeekdayOfPeriod(Weekday),  // First Monday/Tuesday/etc of month/year
+    LastWeekdayOfPeriod(Weekday),   // Last Monday/Tuesday/etc of month/year
+}
+
+impl RecurrencePattern {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::FirstDayOfPeriod => "First Day",
+            Self::LastDayOfPeriod => "Last Day",
+            Self::FirstWeekdayOfPeriod(_) => "First Weekday",
+            Self::LastWeekdayOfPeriod(_) => "Last Weekday",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Weekday {
+    Sunday,
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+}
+
+impl Weekday {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Sunday => "Sunday",
+            Self::Monday => "Monday",
+            Self::Tuesday => "Tuesday",
+            Self::Wednesday => "Wednesday",
+            Self::Thursday => "Thursday",
+            Self::Friday => "Friday",
+            Self::Saturday => "Saturday",
+        }
+    }
+    
+    fn to_rrule_day(&self) -> &'static str {
+        match self {
+            Self::Sunday => "SU",
+            Self::Monday => "MO",
+            Self::Tuesday => "TU",
+            Self::Wednesday => "WE",
+            Self::Thursday => "TH",
+            Self::Friday => "FR",
+            Self::Saturday => "SA",
+        }
+    }
+    
+    fn from_rrule_day(day: &str) -> Option<Self> {
+        match day {
+            "SU" => Some(Self::Sunday),
+            "MO" => Some(Self::Monday),
+            "TU" => Some(Self::Tuesday),
+            "WE" => Some(Self::Wednesday),
+            "TH" => Some(Self::Thursday),
+            "FR" => Some(Self::Friday),
+            "SA" => Some(Self::Saturday),
+            _ => None,
+        }
+    }
+    
+    fn all() -> [Self; 7] {
+        [
+            Self::Sunday,
+            Self::Monday,
+            Self::Tuesday,
+            Self::Wednesday,
+            Self::Thursday,
+            Self::Friday,
+            Self::Saturday,
+        ]
     }
 }
 
@@ -119,6 +203,7 @@ impl EventDialogState {
             interval: 1,
             count: None,
             until_date: None,
+            pattern: RecurrencePattern::None,
             byday_enabled: false,
             byday_monday: false,
             byday_tuesday: false,
@@ -139,11 +224,11 @@ impl EventDialogState {
         let end_time = event.end.time();
         
         // Parse recurrence rule if present
-        let (is_recurring, frequency, interval, count, until_date, byday_flags) = 
+        let (is_recurring, frequency, interval, count, until_date, pattern, byday_flags) = 
             if let Some(ref rrule) = event.recurrence_rule {
                 Self::parse_rrule(rrule)
             } else {
-                (false, RecurrenceFrequency::Daily, 1, None, None, [false; 7])
+                (false, RecurrenceFrequency::Daily, 1, None, None, RecurrencePattern::None, [false; 7])
             };
         
         Self {
@@ -162,6 +247,7 @@ impl EventDialogState {
             interval,
             count,
             until_date,
+            pattern,
             byday_enabled: byday_flags.iter().any(|&b| b),
             byday_sunday: byday_flags[0],
             byday_monday: byday_flags[1],
@@ -176,11 +262,12 @@ impl EventDialogState {
     }
     
     /// Parse RRULE string to extract recurrence information
-    fn parse_rrule(rrule: &str) -> (bool, RecurrenceFrequency, u32, Option<u32>, Option<NaiveDate>, [bool; 7]) {
+    fn parse_rrule(rrule: &str) -> (bool, RecurrenceFrequency, u32, Option<u32>, Option<NaiveDate>, RecurrencePattern, [bool; 7]) {
         let mut frequency = RecurrenceFrequency::Daily;
         let mut interval = 1u32;
         let mut count = None;
         let mut until_date = None;
+        let mut pattern = RecurrencePattern::None;
         let mut byday_flags = [false; 7]; // SU, MO, TU, WE, TH, FR, SA
         
         for part in rrule.split(';') {
@@ -217,17 +304,43 @@ impl EventDialogState {
                             }
                         }
                     }
+                    "BYMONTHDAY" => {
+                        // Parse BYMONTHDAY (1 = first day, -1 = last day)
+                        if value == "1" {
+                            pattern = RecurrencePattern::FirstDayOfPeriod;
+                        } else if value == "-1" {
+                            pattern = RecurrencePattern::LastDayOfPeriod;
+                        }
+                    }
                     "BYDAY" => {
-                        for day in value.split(',') {
-                            match day {
-                                "SU" => byday_flags[0] = true,
-                                "MO" => byday_flags[1] = true,
-                                "TU" => byday_flags[2] = true,
-                                "WE" => byday_flags[3] = true,
-                                "TH" => byday_flags[4] = true,
-                                "FR" => byday_flags[5] = true,
-                                "SA" => byday_flags[6] = true,
-                                _ => {}
+                        // Check for positional BYDAY (e.g., "1MO", "-1FR")
+                        let days: Vec<&str> = value.split(',').collect();
+                        for day in &days {
+                            if day.len() > 2 {
+                                // Positional BYDAY (e.g., "1MO" or "-1FR")
+                                if day.starts_with("1") && day.len() == 3 {
+                                    // First weekday (e.g., "1MO")
+                                    if let Some(weekday) = Weekday::from_rrule_day(&day[1..]) {
+                                        pattern = RecurrencePattern::FirstWeekdayOfPeriod(weekday);
+                                    }
+                                } else if day.starts_with("-1") && day.len() == 4 {
+                                    // Last weekday (e.g., "-1FR")
+                                    if let Some(weekday) = Weekday::from_rrule_day(&day[2..]) {
+                                        pattern = RecurrencePattern::LastWeekdayOfPeriod(weekday);
+                                    }
+                                }
+                            } else {
+                                // Standard BYDAY (e.g., "MO", "TU")
+                                match *day {
+                                    "SU" => byday_flags[0] = true,
+                                    "MO" => byday_flags[1] = true,
+                                    "TU" => byday_flags[2] = true,
+                                    "WE" => byday_flags[3] = true,
+                                    "TH" => byday_flags[4] = true,
+                                    "FR" => byday_flags[5] = true,
+                                    "SA" => byday_flags[6] = true,
+                                    _ => {}
+                                }
                             }
                         }
                     }
@@ -236,7 +349,7 @@ impl EventDialogState {
             }
         }
         
-        (true, frequency, interval, count, until_date, byday_flags)
+        (true, frequency, interval, count, until_date, pattern, byday_flags)
     }
     
     /// Build RRULE string from current state
@@ -251,20 +364,54 @@ impl EventDialogState {
             parts.push(format!("INTERVAL={}", self.interval));
         }
         
-        // Add BYDAY if enabled and applicable
-        if self.byday_enabled && (self.frequency == RecurrenceFrequency::Weekly || 
-                                  self.frequency == RecurrenceFrequency::Monthly) {
-            let mut days = Vec::new();
-            if self.byday_sunday { days.push("SU"); }
-            if self.byday_monday { days.push("MO"); }
-            if self.byday_tuesday { days.push("TU"); }
-            if self.byday_wednesday { days.push("WE"); }
-            if self.byday_thursday { days.push("TH"); }
-            if self.byday_friday { days.push("FR"); }
-            if self.byday_saturday { days.push("SA"); }
-            
-            if !days.is_empty() {
-                parts.push(format!("BYDAY={}", days.join(",")));
+        // Add positional pattern (first/last day/weekday) for Monthly/Yearly
+        if self.frequency == RecurrenceFrequency::Monthly || self.frequency == RecurrenceFrequency::Yearly {
+            match self.pattern {
+                RecurrencePattern::FirstDayOfPeriod => {
+                    parts.push("BYMONTHDAY=1".to_string());
+                }
+                RecurrencePattern::LastDayOfPeriod => {
+                    parts.push("BYMONTHDAY=-1".to_string());
+                }
+                RecurrencePattern::FirstWeekdayOfPeriod(weekday) => {
+                    parts.push(format!("BYDAY=1{}", weekday.to_rrule_day()));
+                }
+                RecurrencePattern::LastWeekdayOfPeriod(weekday) => {
+                    parts.push(format!("BYDAY=-1{}", weekday.to_rrule_day()));
+                }
+                RecurrencePattern::None => {
+                    // Add standard BYDAY if enabled
+                    if self.byday_enabled {
+                        let mut days = Vec::new();
+                        if self.byday_sunday { days.push("SU"); }
+                        if self.byday_monday { days.push("MO"); }
+                        if self.byday_tuesday { days.push("TU"); }
+                        if self.byday_wednesday { days.push("WE"); }
+                        if self.byday_thursday { days.push("TH"); }
+                        if self.byday_friday { days.push("FR"); }
+                        if self.byday_saturday { days.push("SA"); }
+                        
+                        if !days.is_empty() {
+                            parts.push(format!("BYDAY={}", days.join(",")));
+                        }
+                    }
+                }
+            }
+        } else if self.frequency == RecurrenceFrequency::Weekly {
+            // For weekly, only standard BYDAY (no positional patterns)
+            if self.byday_enabled {
+                let mut days = Vec::new();
+                if self.byday_sunday { days.push("SU"); }
+                if self.byday_monday { days.push("MO"); }
+                if self.byday_tuesday { days.push("TU"); }
+                if self.byday_wednesday { days.push("WE"); }
+                if self.byday_thursday { days.push("TH"); }
+                if self.byday_friday { days.push("FR"); }
+                if self.byday_saturday { days.push("SA"); }
+                
+                if !days.is_empty() {
+                    parts.push(format!("BYDAY={}", days.join(",")));
+                }
             }
         }
         
@@ -580,9 +727,53 @@ pub fn render_event_dialog(
                         });
                     });
                     
-                    // BYDAY options for Weekly and Monthly
+                    // Positional pattern options for Monthly and Yearly
+                    if state.frequency == RecurrenceFrequency::Monthly || 
+                       state.frequency == RecurrenceFrequency::Yearly {
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label("Repeat on:");
+                            egui::ComboBox::from_id_source("pattern_combo")
+                                .selected_text(state.pattern.as_str())
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut state.pattern, RecurrencePattern::None, "None");
+                                    ui.selectable_value(&mut state.pattern, RecurrencePattern::FirstDayOfPeriod, "First Day");
+                                    ui.selectable_value(&mut state.pattern, RecurrencePattern::LastDayOfPeriod, "Last Day");
+                                    ui.selectable_value(
+                                        &mut state.pattern, 
+                                        RecurrencePattern::FirstWeekdayOfPeriod(Weekday::Monday), 
+                                        "First Weekday"
+                                    );
+                                    ui.selectable_value(
+                                        &mut state.pattern, 
+                                        RecurrencePattern::LastWeekdayOfPeriod(Weekday::Monday), 
+                                        "Last Weekday"
+                                    );
+                                });
+                        });
+                        
+                        // Show weekday selector if pattern is FirstWeekday or LastWeekday
+                        match state.pattern {
+                            RecurrencePattern::FirstWeekdayOfPeriod(ref mut weekday) |
+                            RecurrencePattern::LastWeekdayOfPeriod(ref mut weekday) => {
+                                ui.horizontal(|ui| {
+                                    ui.label("  of:");
+                                    egui::ComboBox::from_id_source("weekday_combo")
+                                        .selected_text(weekday.as_str())
+                                        .show_ui(ui, |ui| {
+                                            for wd in Weekday::all() {
+                                                ui.selectable_value(weekday, wd, wd.as_str());
+                                            }
+                                        });
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                    
+                    // BYDAY options for Weekly and Monthly (when not using positional pattern)
                     if state.frequency == RecurrenceFrequency::Weekly || 
-                       state.frequency == RecurrenceFrequency::Monthly {
+                       (state.frequency == RecurrenceFrequency::Monthly && state.pattern == RecurrencePattern::None) {
                         ui.add_space(4.0);
                         ui.checkbox(&mut state.byday_enabled, "Repeat on specific days");
                         
