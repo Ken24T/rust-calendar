@@ -108,6 +108,39 @@ impl Database {
             ).context("Failed to add default_event_start_time column")?;
         }
         
+        // Migrate: Rename time_slot_interval to default_event_duration
+        let old_column_exists = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name='time_slot_interval'",
+            [],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        
+        let new_column_exists = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name='default_event_duration'",
+            [],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        
+        if old_column_exists && !new_column_exists {
+            // Add new column
+            self.conn.execute(
+                "ALTER TABLE settings ADD COLUMN default_event_duration INTEGER NOT NULL DEFAULT 60",
+                [],
+            ).context("Failed to add default_event_duration column")?;
+            
+            // Copy data from old column to new column
+            self.conn.execute(
+                "UPDATE settings SET default_event_duration = time_slot_interval WHERE time_slot_interval IS NOT NULL",
+                [],
+            ).context("Failed to migrate time_slot_interval to default_event_duration")?;
+        } else if !new_column_exists {
+            // Just add the new column if neither exists
+            self.conn.execute(
+                "ALTER TABLE settings ADD COLUMN default_event_duration INTEGER NOT NULL DEFAULT 60",
+                [],
+            ).context("Failed to add default_event_duration column")?;
+        }
+        
         // Custom themes table
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS custom_themes (
@@ -131,8 +164,13 @@ impl Database {
         
         // Insert default settings if not exists
         self.conn.execute(
-            "INSERT OR IGNORE INTO settings (id, theme, first_day_of_week, time_format, date_format, time_slot_interval)
-             VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 60)",
+            "INSERT OR IGNORE INTO settings (
+                id, theme, first_day_of_week, time_format, date_format, 
+                show_my_day, my_day_position_right, show_ribbon, current_view,
+                default_event_duration, first_day_of_work_week, last_day_of_work_week,
+                default_event_start_time
+            )
+             VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 0, 0, 0, 'Month', 60, 1, 5, '08:00')",
             [],
         ).context("Failed to insert default settings")?;
         
