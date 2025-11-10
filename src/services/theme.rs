@@ -1,10 +1,10 @@
 // Theme service for managing custom themes
 // Handles CRUD operations for custom theme configurations
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crate::services::database::Database;
-use crate::ui::theme::CalendarTheme;
-use iced::Color;
+use crate::ui_egui::theme::CalendarTheme;
+use egui::Color32;
 
 pub struct ThemeService<'a> {
     db: &'a Database,
@@ -63,7 +63,7 @@ impl<'a> ThemeService<'a> {
     pub fn save_theme(&self, theme: &CalendarTheme, name: &str) -> Result<()> {
         let conn = self.db.connection();
         
-        let is_dark = matches!(theme.base, iced::Theme::Dark);
+        let is_dark = theme.is_dark;
         
         conn.execute(
             "INSERT OR REPLACE INTO custom_themes 
@@ -74,15 +74,15 @@ impl<'a> ThemeService<'a> {
             (
                 name,
                 is_dark as i32,
-                Self::color_to_string(theme.app_background),
-                Self::color_to_string(theme.calendar_background),
-                Self::color_to_string(theme.weekend_background),
-                Self::color_to_string(theme.today_background),
-                Self::color_to_string(theme.today_border),
-                Self::color_to_string(theme.day_background),
-                Self::color_to_string(theme.day_border),
-                Self::color_to_string(theme.text_primary),
-                Self::color_to_string(theme.text_secondary),
+                CalendarTheme::color_to_string(theme.app_background),
+                CalendarTheme::color_to_string(theme.calendar_background),
+                CalendarTheme::color_to_string(theme.weekend_background),
+                CalendarTheme::color_to_string(theme.today_background),
+                CalendarTheme::color_to_string(theme.today_border),
+                CalendarTheme::color_to_string(theme.day_background),
+                CalendarTheme::color_to_string(theme.day_border),
+                CalendarTheme::color_to_string(theme.text_primary),
+                CalendarTheme::color_to_string(theme.text_secondary),
             ),
         )?;
         
@@ -103,42 +103,19 @@ impl<'a> ThemeService<'a> {
     /// Convert a database row to CalendarTheme
     fn row_to_theme(row: &rusqlite::Row) -> Result<CalendarTheme, rusqlite::Error> {
         let is_dark: i32 = row.get(1)?;
-        let base = if is_dark != 0 {
-            iced::Theme::Dark
-        } else {
-            iced::Theme::Light
-        };
         
         Ok(CalendarTheme {
-            base,
-            app_background: Self::string_to_color(&row.get::<_, String>(2)?),
-            calendar_background: Self::string_to_color(&row.get::<_, String>(3)?),
-            weekend_background: Self::string_to_color(&row.get::<_, String>(4)?),
-            today_background: Self::string_to_color(&row.get::<_, String>(5)?),
-            today_border: Self::string_to_color(&row.get::<_, String>(6)?),
-            day_background: Self::string_to_color(&row.get::<_, String>(7)?),
-            day_border: Self::string_to_color(&row.get::<_, String>(8)?),
-            text_primary: Self::string_to_color(&row.get::<_, String>(9)?),
-            text_secondary: Self::string_to_color(&row.get::<_, String>(10)?),
+            is_dark: is_dark != 0,
+            app_background: CalendarTheme::string_to_color(&row.get::<_, String>(2)?).unwrap_or(Color32::BLACK),
+            calendar_background: CalendarTheme::string_to_color(&row.get::<_, String>(3)?).unwrap_or(Color32::WHITE),
+            weekend_background: CalendarTheme::string_to_color(&row.get::<_, String>(4)?).unwrap_or(Color32::LIGHT_GRAY),
+            today_background: CalendarTheme::string_to_color(&row.get::<_, String>(5)?).unwrap_or(Color32::LIGHT_BLUE),
+            today_border: CalendarTheme::string_to_color(&row.get::<_, String>(6)?).unwrap_or(Color32::BLUE),
+            day_background: CalendarTheme::string_to_color(&row.get::<_, String>(7)?).unwrap_or(Color32::WHITE),
+            day_border: CalendarTheme::string_to_color(&row.get::<_, String>(8)?).unwrap_or(Color32::GRAY),
+            text_primary: CalendarTheme::string_to_color(&row.get::<_, String>(9)?).unwrap_or(Color32::BLACK),
+            text_secondary: CalendarTheme::string_to_color(&row.get::<_, String>(10)?).unwrap_or(Color32::GRAY),
         })
-    }
-    
-    /// Convert Color to string format "r,g,b"
-    fn color_to_string(color: Color) -> String {
-        format!("{},{},{}", color.r, color.g, color.b)
-    }
-    
-    /// Convert string format "r,g,b" to Color
-    fn string_to_color(s: &str) -> Color {
-        let parts: Vec<&str> = s.split(',').collect();
-        if parts.len() == 3 {
-            let r: f32 = parts[0].parse().unwrap_or(0.0);
-            let g: f32 = parts[1].parse().unwrap_or(0.0);
-            let b: f32 = parts[2].parse().unwrap_or(0.0);
-            Color::from_rgb(r, g, b)
-        } else {
-            Color::BLACK
-        }
     }
 }
 
@@ -168,7 +145,7 @@ mod tests {
         let service = ThemeService::new(&db);
         
         let theme = service.get_theme("Light").unwrap();
-        assert_eq!(theme.base, iced::Theme::Light);
+        assert!(!theme.is_dark);
     }
     
     #[test]
