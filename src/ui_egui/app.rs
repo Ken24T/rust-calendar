@@ -7,6 +7,7 @@ use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::quarter_view::QuarterView;
 use crate::ui_egui::event_dialog::{EventDialogState, render_event_dialog};
+use crate::ui_egui::settings_dialog::render_settings_dialog;
 use chrono::{Local, NaiveDate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -413,17 +414,17 @@ impl CalendarApp {
     }
     
     fn render_settings_dialog(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Settings")
-            .collapsible(false)
-            .resizable(true)
-            .default_width(500.0)
-            .show(ctx, |ui| {
-                ui.label("Settings dialog - To be implemented");
-                
-                if ui.button("Close").clicked() {
-                    self.show_settings_dialog = false;
-                }
-            });
+        let saved = render_settings_dialog(
+            ctx,
+            &mut self.settings,
+            self.database,
+            &mut self.show_settings_dialog,
+        );
+        
+        // If settings were saved, apply theme
+        if saved {
+            Self::apply_theme(&ctx, &self.settings);
+        }
     }
     
     fn render_theme_picker(&mut self, ctx: &egui::Context) {
