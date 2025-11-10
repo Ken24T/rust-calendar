@@ -83,13 +83,11 @@ impl CalendarApp {
         };
         
         eprintln!("Applying theme: {}", settings.theme);
-        // Apply theme to egui
-        Self::apply_theme(&cc.egui_ctx, &settings);
         
         // Parse current view from settings
         let current_view = Self::parse_view_type(&settings.current_view);
         
-        Self {
+        let app = Self {
             database,
             settings,
             current_view,
@@ -103,7 +101,12 @@ impl CalendarApp {
             event_dialog_date: None,
             event_dialog_recurrence: None,
             event_to_edit: None,
-        }
+        };
+        
+        // Apply theme from database (including custom themes)
+        app.apply_theme_from_db(&cc.egui_ctx);
+        
+        app
     }
     
     fn parse_view_type(view_str: &str) -> ViewType {
@@ -118,16 +121,30 @@ impl CalendarApp {
     }
     
     fn apply_theme(ctx: &egui::Context, settings: &Settings) {
+        // Try to load custom theme from database
+        // Note: We need a database reference, but we're in a static method
+        // For now, we'll just apply basic Light/Dark themes
+        // Custom themes are applied directly in render_theme_manager
         let visuals = if settings.theme.to_lowercase().contains("dark") {
             egui::Visuals::dark()
         } else {
             egui::Visuals::light()
         };
         
-        // Customize visuals based on theme settings
-        // We'll expand this as we port the theme system
-        
         ctx.set_visuals(visuals);
+    }
+    
+    fn apply_theme_from_db(&self, ctx: &egui::Context) {
+        let theme_service = ThemeService::new(self.database);
+        
+        // Try to load the theme
+        if let Ok(theme) = theme_service.get_theme(&self.settings.theme) {
+            eprintln!("Applying custom theme: {}", self.settings.theme);
+            theme.apply_to_context(ctx);
+        } else {
+            eprintln!("Theme not found, using default for: {}", self.settings.theme);
+            Self::apply_theme(ctx, &self.settings);
+        }
     }
 }
 
@@ -494,7 +511,7 @@ impl CalendarApp {
         
         // If settings were saved, apply theme
         if saved {
-            Self::apply_theme(&ctx, &self.settings);
+            self.apply_theme_from_db(ctx);
         }
     }
     
@@ -510,7 +527,7 @@ impl CalendarApp {
             eprintln!("Theme changed to: {}", self.settings.theme);
             
             // Apply theme immediately
-            Self::apply_theme(ctx, &self.settings);
+            self.apply_theme_from_db(ctx);
             
             // Save to database
             let service = SettingsService::new(self.database);

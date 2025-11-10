@@ -37,10 +37,10 @@ impl<'a> ThemeService<'a> {
     
     /// Get a theme by name (handles built-in and custom themes)
     pub fn get_theme(&self, name: &str) -> Result<CalendarTheme> {
-        // Handle built-in themes
-        match name {
-            "Light" => return Ok(CalendarTheme::light()),
-            "Dark" => return Ok(CalendarTheme::dark()),
+        // Handle built-in themes (case-insensitive)
+        match name.to_lowercase().as_str() {
+            "light" => return Ok(CalendarTheme::light()),
+            "dark" => return Ok(CalendarTheme::dark()),
             _ => {}
         }
         

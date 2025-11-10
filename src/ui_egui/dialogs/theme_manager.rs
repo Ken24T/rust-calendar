@@ -51,7 +51,7 @@ pub fn render_theme_manager(
         .open(&mut is_open)
         .collapsible(false)
         .resizable(true)
-        .default_width(500.0)
+        .default_width(350.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             ui.vertical(|ui| {
@@ -67,13 +67,13 @@ pub fn render_theme_manager(
                             let is_current = theme_name == current_theme;
                             
                             ui.horizontal(|ui| {
-                                // Theme name with checkmark if current
+                                // Theme name - highlight if current
                                 let label = if is_current {
-                                    RichText::new(format!("✓ {}", theme_name))
+                                    RichText::new(format!("• {}", theme_name))
                                         .strong()
                                         .color(ui.visuals().hyperlink_color)
                                 } else {
-                                    RichText::new(theme_name.clone())
+                                    RichText::new(format!("  {}", theme_name))
                                 };
                                 
                                 if ui.button(label).clicked() {
