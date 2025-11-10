@@ -96,6 +96,7 @@ impl WeekView {
                     col_width,
                     &week_dates,
                     &events,
+                    database,
                     settings,
                     show_event_dialog,
                     event_dialog_date,
@@ -114,6 +115,7 @@ impl WeekView {
         col_width: f32,
         week_dates: &[NaiveDate],
         events: &[Event],
+        database: &'static crate::services::database::Database,
         _settings: &Settings,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
@@ -207,6 +209,7 @@ impl WeekView {
                             is_hour_start,
                             &starting_events,
                             &continuing_events,
+                            database,
                             show_event_dialog,
                             event_dialog_date,
                             event_dialog_time,
@@ -235,6 +238,7 @@ impl WeekView {
         is_hour_start: bool,
         starting_events: &[&Event],  // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
+        database: &'static crate::services::database::Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
@@ -299,7 +303,7 @@ impl WeekView {
         // Check if user clicked on an event
         let mut clicked_event: Option<Event> = None;
         if response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
+            if let Some(_pos) = response.interact_pointer_pos() {
                 // Check if click was on an event (any event fills the cell, so any click is on an event if events exist)
                 if let Some(event) = starting_events.first() {
                     clicked_event = Some((*event).clone());
@@ -314,6 +318,50 @@ impl WeekView {
                 }
             }
         }
+        
+        // Context menu for right-click on event
+        response.context_menu(|ui| {
+            // Only show menu if there's an event in this cell
+            if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
+                ui.label(format!("Event: {}", event.title));
+                ui.separator();
+                
+                if ui.button("✏ Edit").clicked() {
+                    clicked_event = Some((*event).clone());
+                    ui.close_menu();
+                }
+                
+                if ui.button("🗑 Delete").clicked() {
+                    // Delete the event immediately
+                    use crate::services::event::EventService;
+                    if let Some(id) = event.id {
+                        let service = EventService::new(database.connection());
+                        let _ = service.delete(id);
+                    }
+                    ui.close_menu();
+                }
+            } else {
+                // Right-click on empty space
+                ui.label("Create event");
+                ui.separator();
+                
+                if ui.button("📅 New Event").clicked() {
+                    *show_event_dialog = true;
+                    *event_dialog_date = Some(date);
+                    *event_dialog_time = Some(time);
+                    *event_dialog_recurrence = None;
+                    ui.close_menu();
+                }
+                
+                if ui.button("🔄 New Recurring Event").clicked() {
+                    *show_event_dialog = true;
+                    *event_dialog_date = Some(date);
+                    *event_dialog_time = Some(time);
+                    *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
+                    ui.close_menu();
+                }
+            }
+        });
         
         // Handle double-click for recurring event
         if response.double_clicked() {
