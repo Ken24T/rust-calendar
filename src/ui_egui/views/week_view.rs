@@ -250,7 +250,8 @@ impl WeekView {
             || date.weekday().num_days_from_sunday() == 6;
         
         let desired_size = Vec2::new(col_width, 30.0);
-        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
+        // Use union of click and hover to capture both left and right clicks
+        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
         
         // Add manual context menu handling with secondary_clicked
         let show_context_menu = response.secondary_clicked();
@@ -303,59 +304,67 @@ impl WeekView {
             Self::render_event_in_cell(ui, rect, event);
         }
         
-        // Manual context menu handling with secondary_clicked
+        // Manual context menu handling - store popup state in egui memory
         let mut context_clicked_event: Option<Event> = None;
+        let popup_id = response.id.with(format!("context_menu_{}_{:?}", date, time));
         
+        // Open popup on right-click
         if show_context_menu {
-            let popup_id = ui.make_persistent_id(format!("context_menu_{}_{:?}", date, time));
-            
-            // Show popup at cursor position
-            egui::Area::new(popup_id)
-                .order(egui::Order::Foreground)
-                .current_pos(ui.input(|i| i.pointer.interact_pos().unwrap_or_default()))
-                .show(ui.ctx(), |ui| {
-                    egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.set_min_width(150.0);
-                        
-                        // Only show menu if there's an event in this cell
-                        if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
-                            ui.label(format!("Event: {}", event.title));
-                            ui.separator();
-                            
-                            if ui.button("✏ Edit").clicked() {
-                                context_clicked_event = Some((*event).clone());
-                            }
-                            
-                            if ui.button("🗑 Delete").clicked() {
-                                // Delete the event immediately
-                                use crate::services::event::EventService;
-                                if let Some(id) = event.id {
-                                    let service = EventService::new(database.connection());
-                                    let _ = service.delete(id);
-                                }
-                            }
-                        } else {
-                            // Right-click on empty space
-                            ui.label("Create event");
-                            ui.separator();
-                            
-                            if ui.button("📅 New Event").clicked() {
-                                *show_event_dialog = true;
-                                *event_dialog_date = Some(date);
-                                *event_dialog_time = Some(time);
-                                *event_dialog_recurrence = None;
-                            }
-                            
-                            if ui.button("🔄 New Recurring Event").clicked() {
-                                *show_event_dialog = true;
-                                *event_dialog_date = Some(date);
-                                *event_dialog_time = Some(time);
-                                *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
-                            }
-                        }
-                    });
-                });
+            ui.memory_mut(|mem| mem.open_popup(popup_id));
         }
+        
+        // Show popup if it's open
+        egui::popup::popup_above_or_below_widget(
+            ui,
+            popup_id,
+            &response,
+            egui::AboveOrBelow::Below,
+            egui::PopupCloseBehavior::CloseOnClickOutside,
+            |ui| {
+                ui.set_min_width(150.0);
+                
+                // Only show menu if there's an event in this cell
+                if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
+                    ui.label(format!("Event: {}", event.title));
+                    ui.separator();
+                    
+                    if ui.button("✏ Edit").clicked() {
+                        context_clicked_event = Some((*event).clone());
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    
+                    if ui.button("🗑 Delete").clicked() {
+                        // Delete the event immediately
+                        use crate::services::event::EventService;
+                        if let Some(id) = event.id {
+                            let service = EventService::new(database.connection());
+                            let _ = service.delete(id);
+                        }
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                } else {
+                    // Right-click on empty space
+                    ui.label("Create event");
+                    ui.separator();
+                    
+                    if ui.button("📅 New Event").clicked() {
+                        *show_event_dialog = true;
+                        *event_dialog_date = Some(date);
+                        *event_dialog_time = Some(time);
+                        *event_dialog_recurrence = None;
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    
+                    if ui.button("🔄 New Recurring Event").clicked() {
+                        *show_event_dialog = true;
+                        *event_dialog_date = Some(date);
+                        *event_dialog_time = Some(time);
+                        *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                }
+            },
+        );
         
         // Check if context menu returned a clicked event
         let mut clicked_event: Option<Event> = context_clicked_event;
