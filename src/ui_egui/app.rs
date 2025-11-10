@@ -36,6 +36,7 @@ pub struct CalendarApp {
     event_dialog_state: Option<EventDialogState>,
     event_dialog_date: Option<NaiveDate>,
     event_dialog_recurrence: Option<String>,
+    event_to_edit: Option<i64>, // Event ID to edit
 }
 
 impl CalendarApp {
@@ -69,6 +70,7 @@ impl CalendarApp {
             event_dialog_state: None,
             event_dialog_date: None,
             event_dialog_recurrence: None,
+            event_to_edit: None,
         }
     }
     
@@ -96,6 +98,7 @@ impl eframe::App for CalendarApp {
                 self.event_dialog_state = None;
                 self.event_dialog_date = None;
                 self.event_dialog_recurrence = None;
+                self.event_to_edit = None;
             } else if self.show_settings_dialog {
                 self.show_settings_dialog = false;
             } else if self.show_theme_picker {
@@ -204,23 +207,43 @@ impl eframe::App for CalendarApp {
         if self.show_event_dialog {
             // Create dialog state if not already present
             if self.event_dialog_state.is_none() {
-                self.event_dialog_state = Some(EventDialogState::new_event(
-                    self.event_dialog_date.unwrap_or(self.current_date),
-                    &self.settings
-                ));
-                // Apply any recurrence rule from click
-                if let (Some(ref mut state), Some(ref rrule)) = 
-                    (&mut self.event_dialog_state, &self.event_dialog_recurrence) {
-                    // Parse and set recurrence from the click handler
-                    state.is_recurring = true;
-                    if rrule.contains("WEEKLY") {
-                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Weekly;
-                    } else if rrule.contains("MONTHLY") {
-                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Monthly;
-                    } else if rrule.contains("YEARLY") {
-                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Yearly;
+                // Check if we're editing an existing event
+                if let Some(event_id) = self.event_to_edit {
+                    // Load event from database
+                    use crate::services::event::EventService;
+                    let service = EventService::new(self.database.connection());
+                    if let Ok(Some(event)) = service.get(event_id) {
+                        self.event_dialog_state = Some(EventDialogState::from_event(
+                            &event,
+                            &self.settings
+                        ));
                     } else {
-                        state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Daily;
+                        // Event not found, create new one instead
+                        self.event_dialog_state = Some(EventDialogState::new_event(
+                            self.event_dialog_date.unwrap_or(self.current_date),
+                            &self.settings
+                        ));
+                    }
+                } else {
+                    // Creating a new event
+                    self.event_dialog_state = Some(EventDialogState::new_event(
+                        self.event_dialog_date.unwrap_or(self.current_date),
+                        &self.settings
+                    ));
+                    // Apply any recurrence rule from click
+                    if let (Some(ref mut state), Some(ref rrule)) = 
+                        (&mut self.event_dialog_state, &self.event_dialog_recurrence) {
+                        // Parse and set recurrence from the click handler
+                        state.is_recurring = true;
+                        if rrule.contains("WEEKLY") {
+                            state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Weekly;
+                        } else if rrule.contains("MONTHLY") {
+                            state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Monthly;
+                        } else if rrule.contains("YEARLY") {
+                            state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Yearly;
+                        } else {
+                            state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Daily;
+                        }
                     }
                 }
             }
@@ -354,6 +377,7 @@ impl CalendarApp {
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
+            &mut self.event_to_edit,
         );
     }
     

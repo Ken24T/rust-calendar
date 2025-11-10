@@ -15,6 +15,7 @@ impl MonthView {
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
+        event_to_edit: &mut Option<i64>,
     ) {
         let today = Local::now().date_naive();
         
@@ -97,6 +98,7 @@ impl MonthView {
                                 show_event_dialog,
                                 event_dialog_date,
                                 event_dialog_recurrence,
+                                event_to_edit,
                             );
                         }
                         day_counter += 1;
@@ -116,6 +118,7 @@ impl MonthView {
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
+        event_to_edit: &mut Option<i64>,
     ) {
         let desired_size = Vec2::new(ui.available_width(), 80.0);
         let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
@@ -167,7 +170,7 @@ impl MonthView {
         
         // Draw events (up to 3 visible)
         let mut y_offset = 25.0;
-        for (i, event) in events.iter().take(3).enumerate() {
+        for event in events.iter().take(3) {
             let event_color = event.color.as_deref()
                 .and_then(Self::parse_color)
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
@@ -177,6 +180,13 @@ impl MonthView {
                 Pos2::new(rect.left() + 3.0, rect.top() + y_offset),
                 Vec2::new(rect.width() - 6.0, 16.0),
             );
+            
+            // Make event clickable
+            let event_response = ui.allocate_rect(event_rect, Sense::click());
+            if event_response.clicked() && event.id.is_some() {
+                *show_event_dialog = true;
+                *event_to_edit = event.id;
+            }
             
             ui.painter().rect_filled(event_rect, 2.0, event_color);
             
