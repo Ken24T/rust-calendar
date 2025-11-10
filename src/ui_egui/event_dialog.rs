@@ -78,18 +78,25 @@ impl RecurrenceFrequency {
 impl EventDialogState {
     /// Create a new event dialog state for creating a new event
     pub fn new_event(date: NaiveDate, settings: &Settings) -> Self {
-        // Parse default start time from settings (format: "HH:MM")
-        let (start_hour, start_minute) = settings.default_event_start_time
-            .split_once(':')
-            .and_then(|(h, m)| {
-                let hour = h.parse::<u32>().ok()?;
-                let minute = m.parse::<u32>().ok()?;
-                Some((hour, minute))
-            })
-            .unwrap_or((9, 0));
-        
-        let start_time = NaiveTime::from_hms_opt(start_hour, start_minute, 0)
-            .unwrap_or(NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+        Self::new_event_with_time(date, None, settings)
+    }
+    
+    /// Create a new event dialog state with an optional specific start time
+    pub fn new_event_with_time(date: NaiveDate, start_time_opt: Option<NaiveTime>, settings: &Settings) -> Self {
+        // Use provided time or parse default start time from settings (format: "HH:MM")
+        let start_time = start_time_opt.unwrap_or_else(|| {
+            let (start_hour, start_minute) = settings.default_event_start_time
+                .split_once(':')
+                .and_then(|(h, m)| {
+                    let hour = h.parse::<u32>().ok()?;
+                    let minute = m.parse::<u32>().ok()?;
+                    Some((hour, minute))
+                })
+                .unwrap_or((9, 0));
+            
+            NaiveTime::from_hms_opt(start_hour, start_minute, 0)
+                .unwrap_or(NaiveTime::from_hms_opt(9, 0, 0).unwrap())
+        });
         
         // Calculate end time based on default event duration
         let duration_minutes = settings.default_event_duration as i64;
@@ -273,17 +280,29 @@ impl EventDialogState {
     
     /// Validate the event data
     fn validate(&self) -> Result<(), String> {
+        // Title is required
         if self.title.trim().is_empty() {
             return Err("Event title is required".to_string());
         }
         
-        if self.end_time <= self.start_time {
+        // Title should have reasonable length
+        if self.title.len() > 200 {
+            return Err("Event title is too long (max 200 characters)".to_string());
+        }
+        
+        // Validate time only for non-all-day events
+        if !self.all_day && self.end_time <= self.start_time {
             return Err("End time must be after start time".to_string());
         }
         
+        // Validate recurrence settings
         if self.is_recurring {
             if self.interval < 1 {
                 return Err("Interval must be at least 1".to_string());
+            }
+            
+            if self.interval > 999 {
+                return Err("Interval is too large (max 999)".to_string());
             }
             
             // If BYDAY is enabled for weekly/monthly, at least one day must be selected
@@ -298,6 +317,28 @@ impl EventDialogState {
                     return Err("Select at least one day for weekly/monthly recurrence".to_string());
                 }
             }
+            
+            // Validate count if specified
+            if let Some(count) = self.count {
+                if count < 1 {
+                    return Err("Occurrence count must be at least 1".to_string());
+                }
+                if count > 999 {
+                    return Err("Occurrence count is too large (max 999)".to_string());
+                }
+            }
+            
+            // Validate until date if specified
+            if let Some(until) = self.until_date {
+                if until < self.date {
+                    return Err("Recurrence end date cannot be before event start date".to_string());
+                }
+            }
+        }
+        
+        // Validate color format
+        if !self.color.is_empty() && !self.color.starts_with('#') {
+            return Err("Color must start with # (e.g., #3B82F6)".to_string());
         }
         
         Ok(())
@@ -387,8 +428,22 @@ pub fn render_event_dialog(
                 ui.add_space(4.0);
                 
                 ui.horizontal(|ui| {
-                    ui.label("Title:");
-                    ui.text_edit_singleline(&mut state.title);
+                    ui.label(RichText::new("Title:").strong().color(
+                        if state.title.trim().is_empty() {
+                            Color32::from_rgb(255, 150, 150) // Light red for required field
+                        } else {
+                            Color32::WHITE
+                        }
+                    ));
+                    let title_response = ui.text_edit_singleline(&mut state.title);
+                    
+                    // Show asterisk for required field
+                    ui.label(RichText::new("*").color(Color32::from_rgb(255, 150, 150)));
+                    
+                    // Clear error when user starts typing
+                    if title_response.changed() && state.error_message.is_some() {
+                        state.error_message = None;
+                    }
                 });
                 
                 ui.horizontal(|ui| {
@@ -587,16 +642,33 @@ pub fn render_event_dialog(
                 
                 // Action buttons
                 ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() {
-                        match state.save(database) {
-                            Ok(_) => {
-                                *show_dialog = false;
-                                saved = true;
-                            }
-                            Err(e) => {
-                                state.error_message = Some(e);
+                    // Check if we can enable the Save button (basic validation)
+                    let can_save = !state.title.trim().is_empty();
+                    let save_button = egui::Button::new("Save").fill(
+                        if can_save {
+                            Color32::from_rgb(70, 120, 200)
+                        } else {
+                            Color32::from_gray(60)
+                        }
+                    );
+                    
+                    ui.add_enabled_ui(can_save, |ui| {
+                        if ui.add(save_button).clicked() {
+                            match state.save(database) {
+                                Ok(_) => {
+                                    *show_dialog = false;
+                                    saved = true;
+                                }
+                                Err(e) => {
+                                    state.error_message = Some(e);
+                                }
                             }
                         }
+                    });
+                    
+                    // Show hint if Save is disabled
+                    if !can_save {
+                        ui.label(RichText::new("(Title required)").small().color(Color32::from_gray(150)));
                     }
                     
                     if ui.button("Cancel").clicked() {

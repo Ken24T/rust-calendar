@@ -16,6 +16,7 @@ impl DayView {
         settings: &Settings,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
+        event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
@@ -47,6 +48,7 @@ impl DayView {
                     settings,
                     show_event_dialog,
                     event_dialog_date,
+                    event_dialog_time,
                     event_dialog_recurrence,
                 ) {
                     clicked_event = Some(event);
@@ -63,6 +65,7 @@ impl DayView {
         _settings: &Settings,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
+        event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
@@ -122,6 +125,7 @@ impl DayView {
                     &continuing_events,
                     show_event_dialog,
                     event_dialog_date,
+                    event_dialog_time,
                     event_dialog_recurrence,
                 ) {
                     clicked_event = Some(event);
@@ -135,13 +139,14 @@ impl DayView {
     fn render_time_slot(
         ui: &mut egui::Ui,
         date: NaiveDate,
-        _time: NaiveTime,
+        time: NaiveTime,
         hour: i64,
         is_hour_start: bool,
         starting_events: &[&Event],  // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
+        event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         let mut clicked_event: Option<Event> = None;
@@ -229,6 +234,7 @@ impl DayView {
                 if clicked_event.is_none() {
                     *show_event_dialog = true;
                     *event_dialog_date = Some(date);
+                    *event_dialog_time = Some(time); // Use the clicked time slot
                     *event_dialog_recurrence = None; // Default to non-recurring
                 }
             }
@@ -237,6 +243,7 @@ impl DayView {
             if response.double_clicked() {
                 *show_event_dialog = true;
                 *event_dialog_date = Some(date);
+                *event_dialog_time = Some(time); // Use the clicked time slot
                 *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
             }
         });

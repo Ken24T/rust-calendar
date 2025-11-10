@@ -16,12 +16,13 @@ impl WorkWeekView {
         settings: &Settings,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
+        event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         
         // Get work week dates based on settings
-        let week_start = Self::get_week_start(*current_date);
+        let week_start = Self::get_week_start(*current_date, settings.first_day_of_week);
         let work_week_dates = Self::get_work_week_dates(week_start, settings);
         
         // Get events for the work week
@@ -62,7 +63,7 @@ impl WorkWeekView {
                         };
                         ui.label(text);
                         
-                        let date_text = egui::RichText::new(date.format("%m/%d").to_string()).size(11.0);
+                        let date_text = egui::RichText::new(Self::format_short_date(*date, &settings.date_format)).size(11.0);
                         let date_text = if is_today {
                             date_text.color(Color32::from_rgb(100, 150, 255))
                         } else {
@@ -96,6 +97,7 @@ impl WorkWeekView {
                     settings,
                     show_event_dialog,
                     event_dialog_date,
+                    event_dialog_time,
                     event_dialog_recurrence,
                 ) {
                     clicked_event = Some(event);
@@ -113,6 +115,7 @@ impl WorkWeekView {
         _settings: &Settings,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
+        event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
@@ -204,6 +207,7 @@ impl WorkWeekView {
                             &continuing_events,
                             show_event_dialog,
                             event_dialog_date,
+                            event_dialog_time,
                             event_dialog_recurrence,
                         ) {
                             clicked_event = Some(event);
@@ -225,12 +229,13 @@ impl WorkWeekView {
         ui: &mut egui::Ui,
         col_width: f32,
         date: NaiveDate,
-        _time: NaiveTime,
+        time: NaiveTime,
         is_hour_start: bool,
         starting_events: &[&Event],  // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
+        event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
@@ -298,6 +303,7 @@ impl WorkWeekView {
                     // Click on empty space - create new event
                     *show_event_dialog = true;
                     *event_dialog_date = Some(date);
+                    *event_dialog_time = Some(time); // Use the clicked time slot
                     *event_dialog_recurrence = None; // Default to non-recurring
                 }
             }
@@ -307,6 +313,7 @@ impl WorkWeekView {
         if response.double_clicked() {
             *show_event_dialog = true;
             *event_dialog_date = Some(date);
+            *event_dialog_time = Some(time); // Use the clicked time slot
             *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
         }
         
@@ -359,9 +366,10 @@ impl WorkWeekView {
         ui.painter().rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.5));
     }
     
-    fn get_week_start(date: NaiveDate) -> NaiveDate {
-        let weekday = date.weekday().num_days_from_sunday();
-        date - Duration::days(weekday as i64)
+    fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
+        let weekday = date.weekday().num_days_from_sunday() as i64;
+        let offset = (weekday - first_day_of_week as i64 + 7) % 7;
+        date - Duration::days(offset)
     }
     
     fn get_work_week_dates(week_start: NaiveDate, settings: &Settings) -> Vec<NaiveDate> {
@@ -419,6 +427,18 @@ impl WorkWeekView {
             5 => Weekday::Fri,
             6 => Weekday::Sat,
             _ => Weekday::Mon,
+        }
+    }
+    
+    fn format_short_date(date: NaiveDate, date_format: &str) -> String {
+        // Parse date_format setting and return appropriate short format
+        if date_format.starts_with("DD/MM") || date_format.starts_with("dd/mm") {
+            date.format("%d/%m").to_string()
+        } else if date_format.starts_with("YYYY") || date_format.starts_with("yyyy") {
+            date.format("%Y/%m/%d").to_string()
+        } else {
+            // Default to MM/DD for US format
+            date.format("%m/%d").to_string()
         }
     }
     

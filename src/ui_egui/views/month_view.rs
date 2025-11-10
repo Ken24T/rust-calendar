@@ -2,6 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
 
 use crate::models::event::Event;
+use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 
@@ -12,6 +13,7 @@ impl MonthView {
         ui: &mut egui::Ui,
         current_date: &mut NaiveDate,
         database: &'static Database,
+        settings: &Settings,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
@@ -24,7 +26,7 @@ impl MonthView {
         let events = Self::get_events_for_month(&event_service, *current_date);
         
         // Day of week headers - use Grid to match column widths below
-        let day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        let day_names = Self::get_day_names(settings.first_day_of_week);
         let spacing = 2.0;
         let total_spacing = spacing * 6.0; // 6 gaps between 7 columns
         let col_width = (ui.available_width() - total_spacing) / 7.0;
@@ -50,7 +52,8 @@ impl MonthView {
         
         // Calculate calendar grid
         let first_of_month = current_date.with_day(1).unwrap();
-        let first_weekday = first_of_month.weekday().num_days_from_sunday() as i32;
+        let first_weekday = (first_of_month.weekday().num_days_from_sunday() as i32
+            - settings.first_day_of_week as i32 + 7) % 7;
         let days_in_month = Self::get_days_in_month(current_date.year(), current_date.month());
         
         // Build calendar grid (6 rows of 7 days)
@@ -82,8 +85,12 @@ impl MonthView {
                             ).unwrap();
                             
                             let is_today = date == today;
-                            let is_weekend = date.weekday().num_days_from_sunday() == 0
-                                || date.weekday().num_days_from_sunday() == 6;
+                            
+                            // Calculate weekend based on first_day_of_week
+                            // If Sunday is first day (0), weekend is days 0 and 6
+                            // If Monday is first day (1), weekend is days 5 and 6 (Sat, Sun)
+                            let day_of_week = (date.weekday().num_days_from_sunday() as i32 - settings.first_day_of_week as i32 + 7) % 7;
+                            let is_weekend = day_of_week == 5 || day_of_week == 6;
                             
                             // Get events for this day
                             let day_events: Vec<&Event> = events.iter()
@@ -275,6 +282,16 @@ impl MonthView {
         .unwrap()
         .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
         .num_days() as i32
+    }
+    
+    fn get_day_names(first_day_of_week: u8) -> Vec<&'static str> {
+        let all_days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        let start = first_day_of_week as usize;
+        let mut result = Vec::with_capacity(7);
+        for i in 0..7 {
+            result.push(all_days[(start + i) % 7]);
+        }
+        result
     }
     
     fn parse_color(hex: &str) -> Option<Color32> {

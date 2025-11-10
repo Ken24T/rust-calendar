@@ -1,6 +1,8 @@
 use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
 
+use crate::models::settings::Settings;
+
 pub struct QuarterView;
 
 impl QuarterView {
@@ -10,6 +12,7 @@ impl QuarterView {
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
+        settings: &Settings,
     ) {
         let today = Local::now().date_naive();
         
@@ -62,6 +65,7 @@ impl QuarterView {
                         show_event_dialog,
                         event_dialog_date,
                         event_dialog_recurrence,
+                        settings,
                     );
                 });
             }
@@ -75,9 +79,11 @@ impl QuarterView {
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
+        settings: &Settings,
     ) {
-        // Calculate calendar grid
-        let first_weekday = month_date.weekday().num_days_from_sunday() as i32;
+        // Calculate calendar grid based on first_day_of_week setting
+        let first_weekday = (month_date.weekday().num_days_from_sunday() as i32 
+            - settings.first_day_of_week as i32 + 7) % 7;
         let days_in_month = Self::get_days_in_month(month_date.year(), month_date.month());
         
         // Build mini calendar grid
@@ -109,8 +115,11 @@ impl QuarterView {
                                 ).unwrap();
                                 
                                 let is_today = date == today;
-                                let is_weekend = date.weekday().num_days_from_sunday() == 0
-                                    || date.weekday().num_days_from_sunday() == 6;
+                                
+                                // Calculate weekend based on first_day_of_week
+                                let day_of_week = (date.weekday().num_days_from_sunday() as i32 
+                                    - settings.first_day_of_week as i32 + 7) % 7;
+                                let is_weekend = day_of_week == 5 || day_of_week == 6;
                                 
                                 Self::render_mini_day_cell(
                                     ui,

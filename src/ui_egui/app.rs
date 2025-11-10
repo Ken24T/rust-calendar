@@ -41,6 +41,7 @@ pub struct CalendarApp {
     // Event dialog state
     event_dialog_state: Option<EventDialogState>,
     event_dialog_date: Option<NaiveDate>,
+    event_dialog_time: Option<chrono::NaiveTime>, // Time from clicked cell (None = use default)
     event_dialog_recurrence: Option<String>,
     event_to_edit: Option<i64>, // Event ID to edit
 }
@@ -96,6 +97,7 @@ impl CalendarApp {
             theme_creator_state: ThemeCreatorState::new(),
             event_dialog_state: None,
             event_dialog_date: None,
+            event_dialog_time: None,
             event_dialog_recurrence: None,
             event_to_edit: None,
         };
@@ -154,6 +156,7 @@ impl eframe::App for CalendarApp {
                 self.show_event_dialog = false;
                 self.event_dialog_state = None;
                 self.event_dialog_date = None;
+                self.event_dialog_time = None;
                 self.event_dialog_recurrence = None;
                 self.event_to_edit = None;
             } else if self.show_settings_dialog {
@@ -283,8 +286,9 @@ impl eframe::App for CalendarApp {
                     }
                 } else {
                     // Creating a new event
-                    self.event_dialog_state = Some(EventDialogState::new_event(
+                    self.event_dialog_state = Some(EventDialogState::new_event_with_time(
                         self.event_dialog_date.unwrap_or(self.current_date),
+                        self.event_dialog_time,
                         &self.settings
                     ));
                     // Apply any recurrence rule from click
@@ -398,6 +402,7 @@ impl CalendarApp {
             &self.settings,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
+            &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
         ) {
             // User clicked on an event - open dialog with event details
@@ -417,6 +422,7 @@ impl CalendarApp {
             &self.settings,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
+            &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
         ) {
             // User clicked on an event - open dialog with event details
@@ -436,6 +442,7 @@ impl CalendarApp {
             &self.settings,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
+            &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
         ) {
             // User clicked on an event - open dialog with event details
@@ -452,6 +459,7 @@ impl CalendarApp {
             ui,
             &mut self.current_date,
             self.database,
+            &self.settings,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
@@ -466,6 +474,7 @@ impl CalendarApp {
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
+            &self.settings,
         );
     }
     
@@ -483,6 +492,7 @@ impl CalendarApp {
             // If saved, clear the dialog state
             if saved || !self.show_event_dialog {
                 self.event_dialog_state = None;
+                self.event_dialog_time = None;
             }
         } else {
             // No state - shouldn't happen, but close dialog if it does
