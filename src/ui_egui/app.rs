@@ -9,8 +9,7 @@ use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::quarter_view::QuarterView;
 use crate::ui_egui::event_dialog::{EventDialogState, render_event_dialog};
 use crate::ui_egui::settings_dialog::render_settings_dialog;
-use crate::ui_egui::theme_picker::render_theme_picker;
-use crate::ui_egui::dialogs::theme_manager::{ThemeManagerState, render_theme_manager, ThemeManagerAction};
+use crate::ui_egui::dialogs::theme_dialog::{ThemeDialogState, render_theme_dialog, ThemeDialogAction};
 use crate::ui_egui::dialogs::theme_creator::{ThemeCreatorState, render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::theme::CalendarTheme;
 use chrono::{Local, NaiveDate};
@@ -36,8 +35,7 @@ pub struct CalendarApp {
     // Dialog states
     show_event_dialog: bool,
     show_settings_dialog: bool,
-    show_theme_picker: bool,
-    theme_manager_state: ThemeManagerState,
+    theme_dialog_state: ThemeDialogState,
     theme_creator_state: ThemeCreatorState,
     
     // Event dialog state
@@ -94,8 +92,7 @@ impl CalendarApp {
             current_date: Local::now().date_naive(),
             show_event_dialog: false,
             show_settings_dialog: false,
-            show_theme_picker: false,
-            theme_manager_state: ThemeManagerState::new(),
+            theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
             event_dialog_state: None,
             event_dialog_date: None,
@@ -161,8 +158,8 @@ impl eframe::App for CalendarApp {
                 self.event_to_edit = None;
             } else if self.show_settings_dialog {
                 self.show_settings_dialog = false;
-            } else if self.show_theme_picker {
-                self.show_theme_picker = false;
+            } else if self.theme_dialog_state.is_open {
+                self.theme_dialog_state.close();
             }
         }
         
@@ -203,12 +200,8 @@ impl eframe::App for CalendarApp {
                 });
                 
                 ui.menu_button("Theme", |ui| {
-                    if ui.button("Quick Theme...").clicked() {
-                        self.show_theme_picker = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("Manage Themes...").clicked() {
-                        self.theme_manager_state.open();
+                    if ui.button("Themes...").clicked() {
+                        self.theme_dialog_state.open();
                         ui.close_menu();
                     }
                 });
@@ -319,12 +312,8 @@ impl eframe::App for CalendarApp {
             self.render_settings_dialog(ctx);
         }
         
-        if self.show_theme_picker {
-            self.render_theme_picker(ctx);
-        }
-        
-        // Render theme manager and creator
-        self.render_theme_manager(ctx);
+        // Render unified theme dialog and creator
+        self.render_theme_dialog(ctx);
         self.render_theme_creator(ctx);
     }
 }
@@ -515,56 +504,33 @@ impl CalendarApp {
         }
     }
     
-    fn render_theme_picker(&mut self, ctx: &egui::Context) {
-        let changed = render_theme_picker(
-            ctx,
-            &mut self.settings.theme,
-            &mut self.show_theme_picker,
-        );
-        
-        // If theme changed, apply and save settings
-        if changed {
-            eprintln!("Theme changed to: {}", self.settings.theme);
-            
-            // Apply theme immediately
-            self.apply_theme_from_db(ctx);
-            
-            // Save to database
-            let service = SettingsService::new(self.database);
-            match service.update(&self.settings) {
-                Ok(_) => eprintln!("Successfully saved theme to database"),
-                Err(e) => eprintln!("Failed to save theme setting: {}", e),
-            }
-        }
-    }
-    
-    fn render_theme_manager(&mut self, ctx: &egui::Context) {
+    fn render_theme_dialog(&mut self, ctx: &egui::Context) {
         // Get available themes from database
         let theme_service = ThemeService::new(self.database);
         let available_themes = theme_service.list_themes().unwrap_or_default();
         
-        let action = render_theme_manager(
+        let action = render_theme_dialog(
             ctx,
-            &mut self.theme_manager_state,
+            &mut self.theme_dialog_state,
             &available_themes,
             &self.settings.theme,
         );
         
         match action {
-            ThemeManagerAction::None => {},
-            ThemeManagerAction::CreateTheme => {
+            ThemeDialogAction::None => {},
+            ThemeDialogAction::CreateTheme => {
                 // Open theme creator with current theme as base
                 let base_theme = theme_service.get_theme(&self.settings.theme)
                     .unwrap_or_else(|_| CalendarTheme::light());
                 self.theme_creator_state.open_create(base_theme);
             },
-            ThemeManagerAction::EditTheme(name) => {
+            ThemeDialogAction::EditTheme(name) => {
                 // Load and edit the theme
                 if let Ok(theme) = theme_service.get_theme(&name) {
                     self.theme_creator_state.open_edit(name, theme);
                 }
             },
-            ThemeManagerAction::DeleteTheme(name) => {
+            ThemeDialogAction::DeleteTheme(name) => {
                 // Delete the theme
                 if let Err(e) = theme_service.delete_theme(&name) {
                     eprintln!("Failed to delete theme: {}", e);
@@ -572,7 +538,7 @@ impl CalendarApp {
                     eprintln!("Successfully deleted theme: {}", name);
                 }
             },
-            ThemeManagerAction::ApplyTheme(name) => {
+            ThemeDialogAction::ApplyTheme(name) => {
                 // Apply the selected theme
                 self.settings.theme = name.clone();
                 eprintln!("Applying theme: {}", name);
@@ -590,8 +556,8 @@ impl CalendarApp {
                     eprintln!("Failed to save theme setting: {}", e);
                 }
             },
-            ThemeManagerAction::Close => {
-                self.theme_manager_state.close();
+            ThemeDialogAction::Close => {
+                self.theme_dialog_state.close();
             },
         }
     }
