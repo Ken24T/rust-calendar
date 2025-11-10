@@ -16,7 +16,7 @@ pub struct Settings {
     pub my_day_position_right: bool,
     pub show_ribbon: bool,
     pub current_view: String,
-    pub time_slot_interval: u32,
+    pub default_event_duration: u32,
     pub default_event_start_time: String,
 }
 
@@ -29,12 +29,12 @@ impl Default for Settings {
             first_day_of_work_week: 1, // Monday
             last_day_of_work_week: 5, // Friday
             time_format: "12h".to_string(),
-            date_format: "MM/DD/YYYY".to_string(),
+            date_format: "DD/MM/YYYY".to_string(),
             show_my_day: false,
             my_day_position_right: false,
             show_ribbon: false,
             current_view: "Month".to_string(),
-            time_slot_interval: 60,
+            default_event_duration: 60,
             default_event_start_time: "08:00".to_string(),
         }
     }
@@ -74,9 +74,9 @@ impl Settings {
             return Err(format!("Invalid current_view: {}", self.current_view));
         }
         
-        // Validate time_slot_interval
-        if ![15, 30, 45, 60].contains(&self.time_slot_interval) {
-            return Err(format!("Invalid time_slot_interval: {}", self.time_slot_interval));
+        // Validate default_event_duration (15, 30, 45, 60, 90, 120 minutes)
+        if ![15, 30, 45, 60, 90, 120].contains(&self.default_event_duration) {
+            return Err(format!("Invalid default_event_duration: {}", self.default_event_duration));
         }
         
         // Validate default_event_start_time format (HH:MM)
@@ -115,9 +115,9 @@ impl Settings {
             return Err(format!("Invalid current_view: {}", self.current_view));
         }
         
-        // Validate time_slot_interval
-        if ![15, 30, 45, 60].contains(&self.time_slot_interval) {
-            return Err(format!("Invalid time_slot_interval: {}", self.time_slot_interval));
+        // Validate default_event_duration (15, 30, 45, 60, 90, 120 minutes)
+        if ![15, 30, 45, 60, 90, 120].contains(&self.default_event_duration) {
+            return Err(format!("Invalid default_event_duration: {}", self.default_event_duration));
         }
         
         // Validate default_event_start_time format (HH:MM)
@@ -140,7 +140,7 @@ mod tests {
         assert_eq!(settings.theme, "light");
         assert_eq!(settings.first_day_of_week, 0);
         assert_eq!(settings.time_format, "12h");
-        assert_eq!(settings.date_format, "MM/DD/YYYY");
+        assert_eq!(settings.date_format, "DD/MM/YYYY");
         assert_eq!(settings.show_my_day, false);
         assert_eq!(settings.show_ribbon, false);
         assert_eq!(settings.current_view, "Month");

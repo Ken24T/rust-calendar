@@ -23,21 +23,26 @@ impl MonthView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_month(&event_service, *current_date);
         
-        // Day of week headers
+        // Day of week headers - use Grid to match column widths below
         let day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        let spacing = 2.0;
+        let total_spacing = spacing * 6.0; // 6 gaps between 7 columns
+        let col_width = (ui.available_width() - total_spacing) / 7.0;
         
-        ui.horizontal(|ui| {
-            for day in &day_names {
-                ui.label(
-                    egui::RichText::new(*day)
-                        .size(14.0)
-                        .strong()
-                );
-                if day != &"Sat" {
-                    ui.add_space(5.0);
+        egui::Grid::new("month_header_grid")
+            .spacing([spacing, spacing])
+            .min_col_width(col_width)
+            .show(ui, |ui| {
+                for day in &day_names {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new(*day)
+                                .size(14.0)
+                                .strong()
+                        );
+                    });
                 }
-            }
-        });
+            });
         
         ui.add_space(5.0);
         ui.separator();
@@ -52,8 +57,8 @@ impl MonthView {
         let mut day_counter = 1 - first_weekday;
         
         egui::Grid::new("month_grid")
-            .spacing([2.0, 2.0])
-            .min_col_width(ui.available_width() / 7.0 - 2.0)
+            .spacing([spacing, spacing])
+            .min_col_width(col_width)
             .show(ui, |ui| {
                 for _week in 0..6 {
                     for _day_of_week in 0..7 {
@@ -181,27 +186,34 @@ impl MonthView {
                 Vec2::new(rect.width() - 6.0, 16.0),
             );
             
-            // Make event clickable
-            let event_response = ui.allocate_rect(event_rect, Sense::click());
-            if event_response.clicked() && event.id.is_some() {
-                *show_event_dialog = true;
-                *event_to_edit = event.id;
-            }
-            
             ui.painter().rect_filled(event_rect, 2.0, event_color);
             
-            // Event title (truncated)
-            let title = if event.title.len() > 15 {
-                format!("{}...", &event.title[..12])
-            } else {
-                event.title.clone()
-            };
+            // Check if mouse is over this event and clicked
+            if response.clicked() {
+                if let Some(hover_pos) = response.hover_pos() {
+                    if event_rect.contains(hover_pos) && event.id.is_some() {
+                        *show_event_dialog = true;
+                        *event_to_edit = event.id;
+                    }
+                }
+            }
             
-            ui.painter().text(
-                Pos2::new(event_rect.left() + 3.0, event_rect.center().y),
-                egui::Align2::LEFT_CENTER,
-                title,
-                egui::FontId::proportional(11.0),
+            // Event title - use available width with proper truncation
+            let font_id = egui::FontId::proportional(11.0);
+            let available_width = event_rect.width() - 6.0; // 3px padding on each side
+            
+            let layout_job = egui::text::LayoutJob::simple(
+                event.title.clone(),
+                font_id.clone(),
+                Color32::WHITE,
+                available_width,
+            );
+            
+            let galley = ui.fonts(|f| f.layout_job(layout_job));
+            
+            ui.painter().galley(
+                Pos2::new(event_rect.left() + 3.0, event_rect.center().y - galley.size().y / 2.0),
+                galley,
                 Color32::WHITE,
             );
             
@@ -223,10 +235,10 @@ impl MonthView {
         if response.clicked() {
             *show_event_dialog = true;
             *event_dialog_date = Some(date);
-            *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
+            *event_dialog_recurrence = None; // Default to non-recurring
         }
         
-        // Handle double-click (egui supports this!)
+        // Handle double-click for recurring event
         if response.double_clicked() {
             *show_event_dialog = true;
             *event_dialog_date = Some(date);

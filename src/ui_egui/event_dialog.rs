@@ -2,7 +2,7 @@ use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
-use chrono::{Local, NaiveDate, NaiveTime, Timelike};
+use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use egui::{Color32, RichText};
 
 /// State for the event editing dialog
@@ -91,12 +91,10 @@ impl EventDialogState {
         let start_time = NaiveTime::from_hms_opt(start_hour, start_minute, 0)
             .unwrap_or(NaiveTime::from_hms_opt(9, 0, 0).unwrap());
         
-        // Default end time is 1 hour after start
-        let end_time = NaiveTime::from_hms_opt(
-            (start_hour + 1) % 24,
-            start_minute,
-            0,
-        ).unwrap_or(NaiveTime::from_hms_opt(10, 0, 0).unwrap());
+        // Calculate end time based on default event duration
+        let duration_minutes = settings.default_event_duration as i64;
+        let end_datetime = NaiveDateTime::new(date, start_time) + chrono::Duration::minutes(duration_minutes);
+        let end_time = end_datetime.time();
         
         Self {
             event_id: None,
@@ -417,24 +415,19 @@ pub fn render_event_dialog(
                 // Date picker
                 ui.horizontal(|ui| {
                     ui.label("Date:");
-                    let date_string = state.date.format("%Y-%m-%d").to_string();
-                    ui.label(date_string);
-                    
-                    if ui.button("Change...").clicked() {
-                        // Simple date adjustment buttons
-                        // In a more complete implementation, you'd have a full date picker
-                    }
+                    let date_string = state.date.format("%B %d, %Y").to_string();
+                    ui.label(RichText::new(date_string).strong());
                 });
                 
                 // Quick date adjustment
                 ui.horizontal(|ui| {
-                    if ui.button("← Previous Day").clicked() {
+                    if ui.button("< Previous Day").clicked() {
                         state.date = state.date.pred_opt().unwrap_or(state.date);
                     }
                     if ui.button("Today").clicked() {
                         state.date = Local::now().date_naive();
                     }
-                    if ui.button("Next Day →").clicked() {
+                    if ui.button("Next Day >").clicked() {
                         state.date = state.date.succ_opt().unwrap_or(state.date);
                     }
                 });
@@ -469,7 +462,7 @@ pub fn render_event_dialog(
                 
                 ui.horizontal(|ui| {
                     ui.label("Color:");
-                    ui.text_edit_singleline(&mut state.color);
+                    ui.add(egui::TextEdit::singleline(&mut state.color).desired_width(80.0));
                     
                     // Color preview
                     if let Some(mut color) = parse_hex_color(&state.color) {
@@ -594,7 +587,7 @@ pub fn render_event_dialog(
                 
                 // Action buttons
                 ui.horizontal(|ui| {
-                    if ui.button("💾 Save").clicked() {
+                    if ui.button("Save").clicked() {
                         match state.save(database) {
                             Ok(_) => {
                                 *show_dialog = false;
@@ -606,13 +599,13 @@ pub fn render_event_dialog(
                         }
                     }
                     
-                    if ui.button("✖ Cancel").clicked() {
+                    if ui.button("Cancel").clicked() {
                         *show_dialog = false;
                     }
                     
                     if state.event_id.is_some() {
                         ui.add_space(20.0);
-                        if ui.button(RichText::new("🗑 Delete").color(Color32::RED)).clicked() {
+                        if ui.button(RichText::new("Delete").color(Color32::RED)).clicked() {
                             if let Some(id) = state.event_id {
                                 let service = EventService::new(database.connection());
                                 if let Err(e) = service.delete(id) {

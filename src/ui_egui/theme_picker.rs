@@ -64,7 +64,7 @@ pub fn render_theme_picker(
             
             // Close button
             ui.horizontal(|ui| {
-                if ui.button("✓ Done").clicked() {
+                if ui.button("Done").clicked() {
                     *show_dialog = false;
                 }
             });

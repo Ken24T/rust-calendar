@@ -45,26 +45,48 @@ impl CalendarApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Initialize database and leak it for 'static lifetime
         // This is necessary because eframe requires 'static App implementations
-        let database = Box::leak(Box::new(
-            Database::new("calendar.db")
-                .expect("Failed to initialize database")
-        ));
+        let database = {
+            let db = Database::new("calendar.db")
+                .expect("Failed to create database connection");
+            
+            // Initialize schema (create tables and insert defaults)
+            db.initialize_schema()
+                .expect("Failed to initialize database schema");
+            
+            Box::leak(Box::new(db))
+        };
         
         // Create temporary services to load settings
         let settings_service = SettingsService::new(database);
         
-        // Load settings
-        let settings = settings_service
-            .get()
-            .unwrap_or_else(|_| Settings::default());
+        // Load settings or create defaults
+        let settings = match settings_service.get() {
+            Ok(settings) => {
+                eprintln!("Loaded settings from database - theme: {}", settings.theme);
+                settings
+            },
+            Err(e) => {
+                eprintln!("Failed to load settings: {}, using defaults", e);
+                // No settings found, create and save defaults
+                let defaults = Settings::default();
+                // Note: The database INSERT OR IGNORE should handle initial creation,
+                // but if somehow the row doesn't exist, this won't work.
+                // The database initialization should ensure the row exists.
+                defaults
+            }
+        };
         
+        eprintln!("Applying theme: {}", settings.theme);
         // Apply theme to egui
         Self::apply_theme(&cc.egui_ctx, &settings);
+        
+        // Parse current view from settings
+        let current_view = Self::parse_view_type(&settings.current_view);
         
         Self {
             database,
             settings,
-            current_view: ViewType::Month,
+            current_view,
             current_date: Local::now().date_naive(),
             show_event_dialog: false,
             show_settings_dialog: false,
@@ -73,6 +95,17 @@ impl CalendarApp {
             event_dialog_date: None,
             event_dialog_recurrence: None,
             event_to_edit: None,
+        }
+    }
+    
+    fn parse_view_type(view_str: &str) -> ViewType {
+        match view_str {
+            "Day" => ViewType::Day,
+            "Week" => ViewType::Week,
+            "WorkWeek" => ViewType::WorkWeek,
+            "Month" => ViewType::Month,
+            "Quarter" => ViewType::Quarter,
+            _ => ViewType::Month, // Default fallback
         }
     }
     
@@ -336,7 +369,7 @@ impl CalendarApp {
     
     // View renderers
     fn render_day_view(&mut self, ui: &mut egui::Ui) {
-        DayView::show(
+        if let Some(clicked_event) = DayView::show(
             ui,
             &mut self.current_date,
             self.database,
@@ -344,11 +377,18 @@ impl CalendarApp {
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
-        );
+        ) {
+            // User clicked on an event - open dialog with event details
+            self.event_dialog_state = Some(EventDialogState::from_event(
+                &clicked_event,
+                &self.settings
+            ));
+            self.show_event_dialog = true;
+        }
     }
     
     fn render_week_view(&mut self, ui: &mut egui::Ui) {
-        WeekView::show(
+        if let Some(clicked_event) = WeekView::show(
             ui,
             &mut self.current_date,
             self.database,
@@ -356,11 +396,18 @@ impl CalendarApp {
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
-        );
+        ) {
+            // User clicked on an event - open dialog with event details
+            self.event_dialog_state = Some(EventDialogState::from_event(
+                &clicked_event,
+                &self.settings
+            ));
+            self.show_event_dialog = true;
+        }
     }
     
     fn render_workweek_view(&mut self, ui: &mut egui::Ui) {
-        WorkWeekView::show(
+        if let Some(clicked_event) = WorkWeekView::show(
             ui,
             &mut self.current_date,
             self.database,
@@ -368,7 +415,14 @@ impl CalendarApp {
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
-        );
+        ) {
+            // User clicked on an event - open dialog with event details
+            self.event_dialog_state = Some(EventDialogState::from_event(
+                &clicked_event,
+                &self.settings
+            ));
+            self.show_event_dialog = true;
+        }
     }
     
     fn render_month_view(&mut self, ui: &mut egui::Ui) {
@@ -435,10 +489,19 @@ impl CalendarApp {
             &mut self.show_theme_picker,
         );
         
-        // If theme changed, save settings
+        // If theme changed, apply and save settings
         if changed {
+            eprintln!("Theme changed to: {}", self.settings.theme);
+            
+            // Apply theme immediately
+            Self::apply_theme(ctx, &self.settings);
+            
+            // Save to database
             let service = SettingsService::new(self.database);
-            let _ = service.update(&self.settings);
+            match service.update(&self.settings) {
+                Ok(_) => eprintln!("Successfully saved theme to database"),
+                Err(e) => eprintln!("Failed to save theme setting: {}", e),
+            }
         }
     }
 }
