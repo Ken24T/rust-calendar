@@ -1,5 +1,7 @@
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime};
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
@@ -300,26 +302,10 @@ impl WeekView {
             Self::render_event_in_cell(ui, rect, event);
         }
         
-        // Check if user clicked on an event
-        let mut clicked_event: Option<Event> = None;
-        if response.clicked() {
-            if let Some(_pos) = response.interact_pointer_pos() {
-                // Check if click was on an event (any event fills the cell, so any click is on an event if events exist)
-                if let Some(event) = starting_events.first() {
-                    clicked_event = Some((*event).clone());
-                } else if let Some(event) = continuing_events.first() {
-                    clicked_event = Some((*event).clone());
-                } else {
-                    // Click on empty space - create new event
-                    *show_event_dialog = true;
-                    *event_dialog_date = Some(date);
-                    *event_dialog_time = Some(time); // Use the clicked time slot
-                    *event_dialog_recurrence = None; // Default to non-recurring
-                }
-            }
-        }
+        // Context menu for right-click - use Rc<RefCell<>> to capture the event
+        let context_clicked_event: Rc<RefCell<Option<Event>>> = Rc::new(RefCell::new(None));
+        let context_clicked_event_clone = context_clicked_event.clone();
         
-        // Context menu for right-click on event
         response.context_menu(|ui| {
             // Only show menu if there's an event in this cell
             if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
@@ -327,7 +313,7 @@ impl WeekView {
                 ui.separator();
                 
                 if ui.button("✏ Edit").clicked() {
-                    clicked_event = Some((*event).clone());
+                    *context_clicked_event_clone.borrow_mut() = Some((*event).clone());
                     ui.close_menu();
                 }
                 
@@ -362,6 +348,27 @@ impl WeekView {
                 }
             }
         });
+        
+        // Check if context menu returned a clicked event
+        let mut clicked_event: Option<Event> = context_clicked_event.borrow().clone();
+        
+        // Check if user clicked on an event (left click)
+        if clicked_event.is_none() && response.clicked() {
+            if let Some(_pos) = response.interact_pointer_pos() {
+                // Check if click was on an event (any event fills the cell, so any click is on an event if events exist)
+                if let Some(event) = starting_events.first() {
+                    clicked_event = Some((*event).clone());
+                } else if let Some(event) = continuing_events.first() {
+                    clicked_event = Some((*event).clone());
+                } else {
+                    // Click on empty space - create new event
+                    *show_event_dialog = true;
+                    *event_dialog_date = Some(date);
+                    *event_dialog_time = Some(time); // Use the clicked time slot
+                    *event_dialog_recurrence = None; // Default to non-recurring
+                }
+            }
+        }
         
         // Handle double-click for recurring event
         if response.double_clicked() {
