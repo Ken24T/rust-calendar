@@ -8,6 +8,7 @@ use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::quarter_view::QuarterView;
 use crate::ui_egui::event_dialog::{EventDialogState, render_event_dialog};
 use crate::ui_egui::settings_dialog::render_settings_dialog;
+use crate::ui_egui::theme_picker::render_theme_picker;
 use chrono::{Local, NaiveDate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -428,16 +429,16 @@ impl CalendarApp {
     }
     
     fn render_theme_picker(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Theme Picker")
-            .collapsible(false)
-            .resizable(false)
-            .default_width(400.0)
-            .show(ctx, |ui| {
-                ui.label("Theme picker - To be implemented");
-                
-                if ui.button("Close").clicked() {
-                    self.show_theme_picker = false;
-                }
-            });
+        let changed = render_theme_picker(
+            ctx,
+            &mut self.settings.theme,
+            &mut self.show_theme_picker,
+        );
+        
+        // If theme changed, save settings
+        if changed {
+            let service = SettingsService::new(self.database);
+            let _ = service.update(&self.settings);
+        }
     }
 }
