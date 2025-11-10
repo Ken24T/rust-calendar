@@ -383,33 +383,36 @@ impl<'a> EventService<'a> {
                         - chrono::Duration::days(event.start.weekday().num_days_from_monday() as i64);
                     let week_start_time = event.start.time();
                     
-                    let mut occurrence_count = 0;
+                    let mut week_count = 0;
                     
                     // Generate occurrences week by week
                     loop {
-                        // Check if we've reached the COUNT limit
+                        // Check if we've reached the COUNT limit (counting weeks, not individual days)
                         if let Some(max) = max_count {
-                            if occurrence_count >= max {
+                            if week_count >= max {
                                 break;
                             }
                         }
                         
+                        // Check UNTIL date before processing this week
+                        if let Some(until) = until_date {
+                            if current_week_start > until {
+                                break;
+                            }
+                        }
+                        
+                        // Track if we added any valid occurrences this week
+                        let mut week_has_valid_occurrence = false;
+                        
                         // For each specified day in the week
                         for &target_weekday in &byday_days {
-                            // Check COUNT limit again for each day
-                            if let Some(max) = max_count {
-                                if occurrence_count >= max {
-                                    break;
-                                }
-                            }
-                            
                             let days_offset = target_weekday.num_days_from_monday() as i64;
                             let occurrence_date = current_week_start + chrono::Duration::days(days_offset);
                             
-                            // Check UNTIL date
+                            // Check UNTIL date for this specific day
                             if let Some(until) = until_date {
                                 if occurrence_date > until {
-                                    break;
+                                    continue;
                                 }
                             }
                             
@@ -428,8 +431,7 @@ impl<'a> EventService<'a> {
                                     };
                                     
                                     if !is_exception {
-                                        // Count this occurrence towards the total
-                                        occurrence_count += 1;
+                                        week_has_valid_occurrence = true;
                                         
                                         // Only add to results if within the requested range
                                         if occurrence_datetime >= range_start && occurrence_datetime <= range_end {
@@ -443,19 +445,17 @@ impl<'a> EventService<'a> {
                             }
                         }
                         
+                        // Count this week if it had at least one valid occurrence
+                        if week_has_valid_occurrence {
+                            week_count += 1;
+                        }
+                        
                         // Move to next week (or skip weeks based on interval)
                         current_week_start = current_week_start + chrono::Duration::weeks(interval as i64);
                         
                         // Safety break
-                        if current_week_start > range_end.date_naive() + chrono::Duration::days(7) {
+                        if current_week_start > range_end.date_naive() + chrono::Duration::days(365) {
                             break;
-                        }
-                        
-                        // Additional break if we've hit UNTIL date
-                        if let Some(until) = until_date {
-                            if current_week_start > until {
-                                break;
-                            }
                         }
                     }
                 }
@@ -492,23 +492,25 @@ impl<'a> EventService<'a> {
                     
                     let current_end = current_start + duration;
                     
-                    // Only include if within range
-                    if current_start >= range_start && current_start <= range_end {
-                        // Don't include if in exceptions
-                        let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
-                            exceptions.iter().any(|ex| {
-                                ex.date_naive() == current_start.date_naive()
-                            })
-                        } else {
-                            false
-                        };
+                    // Check if this is a valid occurrence (not an exception)
+                    let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
+                        exceptions.iter().any(|ex| {
+                            ex.date_naive() == current_start.date_naive()
+                        })
+                    } else {
+                        false
+                    };
+                    
+                    if !is_exception {
+                        // Count this occurrence towards the total
+                        occurrence_count += 1;
                         
-                        if !is_exception {
+                        // Only add to results if within the requested range
+                        if current_start >= range_start && current_start <= range_end {
                             let mut occurrence = event.clone();
                             occurrence.start = current_start;
                             occurrence.end = current_end;
                             occurrences.push(occurrence);
-                            occurrence_count += 1;
                         }
                     }
                     
