@@ -235,11 +235,12 @@ impl<'a> EventService<'a> {
                     is_all_day, category, color, recurrence_rule, recurrence_exceptions,
                     created_at, updated_at
              FROM events
-             WHERE start_datetime <= ? AND end_datetime >= ?
+             WHERE (start_datetime <= ? AND end_datetime >= ?)
+                OR (recurrence_rule IS NOT NULL AND recurrence_rule != '' AND recurrence_rule != 'None' AND start_datetime <= ?)
              ORDER BY start_datetime ASC"
         )?;
         
-        let events = stmt.query_map([end.to_rfc3339(), start.to_rfc3339()], |row| {
+        let events = stmt.query_map([end.to_rfc3339(), start.to_rfc3339(), end.to_rfc3339()], |row| {
             let exceptions_json: Option<String> = row.get(10)?;
             let recurrence_exceptions = exceptions_json.and_then(|json| {
                 serde_json::from_str::<Vec<String>>(&json).ok()
@@ -313,6 +314,38 @@ impl<'a> EventService<'a> {
         if let Some(ref rrule) = event.recurrence_rule {
             let duration = event.end - event.start;
             
+            // Parse COUNT if present
+            let max_count = if let Some(count_start) = rrule.find("COUNT=") {
+                let count_str = &rrule[count_start + 6..];
+                let count_end = count_str.find(';').unwrap_or(count_str.len());
+                count_str[..count_end].parse::<usize>().ok()
+            } else {
+                None
+            };
+            
+            // Parse UNTIL date if present
+            let until_date = if let Some(until_start) = rrule.find("UNTIL=") {
+                let until_str = &rrule[until_start + 6..];
+                let until_end = until_str.find(';').unwrap_or(until_str.len());
+                let date_str = &until_str[..until_end];
+                // Parse YYYYMMDD format
+                if date_str.len() == 8 {
+                    if let (Ok(year), Ok(month), Ok(day)) = (
+                        date_str[0..4].parse::<i32>(),
+                        date_str[4..6].parse::<u32>(),
+                        date_str[6..8].parse::<u32>()
+                    ) {
+                        chrono::NaiveDate::from_ymd_opt(year, month, day)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
             // Handle FREQ=WEEKLY with BYDAY
             if rrule.contains("FREQ=WEEKLY") {
                 let interval = if rrule.contains("INTERVAL=2") { 2 } else { 1 }; // weeks
@@ -350,32 +383,61 @@ impl<'a> EventService<'a> {
                         - chrono::Duration::days(event.start.weekday().num_days_from_monday() as i64);
                     let week_start_time = event.start.time();
                     
+                    let mut occurrence_count = 0;
+                    
                     // Generate occurrences week by week
                     loop {
+                        // Check if we've reached the COUNT limit
+                        if let Some(max) = max_count {
+                            if occurrence_count >= max {
+                                break;
+                            }
+                        }
+                        
                         // For each specified day in the week
                         for &target_weekday in &byday_days {
+                            // Check COUNT limit again for each day
+                            if let Some(max) = max_count {
+                                if occurrence_count >= max {
+                                    break;
+                                }
+                            }
+                            
                             let days_offset = target_weekday.num_days_from_monday() as i64;
                             let occurrence_date = current_week_start + chrono::Duration::days(days_offset);
+                            
+                            // Check UNTIL date
+                            if let Some(until) = until_date {
+                                if occurrence_date > until {
+                                    break;
+                                }
+                            }
                             
                             // Combine with the original time
                             if let Some(occurrence_datetime) = occurrence_date.and_time(week_start_time).and_local_timezone(Local).single() {
                                 let occurrence_end = occurrence_datetime + duration;
                                 
-                                // Only include if within range and not before the original event
-                                if occurrence_datetime >= event.start && occurrence_datetime >= range_start && occurrence_datetime <= range_end {
-                                    let mut occurrence = event.clone();
-                                    occurrence.start = occurrence_datetime;
-                                    occurrence.end = occurrence_end;
-                                    
-                                    // Don't include if in exceptions
-                                    if let Some(ref exceptions) = event.recurrence_exceptions {
-                                        if !exceptions.iter().any(|ex| {
+                                // Check if this occurrence is valid (not before original event, not an exception)
+                                if occurrence_datetime >= event.start {
+                                    let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
+                                        exceptions.iter().any(|ex| {
                                             ex.date_naive() == occurrence_datetime.date_naive()
-                                        }) {
+                                        })
+                                    } else {
+                                        false
+                                    };
+                                    
+                                    if !is_exception {
+                                        // Count this occurrence towards the total
+                                        occurrence_count += 1;
+                                        
+                                        // Only add to results if within the requested range
+                                        if occurrence_datetime >= range_start && occurrence_datetime <= range_end {
+                                            let mut occurrence = event.clone();
+                                            occurrence.start = occurrence_datetime;
+                                            occurrence.end = occurrence_end;
                                             occurrences.push(occurrence);
                                         }
-                                    } else {
-                                        occurrences.push(occurrence);
                                     }
                                 }
                             }
@@ -387,6 +449,13 @@ impl<'a> EventService<'a> {
                         // Safety break
                         if current_week_start > range_end.date_naive() + chrono::Duration::days(7) {
                             break;
+                        }
+                        
+                        // Additional break if we've hit UNTIL date
+                        if let Some(until) = until_date {
+                            if current_week_start > until {
+                                break;
+                            }
                         }
                     }
                 }
@@ -403,25 +472,43 @@ impl<'a> EventService<'a> {
                 };
                 
                 let mut current_start = event.start;
+                let mut occurrence_count = 0;
                 
                 // Generate occurrences
                 while current_start <= event.end.max(range_end) {
+                    // Check if we've reached the COUNT limit
+                    if let Some(max) = max_count {
+                        if occurrence_count >= max {
+                            break;
+                        }
+                    }
+                    
+                    // Check UNTIL date
+                    if let Some(until) = until_date {
+                        if current_start.date_naive() > until {
+                            break;
+                        }
+                    }
+                    
                     let current_end = current_start + duration;
                     
                     // Only include if within range
                     if current_start >= range_start && current_start <= range_end {
-                        let mut occurrence = event.clone();
-                        occurrence.start = current_start;
-                        occurrence.end = current_end;
                         // Don't include if in exceptions
-                        if let Some(ref exceptions) = event.recurrence_exceptions {
-                            if !exceptions.iter().any(|ex| {
+                        let is_exception = if let Some(ref exceptions) = event.recurrence_exceptions {
+                            exceptions.iter().any(|ex| {
                                 ex.date_naive() == current_start.date_naive()
-                            }) {
-                                occurrences.push(occurrence);
-                            }
+                            })
                         } else {
+                            false
+                        };
+                        
+                        if !is_exception {
+                            let mut occurrence = event.clone();
+                            occurrence.start = current_start;
+                            occurrence.end = current_end;
                             occurrences.push(occurrence);
+                            occurrence_count += 1;
                         }
                     }
                     
