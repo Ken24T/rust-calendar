@@ -1,5 +1,9 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
+use serde_json::{self, Error as SerdeError};
+use std::{fs, path::Path};
+
+use anyhow::{Context, Result};
 
 /// Unique identifier for countdown cards. We start with a monotonic u64 so we
 /// can serialize it easily and evolve to UUIDs later if needed.
@@ -99,6 +103,28 @@ impl CountdownService {
         }
     }
 
+    pub fn load_from_disk(path: &Path) -> Result<Self> {
+        if !path.exists() {
+            return Ok(Self::new());
+        }
+        let data = fs::read_to_string(path)
+            .with_context(|| format!("failed to read countdowns from {}", path.display()))?;
+        let snapshot: CountdownPersistedState =
+            serde_json::from_str(&data).map_err(|err| map_deser_error(err, path))?;
+        Ok(Self::from_snapshot(snapshot))
+    }
+
+    pub fn save_to_disk(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create dir {}", parent.display()))?;
+        }
+        let snapshot = self.snapshot();
+        let data = serde_json::to_string_pretty(&snapshot)?;
+        fs::write(path, data)
+            .with_context(|| format!("failed to write countdowns to {}", path.display()))
+    }
+
     pub fn cards(&self) -> &[CountdownCardState] {
         &self.cards
     }
@@ -181,16 +207,25 @@ impl CountdownService {
             if card.last_computed_days != Some(computed) {
                 card.record_days_remaining(computed);
                 changed.push((card.id, computed));
+                self.dirty = true;
             }
         }
         changed
     }
 }
 
+fn map_deser_error(err: SerdeError, path: &Path) -> anyhow::Error {
+    anyhow::Error::new(err).context(format!(
+        "failed to deserialize countdowns from {}",
+        path.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Duration;
+    use tempfile::tempdir;
 
     #[test]
     fn create_refresh_and_remove_card() {
@@ -209,5 +244,19 @@ mod tests {
 
         assert!(service.remove_card(card_id));
         assert!(service.cards().is_empty());
+    }
+
+    #[test]
+    fn persist_and_reload_cards() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("countdowns.json");
+        let mut service = CountdownService::new();
+        let target_start = Local::now() + Duration::days(10);
+        service.create_card(None, "Persist", target_start);
+        service.save_to_disk(&file_path).unwrap();
+
+        let loaded = CountdownService::load_from_disk(&file_path).unwrap();
+        assert_eq!(loaded.cards().len(), 1);
+        assert_eq!(loaded.cards()[0].event_title, "Persist");
     }
 }

@@ -18,6 +18,8 @@ use crate::ui_egui::views::quarter_view::QuarterView;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use chrono::{Local, NaiveDate};
+use directories::ProjectDirs;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewType {
@@ -52,6 +54,7 @@ pub struct CalendarApp {
 
     // Countdown cards
     countdown_service: CountdownService,
+    countdown_storage_path: PathBuf,
 }
 
 impl CalendarApp {
@@ -93,6 +96,18 @@ impl CalendarApp {
         // Parse current view from settings
         let current_view = Self::parse_view_type(&settings.current_view);
 
+        let countdown_storage_path = Self::resolve_countdown_storage_path();
+        let countdown_service = match CountdownService::load_from_disk(&countdown_storage_path) {
+            Ok(service) => service,
+            Err(err) => {
+                log::warn!(
+                    "Failed to load countdown cards from {}: {err:?}",
+                    countdown_storage_path.display()
+                );
+                CountdownService::new()
+            }
+        };
+
         let app = Self {
             database,
             settings,
@@ -107,7 +122,8 @@ impl CalendarApp {
             event_dialog_time: None,
             event_dialog_recurrence: None,
             event_to_edit: None,
-            countdown_service: CountdownService::new(),
+            countdown_service,
+            countdown_storage_path,
         };
 
         // Apply theme from database (including custom themes)
@@ -350,10 +366,15 @@ impl eframe::App for CalendarApp {
         if !changed_counts.is_empty() {
             ctx.request_repaint();
         }
+        self.persist_countdowns_if_needed();
 
         // Render unified theme dialog and creator
         self.render_theme_dialog(ctx);
         self.render_theme_creator(ctx);
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.persist_countdowns_if_needed();
     }
 }
 
@@ -634,6 +655,31 @@ impl CalendarApp {
             ThemeCreatorAction::Cancel => {
                 self.theme_creator_state.close();
             }
+        }
+    }
+
+    fn persist_countdowns_if_needed(&mut self) {
+        if !self.countdown_service.is_dirty() {
+            return;
+        }
+        if let Err(err) = self
+            .countdown_service
+            .save_to_disk(&self.countdown_storage_path)
+        {
+            log::error!(
+                "Failed to persist countdown cards to {}: {err:?}",
+                self.countdown_storage_path.display()
+            );
+        } else {
+            self.countdown_service.mark_clean();
+        }
+    }
+
+    fn resolve_countdown_storage_path() -> PathBuf {
+        if let Some(dirs) = ProjectDirs::from("com", "RustCalendar", "DesktopApp") {
+            dirs.data_dir().join("countdown_cards.json")
+        } else {
+            PathBuf::from("countdown_cards.json")
         }
     }
 }
