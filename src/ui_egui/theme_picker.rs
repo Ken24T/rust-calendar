@@ -7,7 +7,7 @@ pub fn render_theme_picker(
     show_dialog: &mut bool,
 ) -> bool {
     let mut changed = false;
-    
+
     egui::Window::new("Theme Selection")
         .collapsible(false)
         .resizable(false)
@@ -16,40 +16,46 @@ pub fn render_theme_picker(
         .show(ctx, |ui| {
             ui.heading("Select Theme");
             ui.add_space(8.0);
-            
+
             ui.label("Choose your preferred theme:");
             ui.add_space(8.0);
-            
+
             // Light theme option
             ui.horizontal(|ui| {
-                if ui.selectable_label(*current_theme == "light", "☀ Light Theme").clicked() {
+                if ui
+                    .selectable_label(*current_theme == "light", "☀ Light Theme")
+                    .clicked()
+                {
                     *current_theme = "light".to_string();
                     apply_theme(ctx, current_theme);
                     changed = true;
                 }
             });
-            
+
             ui.add_space(4.0);
-            
+
             // Dark theme option
             ui.horizontal(|ui| {
-                if ui.selectable_label(*current_theme == "dark", "🌙 Dark Theme").clicked() {
+                if ui
+                    .selectable_label(*current_theme == "dark", "🌙 Dark Theme")
+                    .clicked()
+                {
                     *current_theme = "dark".to_string();
                     apply_theme(ctx, current_theme);
                     changed = true;
                 }
             });
-            
+
             ui.add_space(12.0);
             ui.separator();
             ui.add_space(8.0);
-            
+
             // Preview
             ui.label("Preview:");
             ui.group(|ui| {
                 ui.set_min_width(300.0);
                 ui.set_min_height(80.0);
-                
+
                 ui.heading("Sample Heading");
                 ui.label("This is sample text in the selected theme.");
                 ui.horizontal(|ui| {
@@ -57,11 +63,11 @@ pub fn render_theme_picker(
                     ui.checkbox(&mut true.clone(), "Sample Checkbox");
                 });
             });
-            
+
             ui.add_space(12.0);
             ui.separator();
             ui.add_space(8.0);
-            
+
             // Close button
             ui.horizontal(|ui| {
                 if ui.button("Done").clicked() {
@@ -69,7 +75,7 @@ pub fn render_theme_picker(
                 }
             });
         });
-    
+
     changed
 }
 
@@ -80,6 +86,6 @@ fn apply_theme(ctx: &Context, theme: &str) {
     } else {
         Visuals::light()
     };
-    
+
     ctx.set_visuals(visuals);
 }

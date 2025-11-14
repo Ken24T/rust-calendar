@@ -16,10 +16,10 @@ fn calculate_occurrences(freq: Frequency, start_year: i32, count: usize) -> Vec<
     let mut year = start_year;
     let mut month = 1u32;
     let day = 1u32;
-    
+
     for _ in 0..count {
         occurrences.push((year, month, day));
-        
+
         match freq {
             Frequency::Fortnightly => {
                 // Simplified: just increment month for demo
@@ -38,59 +38,51 @@ fn calculate_occurrences(freq: Frequency, start_year: i32, count: usize) -> Vec<
             }
         }
     }
-    
+
     occurrences
 }
 
 fn bench_fortnightly_occurrences(c: &mut Criterion) {
     let mut group = c.benchmark_group("fortnightly_occurrences");
-    
+
     for count in [10, 100, 1000].iter() {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            count,
-            |b, &count| {
-                b.iter(|| {
-                    calculate_occurrences(
-                        black_box(Frequency::Fortnightly),
-                        black_box(2025),
-                        black_box(count),
-                    )
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &count| {
+            b.iter(|| {
+                calculate_occurrences(
+                    black_box(Frequency::Fortnightly),
+                    black_box(2025),
+                    black_box(count),
+                )
+            });
+        });
     }
-    
+
     group.finish();
 }
 
 fn bench_quarterly_occurrences(c: &mut Criterion) {
     let mut group = c.benchmark_group("quarterly_occurrences");
-    
+
     for count in [10, 100, 400].iter() {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            count,
-            |b, &count| {
-                b.iter(|| {
-                    calculate_occurrences(
-                        black_box(Frequency::Quarterly),
-                        black_box(2025),
-                        black_box(count),
-                    )
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &count| {
+            b.iter(|| {
+                calculate_occurrences(
+                    black_box(Frequency::Quarterly),
+                    black_box(2025),
+                    black_box(count),
+                )
+            });
+        });
     }
-    
+
     group.finish();
 }
 
 fn bench_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("frequency_comparison");
-    
+
     let count = 100;
-    
+
     group.bench_function("fortnightly_100", |b| {
         b.iter(|| {
             calculate_occurrences(
@@ -100,7 +92,7 @@ fn bench_comparison(c: &mut Criterion) {
             )
         });
     });
-    
+
     group.bench_function("quarterly_100", |b| {
         b.iter(|| {
             calculate_occurrences(
@@ -110,7 +102,7 @@ fn bench_comparison(c: &mut Criterion) {
             )
         });
     });
-    
+
     group.finish();
 }
 

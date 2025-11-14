@@ -11,9 +11,9 @@ use eframe::egui;
 fn main() -> eframe::Result<()> {
     // Initialize logging
     env_logger::init();
-    
+
     log::info!("Starting Rust Calendar Application (egui version)");
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
@@ -21,7 +21,7 @@ fn main() -> eframe::Result<()> {
             .with_title("Rust Calendar"),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "Rust Calendar",
         options,

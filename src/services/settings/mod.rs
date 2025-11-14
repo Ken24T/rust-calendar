@@ -14,32 +14,35 @@ impl<'a> SettingsService<'a> {
     pub fn new(db: &'a Database) -> Self {
         Self { db }
     }
-    
+
     /// Get the current settings
     pub fn get(&self) -> Result<Settings> {
         let conn = self.db.connection();
-        
-        let settings = conn.query_row(
-            "SELECT id, theme, first_day_of_week, time_format, date_format, 
+
+        let settings = conn
+            .query_row(
+                "SELECT id, theme, first_day_of_week, time_format, date_format, 
                     show_my_day, my_day_position_right, show_ribbon, current_view,
                     default_event_duration, first_day_of_work_week, last_day_of_work_week,
                     default_event_start_time
              FROM settings WHERE id = 1",
-            [],
-            |row| Ok(Self::row_to_settings(row)?),
-        ).context("Failed to load settings")?;
-        
+                [],
+                |row| Ok(Self::row_to_settings(row)?),
+            )
+            .context("Failed to load settings")?;
+
         Ok(settings)
     }
-    
+
     /// Update settings
     pub fn update(&self, settings: &Settings) -> Result<()> {
         // Validate before updating (skip theme validation - handled by app.rs)
-        settings.validate_without_theme()
+        settings
+            .validate_without_theme()
             .map_err(|e| anyhow!("Invalid settings: {}", e))?;
-        
+
         let conn = self.db.connection();
-        
+
         conn.execute(
             "UPDATE settings 
              SET theme = ?1, 
@@ -70,17 +73,18 @@ impl<'a> SettingsService<'a> {
                 settings.last_day_of_work_week,
                 &settings.default_event_start_time,
             ),
-        ).context("Failed to update settings")?;
-        
+        )
+        .context("Failed to update settings")?;
+
         Ok(())
     }
-    
+
     /// Reset settings to defaults
     pub fn reset(&self) -> Result<()> {
         let default_settings = Settings::default();
         self.update(&default_settings)
     }
-    
+
     /// Helper to convert a database row to Settings
     fn row_to_settings(row: &Row) -> Result<Settings, rusqlite::Error> {
         Ok(Settings {
@@ -104,104 +108,104 @@ impl<'a> SettingsService<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     fn setup_test_db() -> Database {
         let db = Database::new(":memory:").unwrap();
         db.initialize_schema().unwrap();
         db
     }
-    
+
     #[test]
     fn test_get_default_settings() {
         let db = setup_test_db();
         let service = SettingsService::new(&db);
-        
+
         let settings = service.get().unwrap();
         assert_eq!(settings.theme, "light");
         assert_eq!(settings.first_day_of_week, 0);
     }
-    
+
     #[test]
     fn test_update_settings() {
         let db = setup_test_db();
         let service = SettingsService::new(&db);
-        
+
         let mut settings = service.get().unwrap();
         settings.theme = "dark".to_string();
         settings.first_day_of_week = 1; // Monday
         settings.show_my_day = true;
-        
+
         let result = service.update(&settings);
         assert!(result.is_ok());
-        
+
         // Verify the update
         let updated = service.get().unwrap();
         assert_eq!(updated.theme, "dark");
         assert_eq!(updated.first_day_of_week, 1);
         assert_eq!(updated.show_my_day, true);
     }
-    
+
     #[test]
     fn test_update_invalid_settings() {
         let db = setup_test_db();
         let service = SettingsService::new(&db);
-        
+
         let mut settings = service.get().unwrap();
         // Theme validation is handled elsewhere, so use a field that this service validates
         settings.time_format = "invalid".to_string();
-        
+
         let result = service.update(&settings);
         assert!(result.is_err());
     }
-    
+
     #[test]
     fn test_reset_settings() {
         let db = setup_test_db();
         let service = SettingsService::new(&db);
-        
+
         // Change settings
         let mut settings = service.get().unwrap();
         settings.theme = "dark".to_string();
         settings.first_day_of_week = 1;
         service.update(&settings).unwrap();
-        
+
         // Reset
         let result = service.reset();
         assert!(result.is_ok());
-        
+
         // Verify reset to defaults
         let reset_settings = service.get().unwrap();
         let defaults = Settings::default();
         assert_eq!(reset_settings.theme, defaults.theme);
         assert_eq!(reset_settings.first_day_of_week, defaults.first_day_of_week);
     }
-    
+
     #[test]
     fn test_update_all_boolean_fields() {
         let db = setup_test_db();
         let service = SettingsService::new(&db);
-        
+
         let mut settings = service.get().unwrap();
         settings.show_my_day = true;
         settings.show_ribbon = true;
-        
+
         service.update(&settings).unwrap();
-        
+
         let updated = service.get().unwrap();
         assert_eq!(updated.show_my_day, true);
         assert_eq!(updated.show_ribbon, true);
     }
-    
+
     #[test]
     fn test_update_current_view() {
         let db = setup_test_db();
         let service = SettingsService::new(&db);
-        
+
         let mut settings = service.get().unwrap();
         settings.current_view = "Week".to_string();
-        
+
         service.update(&settings).unwrap();
-        
+
         let updated = service.get().unwrap();
         assert_eq!(updated.current_view, "Week");
     }

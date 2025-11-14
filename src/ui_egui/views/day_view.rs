@@ -22,11 +22,11 @@ impl DayView {
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let is_today = *current_date == today;
-        
+
         // Get events for this day
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_day(&event_service, *current_date);
-        
+
         // Day header
         let day_name = current_date.format("%A, %B %d, %Y").to_string();
         ui.heading(&day_name);
@@ -36,7 +36,7 @@ impl DayView {
         ui.add_space(5.0);
         ui.separator();
         ui.add_space(5.0);
-        
+
         // Scrollable time slots
         let mut clicked_event = None;
         egui::ScrollArea::vertical()
@@ -56,10 +56,10 @@ impl DayView {
                     clicked_event = Some(event);
                 }
             });
-            
+
         clicked_event
     }
-    
+
     fn render_time_slots(
         ui: &mut egui::Ui,
         date: NaiveDate,
@@ -73,16 +73,16 @@ impl DayView {
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
-        
+
         let mut clicked_event: Option<Event> = None;
-        
+
         // Draw 24 hours with 4 slots each
         for hour in 0..24 {
             for slot in 0..4 {
                 let minute = slot * SLOT_INTERVAL;
                 let time = NaiveTime::from_hms_opt(hour as u32, minute as u32, 0).unwrap();
                 let is_hour_start = slot == 0;
-                
+
                 // Calculate slot time range
                 let slot_start = time;
                 let slot_end = {
@@ -95,17 +95,17 @@ impl DayView {
                         NaiveTime::from_hms_opt(end_hour, end_minute, 0).unwrap()
                     }
                 };
-                
+
                 // Categorize events for this slot:
                 // 1. Events that START in this slot (render full details)
                 // 2. Events that are CONTINUING through this slot (render colored block only)
                 let mut starting_events: Vec<&Event> = Vec::new();
                 let mut continuing_events: Vec<&Event> = Vec::new();
-                
+
                 for event in events.iter() {
                     let event_start = event.start.time();
                     let event_end = event.end.time();
-                    
+
                     // Check if event overlaps with this slot
                     if event_start < slot_end && event_end > slot_start {
                         // Does it start in this slot?
@@ -117,7 +117,7 @@ impl DayView {
                         }
                     }
                 }
-                
+
                 if let Some(event) = Self::render_time_slot(
                     ui,
                     date,
@@ -136,17 +136,17 @@ impl DayView {
                 }
             }
         }
-        
+
         clicked_event
     }
-    
+
     fn render_time_slot(
         ui: &mut egui::Ui,
         date: NaiveDate,
         time: NaiveTime,
         hour: i64,
         is_hour_start: bool,
-        starting_events: &[&Event],  // Events that start in this slot
+        starting_events: &[&Event],   // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
         database: &'static Database,
         show_event_dialog: &mut bool,
@@ -155,7 +155,7 @@ impl DayView {
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         let mut clicked_event: Option<Event> = None;
-        
+
         ui.horizontal(|ui| {
             // Time label with fixed width (only on hour starts)
             ui.allocate_ui_with_layout(
@@ -168,16 +168,17 @@ impl DayView {
                         ui.label(
                             egui::RichText::new(time_str)
                                 .size(12.0)
-                                .color(Color32::GRAY)
+                                .color(Color32::GRAY),
                         );
                     }
                 },
             );
-            
+
             // Time slot area
             let desired_size = Vec2::new(ui.available_width(), 40.0);
-            let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
-            
+            let (rect, response) =
+                ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
+
             // Background
             let bg_color = if is_hour_start {
                 Color32::from_gray(45)
@@ -185,7 +186,7 @@ impl DayView {
                 Color32::from_gray(40)
             };
             ui.painter().rect_filled(rect, 0.0, bg_color);
-            
+
             // Horizontal grid line
             let line_color = if is_hour_start {
                 Color32::from_gray(60)
@@ -199,12 +200,16 @@ impl DayView {
                 ],
                 Stroke::new(1.0, line_color),
             );
-            
+
             // Hover effect
             if response.hovered() {
-                ui.painter().rect_filled(rect, 0.0, Color32::from_rgba_unmultiplied(100, 150, 255, 30));
+                ui.painter().rect_filled(
+                    rect,
+                    0.0,
+                    Color32::from_rgba_unmultiplied(100, 150, 255, 30),
+                );
             }
-            
+
             let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
 
             // Draw continuing events first (colored blocks only)
@@ -212,7 +217,7 @@ impl DayView {
                 let event_rect = Self::render_event_continuation(ui, rect, event);
                 event_hitboxes.push((event_rect, (*event).clone()));
             }
-            
+
             // Draw starting events (full details)
             for event in starting_events {
                 let event_rect = Self::render_event_in_slot(ui, rect, event);
@@ -261,7 +266,9 @@ impl DayView {
             // Manual context menu handling - store popup state in egui memory
             let mut context_clicked_event: Option<Event> = None;
             let mut context_menu_event: Option<Event> = None;
-            let popup_id = response.id.with(format!("context_menu_{}_{:?}", date, time));
+            let popup_id = response
+                .id
+                .with(format!("context_menu_{}_{:?}", date, time));
 
             // Derive a narrower anchor rect from the slot so the popup doesn't stretch full width
             let mut popup_anchor_response = response.clone();
@@ -328,7 +335,7 @@ impl DayView {
             );
 
             let mut clicked_from_ui: Option<Event> = context_clicked_event;
-            
+
             // Handle click - check if we clicked on an event first
             if clicked_from_ui.is_none() && response.clicked() {
                 if let Some(event) = pointer_event.clone() {
@@ -342,7 +349,7 @@ impl DayView {
                     *event_dialog_recurrence = None; // Default to non-recurring
                 }
             }
-            
+
             // Handle double-click for recurring event
             if response.double_clicked() {
                 *show_event_dialog = true;
@@ -374,18 +381,20 @@ impl DayView {
 
             if response.drag_stopped() {
                 if let Some(drag_context) = DragManager::finish_for_view(ui.ctx(), DragView::Day) {
-                    if let Some(target_start) = drag_context.hovered_start().or_else(|| {
-                        date.and_time(time)
-                            .and_local_timezone(Local)
-                            .single()
-                    }) {
+                    if let Some(target_start) = drag_context
+                        .hovered_start()
+                        .or_else(|| date.and_time(time).and_local_timezone(Local).single())
+                    {
                         let new_end = target_start + drag_context.duration;
                         let event_service = EventService::new(database.connection());
                         if let Ok(Some(mut event)) = event_service.get(drag_context.event_id) {
                             event.start = target_start;
                             event.end = new_end;
                             if let Err(err) = event_service.update(&event) {
-                                eprintln!("Failed to move event {}: {}", drag_context.event_id, err);
+                                eprintln!(
+                                    "Failed to move event {}: {}",
+                                    drag_context.event_id, err
+                                );
                             }
                         }
                     }
@@ -394,54 +403,60 @@ impl DayView {
 
             clicked_event = clicked_from_ui;
         });
-        
+
         clicked_event
     }
-    
+
     fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
-        let event_color = event.color.as_deref()
+        let event_color = event
+            .color
+            .as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
-        
+
         // Event background - fill the slot area (after the time label)
         let bg_rect = Rect::from_min_size(
             Pos2::new(slot_rect.left() + 55.0, slot_rect.top() + 2.0),
             Vec2::new(slot_rect.width() - 60.0, slot_rect.height() - 4.0),
         );
         ui.painter().rect_filled(bg_rect, 2.0, event_color);
-        
+
         // Event bar (left side) - darker accent
         let bar_rect = Rect::from_min_size(
             Pos2::new(slot_rect.left() + 55.0, slot_rect.top() + 2.0),
             Vec2::new(4.0, slot_rect.height() - 4.0),
         );
-        ui.painter().rect_filled(bar_rect, 2.0, event_color.linear_multiply(0.7));
-        
+        ui.painter()
+            .rect_filled(bar_rect, 2.0, event_color.linear_multiply(0.7));
+
         // Event title
         let text_rect = Rect::from_min_size(
             Pos2::new(bar_rect.right() + 5.0, slot_rect.top() + 2.0),
             Vec2::new(slot_rect.width() - 70.0, slot_rect.height() - 4.0),
         );
-        
+
         // Use egui's layout system to properly truncate text
         let font_id = egui::FontId::proportional(13.0);
         let available_width = text_rect.width();
-        
+
         let layout_job = egui::text::LayoutJob::simple(
             event.title.clone(),
             font_id.clone(),
             Color32::WHITE,
             available_width,
         );
-        
+
         let galley = ui.fonts(|f| f.layout_job(layout_job));
-        
+
         ui.painter().galley(
-            Pos2::new(text_rect.left(), text_rect.center().y - galley.size().y / 2.0),
+            Pos2::new(
+                text_rect.left(),
+                text_rect.center().y - galley.size().y / 2.0,
+            ),
             galley,
             Color32::WHITE,
         );
-        
+
         // Time range
         let time_str = format!(
             "{} - {}",
@@ -458,58 +473,63 @@ impl DayView {
 
         bg_rect
     }
-    
+
     fn render_event_continuation(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
-        let event_color = event.color.as_deref()
+        let event_color = event
+            .color
+            .as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
-        
+
         // Just render a colored bar to show the event continues through this slot
         let bar_rect = Rect::from_min_size(
             Pos2::new(slot_rect.left() + 55.0, slot_rect.top() + 2.0),
             Vec2::new(4.0, slot_rect.height() - 4.0),
         );
         ui.painter().rect_filled(bar_rect, 2.0, event_color);
-        
+
         // Optional: render a lighter background to show continuation
         let bg_rect = Rect::from_min_size(
             Pos2::new(bar_rect.right() + 5.0, slot_rect.top() + 2.0),
             Vec2::new(slot_rect.width() - 70.0, slot_rect.height() - 4.0),
         );
-        ui.painter().rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.3));
+        ui.painter()
+            .rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.3));
 
         bg_rect
     }
-    
+
     fn get_events_for_day(event_service: &EventService, date: NaiveDate) -> Vec<Event> {
-        use chrono::{TimeZone, Local};
-        
-        let start = Local.from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+        use chrono::{Local, TimeZone};
+
+        let start = Local
+            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
             .single()
             .unwrap();
-        let end = Local.from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+        let end = Local
+            .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
             .single()
             .unwrap();
-        
+
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
     }
-    
+
     fn parse_color(hex: &str) -> Option<Color32> {
         if hex.is_empty() {
             return None;
         }
-        
+
         let hex = hex.trim_start_matches('#');
         if hex.len() != 6 {
             return None;
         }
-        
+
         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
         let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
         let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-        
+
         Some(Color32::from_rgb(r, g, b))
     }
 }

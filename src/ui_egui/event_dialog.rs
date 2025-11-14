@@ -9,30 +9,30 @@ use egui::{Color32, RichText};
 pub struct EventDialogState {
     // Event being edited (None for new event)
     pub event_id: Option<i64>,
-    
+
     // Basic fields
     pub title: String,
     pub description: String,
     pub location: String,
-    
+
     // Date/time
     pub date: NaiveDate,
     pub start_time: NaiveTime,
     pub end_time: NaiveTime,
     pub all_day: bool,
-    
+
     // Visual
     pub color: String,
     pub category: String,
-    
+
     // Recurrence
     pub is_recurring: bool,
     pub frequency: RecurrenceFrequency,
     pub interval: u32,
     pub count: Option<u32>,
     pub until_date: Option<NaiveDate>,
-    pub pattern: RecurrencePattern,  // Positional pattern (first/last day/weekday)
-    
+    pub pattern: RecurrencePattern, // Positional pattern (first/last day/weekday)
+
     // BYDAY for weekly/monthly recurrence
     pub byday_enabled: bool,
     pub byday_monday: bool,
@@ -42,7 +42,7 @@ pub struct EventDialogState {
     pub byday_friday: bool,
     pub byday_saturday: bool,
     pub byday_sunday: bool,
-    
+
     // UI state
     pub error_message: Option<String>,
     pub show_advanced: bool,
@@ -65,7 +65,7 @@ impl RecurrenceFrequency {
             Self::Yearly => "Yearly",
         }
     }
-    
+
     fn to_rrule_freq(&self) -> &'static str {
         match self {
             Self::Daily => "DAILY",
@@ -78,11 +78,11 @@ impl RecurrenceFrequency {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecurrencePattern {
-    None,                           // No special pattern
-    FirstDayOfPeriod,               // First day of month/year
-    LastDayOfPeriod,                // Last day of month/year
-    FirstWeekdayOfPeriod(Weekday),  // First Monday/Tuesday/etc of month/year
-    LastWeekdayOfPeriod(Weekday),   // Last Monday/Tuesday/etc of month/year
+    None,                          // No special pattern
+    FirstDayOfPeriod,              // First day of month/year
+    LastDayOfPeriod,               // Last day of month/year
+    FirstWeekdayOfPeriod(Weekday), // First Monday/Tuesday/etc of month/year
+    LastWeekdayOfPeriod(Weekday),  // Last Monday/Tuesday/etc of month/year
 }
 
 impl RecurrencePattern {
@@ -120,7 +120,7 @@ impl Weekday {
             Self::Saturday => "Saturday",
         }
     }
-    
+
     fn to_rrule_day(&self) -> &'static str {
         match self {
             Self::Sunday => "SU",
@@ -132,7 +132,7 @@ impl Weekday {
             Self::Saturday => "SA",
         }
     }
-    
+
     fn from_rrule_day(day: &str) -> Option<Self> {
         match day {
             "SU" => Some(Self::Sunday),
@@ -145,7 +145,7 @@ impl Weekday {
             _ => None,
         }
     }
-    
+
     fn all() -> [Self; 7] {
         [
             Self::Sunday,
@@ -164,12 +164,17 @@ impl EventDialogState {
     pub fn new_event(date: NaiveDate, settings: &Settings) -> Self {
         Self::new_event_with_time(date, None, settings)
     }
-    
+
     /// Create a new event dialog state with an optional specific start time
-    pub fn new_event_with_time(date: NaiveDate, start_time_opt: Option<NaiveTime>, settings: &Settings) -> Self {
+    pub fn new_event_with_time(
+        date: NaiveDate,
+        start_time_opt: Option<NaiveTime>,
+        settings: &Settings,
+    ) -> Self {
         // Use provided time or parse default start time from settings (format: "HH:MM")
         let start_time = start_time_opt.unwrap_or_else(|| {
-            let (start_hour, start_minute) = settings.default_event_start_time
+            let (start_hour, start_minute) = settings
+                .default_event_start_time
                 .split_once(':')
                 .and_then(|(h, m)| {
                     let hour = h.parse::<u32>().ok()?;
@@ -177,16 +182,17 @@ impl EventDialogState {
                     Some((hour, minute))
                 })
                 .unwrap_or((9, 0));
-            
+
             NaiveTime::from_hms_opt(start_hour, start_minute, 0)
                 .unwrap_or(NaiveTime::from_hms_opt(9, 0, 0).unwrap())
         });
-        
+
         // Calculate end time based on default event duration
         let duration_minutes = settings.default_event_duration as i64;
-        let end_datetime = NaiveDateTime::new(date, start_time) + chrono::Duration::minutes(duration_minutes);
+        let end_datetime =
+            NaiveDateTime::new(date, start_time) + chrono::Duration::minutes(duration_minutes);
         let end_time = end_datetime.time();
-        
+
         Self {
             event_id: None,
             title: String::new(),
@@ -216,21 +222,29 @@ impl EventDialogState {
             show_advanced: false,
         }
     }
-    
+
     /// Create a new event dialog state for editing an existing event
     pub fn from_event(event: &Event, _settings: &Settings) -> Self {
         let date = event.start.date_naive();
         let start_time = event.start.time();
         let end_time = event.end.time();
-        
+
         // Parse recurrence rule if present
-        let (is_recurring, frequency, interval, count, until_date, pattern, byday_flags) = 
+        let (is_recurring, frequency, interval, count, until_date, pattern, byday_flags) =
             if let Some(ref rrule) = event.recurrence_rule {
                 Self::parse_rrule(rrule)
             } else {
-                (false, RecurrenceFrequency::Daily, 1, None, None, RecurrencePattern::None, [false; 7])
+                (
+                    false,
+                    RecurrenceFrequency::Daily,
+                    1,
+                    None,
+                    None,
+                    RecurrencePattern::None,
+                    [false; 7],
+                )
             };
-        
+
         Self {
             event_id: event.id,
             title: event.title.clone(),
@@ -260,16 +274,26 @@ impl EventDialogState {
             show_advanced: false,
         }
     }
-    
+
     /// Parse RRULE string to extract recurrence information
-    fn parse_rrule(rrule: &str) -> (bool, RecurrenceFrequency, u32, Option<u32>, Option<NaiveDate>, RecurrencePattern, [bool; 7]) {
+    fn parse_rrule(
+        rrule: &str,
+    ) -> (
+        bool,
+        RecurrenceFrequency,
+        u32,
+        Option<u32>,
+        Option<NaiveDate>,
+        RecurrencePattern,
+        [bool; 7],
+    ) {
         let mut frequency = RecurrenceFrequency::Daily;
         let mut interval = 1u32;
         let mut count = None;
         let mut until_date = None;
         let mut pattern = RecurrencePattern::None;
         let mut byday_flags = [false; 7]; // SU, MO, TU, WE, TH, FR, SA
-        
+
         for part in rrule.split(';') {
             if let Some((key, value)) = part.split_once('=') {
                 match key {
@@ -348,24 +372,34 @@ impl EventDialogState {
                 }
             }
         }
-        
-        (true, frequency, interval, count, until_date, pattern, byday_flags)
+
+        (
+            true,
+            frequency,
+            interval,
+            count,
+            until_date,
+            pattern,
+            byday_flags,
+        )
     }
-    
+
     /// Build RRULE string from current state
     fn build_rrule(&self) -> Option<String> {
         if !self.is_recurring {
             return None;
         }
-        
+
         let mut parts = vec![format!("FREQ={}", self.frequency.to_rrule_freq())];
-        
+
         if self.interval > 1 {
             parts.push(format!("INTERVAL={}", self.interval));
         }
-        
+
         // Add positional pattern (first/last day/weekday) for Monthly/Yearly
-        if self.frequency == RecurrenceFrequency::Monthly || self.frequency == RecurrenceFrequency::Yearly {
+        if self.frequency == RecurrenceFrequency::Monthly
+            || self.frequency == RecurrenceFrequency::Yearly
+        {
             match self.pattern {
                 RecurrencePattern::FirstDayOfPeriod => {
                     parts.push("BYMONTHDAY=1".to_string());
@@ -383,14 +417,28 @@ impl EventDialogState {
                     // Add standard BYDAY if enabled
                     if self.byday_enabled {
                         let mut days = Vec::new();
-                        if self.byday_sunday { days.push("SU"); }
-                        if self.byday_monday { days.push("MO"); }
-                        if self.byday_tuesday { days.push("TU"); }
-                        if self.byday_wednesday { days.push("WE"); }
-                        if self.byday_thursday { days.push("TH"); }
-                        if self.byday_friday { days.push("FR"); }
-                        if self.byday_saturday { days.push("SA"); }
-                        
+                        if self.byday_sunday {
+                            days.push("SU");
+                        }
+                        if self.byday_monday {
+                            days.push("MO");
+                        }
+                        if self.byday_tuesday {
+                            days.push("TU");
+                        }
+                        if self.byday_wednesday {
+                            days.push("WE");
+                        }
+                        if self.byday_thursday {
+                            days.push("TH");
+                        }
+                        if self.byday_friday {
+                            days.push("FR");
+                        }
+                        if self.byday_saturday {
+                            days.push("SA");
+                        }
+
                         if !days.is_empty() {
                             parts.push(format!("BYDAY={}", days.join(",")));
                         }
@@ -401,70 +449,89 @@ impl EventDialogState {
             // For weekly, only standard BYDAY (no positional patterns)
             if self.byday_enabled {
                 let mut days = Vec::new();
-                if self.byday_sunday { days.push("SU"); }
-                if self.byday_monday { days.push("MO"); }
-                if self.byday_tuesday { days.push("TU"); }
-                if self.byday_wednesday { days.push("WE"); }
-                if self.byday_thursday { days.push("TH"); }
-                if self.byday_friday { days.push("FR"); }
-                if self.byday_saturday { days.push("SA"); }
-                
+                if self.byday_sunday {
+                    days.push("SU");
+                }
+                if self.byday_monday {
+                    days.push("MO");
+                }
+                if self.byday_tuesday {
+                    days.push("TU");
+                }
+                if self.byday_wednesday {
+                    days.push("WE");
+                }
+                if self.byday_thursday {
+                    days.push("TH");
+                }
+                if self.byday_friday {
+                    days.push("FR");
+                }
+                if self.byday_saturday {
+                    days.push("SA");
+                }
+
                 if !days.is_empty() {
                     parts.push(format!("BYDAY={}", days.join(",")));
                 }
             }
         }
-        
+
         // Add COUNT or UNTIL (mutually exclusive)
         if let Some(count) = self.count {
             parts.push(format!("COUNT={}", count));
         } else if let Some(until) = self.until_date {
             parts.push(format!("UNTIL={}", until.format("%Y%m%d")));
         }
-        
+
         Some(parts.join(";"))
     }
-    
+
     /// Validate the event data
     fn validate(&self) -> Result<(), String> {
         // Title is required
         if self.title.trim().is_empty() {
             return Err("Event title is required".to_string());
         }
-        
+
         // Title should have reasonable length
         if self.title.len() > 200 {
             return Err("Event title is too long (max 200 characters)".to_string());
         }
-        
+
         // Validate time only for non-all-day events
         if !self.all_day && self.end_time <= self.start_time {
             return Err("End time must be after start time".to_string());
         }
-        
+
         // Validate recurrence settings
         if self.is_recurring {
             if self.interval < 1 {
                 return Err("Interval must be at least 1".to_string());
             }
-            
+
             if self.interval > 999 {
                 return Err("Interval is too large (max 999)".to_string());
             }
-            
+
             // If BYDAY is enabled for weekly/monthly, at least one day must be selected
-            if self.byday_enabled && (self.frequency == RecurrenceFrequency::Weekly || 
-                                     self.frequency == RecurrenceFrequency::Monthly) {
-                let any_day_selected = self.byday_monday || self.byday_tuesday || 
-                                      self.byday_wednesday || self.byday_thursday ||
-                                      self.byday_friday || self.byday_saturday || 
-                                      self.byday_sunday;
-                
+            if self.byday_enabled
+                && (self.frequency == RecurrenceFrequency::Weekly
+                    || self.frequency == RecurrenceFrequency::Monthly)
+            {
+                let any_day_selected = self.byday_monday
+                    || self.byday_tuesday
+                    || self.byday_wednesday
+                    || self.byday_thursday
+                    || self.byday_friday
+                    || self.byday_saturday
+                    || self.byday_sunday;
+
                 if !any_day_selected {
                     return Err("Select at least one day for weekly/monthly recurrence".to_string());
                 }
             }
-            
+
             // Validate count if specified
             if let Some(count) = self.count {
                 if count < 1 {
@@ -474,7 +541,7 @@ impl EventDialogState {
                     return Err("Occurrence count is too large (max 999)".to_string());
                 }
             }
-            
+
             // Validate until date if specified
             if let Some(until) = self.until_date {
                 if until < self.date {
@@ -482,66 +549,76 @@ impl EventDialogState {
                 }
             }
         }
-        
+
         // Validate color format
         if !self.color.is_empty() && !self.color.starts_with('#') {
             return Err("Color must start with # (e.g., #3B82F6)".to_string());
         }
-        
+
         Ok(())
     }
-    
+
     /// Convert dialog state to Event
     fn to_event(&self) -> Result<Event, String> {
         self.validate()?;
-        
-        let start_datetime = self.date.and_time(self.start_time).and_local_timezone(Local).unwrap();
-        let end_datetime = self.date.and_time(self.end_time).and_local_timezone(Local).unwrap();
-        
+
+        let start_datetime = self
+            .date
+            .and_time(self.start_time)
+            .and_local_timezone(Local)
+            .unwrap();
+        let end_datetime = self
+            .date
+            .and_time(self.end_time)
+            .and_local_timezone(Local)
+            .unwrap();
+
         let mut event = Event::builder()
             .title(&self.title)
             .start(start_datetime)
             .end(end_datetime)
             .all_day(self.all_day);
-        
+
         if !self.description.is_empty() {
             event = event.description(&self.description);
         }
-        
+
         if !self.location.is_empty() {
             event = event.location(&self.location);
         }
-        
+
         if !self.color.is_empty() {
             event = event.color(&self.color);
         }
-        
+
         if !self.category.is_empty() {
             event = event.category(&self.category);
         }
-        
+
         if let Some(rrule) = self.build_rrule() {
             event = event.recurrence_rule(rrule);
         }
-        
+
         event.build()
     }
-    
+
     /// Save the event (create or update)
     pub fn save(&self, database: &Database) -> Result<Event, String> {
         let mut event = self.to_event()?;
-        
+
         let service = EventService::new(database.connection());
-        
+
         if let Some(id) = self.event_id {
             // Update existing event
             event.id = Some(id);
-            service.update(&event)
+            service
+                .update(&event)
                 .map_err(|e| format!("Failed to update event: {}", e))?;
             Ok(event)
         } else {
             // Create new event
-            service.create(event)
+            service
+                .create(event)
                 .map_err(|e| format!("Failed to create event: {}", e))
         }
     }
@@ -556,334 +633,374 @@ pub fn render_event_dialog(
     show_dialog: &mut bool,
 ) -> bool {
     let mut saved = false;
-    
-    egui::Window::new(if state.event_id.is_some() { "Edit Event" } else { "New Event" })
-        .collapsible(false)
-        .resizable(true)
-        .default_width(600.0)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                // Error message display
-                if let Some(ref error) = state.error_message {
-                    ui.colored_label(Color32::RED, RichText::new(error).strong());
-                    ui.add_space(8.0);
+
+    egui::Window::new(if state.event_id.is_some() {
+        "Edit Event"
+    } else {
+        "New Event"
+    })
+    .collapsible(false)
+    .resizable(true)
+    .default_width(600.0)
+    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+    .show(ctx, |ui| {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            // Error message display
+            if let Some(ref error) = state.error_message {
+                ui.colored_label(Color32::RED, RichText::new(error).strong());
+                ui.add_space(8.0);
+            }
+
+            // Basic Information Section
+            ui.heading("Basic Information");
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Title:").strong().color(
+                    if state.title.trim().is_empty() {
+                        Color32::from_rgb(255, 150, 150) // Light red for required field
+                    } else {
+                        Color32::WHITE
+                    },
+                ));
+                let title_response = ui.text_edit_singleline(&mut state.title);
+
+                // Show asterisk for required field
+                ui.label(RichText::new("*").color(Color32::from_rgb(255, 150, 150)));
+
+                // Clear error when user starts typing
+                if title_response.changed() && state.error_message.is_some() {
+                    state.error_message = None;
                 }
-                
-                // Basic Information Section
-                ui.heading("Basic Information");
-                ui.add_space(4.0);
-                
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Title:").strong().color(
-                        if state.title.trim().is_empty() {
-                            Color32::from_rgb(255, 150, 150) // Light red for required field
-                        } else {
-                            Color32::WHITE
-                        }
-                    ));
-                    let title_response = ui.text_edit_singleline(&mut state.title);
-                    
-                    // Show asterisk for required field
-                    ui.label(RichText::new("*").color(Color32::from_rgb(255, 150, 150)));
-                    
-                    // Clear error when user starts typing
-                    if title_response.changed() && state.error_message.is_some() {
-                        state.error_message = None;
-                    }
-                });
-                
-                ui.horizontal(|ui| {
-                    ui.label("Location:");
-                    ui.text_edit_singleline(&mut state.location);
-                });
-                
-                ui.horizontal(|ui| {
-                    ui.label("Category:");
-                    ui.text_edit_singleline(&mut state.category);
-                });
-                
-                ui.label("Description:");
-                ui.text_edit_multiline(&mut state.description);
-                
-                ui.add_space(12.0);
-                ui.separator();
-                ui.add_space(8.0);
-                
-                // Date and Time Section
-                ui.heading("Date and Time");
-                ui.add_space(4.0);
-                
-                // Date picker
-                ui.horizontal(|ui| {
-                    ui.label("Date:");
-                    let date_string = state.date.format("%B %d, %Y").to_string();
-                    ui.label(RichText::new(date_string).strong());
-                });
-                
-                // Quick date adjustment
-                ui.horizontal(|ui| {
-                    if ui.button("< Previous Day").clicked() {
-                        state.date = state.date.pred_opt().unwrap_or(state.date);
-                    }
-                    if ui.button("Today").clicked() {
-                        state.date = Local::now().date_naive();
-                    }
-                    if ui.button("Next Day >").clicked() {
-                        state.date = state.date.succ_opt().unwrap_or(state.date);
-                    }
-                });
-                
-                ui.add_space(4.0);
-                
-                // All-day checkbox
-                ui.checkbox(&mut state.all_day, "All-day event");
-                
-                ui.add_space(4.0);
-                
-                // Time pickers (only if not all-day)
-                if !state.all_day {
-                    ui.horizontal(|ui| {
-                        ui.label("Start time:");
-                        render_time_picker(ui, &mut state.start_time);
-                    });
-                    
-                    ui.horizontal(|ui| {
-                        ui.label("End time:");
-                        render_time_picker(ui, &mut state.end_time);
-                    });
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Location:");
+                ui.text_edit_singleline(&mut state.location);
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Category:");
+                ui.text_edit_singleline(&mut state.category);
+            });
+
+            ui.label("Description:");
+            ui.text_edit_multiline(&mut state.description);
+
+            ui.add_space(12.0);
+            ui.separator();
+            ui.add_space(8.0);
+
+            // Date and Time Section
+            ui.heading("Date and Time");
+            ui.add_space(4.0);
+
+            // Date picker
+            ui.horizontal(|ui| {
+                ui.label("Date:");
+                let date_string = state.date.format("%B %d, %Y").to_string();
+                ui.label(RichText::new(date_string).strong());
+            });
+
+            // Quick date adjustment
+            ui.horizontal(|ui| {
+                if ui.button("< Previous Day").clicked() {
+                    state.date = state.date.pred_opt().unwrap_or(state.date);
                 }
-                
-                ui.add_space(12.0);
-                ui.separator();
-                ui.add_space(8.0);
-                
-                // Appearance Section
-                ui.heading("Appearance");
-                ui.add_space(4.0);
-                
+                if ui.button("Today").clicked() {
+                    state.date = Local::now().date_naive();
+                }
+                if ui.button("Next Day >").clicked() {
+                    state.date = state.date.succ_opt().unwrap_or(state.date);
+                }
+            });
+
+            ui.add_space(4.0);
+
+            // All-day checkbox
+            ui.checkbox(&mut state.all_day, "All-day event");
+
+            ui.add_space(4.0);
+
+            // Time pickers (only if not all-day)
+            if !state.all_day {
                 ui.horizontal(|ui| {
-                    ui.label("Color:");
-                    ui.add(egui::TextEdit::singleline(&mut state.color).desired_width(80.0));
-                    
-                    // Color preview
-                    if let Some(mut color) = parse_hex_color(&state.color) {
-                        ui.color_edit_button_srgba(&mut color);
-                        // Update the hex string if user changed the color
-                        state.color = format!("#{:02X}{:02X}{:02X}", color.r(), color.g(), color.b());
-                    }
+                    ui.label("Start time:");
+                    render_time_picker(ui, &mut state.start_time);
                 });
-                
-                // Preset colors
+
                 ui.horizontal(|ui| {
-                    ui.label("Presets:");
-                    for (name, hex) in &[
-                        ("Blue", "#3B82F6"),
-                        ("Green", "#10B981"),
-                        ("Red", "#EF4444"),
-                        ("Yellow", "#F59E0B"),
-                        ("Purple", "#8B5CF6"),
-                        ("Pink", "#EC4899"),
-                    ] {
-                        if ui.button(*name).clicked() {
-                            state.color = hex.to_string();
-                        }
-                    }
+                    ui.label("End time:");
+                    render_time_picker(ui, &mut state.end_time);
                 });
-                
-                ui.add_space(12.0);
-                ui.separator();
-                ui.add_space(8.0);
-                
-                // Recurrence Section
-                ui.heading("Recurrence");
+            }
+
+            ui.add_space(12.0);
+            ui.separator();
+            ui.add_space(8.0);
+
+            // Appearance Section
+            ui.heading("Appearance");
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                ui.label("Color:");
+                ui.add(egui::TextEdit::singleline(&mut state.color).desired_width(80.0));
+
+                // Color preview
+                if let Some(mut color) = parse_hex_color(&state.color) {
+                    ui.color_edit_button_srgba(&mut color);
+                    // Update the hex string if user changed the color
+                    state.color = format!("#{:02X}{:02X}{:02X}", color.r(), color.g(), color.b());
+                }
+            });
+
+            // Preset colors
+            ui.horizontal(|ui| {
+                ui.label("Presets:");
+                for (name, hex) in &[
+                    ("Blue", "#3B82F6"),
+                    ("Green", "#10B981"),
+                    ("Red", "#EF4444"),
+                    ("Yellow", "#F59E0B"),
+                    ("Purple", "#8B5CF6"),
+                    ("Pink", "#EC4899"),
+                ] {
+                    if ui.button(*name).clicked() {
+                        state.color = hex.to_string();
+                    }
+                }
+            });
+
+            ui.add_space(12.0);
+            ui.separator();
+            ui.add_space(8.0);
+
+            // Recurrence Section
+            ui.heading("Recurrence");
+            ui.add_space(4.0);
+
+            ui.checkbox(&mut state.is_recurring, "Repeat this event");
+
+            if state.is_recurring {
                 ui.add_space(4.0);
-                
-                ui.checkbox(&mut state.is_recurring, "Repeat this event");
-                
-                if state.is_recurring {
+
+                ui.horizontal(|ui| {
+                    ui.label("Frequency:");
+                    egui::ComboBox::from_id_source("frequency_combo")
+                        .selected_text(state.frequency.as_str())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut state.frequency,
+                                RecurrenceFrequency::Daily,
+                                "Daily",
+                            );
+                            ui.selectable_value(
+                                &mut state.frequency,
+                                RecurrenceFrequency::Weekly,
+                                "Weekly",
+                            );
+                            ui.selectable_value(
+                                &mut state.frequency,
+                                RecurrenceFrequency::Monthly,
+                                "Monthly",
+                            );
+                            ui.selectable_value(
+                                &mut state.frequency,
+                                RecurrenceFrequency::Yearly,
+                                "Yearly",
+                            );
+                        });
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Every");
+                    ui.add(egui::DragValue::new(&mut state.interval).range(1..=999));
+                    ui.label(match state.frequency {
+                        RecurrenceFrequency::Daily => "day(s)",
+                        RecurrenceFrequency::Weekly => "week(s)",
+                        RecurrenceFrequency::Monthly => "month(s)",
+                        RecurrenceFrequency::Yearly => "year(s)",
+                    });
+                });
+
+                // Positional pattern options for Monthly and Yearly
+                if state.frequency == RecurrenceFrequency::Monthly
+                    || state.frequency == RecurrenceFrequency::Yearly
+                {
                     ui.add_space(4.0);
-                    
                     ui.horizontal(|ui| {
-                        ui.label("Frequency:");
-                        egui::ComboBox::from_id_source("frequency_combo")
-                            .selected_text(state.frequency.as_str())
+                        ui.label("Repeat on:");
+                        egui::ComboBox::from_id_source("pattern_combo")
+                            .selected_text(state.pattern.as_str())
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut state.frequency, RecurrenceFrequency::Daily, "Daily");
-                                ui.selectable_value(&mut state.frequency, RecurrenceFrequency::Weekly, "Weekly");
-                                ui.selectable_value(&mut state.frequency, RecurrenceFrequency::Monthly, "Monthly");
-                                ui.selectable_value(&mut state.frequency, RecurrenceFrequency::Yearly, "Yearly");
+                                ui.selectable_value(
+                                    &mut state.pattern,
+                                    RecurrencePattern::None,
+                                    "None",
+                                );
+                                ui.selectable_value(
+                                    &mut state.pattern,
+                                    RecurrencePattern::FirstDayOfPeriod,
+                                    "First Day",
+                                );
+                                ui.selectable_value(
+                                    &mut state.pattern,
+                                    RecurrencePattern::LastDayOfPeriod,
+                                    "Last Day",
+                                );
+                                ui.selectable_value(
+                                    &mut state.pattern,
+                                    RecurrencePattern::FirstWeekdayOfPeriod(Weekday::Monday),
+                                    "First Weekday",
+                                );
+                                ui.selectable_value(
+                                    &mut state.pattern,
+                                    RecurrencePattern::LastWeekdayOfPeriod(Weekday::Monday),
+                                    "Last Weekday",
+                                );
                             });
                     });
-                    
-                    ui.horizontal(|ui| {
-                        ui.label("Every");
-                        ui.add(egui::DragValue::new(&mut state.interval).range(1..=999));
-                        ui.label(match state.frequency {
-                            RecurrenceFrequency::Daily => "day(s)",
-                            RecurrenceFrequency::Weekly => "week(s)",
-                            RecurrenceFrequency::Monthly => "month(s)",
-                            RecurrenceFrequency::Yearly => "year(s)",
-                        });
-                    });
-                    
-                    // Positional pattern options for Monthly and Yearly
-                    if state.frequency == RecurrenceFrequency::Monthly || 
-                       state.frequency == RecurrenceFrequency::Yearly {
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.label("Repeat on:");
-                            egui::ComboBox::from_id_source("pattern_combo")
-                                .selected_text(state.pattern.as_str())
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut state.pattern, RecurrencePattern::None, "None");
-                                    ui.selectable_value(&mut state.pattern, RecurrencePattern::FirstDayOfPeriod, "First Day");
-                                    ui.selectable_value(&mut state.pattern, RecurrencePattern::LastDayOfPeriod, "Last Day");
-                                    ui.selectable_value(
-                                        &mut state.pattern, 
-                                        RecurrencePattern::FirstWeekdayOfPeriod(Weekday::Monday), 
-                                        "First Weekday"
-                                    );
-                                    ui.selectable_value(
-                                        &mut state.pattern, 
-                                        RecurrencePattern::LastWeekdayOfPeriod(Weekday::Monday), 
-                                        "Last Weekday"
-                                    );
-                                });
-                        });
-                        
-                        // Show weekday selector if pattern is FirstWeekday or LastWeekday
-                        match state.pattern {
-                            RecurrencePattern::FirstWeekdayOfPeriod(ref mut weekday) |
-                            RecurrencePattern::LastWeekdayOfPeriod(ref mut weekday) => {
-                                ui.horizontal(|ui| {
-                                    ui.label("  of:");
-                                    egui::ComboBox::from_id_source("weekday_combo")
-                                        .selected_text(weekday.as_str())
-                                        .show_ui(ui, |ui| {
-                                            for wd in Weekday::all() {
-                                                ui.selectable_value(weekday, wd, wd.as_str());
-                                            }
-                                        });
-                                });
-                            }
-                            _ => {}
-                        }
-                    }
-                    
-                    // BYDAY options for Weekly and Monthly (when not using positional pattern)
-                    if state.frequency == RecurrenceFrequency::Weekly || 
-                       (state.frequency == RecurrenceFrequency::Monthly && state.pattern == RecurrencePattern::None) {
-                        ui.add_space(4.0);
-                        ui.checkbox(&mut state.byday_enabled, "Repeat on specific days");
-                        
-                        if state.byday_enabled {
+
+                    // Show weekday selector if pattern is FirstWeekday or LastWeekday
+                    match state.pattern {
+                        RecurrencePattern::FirstWeekdayOfPeriod(ref mut weekday)
+                        | RecurrencePattern::LastWeekdayOfPeriod(ref mut weekday) => {
                             ui.horizontal(|ui| {
-                                ui.checkbox(&mut state.byday_sunday, "Sun");
-                                ui.checkbox(&mut state.byday_monday, "Mon");
-                                ui.checkbox(&mut state.byday_tuesday, "Tue");
-                                ui.checkbox(&mut state.byday_wednesday, "Wed");
-                                ui.checkbox(&mut state.byday_thursday, "Thu");
-                                ui.checkbox(&mut state.byday_friday, "Fri");
-                                ui.checkbox(&mut state.byday_saturday, "Sat");
+                                ui.label("  of:");
+                                egui::ComboBox::from_id_source("weekday_combo")
+                                    .selected_text(weekday.as_str())
+                                    .show_ui(ui, |ui| {
+                                        for wd in Weekday::all() {
+                                            ui.selectable_value(weekday, wd, wd.as_str());
+                                        }
+                                    });
                             });
                         }
+                        _ => {}
                     }
-                    
-                    ui.add_space(8.0);
-                    ui.label("End condition:");
-                    
-                    ui.horizontal(|ui| {
-                        let no_end = state.count.is_none() && state.until_date.is_none();
-                        if ui.radio(no_end, "Never").clicked() {
-                            state.count = None;
-                            state.until_date = None;
-                        }
-                    });
-                    
-                    ui.horizontal(|ui| {
-                        let has_count = state.count.is_some();
-                        if ui.radio(has_count, "After").clicked() {
-                            state.count = Some(10);
-                            state.until_date = None;
-                        }
-                        
-                        if let Some(ref mut count) = state.count {
-                            ui.add(egui::DragValue::new(count).range(1..=999));
-                            ui.label("occurrence(s)");
-                        }
-                    });
-                    
-                    ui.horizontal(|ui| {
-                        let has_until = state.until_date.is_some();
-                        if ui.radio(has_until, "Until").clicked() {
-                            state.until_date = Some(state.date + chrono::Duration::days(30));
-                            state.count = None;
-                        }
-                        
-                        if let Some(until) = state.until_date {
-                            ui.label(until.format("%Y-%m-%d").to_string());
-                        }
-                    });
                 }
-                
-                ui.add_space(16.0);
-                ui.separator();
+
+                // BYDAY options for Weekly and Monthly (when not using positional pattern)
+                if state.frequency == RecurrenceFrequency::Weekly
+                    || (state.frequency == RecurrenceFrequency::Monthly
+                        && state.pattern == RecurrencePattern::None)
+                {
+                    ui.add_space(4.0);
+                    ui.checkbox(&mut state.byday_enabled, "Repeat on specific days");
+
+                    if state.byday_enabled {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut state.byday_sunday, "Sun");
+                            ui.checkbox(&mut state.byday_monday, "Mon");
+                            ui.checkbox(&mut state.byday_tuesday, "Tue");
+                            ui.checkbox(&mut state.byday_wednesday, "Wed");
+                            ui.checkbox(&mut state.byday_thursday, "Thu");
+                            ui.checkbox(&mut state.byday_friday, "Fri");
+                            ui.checkbox(&mut state.byday_saturday, "Sat");
+                        });
+                    }
+                }
+
                 ui.add_space(8.0);
-                
-                // Action buttons
+                ui.label("End condition:");
+
                 ui.horizontal(|ui| {
-                    // Check if we can enable the Save button (basic validation)
-                    let can_save = !state.title.trim().is_empty();
-                    let save_button = egui::Button::new("Save").fill(
-                        if can_save {
-                            Color32::from_rgb(70, 120, 200)
-                        } else {
-                            Color32::from_gray(60)
-                        }
-                    );
-                    
-                    ui.add_enabled_ui(can_save, |ui| {
-                        if ui.add(save_button).clicked() {
-                            match state.save(database) {
-                                Ok(_) => {
-                                    *show_dialog = false;
-                                    saved = true;
-                                }
-                                Err(e) => {
-                                    state.error_message = Some(e);
-                                }
+                    let no_end = state.count.is_none() && state.until_date.is_none();
+                    if ui.radio(no_end, "Never").clicked() {
+                        state.count = None;
+                        state.until_date = None;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    let has_count = state.count.is_some();
+                    if ui.radio(has_count, "After").clicked() {
+                        state.count = Some(10);
+                        state.until_date = None;
+                    }
+
+                    if let Some(ref mut count) = state.count {
+                        ui.add(egui::DragValue::new(count).range(1..=999));
+                        ui.label("occurrence(s)");
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    let has_until = state.until_date.is_some();
+                    if ui.radio(has_until, "Until").clicked() {
+                        state.until_date = Some(state.date + chrono::Duration::days(30));
+                        state.count = None;
+                    }
+
+                    if let Some(until) = state.until_date {
+                        ui.label(until.format("%Y-%m-%d").to_string());
+                    }
+                });
+            }
+
+            ui.add_space(16.0);
+            ui.separator();
+            ui.add_space(8.0);
+
+            // Action buttons
+            ui.horizontal(|ui| {
+                // Check if we can enable the Save button (basic validation)
+                let can_save = !state.title.trim().is_empty();
+                let save_button = egui::Button::new("Save").fill(if can_save {
+                    Color32::from_rgb(70, 120, 200)
+                } else {
+                    Color32::from_gray(60)
+                });
+
+                ui.add_enabled_ui(can_save, |ui| {
+                    if ui.add(save_button).clicked() {
+                        match state.save(database) {
+                            Ok(_) => {
+                                *show_dialog = false;
+                                saved = true;
                             }
-                        }
-                    });
-                    
-                    // Show hint if Save is disabled
-                    if !can_save {
-                        ui.label(RichText::new("(Title required)").small().color(Color32::from_gray(150)));
-                    }
-                    
-                    if ui.button("Cancel").clicked() {
-                        *show_dialog = false;
-                    }
-                    
-                    if state.event_id.is_some() {
-                        ui.add_space(20.0);
-                        if ui.button(RichText::new("Delete").color(Color32::RED)).clicked() {
-                            if let Some(id) = state.event_id {
-                                let service = EventService::new(database.connection());
-                                if let Err(e) = service.delete(id) {
-                                    state.error_message = Some(format!("Failed to delete: {}", e));
-                                } else {
-                                    *show_dialog = false;
-                                    saved = true; // Trigger refresh
-                                }
+                            Err(e) => {
+                                state.error_message = Some(e);
                             }
                         }
                     }
                 });
+
+                // Show hint if Save is disabled
+                if !can_save {
+                    ui.label(
+                        RichText::new("(Title required)")
+                            .small()
+                            .color(Color32::from_gray(150)),
+                    );
+                }
+
+                if ui.button("Cancel").clicked() {
+                    *show_dialog = false;
+                }
+
+                if state.event_id.is_some() {
+                    ui.add_space(20.0);
+                    if ui
+                        .button(RichText::new("Delete").color(Color32::RED))
+                        .clicked()
+                    {
+                        if let Some(id) = state.event_id {
+                            let service = EventService::new(database.connection());
+                            if let Err(e) = service.delete(id) {
+                                state.error_message = Some(format!("Failed to delete: {}", e));
+                            } else {
+                                *show_dialog = false;
+                                saved = true; // Trigger refresh
+                            }
+                        }
+                    }
+                }
             });
         });
-    
+    });
+
     saved
 }
 
@@ -891,7 +1008,7 @@ pub fn render_event_dialog(
 fn render_time_picker(ui: &mut egui::Ui, time: &mut NaiveTime) {
     let mut hour = time.hour();
     let mut minute = time.minute();
-    
+
     ui.horizontal(|ui| {
         // Hour picker (0-23)
         egui::ComboBox::from_id_source(format!("hour_{:p}", time))
@@ -902,9 +1019,9 @@ fn render_time_picker(ui: &mut egui::Ui, time: &mut NaiveTime) {
                     ui.selectable_value(&mut hour, h, format!("{:02}", h));
                 }
             });
-        
+
         ui.label(":");
-        
+
         // Minute picker (0-59)
         egui::ComboBox::from_id_source(format!("minute_{:p}", time))
             .width(60.0)
@@ -915,7 +1032,7 @@ fn render_time_picker(ui: &mut egui::Ui, time: &mut NaiveTime) {
                 }
             });
     });
-    
+
     // Update time if changed
     if let Some(new_time) = NaiveTime::from_hms_opt(hour, minute, 0) {
         *time = new_time;
@@ -925,7 +1042,7 @@ fn render_time_picker(ui: &mut egui::Ui, time: &mut NaiveTime) {
 /// Parse hex color string to egui Color32
 fn parse_hex_color(hex: &str) -> Option<Color32> {
     let hex = hex.trim_start_matches('#');
-    
+
     if hex.len() == 6 {
         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
         let g = u8::from_str_radix(&hex[2..4], 16).ok()?;

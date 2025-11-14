@@ -9,9 +9,9 @@ use std::collections::HashSet;
 pub enum Frequency {
     Daily,
     Weekly,
-    Fortnightly,  // Convenience alias for WEEKLY with INTERVAL=2
+    Fortnightly, // Convenience alias for WEEKLY with INTERVAL=2
     Monthly,
-    Quarterly,    // Convenience alias for MONTHLY with INTERVAL=3
+    Quarterly, // Convenience alias for MONTHLY with INTERVAL=3
     Yearly,
 }
 
@@ -125,16 +125,10 @@ impl RecurrenceRule {
                         .collect();
                 }
                 "BYMONTHDAY" => {
-                    by_month_day = parts[1]
-                        .split(',')
-                        .filter_map(|s| s.parse().ok())
-                        .collect();
+                    by_month_day = parts[1].split(',').filter_map(|s| s.parse().ok()).collect();
                 }
                 "BYMONTH" => {
-                    by_month = parts[1]
-                        .split(',')
-                        .filter_map(|s| s.parse().ok())
-                        .collect();
+                    by_month = parts[1].split(',').filter_map(|s| s.parse().ok()).collect();
                 }
                 _ => {}
             }
@@ -213,10 +207,8 @@ impl RecurrenceRule {
         exceptions: &[DateTime<Local>],
     ) -> Vec<DateTime<Local>> {
         let mut occurrences = Vec::new();
-        let exception_set: HashSet<NaiveDate> = exceptions
-            .iter()
-            .map(|dt| dt.date_naive())
-            .collect();
+        let exception_set: HashSet<NaiveDate> =
+            exceptions.iter().map(|dt| dt.date_naive()).collect();
 
         let mut current = start;
         let mut iteration = 0;
@@ -317,14 +309,15 @@ impl RecurrenceRule {
         let day = date.day().min(max_day);
 
         // Create new naive date with clamped day
-        let new_naive_date = NaiveDate::from_ymd_opt(year, month as u32, day)
-            .unwrap_or_else(|| date.date_naive());
-        
+        let new_naive_date =
+            NaiveDate::from_ymd_opt(year, month as u32, day).unwrap_or_else(|| date.date_naive());
+
         // Combine with original time
         let new_naive_datetime = new_naive_date.and_time(date.time());
-        
+
         // Convert to Local timezone
-        Local.from_local_datetime(&new_naive_datetime)
+        Local
+            .from_local_datetime(&new_naive_datetime)
             .earliest()
             .unwrap_or(date)
     }
@@ -405,8 +398,8 @@ mod tests {
 
     #[test]
     fn test_parse_complex_rrule() {
-        let rule = RecurrenceRule::from_rrule("FREQ=WEEKLY;INTERVAL=2;COUNT=10;BYDAY=MO,WE,FR")
-            .unwrap();
+        let rule =
+            RecurrenceRule::from_rrule("FREQ=WEEKLY;INTERVAL=2;COUNT=10;BYDAY=MO,WE,FR").unwrap();
         assert_eq!(rule.frequency, Frequency::Weekly);
         assert_eq!(rule.interval, 2);
         assert_eq!(rule.count, Some(10));
@@ -513,10 +506,7 @@ mod tests {
         let range_start = start;
         let range_end = start + Duration::days(5);
 
-        let exceptions = vec![
-            start + Duration::days(2),
-            start + Duration::days(4),
-        ];
+        let exceptions = vec![start + Duration::days(2), start + Duration::days(4)];
 
         let rule = RecurrenceRule::new(Frequency::Daily);
         let occurrences = rule.generate_occurrences(start, range_start, range_end, &exceptions);

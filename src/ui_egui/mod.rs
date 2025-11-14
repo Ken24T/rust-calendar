@@ -1,10 +1,10 @@
 mod app;
-mod views;
-mod event_dialog;
-mod settings_dialog;
-mod theme_picker;
-pub mod theme;
 pub mod dialogs;
 pub mod drag;
+mod event_dialog;
+mod settings_dialog;
+pub mod theme;
+mod theme_picker;
+mod views;
 
 pub use app::CalendarApp;

@@ -25,9 +25,9 @@ impl Default for Settings {
         Self {
             id: Some(1),
             theme: "light".to_string(),
-            first_day_of_week: 0, // Sunday
+            first_day_of_week: 0,      // Sunday
             first_day_of_work_week: 1, // Monday
-            last_day_of_work_week: 5, // Friday
+            last_day_of_work_week: 5,  // Friday
             time_format: "12h".to_string(),
             date_format: "DD/MM/YYYY".to_string(),
             show_my_day: false,
@@ -47,84 +47,108 @@ impl Settings {
         if !["light", "dark"].contains(&self.theme.as_str()) {
             return Err(format!("Invalid theme: {}", self.theme));
         }
-        
+
         // Validate first_day_of_week (0-6, Sunday to Saturday)
         if self.first_day_of_week > 6 {
-            return Err(format!("Invalid first_day_of_week: {}", self.first_day_of_week));
+            return Err(format!(
+                "Invalid first_day_of_week: {}",
+                self.first_day_of_week
+            ));
         }
-        
+
         // Validate work week days (1-5 for Monday to Friday)
         if self.first_day_of_work_week < 1 || self.first_day_of_work_week > 5 {
-            return Err(format!("Invalid first_day_of_work_week: {}", self.first_day_of_work_week));
+            return Err(format!(
+                "Invalid first_day_of_work_week: {}",
+                self.first_day_of_work_week
+            ));
         }
         if self.last_day_of_work_week < 1 || self.last_day_of_work_week > 5 {
-            return Err(format!("Invalid last_day_of_work_week: {}", self.last_day_of_work_week));
+            return Err(format!(
+                "Invalid last_day_of_work_week: {}",
+                self.last_day_of_work_week
+            ));
         }
         if self.first_day_of_work_week > self.last_day_of_work_week {
             return Err("first_day_of_work_week cannot be after last_day_of_work_week".to_string());
         }
-        
+
         // Validate time_format
         if !["12h", "24h"].contains(&self.time_format.as_str()) {
             return Err(format!("Invalid time_format: {}", self.time_format));
         }
-        
+
         // Validate current_view
         if !["Day", "WorkWeek", "Week", "Month", "Quarter"].contains(&self.current_view.as_str()) {
             return Err(format!("Invalid current_view: {}", self.current_view));
         }
-        
+
         // Validate default_event_duration (15, 30, 45, 60, 90, 120 minutes)
         if ![15, 30, 45, 60, 90, 120].contains(&self.default_event_duration) {
-            return Err(format!("Invalid default_event_duration: {}", self.default_event_duration));
+            return Err(format!(
+                "Invalid default_event_duration: {}",
+                self.default_event_duration
+            ));
         }
-        
+
         // Validate default_event_start_time format (HH:MM)
         if !self.default_event_start_time.contains(':') {
             return Err("Invalid default_event_start_time format".to_string());
         }
-        
+
         Ok(())
     }
-    
+
     /// Validate settings values without checking theme (theme validated by app.rs)
     pub fn validate_without_theme(&self) -> Result<(), String> {
         // Validate first_day_of_week (0-6, Sunday to Saturday)
         if self.first_day_of_week > 6 {
-            return Err(format!("Invalid first_day_of_week: {}", self.first_day_of_week));
+            return Err(format!(
+                "Invalid first_day_of_week: {}",
+                self.first_day_of_week
+            ));
         }
-        
+
         // Validate work week days (1-5 for Monday to Friday)
         if self.first_day_of_work_week < 1 || self.first_day_of_work_week > 5 {
-            return Err(format!("Invalid first_day_of_work_week: {}", self.first_day_of_work_week));
+            return Err(format!(
+                "Invalid first_day_of_work_week: {}",
+                self.first_day_of_work_week
+            ));
         }
         if self.last_day_of_work_week < 1 || self.last_day_of_work_week > 5 {
-            return Err(format!("Invalid last_day_of_work_week: {}", self.last_day_of_work_week));
+            return Err(format!(
+                "Invalid last_day_of_work_week: {}",
+                self.last_day_of_work_week
+            ));
         }
         if self.first_day_of_work_week > self.last_day_of_work_week {
             return Err("first_day_of_work_week cannot be after last_day_of_work_week".to_string());
         }
-        
+
         // Validate time_format
         if !["12h", "24h"].contains(&self.time_format.as_str()) {
             return Err(format!("Invalid time_format: {}", self.time_format));
         }
-        
+
         // Validate current_view
         if !["Day", "WorkWeek", "Week", "Month", "Quarter"].contains(&self.current_view.as_str()) {
             return Err(format!("Invalid current_view: {}", self.current_view));
         }
-        
+
         // Validate default_event_duration (15, 30, 45, 60, 90, 120 minutes)
         if ![15, 30, 45, 60, 90, 120].contains(&self.default_event_duration) {
-            return Err(format!("Invalid default_event_duration: {}", self.default_event_duration));
+            return Err(format!(
+                "Invalid default_event_duration: {}",
+                self.default_event_duration
+            ));
         }
-        
+
         // Validate default_event_start_time format (HH:MM)
         if !self.default_event_start_time.contains(':') {
             return Err("Invalid default_event_start_time format".to_string());
         }
-        
+
         Ok(())
     }
 }
@@ -132,7 +156,7 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_settings() {
         let settings = Settings::default();
@@ -145,56 +169,64 @@ mod tests {
         assert_eq!(settings.show_ribbon, false);
         assert_eq!(settings.current_view, "Month");
     }
-    
+
     #[test]
     fn test_validate_valid_settings() {
         let settings = Settings::default();
         assert!(settings.validate().is_ok());
     }
-    
+
     #[test]
     fn test_validate_invalid_theme() {
         let mut settings = Settings::default();
         settings.theme = "invalid".to_string();
         assert!(settings.validate().is_err());
     }
-    
+
     #[test]
     fn test_validate_invalid_first_day_of_week() {
         let mut settings = Settings::default();
         settings.first_day_of_week = 7;
         assert!(settings.validate().is_err());
     }
-    
+
     #[test]
     fn test_validate_invalid_time_format() {
         let mut settings = Settings::default();
         settings.time_format = "invalid".to_string();
         assert!(settings.validate().is_err());
     }
-    
+
     #[test]
     fn test_validate_invalid_view() {
         let mut settings = Settings::default();
         settings.current_view = "Invalid".to_string();
         assert!(settings.validate().is_err());
     }
-    
+
     #[test]
     fn test_validate_all_valid_themes() {
         for theme in ["light", "dark"] {
             let mut settings = Settings::default();
             settings.theme = theme.to_string();
-            assert!(settings.validate().is_ok(), "Theme '{}' should be valid", theme);
+            assert!(
+                settings.validate().is_ok(),
+                "Theme '{}' should be valid",
+                theme
+            );
         }
     }
-    
+
     #[test]
     fn test_validate_all_valid_views() {
         for view in ["Day", "WorkWeek", "Week", "Month", "Quarter"] {
             let mut settings = Settings::default();
             settings.current_view = view.to_string();
-            assert!(settings.validate().is_ok(), "View '{}' should be valid", view);
+            assert!(
+                settings.validate().is_ok(),
+                "View '{}' should be valid",
+                view
+            );
         }
     }
 }

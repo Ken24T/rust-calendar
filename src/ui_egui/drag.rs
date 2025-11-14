@@ -43,10 +43,7 @@ impl DragContext {
 
     pub fn hovered_start(&self) -> Option<DateTime<Local>> {
         match (self.hovered_date, self.hovered_time) {
-            (Some(date), Some(time)) => date
-                .and_time(time)
-                .and_local_timezone(Local)
-                .single(),
+            (Some(date), Some(time)) => date.and_time(time).and_local_timezone(Local).single(),
             _ => None,
         }
     }
