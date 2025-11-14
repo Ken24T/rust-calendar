@@ -231,6 +231,26 @@ impl CountdownService {
         false
     }
 
+    pub fn set_always_on_top(&mut self, id: CountdownCardId, always_on_top: bool) -> bool {
+        self.update_visual_flag(id, |visuals| visuals.always_on_top = always_on_top)
+    }
+
+    pub fn set_compact_mode(&mut self, id: CountdownCardId, compact_mode: bool) -> bool {
+        self.update_visual_flag(id, |visuals| visuals.compact_mode = compact_mode)
+    }
+
+    fn update_visual_flag<F>(&mut self, id: CountdownCardId, mut update: F) -> bool
+    where
+        F: FnMut(&mut CountdownCardVisuals),
+    {
+        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
+            update(&mut card.visuals);
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
     /// Recomputes days remaining for every card, returning the ones that
     /// changed so the UI can re-render or animate them.
     pub fn refresh_days_remaining(&mut self, now: DateTime<Local>) -> Vec<(CountdownCardId, i64)> {

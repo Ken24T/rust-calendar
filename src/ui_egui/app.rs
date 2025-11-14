@@ -1,5 +1,5 @@
 use crate::models::settings::Settings;
-use crate::services::countdown::{CountdownCardGeometry, CountdownService};
+use crate::services::countdown::{CountdownCardGeometry, CountdownCardState, CountdownService};
 use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
@@ -20,7 +20,7 @@ use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::CountdownRequest;
 use chrono::{Local, NaiveDate};
 use directories::ProjectDirs;
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration as StdDuration};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewType {
@@ -29,6 +29,15 @@ pub enum ViewType {
     WorkWeek,
     Month,
     Quarter,
+}
+
+enum CountdownCardUiAction {
+    None,
+    Close,
+    Rename(String),
+    ClearTitle,
+    SetAlwaysOnTop(bool),
+    SetCompactMode(bool),
 }
 
 pub struct CalendarApp {
@@ -734,7 +743,7 @@ impl CalendarApp {
             let builder = self.viewport_builder_for_card(&card);
 
             let card_clone = card.clone();
-            let close_via_ui = ctx.show_viewport_immediate(viewport_id, builder, move |child_ctx, class| {
+            let action = ctx.show_viewport_immediate(viewport_id, builder, move |child_ctx, class| {
                 Self::render_countdown_card_ui(child_ctx, class, &card_clone, now)
             });
 
@@ -747,7 +756,33 @@ impl CalendarApp {
                     .unwrap_or(false)
             });
 
-            if close_via_ui || close_via_window {
+            let mut queued_close = close_via_window;
+
+            match action {
+                CountdownCardUiAction::None => {}
+                CountdownCardUiAction::Close => queued_close = true,
+                CountdownCardUiAction::Rename(title) => {
+                    let trimmed = title.trim();
+                    if trimmed.is_empty() {
+                        self.countdown_service.set_title_override(card.id, None);
+                    } else {
+                        self
+                            .countdown_service
+                            .set_title_override(card.id, Some(trimmed.to_owned()));
+                    }
+                }
+                CountdownCardUiAction::ClearTitle => {
+                    self.countdown_service.set_title_override(card.id, None);
+                }
+                CountdownCardUiAction::SetAlwaysOnTop(value) => {
+                    self.countdown_service.set_always_on_top(card.id, value);
+                }
+                CountdownCardUiAction::SetCompactMode(value) => {
+                    self.countdown_service.set_compact_mode(card.id, value);
+                }
+            }
+
+            if queued_close {
                 removals.push(card.id);
                 continue;
             }
@@ -796,7 +831,7 @@ impl CalendarApp {
         }
     }
 
-    fn viewport_builder_for_card(&self, card: &crate::services::countdown::CountdownCardState) -> egui::ViewportBuilder {
+    fn viewport_builder_for_card(&self, card: &CountdownCardState) -> egui::ViewportBuilder {
         let mut builder = egui::ViewportBuilder::default()
             .with_title(card.effective_title().to_owned())
             .with_position(egui::pos2(card.geometry.x, card.geometry.y))
@@ -814,12 +849,16 @@ impl CalendarApp {
     fn render_countdown_card_ui(
         ctx: &egui::Context,
         class: egui::ViewportClass,
-        card: &crate::services::countdown::CountdownCardState,
+        card: &CountdownCardState,
         now: chrono::DateTime<chrono::Local>,
-    ) -> bool {
-        let mut close_requested = false;
+    ) -> CountdownCardUiAction {
+        ctx.request_repaint_after(StdDuration::from_secs(1));
+
+        let mut action = CountdownCardUiAction::None;
 
         let mut render_contents = |ui: &mut egui::Ui| {
+            let mut close_requested = false;
+
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.heading(card.effective_title());
@@ -829,14 +868,59 @@ impl CalendarApp {
                         }
                     });
                 });
+
                 ui.separator();
-                let days = card.compute_days_remaining(now);
-                let suffix = if days == 1 { "" } else { "s" };
-                ui.label(format!("{} day{} remaining", days, suffix));
-                ui.label(card.start_at.format("Starts %b %d, %Y %H:%M").to_string());
+
+                let total_secs = (card.start_at - now).num_seconds().max(0);
+                let days = total_secs / 86_400;
+                let hours = (total_secs % 86_400) / 3_600;
+                let minutes = (total_secs % 3_600) / 60;
+                let seconds = total_secs % 60;
+
+                if card.visuals.compact_mode {
+                    ui.heading(format!("{:02}:{:02}:{:02}", hours + days * 24, minutes, seconds));
+                } else {
+                    ui.label(card.start_at.format("Starts %b %d, %Y %H:%M").to_string());
+                    ui.add_space(4.0);
+                    ui.strong(format!(
+                        "{days:02}d {hours:02}h {minutes:02}m {seconds:02}s remaining"
+                    ));
+                }
+
+                if !card.visuals.compact_mode {
+                    ui.add_space(6.0);
+                    ui.heading("Appearance");
+                }
+
+                let mut title_buffer = card
+                    .title_override
+                    .clone()
+                    .unwrap_or_else(|| card.event_title.clone());
+                if ui.text_edit_singleline(&mut title_buffer).changed() {
+                    action = CountdownCardUiAction::Rename(title_buffer);
+                }
+
+                ui.horizontal(|ui| {
+                    if ui.button("Reset Title").clicked() {
+                        action = CountdownCardUiAction::ClearTitle;
+                    }
+                    let mut always_on_top = card.visuals.always_on_top;
+                    if ui.checkbox(&mut always_on_top, "Always on top").changed() {
+                        action = CountdownCardUiAction::SetAlwaysOnTop(always_on_top);
+                    }
+                    let mut compact_mode = card.visuals.compact_mode;
+                    if ui.checkbox(&mut compact_mode, "Compact").changed() {
+                        action = CountdownCardUiAction::SetCompactMode(compact_mode);
+                    }
+                });
+
                 ui.add_space(4.0);
-                ui.label("Countdown card UI coming soon...");
+                ui.label("Drag window to reposition. Close to delete.");
             });
+
+            if close_requested {
+                action = CountdownCardUiAction::Close;
+            }
         };
 
         match class {
@@ -844,7 +928,7 @@ impl CalendarApp {
                 egui::Window::new(card.effective_title())
                     .collapsible(false)
                     .resizable(true)
-                    .show(ctx, |ui| render_contents(ui)); // placeholder to fix compile
+                    .show(ctx, |ui| render_contents(ui));
             }
             _ => {
                 egui::CentralPanel::default()
@@ -855,6 +939,6 @@ impl CalendarApp {
             }
         }
 
-        close_requested
+        action
     }
 }
