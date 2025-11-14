@@ -5,5 +5,6 @@ mod settings_dialog;
 mod theme_picker;
 pub mod theme;
 pub mod dialogs;
+pub mod drag;
 
 pub use app::CalendarApp;

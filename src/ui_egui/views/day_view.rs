@@ -1,10 +1,11 @@
-use chrono::{Datelike, Local, NaiveDate, NaiveTime, Timelike};
-use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use chrono::{Local, NaiveDate, NaiveTime};
+use egui::{Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 
 pub struct DayView;
 
@@ -219,18 +220,43 @@ impl DayView {
             }
 
             let pointer_pos = response.interact_pointer_pos();
-            let pointer_event = pointer_pos.and_then(|pos| {
+            let pointer_hit = pointer_pos.and_then(|pos| {
                 event_hitboxes
                     .iter()
                     .rev()
                     .find(|(hit_rect, _)| hit_rect.contains(pos))
-                    .map(|(_, event)| event.clone())
+                    .map(|(hit_rect, event)| (*hit_rect, event.clone()))
             });
+            let pointer_event = pointer_hit.as_ref().map(|(_, event)| event.clone());
             let single_event_fallback = if event_hitboxes.len() == 1 {
                 Some(event_hitboxes[0].1.clone())
             } else {
                 None
             };
+
+            if DragManager::is_active_for_view(ui.ctx(), DragView::Day) && response.hovered() {
+                if let Some(pointer) = response.interact_pointer_pos() {
+                    DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
+                    ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                    ui.ctx().request_repaint();
+                }
+            }
+
+            if let Some(drag_state) = DragManager::active_for_view(ui.ctx(), DragView::Day) {
+                if drag_state.hovered_date == Some(date) && drag_state.hovered_time == Some(time) {
+                    let highlight = rect.shrink2(Vec2::new(5.0, 4.0));
+                    ui.painter().rect_filled(
+                        highlight,
+                        2.0,
+                        Color32::from_rgba_unmultiplied(120, 200, 120, 35),
+                    );
+                    ui.painter().rect_stroke(
+                        highlight,
+                        2.0,
+                        Stroke::new(1.5, Color32::from_rgb(120, 200, 120)),
+                    );
+                }
+            }
 
             // Manual context menu handling - store popup state in egui memory
             let mut context_clicked_event: Option<Event> = None;
@@ -323,6 +349,47 @@ impl DayView {
                 *event_dialog_date = Some(date);
                 *event_dialog_time = Some(time); // Use the clicked time slot
                 *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
+            }
+
+            if response.drag_started() {
+                if let Some((hit_rect, event)) = pointer_hit.clone() {
+                    if event.recurrence_rule.is_none() {
+                        if let Some(drag_context) = DragContext::from_event(
+                            &event,
+                            pointer_pos
+                                .map(|pos| pos - hit_rect.min)
+                                .unwrap_or(Vec2::ZERO),
+                            DragView::Day,
+                        ) {
+                            DragManager::begin(ui.ctx(), drag_context);
+                            ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                        }
+                    }
+                }
+            }
+
+            if response.dragged() {
+                ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+            }
+
+            if response.drag_stopped() {
+                if let Some(drag_context) = DragManager::finish_for_view(ui.ctx(), DragView::Day) {
+                    if let Some(target_start) = drag_context.hovered_start().or_else(|| {
+                        date.and_time(time)
+                            .and_local_timezone(Local)
+                            .single()
+                    }) {
+                        let new_end = target_start + drag_context.duration;
+                        let event_service = EventService::new(database.connection());
+                        if let Ok(Some(mut event)) = event_service.get(drag_context.event_id) {
+                            event.start = target_start;
+                            event.end = new_end;
+                            if let Err(err) = event_service.update(&event) {
+                                eprintln!("Failed to move event {}: {}", drag_context.event_id, err);
+                            }
+                        }
+                    }
+                }
             }
 
             clicked_event = clicked_from_ui;
