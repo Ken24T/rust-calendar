@@ -151,7 +151,7 @@ impl QuarterView {
         event_dialog_recurrence: &mut Option<String>,
     ) {
         let desired_size = Vec2::new(30.0, 30.0);
-        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
+        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
         
         // Background color
         let bg_color = if is_today {
@@ -194,6 +194,44 @@ impl QuarterView {
             format!("{}", day),
             egui::FontId::proportional(12.0),
             text_color,
+        );
+
+        let popup_id = response.id.with(format!("quarter_context_menu_{}", date));
+        let mut popup_anchor_response = response.clone();
+        popup_anchor_response.rect = Rect::from_min_size(
+            Pos2::new(rect.left(), rect.top()),
+            Vec2::new(rect.width(), rect.height()),
+        );
+
+        if response.secondary_clicked() {
+            ui.memory_mut(|mem| mem.open_popup(popup_id));
+        }
+
+        egui::popup::popup_above_or_below_widget(
+            ui,
+            popup_id,
+            &popup_anchor_response,
+            egui::AboveOrBelow::Below,
+            egui::PopupCloseBehavior::CloseOnClickOutside,
+            |ui| {
+                ui.set_width(150.0);
+                ui.label(date.format("%A, %B %d").to_string());
+                ui.separator();
+
+                if ui.button("📅 New Event").clicked() {
+                    *show_event_dialog = true;
+                    *event_dialog_date = Some(date);
+                    *event_dialog_recurrence = None;
+                    ui.memory_mut(|mem| mem.close_popup());
+                }
+
+                if ui.button("🔄 New Quarterly Event").clicked() {
+                    *show_event_dialog = true;
+                    *event_dialog_date = Some(date);
+                    *event_dialog_recurrence = Some("FREQ=MONTHLY;INTERVAL=3".to_string());
+                    ui.memory_mut(|mem| mem.close_popup());
+                }
+            },
         );
         
         // Handle click to create event

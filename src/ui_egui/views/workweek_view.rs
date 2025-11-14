@@ -285,23 +285,43 @@ impl WorkWeekView {
             ui.painter().rect_filled(rect, 0.0, Color32::from_rgba_unmultiplied(100, 150, 255, 30));
         }
         
+        let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
+
         // Draw continuing events first (colored blocks only)
         for event in continuing_events {
-            Self::render_event_continuation(ui, rect, event);
+            let event_rect = Self::render_event_continuation(ui, rect, event);
+            event_hitboxes.push((event_rect, (*event).clone()));
         }
         
         // Draw starting events (full details)
         for event in starting_events {
-            Self::render_event_in_cell(ui, rect, event);
+            let event_rect = Self::render_event_in_cell(ui, rect, event);
+            event_hitboxes.push((event_rect, (*event).clone()));
         }
+
+        let pointer_pos = response.interact_pointer_pos();
+        let pointer_event = pointer_pos.and_then(|pos| {
+            event_hitboxes
+                .iter()
+                .rev()
+                .find(|(hit_rect, _)| hit_rect.contains(pos))
+                .map(|(_, event)| event.clone())
+        });
+        let single_event_fallback = if event_hitboxes.len() == 1 {
+            Some(event_hitboxes[0].1.clone())
+        } else {
+            None
+        };
         
         // Manual context menu handling - store popup state in egui memory
         let mut context_clicked_event: Option<Event> = None;
+        let mut context_menu_event: Option<Event> = None;
         let popup_id = response.id.with(format!("context_menu_{}_{:?}", date, time));
         
         // Open popup on right-click
         let show_context_menu = response.secondary_clicked();
         if show_context_menu {
+            context_menu_event = pointer_event.clone();
             ui.memory_mut(|mem| mem.open_popup(popup_id));
         }
         
@@ -315,13 +335,17 @@ impl WorkWeekView {
             |ui| {
                 ui.set_min_width(150.0);
                 
+                let popup_event = context_menu_event
+                    .clone()
+                    .or_else(|| single_event_fallback.clone());
+
                 // Only show menu if there's an event in this cell
-                if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
+                if let Some(event) = popup_event {
                     ui.label(format!("Event: {}", event.title));
                     ui.separator();
                     
                     if ui.button("✏ Edit").clicked() {
-                        context_clicked_event = Some((*event).clone());
+                        context_clicked_event = Some(event.clone());
                         ui.memory_mut(|mem| mem.close_popup());
                     }
                     
@@ -363,19 +387,14 @@ impl WorkWeekView {
         
         // Check if user clicked on an event
         if clicked_event.is_none() && response.clicked() {
-            if let Some(_pos) = response.interact_pointer_pos() {
-                // Check if click was on an event (any event fills the cell, so any click is on an event if events exist)
-                if let Some(event) = starting_events.first() {
-                    clicked_event = Some((*event).clone());
-                } else if let Some(event) = continuing_events.first() {
-                    clicked_event = Some((*event).clone());
-                } else {
-                    // Click on empty space - create new event
-                    *show_event_dialog = true;
-                    *event_dialog_date = Some(date);
-                    *event_dialog_time = Some(time); // Use the clicked time slot
-                    *event_dialog_recurrence = None; // Default to non-recurring
-                }
+            if let Some(event) = pointer_event.clone() {
+                clicked_event = Some(event);
+            } else {
+                // Click on empty space - create new event
+                *show_event_dialog = true;
+                *event_dialog_date = Some(date);
+                *event_dialog_time = Some(time); // Use the clicked time slot
+                *event_dialog_recurrence = None; // Default to non-recurring
             }
         }
         
@@ -390,7 +409,7 @@ impl WorkWeekView {
         clicked_event
     }
     
-    fn render_event_in_cell(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) {
+    fn render_event_in_cell(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -> Rect {
         let event_color = event.color.as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
@@ -421,9 +440,11 @@ impl WorkWeekView {
             galley,
             Color32::WHITE,
         );
+
+        bar_rect
     }
     
-    fn render_event_continuation(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) {
+    fn render_event_continuation(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -> Rect {
         let event_color = event.color.as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
@@ -434,6 +455,8 @@ impl WorkWeekView {
             Vec2::new(cell_rect.width() - 4.0, cell_rect.height() - 4.0),
         );
         ui.painter().rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.5));
+
+        bg_rect
     }
     
     fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {

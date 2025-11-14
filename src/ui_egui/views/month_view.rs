@@ -226,6 +226,7 @@ impl MonthView {
         let pointer_event = pointer_pos.and_then(|pos| {
             event_hitboxes
                 .iter()
+                .rev()
                 .find(|(hit_rect, _)| hit_rect.contains(pos))
                 .map(|(_, event)| event.clone())
         });
