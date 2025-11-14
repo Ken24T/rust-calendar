@@ -57,6 +57,13 @@ impl DragManager {
     }
 
     pub fn begin(ctx: &Context, context: DragContext) {
+        eprintln!(
+            "[drag] begin view={:?} event={} start={} duration={}s",
+            context.view,
+            context.event_id,
+            context.original_start,
+            context.duration.num_seconds()
+        );
         ctx.memory_mut(|mem| {
             mem.data.insert_persisted(Self::storage_id(), context);
         });
@@ -84,10 +91,15 @@ impl DragManager {
         let id = Self::storage_id();
         ctx.memory_mut(|mem| {
             if let Some(mut state) = mem.data.get_persisted::<DragContext>(id) {
+                let prev_date = state.hovered_date;
+                let prev_time = state.hovered_time;
                 state.hovered_date = Some(date);
                 state.hovered_time = Some(time);
                 state.hovered_rect = Some(rect);
                 state.pointer_pos = Some(pointer_pos);
+                if prev_date != state.hovered_date || prev_time != state.hovered_time {
+                    eprintln!("[drag] hover view={:?} -> {} {}", state.view, date, time);
+                }
                 mem.data.insert_persisted(id, state);
             }
         });
@@ -99,6 +111,11 @@ impl DragManager {
         ctx.memory_mut(|mem| {
             if let Some(current) = mem.data.get_persisted::<DragContext>(id) {
                 if current.view == view {
+                    if let Some(date) = current.hovered_date {
+                        if let Some(time) = current.hovered_time {
+                            eprintln!("[drag] finish view={:?} target={} {}", view, date, time);
+                        }
+                    }
                     result = Some(current);
                     mem.data.remove::<DragContext>(id);
                 }

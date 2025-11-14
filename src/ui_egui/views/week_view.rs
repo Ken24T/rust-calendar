@@ -255,8 +255,8 @@ impl WeekView {
 
         let desired_size = Vec2::new(col_width, 30.0);
         // Use union of click and hover to capture both left and right clicks
-        let (rect, response) =
-            ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
+        let drag_sense = Sense::click_and_drag().union(Sense::hover());
+        let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
 
         // Add manual context menu handling with secondary_clicked
         let show_context_menu = response.secondary_clicked();
@@ -332,11 +332,17 @@ impl WeekView {
             None
         };
 
-        if DragManager::is_active_for_view(ui.ctx(), DragView::Week) && response.hovered() {
-            if let Some(pointer) = response.interact_pointer_pos() {
+        let pointer_for_hover = ui
+            .ctx()
+            .pointer_interact_pos()
+            .or_else(|| ui.input(|i| i.pointer.hover_pos()));
+        if let Some(pointer) = pointer_for_hover {
+            if rect.contains(pointer) {
                 DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
-                ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
-                ui.ctx().request_repaint();
+                if DragManager::is_active_for_view(ui.ctx(), DragView::Week) {
+                    ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                    ui.ctx().request_repaint();
+                }
             }
         }
 
