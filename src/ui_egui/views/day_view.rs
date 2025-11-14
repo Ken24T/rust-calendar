@@ -204,18 +204,36 @@ impl DayView {
                 ui.painter().rect_filled(rect, 0.0, Color32::from_rgba_unmultiplied(100, 150, 255, 30));
             }
             
+            let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
+
             // Draw continuing events first (colored blocks only)
             for event in continuing_events {
-                Self::render_event_continuation(ui, rect, event);
+                let event_rect = Self::render_event_continuation(ui, rect, event);
+                event_hitboxes.push((event_rect, (*event).clone()));
             }
             
             // Draw starting events (full details)
             for event in starting_events {
-                Self::render_event_in_slot(ui, rect, event);
+                let event_rect = Self::render_event_in_slot(ui, rect, event);
+                event_hitboxes.push((event_rect, (*event).clone()));
             }
+
+            let pointer_pos = response.interact_pointer_pos();
+            let pointer_event = pointer_pos.and_then(|pos| {
+                event_hitboxes
+                    .iter()
+                    .find(|(hit_rect, _)| hit_rect.contains(pos))
+                    .map(|(_, event)| event.clone())
+            });
+            let single_event_fallback = if event_hitboxes.len() == 1 {
+                Some(event_hitboxes[0].1.clone())
+            } else {
+                None
+            };
 
             // Manual context menu handling - store popup state in egui memory
             let mut context_clicked_event: Option<Event> = None;
+            let mut context_menu_event: Option<Event> = None;
             let popup_id = response.id.with(format!("context_menu_{}_{:?}", date, time));
 
             // Derive a narrower anchor rect from the slot so the popup doesn't stretch full width
@@ -226,6 +244,7 @@ impl DayView {
             );
 
             if response.secondary_clicked() {
+                context_menu_event = pointer_event.clone();
                 ui.memory_mut(|mem| mem.open_popup(popup_id));
             }
 
@@ -238,12 +257,16 @@ impl DayView {
                 |ui| {
                     ui.set_width(190.0);
 
-                    if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
+                    let popup_event = context_menu_event
+                        .clone()
+                        .or_else(|| single_event_fallback.clone());
+
+                    if let Some(event) = popup_event {
                         ui.label(format!("Event: {}", event.title));
                         ui.separator();
 
                         if ui.button("✏ Edit").clicked() {
-                            context_clicked_event = Some((*event).clone());
+                            context_clicked_event = Some(event.clone());
                             ui.memory_mut(|mem| mem.close_popup());
                         }
 
@@ -281,25 +304,10 @@ impl DayView {
             
             // Handle click - check if we clicked on an event first
             if clicked_from_ui.is_none() && response.clicked() {
-                // Check if click is over an event (starting or continuing)
-                let click_pos = response.interact_pointer_pos();
-                if let Some(pos) = click_pos {
-                    let event_area = Rect::from_min_size(
-                        Pos2::new(rect.left() + 55.0, rect.top()),
-                        Vec2::new(rect.width() - 60.0, rect.height()),
-                    );
-                    
-                    if event_area.contains(pos) {
-                        // Clicked on event area - prefer starting events, then continuing
-                        if let Some(event) = starting_events.first() {
-                            clicked_from_ui = Some((*event).clone());
-                        } else if let Some(event) = continuing_events.first() {
-                            clicked_from_ui = Some((*event).clone());
-                        }
-                    }
+                if let Some(event) = pointer_event.clone() {
+                    clicked_from_ui = Some(event);
                 }
-                
-                // If no event was clicked, create new event
+
                 if clicked_from_ui.is_none() {
                     *show_event_dialog = true;
                     *event_dialog_date = Some(date);
@@ -322,7 +330,7 @@ impl DayView {
         clicked_event
     }
     
-    fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) {
+    fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
         let event_color = event.color.as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
@@ -379,9 +387,11 @@ impl DayView {
             egui::FontId::proportional(10.0),
             Color32::WHITE,
         );
+
+        bg_rect
     }
     
-    fn render_event_continuation(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) {
+    fn render_event_continuation(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
         let event_color = event.color.as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
@@ -399,6 +409,8 @@ impl DayView {
             Vec2::new(slot_rect.width() - 70.0, slot_rect.height() - 4.0),
         );
         ui.painter().rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.3));
+
+        bg_rect
     }
     
     fn get_events_for_day(event_service: &EventService, date: NaiveDate) -> Vec<Event> {

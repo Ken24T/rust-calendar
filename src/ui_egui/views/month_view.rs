@@ -185,7 +185,8 @@ impl MonthView {
         
         // Draw events (up to 3 visible)
         let mut y_offset = 25.0;
-        for event in events.iter().take(3) {
+        let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
+        for &event in events.iter().take(3) {
             let event_color = event.color.as_deref()
                 .and_then(Self::parse_color)
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
@@ -197,16 +198,7 @@ impl MonthView {
             );
             
             ui.painter().rect_filled(event_rect, 2.0, event_color);
-            
-            // Check if mouse is over this event and clicked
-            if response.clicked() {
-                if let Some(hover_pos) = response.hover_pos() {
-                    if event_rect.contains(hover_pos) && event.id.is_some() {
-                        *show_event_dialog = true;
-                        *event_to_edit = event.id;
-                    }
-                }
-            }
+            event_hitboxes.push((event_rect, event.clone()));
             
             // Event title - use available width with proper truncation
             let font_id = egui::FontId::proportional(11.0);
@@ -230,6 +222,19 @@ impl MonthView {
             y_offset += 18.0;
         }
         
+        let pointer_pos = response.interact_pointer_pos();
+        let pointer_event = pointer_pos.and_then(|pos| {
+            event_hitboxes
+                .iter()
+                .find(|(hit_rect, _)| hit_rect.contains(pos))
+                .map(|(_, event)| event.clone())
+        });
+        let single_event_fallback = if event_hitboxes.len() == 1 {
+            Some(event_hitboxes[0].1.clone())
+        } else {
+            None
+        };
+
         // Show "+N more" if there are more events
         if events.len() > 3 {
             ui.painter().text(
@@ -241,11 +246,92 @@ impl MonthView {
             );
         }
         
-        // Handle click to create event
+        // Manual context menu handling
+        let popup_id = response.id.with(format!("month_context_menu_{}", date));
+        let mut popup_anchor_response = response.clone();
+        popup_anchor_response.rect = Rect::from_min_size(
+            Pos2::new(rect.left() + 5.0, rect.top()),
+            Vec2::new(200.0, 30.0),
+        );
+
+        let mut context_menu_event: Option<Event> = None;
+        if response.secondary_clicked() {
+            context_menu_event = pointer_event.clone();
+            ui.memory_mut(|mem| mem.open_popup(popup_id));
+        }
+
+        egui::popup::popup_above_or_below_widget(
+            ui,
+            popup_id,
+            &popup_anchor_response,
+            egui::AboveOrBelow::Below,
+            egui::PopupCloseBehavior::CloseOnClickOutside,
+                |ui| {
+                ui.set_width(190.0);
+
+                let popup_event = context_menu_event
+                    .clone()
+                    .or_else(|| single_event_fallback.clone());
+
+                if let Some(event) = popup_event {
+                    ui.label(format!("Event: {}", event.title));
+                    ui.separator();
+
+                    if ui.button("✏ Edit").clicked() {
+                        if let Some(id) = event.id {
+                            *event_to_edit = Some(id);
+                            *show_event_dialog = true;
+                            *event_dialog_date = Some(date);
+                        }
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+
+                    if ui.button("🗑 Delete").clicked() {
+                        if let Some(id) = event.id {
+                            let service = EventService::new(database.connection());
+                            let _ = service.delete(id);
+                        }
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                } else {
+                    ui.label("Create event");
+                    ui.separator();
+
+                    if ui.button("📅 New Event").clicked() {
+                        *show_event_dialog = true;
+                        *event_dialog_date = Some(date);
+                        *event_dialog_recurrence = None;
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+
+                    if ui.button("🔄 New Recurring Event").clicked() {
+                        *show_event_dialog = true;
+                        *event_dialog_date = Some(date);
+                        *event_dialog_recurrence = Some("FREQ=MONTHLY".to_string());
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                }
+            },
+        );
+
+        // Handle click to edit or create event
         if response.clicked() {
-            *show_event_dialog = true;
-            *event_dialog_date = Some(date);
-            *event_dialog_recurrence = None; // Default to non-recurring
+            let mut handled = false;
+
+            if let Some(event) = pointer_event.clone() {
+                if let Some(id) = event.id {
+                    *show_event_dialog = true;
+                    *event_to_edit = Some(id);
+                    *event_dialog_date = Some(date);
+                }
+                handled = true;
+            }
+
+            if !handled {
+                *show_event_dialog = true;
+                *event_dialog_date = Some(date);
+                *event_dialog_recurrence = None; // Default to non-recurring
+            }
         }
         
         // Handle double-click for recurring event
