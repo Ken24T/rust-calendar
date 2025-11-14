@@ -414,10 +414,21 @@ impl WeekView {
                         ui.memory_mut(|mem| mem.close_popup());
                     }
 
-                        if ui.button("⏱ Create Countdown").clicked() {
-                            countdown_requests.push(CountdownRequest::from_event(&event));
-                            ui.memory_mut(|mem| mem.close_popup());
-                        }
+                    let is_future_event = event.start > Local::now();
+                    let button =
+                        ui.add_enabled(is_future_event, egui::Button::new("⏱ Create Countdown"));
+                    if button.clicked() {
+                        countdown_requests.push(CountdownRequest::from_event(&event));
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    if !is_future_event {
+                        ui.label(
+                            egui::RichText::new("Countdowns are only available for future events")
+                                .italics()
+                                .color(Color32::from_gray(150))
+                                .size(11.0),
+                        );
+                    }
                 } else {
                     // Right-click on empty space
                     ui.label("Create event");

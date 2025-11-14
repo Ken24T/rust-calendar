@@ -1,7 +1,11 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Error as SerdeError};
-use std::{fs, path::Path, time::{Duration, Instant}};
+use std::{
+    fs,
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use anyhow::{Context, Result};
 
@@ -11,7 +15,7 @@ use anyhow::{Context, Result};
 pub struct CountdownCardId(pub u64);
 
 /// Geometry data we persist for each card so they reopen at the same spot.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
 pub struct CountdownCardGeometry {
     pub x: f32,
     pub y: f32,
@@ -20,11 +24,22 @@ pub struct CountdownCardGeometry {
 }
 
 /// Visual preferences that persist per card.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct CountdownCardVisuals {
     pub accent_color: Option<String>,
     pub always_on_top: bool,
     pub compact_mode: bool,
+    #[serde(default = "default_title_bg_color")]
+    pub title_bg_color: RgbaColor,
+    #[serde(default = "default_title_fg_color")]
+    pub title_fg_color: RgbaColor,
+    #[serde(default = "default_body_bg_color")]
+    pub body_bg_color: RgbaColor,
+    #[serde(default = "default_days_fg_color")]
+    pub days_fg_color: RgbaColor,
+    #[serde(default = "default_days_font_size")]
+    pub days_font_size: f32,
 }
 
 impl Default for CountdownCardVisuals {
@@ -33,8 +48,53 @@ impl Default for CountdownCardVisuals {
             accent_color: None,
             always_on_top: false,
             compact_mode: false,
+            title_bg_color: default_title_bg_color(),
+            title_fg_color: default_title_fg_color(),
+            body_bg_color: default_body_bg_color(),
+            days_fg_color: default_days_fg_color(),
+            days_font_size: default_days_font_size(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RgbaColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl RgbaColor {
+    pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+}
+
+impl Default for RgbaColor {
+    fn default() -> Self {
+        RgbaColor::new(0, 0, 0, 255)
+    }
+}
+
+const fn default_title_bg_color() -> RgbaColor {
+    RgbaColor::new(10, 34, 145, 255)
+}
+
+const fn default_title_fg_color() -> RgbaColor {
+    RgbaColor::new(255, 255, 255, 255)
+}
+
+const fn default_body_bg_color() -> RgbaColor {
+    RgbaColor::new(103, 176, 255, 255)
+}
+
+const fn default_days_fg_color() -> RgbaColor {
+    RgbaColor::new(15, 32, 70, 255)
+}
+
+const fn default_days_font_size() -> f32 {
+    96.0
 }
 
 /// Core persisted information for each countdown card.
@@ -48,6 +108,8 @@ pub struct CountdownCardState {
     pub geometry: CountdownCardGeometry,
     pub visuals: CountdownCardVisuals,
     pub last_computed_days: Option<i64>,
+    #[serde(default)]
+    pub comment: Option<String>,
 }
 
 impl CountdownCardState {
@@ -74,6 +136,10 @@ impl CountdownCardState {
 pub struct CountdownPersistedState {
     pub next_id: u64,
     pub cards: Vec<CountdownCardState>,
+    #[serde(default = "default_visuals")]
+    pub visual_defaults: CountdownCardVisuals,
+    #[serde(default)]
+    pub app_window_geometry: Option<CountdownCardGeometry>,
 }
 
 /// Manages active countdown cards while the calendar app is running.
@@ -83,6 +149,8 @@ pub struct CountdownService {
     dirty: bool,
     pending_geometry: Vec<(CountdownCardId, CountdownCardGeometry)>,
     last_geometry_update: Option<Instant>,
+    visual_defaults: CountdownCardVisuals,
+    app_window_geometry: Option<CountdownCardGeometry>,
 }
 
 impl CountdownService {
@@ -97,6 +165,8 @@ impl CountdownService {
             dirty: false,
             pending_geometry: Vec::new(),
             last_geometry_update: None,
+            visual_defaults: snapshot.visual_defaults,
+            app_window_geometry: snapshot.app_window_geometry,
         }
     }
 
@@ -104,6 +174,8 @@ impl CountdownService {
         CountdownPersistedState {
             next_id: self.next_id,
             cards: self.cards.clone(),
+            visual_defaults: self.visual_defaults.clone(),
+            app_window_geometry: self.app_window_geometry,
         }
     }
 
@@ -147,9 +219,23 @@ impl CountdownService {
         &mut self,
         id: CountdownCardId,
         geometry: CountdownCardGeometry,
-    ) {
+    ) -> bool {
+        if let Some(entry) = self
+            .pending_geometry
+            .iter_mut()
+            .find(|(pending_id, _)| *pending_id == id)
+        {
+            if entry.1 == geometry {
+                return false;
+            }
+            entry.1 = geometry;
+            self.last_geometry_update = Some(Instant::now());
+            return true;
+        }
+
         self.pending_geometry.push((id, geometry));
         self.last_geometry_update = Some(Instant::now());
+        true
     }
 
     pub fn flush_geometry_updates(&mut self) {
@@ -178,7 +264,7 @@ impl CountdownService {
     ) -> CountdownCardId {
         let id = CountdownCardId(self.next_id);
         self.next_id += 1;
-        let mut card = CountdownCardState {
+        let card = CountdownCardState {
             id,
             event_id,
             event_title: event_title.into(),
@@ -190,11 +276,10 @@ impl CountdownService {
                 width: 138.0,
                 height: 128.0,
             },
-            visuals: CountdownCardVisuals::default(),
+            visuals: self.visual_defaults.clone(),
             last_computed_days: None,
+            comment: None,
         };
-        let days = card.compute_days_remaining(Local::now());
-        card.record_days_remaining(days);
         self.cards.push(card);
         self.dirty = true;
         id
@@ -239,6 +324,115 @@ impl CountdownService {
         self.update_visual_flag(id, |visuals| visuals.compact_mode = compact_mode)
     }
 
+    pub fn set_title_bg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
+        self.update_visual_flag(id, |visuals| visuals.title_bg_color = color)
+    }
+
+    pub fn set_title_fg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
+        self.update_visual_flag(id, |visuals| visuals.title_fg_color = color)
+    }
+
+    pub fn set_body_bg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
+        self.update_visual_flag(id, |visuals| visuals.body_bg_color = color)
+    }
+
+    pub fn set_days_fg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
+        self.update_visual_flag(id, |visuals| visuals.days_fg_color = color)
+    }
+
+    pub fn set_days_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
+        self.update_visual_flag(id, |visuals| visuals.days_font_size = size.max(16.0))
+    }
+
+    pub fn set_comment(&mut self, id: CountdownCardId, comment: Option<String>) -> bool {
+        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
+            card.comment = comment;
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    pub fn set_start_at(&mut self, id: CountdownCardId, start_at: DateTime<Local>) -> bool {
+        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
+            card.start_at = start_at;
+            let days = card.compute_days_remaining(Local::now());
+            card.record_days_remaining(days);
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    pub fn apply_visual_defaults(&mut self, id: CountdownCardId) -> bool {
+        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
+            card.visuals = self.visual_defaults.clone();
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    pub fn defaults(&self) -> &CountdownCardVisuals {
+        &self.visual_defaults
+    }
+
+    pub fn app_window_geometry(&self) -> Option<CountdownCardGeometry> {
+        self.app_window_geometry
+    }
+
+    pub fn update_app_window_geometry(&mut self, geometry: CountdownCardGeometry) {
+        if self.app_window_geometry != Some(geometry) {
+            self.app_window_geometry = Some(geometry);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_default_title_bg_color(&mut self, color: RgbaColor) {
+        self.visual_defaults.title_bg_color = color;
+        self.dirty = true;
+    }
+
+    pub fn reset_default_title_bg_color(&mut self) {
+        self.set_default_title_bg_color(default_title_bg_color());
+    }
+
+    pub fn set_default_title_fg_color(&mut self, color: RgbaColor) {
+        self.visual_defaults.title_fg_color = color;
+        self.dirty = true;
+    }
+
+    pub fn reset_default_title_fg_color(&mut self) {
+        self.set_default_title_fg_color(default_title_fg_color());
+    }
+
+    pub fn set_default_body_bg_color(&mut self, color: RgbaColor) {
+        self.visual_defaults.body_bg_color = color;
+        self.dirty = true;
+    }
+
+    pub fn reset_default_body_bg_color(&mut self) {
+        self.set_default_body_bg_color(default_body_bg_color());
+    }
+
+    pub fn set_default_days_fg_color(&mut self, color: RgbaColor) {
+        self.visual_defaults.days_fg_color = color;
+        self.dirty = true;
+    }
+
+    pub fn reset_default_days_fg_color(&mut self) {
+        self.set_default_days_fg_color(default_days_fg_color());
+    }
+
+    pub fn set_default_days_font_size(&mut self, size: f32) {
+        self.visual_defaults.days_font_size = size.max(16.0);
+        self.dirty = true;
+    }
+
+    pub fn reset_default_days_font_size(&mut self) {
+        self.set_default_days_font_size(default_days_font_size());
+    }
+
     fn update_visual_flag<F>(&mut self, id: CountdownCardId, mut update: F) -> bool
     where
         F: FnMut(&mut CountdownCardVisuals),
@@ -265,6 +459,10 @@ impl CountdownService {
         }
         changed
     }
+}
+
+fn default_visuals() -> CountdownCardVisuals {
+    CountdownCardVisuals::default()
 }
 
 fn map_deser_error(err: SerdeError, path: &Path) -> anyhow::Error {
