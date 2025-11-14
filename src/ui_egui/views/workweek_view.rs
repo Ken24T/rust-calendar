@@ -95,6 +95,7 @@ impl WorkWeekView {
                     &work_week_dates,
                     &events,
                     settings,
+                    database,
                     show_event_dialog,
                     event_dialog_date,
                     event_dialog_time,
@@ -113,6 +114,7 @@ impl WorkWeekView {
         work_week_dates: &[NaiveDate],
         events: &[Event],
         _settings: &Settings,
+        database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
@@ -205,6 +207,7 @@ impl WorkWeekView {
                             is_hour_start,
                             &starting_events,
                             &continuing_events,
+                            database,
                             show_event_dialog,
                             event_dialog_date,
                             event_dialog_time,
@@ -233,6 +236,7 @@ impl WorkWeekView {
         is_hour_start: bool,
         starting_events: &[&Event],  // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
+        database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
@@ -242,7 +246,8 @@ impl WorkWeekView {
         let is_today = date == today;
         
         let desired_size = Vec2::new(col_width, 30.0);
-        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
+        // Use union of click and hover to capture both left and right clicks
+        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
         
         // Background
         let bg_color = if is_today {
@@ -290,9 +295,74 @@ impl WorkWeekView {
             Self::render_event_in_cell(ui, rect, event);
         }
         
+        // Manual context menu handling - store popup state in egui memory
+        let mut context_clicked_event: Option<Event> = None;
+        let popup_id = response.id.with(format!("context_menu_{}_{:?}", date, time));
+        
+        // Open popup on right-click
+        let show_context_menu = response.secondary_clicked();
+        if show_context_menu {
+            ui.memory_mut(|mem| mem.open_popup(popup_id));
+        }
+        
+        // Show popup if it's open
+        egui::popup::popup_above_or_below_widget(
+            ui,
+            popup_id,
+            &response,
+            egui::AboveOrBelow::Below,
+            egui::PopupCloseBehavior::CloseOnClickOutside,
+            |ui| {
+                ui.set_min_width(150.0);
+                
+                // Only show menu if there's an event in this cell
+                if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
+                    ui.label(format!("Event: {}", event.title));
+                    ui.separator();
+                    
+                    if ui.button("✏ Edit").clicked() {
+                        context_clicked_event = Some((*event).clone());
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    
+                    if ui.button("🗑 Delete").clicked() {
+                        // Delete the event immediately
+                        use crate::services::event::EventService;
+                        if let Some(id) = event.id {
+                            let service = EventService::new(database.connection());
+                            let _ = service.delete(id);
+                        }
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                } else {
+                    // Right-click on empty space
+                    ui.label("Create event");
+                    ui.separator();
+                    
+                    if ui.button("📅 New Event").clicked() {
+                        *show_event_dialog = true;
+                        *event_dialog_date = Some(date);
+                        *event_dialog_time = Some(time);
+                        *event_dialog_recurrence = None;
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    
+                    if ui.button("🔄 New Recurring Event").clicked() {
+                        *show_event_dialog = true;
+                        *event_dialog_date = Some(date);
+                        *event_dialog_time = Some(time);
+                        *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                }
+            },
+        );
+        
+        // Check if context menu returned a clicked event
+        let mut clicked_event: Option<Event> = context_clicked_event;
+        
         // Check if user clicked on an event
-        let mut clicked_event: Option<Event> = None;
-        if response.clicked() {
+        if clicked_event.is_none() && response.clicked() {
             if let Some(_pos) = response.interact_pointer_pos() {
                 // Check if click was on an event (any event fills the cell, so any click is on an event if events exist)
                 if let Some(event) = starting_events.first() {

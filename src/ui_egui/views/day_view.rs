@@ -46,6 +46,7 @@ impl DayView {
                     *current_date,
                     &events,
                     settings,
+                    database,
                     show_event_dialog,
                     event_dialog_date,
                     event_dialog_time,
@@ -63,6 +64,7 @@ impl DayView {
         date: NaiveDate,
         events: &[Event],
         _settings: &Settings,
+        database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
@@ -123,6 +125,7 @@ impl DayView {
                     is_hour_start,
                     &starting_events,
                     &continuing_events,
+                    database,
                     show_event_dialog,
                     event_dialog_date,
                     event_dialog_time,
@@ -144,6 +147,7 @@ impl DayView {
         is_hour_start: bool,
         starting_events: &[&Event],  // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
+        database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
@@ -171,7 +175,7 @@ impl DayView {
             
             // Time slot area
             let desired_size = Vec2::new(ui.available_width(), 40.0);
-            let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
+            let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
             
             // Background
             let bg_color = if is_hour_start {
@@ -209,9 +213,74 @@ impl DayView {
             for event in starting_events {
                 Self::render_event_in_slot(ui, rect, event);
             }
+
+            // Manual context menu handling - store popup state in egui memory
+            let mut context_clicked_event: Option<Event> = None;
+            let popup_id = response.id.with(format!("context_menu_{}_{:?}", date, time));
+
+            // Derive a narrower anchor rect from the slot so the popup doesn't stretch full width
+            let mut popup_anchor_response = response.clone();
+            popup_anchor_response.rect = Rect::from_min_size(
+                Pos2::new(rect.left() + 55.0, rect.top()),
+                Vec2::new(200.0, rect.height()),
+            );
+
+            if response.secondary_clicked() {
+                ui.memory_mut(|mem| mem.open_popup(popup_id));
+            }
+
+            egui::popup::popup_above_or_below_widget(
+                ui,
+                popup_id,
+                &popup_anchor_response,
+                egui::AboveOrBelow::Below,
+                egui::PopupCloseBehavior::CloseOnClickOutside,
+                |ui| {
+                    ui.set_width(190.0);
+
+                    if let Some(event) = starting_events.first().or_else(|| continuing_events.first()) {
+                        ui.label(format!("Event: {}", event.title));
+                        ui.separator();
+
+                        if ui.button("✏ Edit").clicked() {
+                            context_clicked_event = Some((*event).clone());
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+
+                        if ui.button("🗑 Delete").clicked() {
+                            if let Some(id) = event.id {
+                                let service = EventService::new(database.connection());
+                                let _ = service.delete(id);
+                            }
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+                    } else {
+                        ui.label("Create event");
+                        ui.separator();
+
+                        if ui.button("📅 New Event").clicked() {
+                            *show_event_dialog = true;
+                            *event_dialog_date = Some(date);
+                            *event_dialog_time = Some(time);
+                            *event_dialog_recurrence = None;
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+
+                        if ui.button("🔄 New Recurring Event").clicked() {
+                            *show_event_dialog = true;
+                            *event_dialog_date = Some(date);
+                            *event_dialog_time = Some(time);
+                            *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+                    }
+                },
+            );
+
+            let mut clicked_from_ui: Option<Event> = context_clicked_event;
             
             // Handle click - check if we clicked on an event first
-            if response.clicked() {
+            if clicked_from_ui.is_none() && response.clicked() {
                 // Check if click is over an event (starting or continuing)
                 let click_pos = response.interact_pointer_pos();
                 if let Some(pos) = click_pos {
@@ -223,15 +292,15 @@ impl DayView {
                     if event_area.contains(pos) {
                         // Clicked on event area - prefer starting events, then continuing
                         if let Some(event) = starting_events.first() {
-                            clicked_event = Some((*event).clone());
+                            clicked_from_ui = Some((*event).clone());
                         } else if let Some(event) = continuing_events.first() {
-                            clicked_event = Some((*event).clone());
+                            clicked_from_ui = Some((*event).clone());
                         }
                     }
                 }
                 
                 // If no event was clicked, create new event
-                if clicked_event.is_none() {
+                if clicked_from_ui.is_none() {
                     *show_event_dialog = true;
                     *event_dialog_date = Some(date);
                     *event_dialog_time = Some(time); // Use the clicked time slot
@@ -246,6 +315,8 @@ impl DayView {
                 *event_dialog_time = Some(time); // Use the clicked time slot
                 *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
             }
+
+            clicked_event = clicked_from_ui;
         });
         
         clicked_event

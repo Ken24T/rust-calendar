@@ -107,6 +107,7 @@ impl MonthView {
                                 is_today,
                                 is_weekend,
                                 &day_events,
+                                database,
                                 show_event_dialog,
                                 event_dialog_date,
                                 event_dialog_recurrence,
@@ -127,13 +128,15 @@ impl MonthView {
         is_today: bool,
         is_weekend: bool,
         events: &[&Event],
+        database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
     ) {
         let desired_size = Vec2::new(ui.available_width(), 80.0);
-        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
+        // Use union of click and hover to capture both left and right clicks
+        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
         
         // Background color
         let bg_color = if is_today {

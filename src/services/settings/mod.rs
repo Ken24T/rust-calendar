@@ -147,7 +147,8 @@ mod tests {
         let service = SettingsService::new(&db);
         
         let mut settings = service.get().unwrap();
-        settings.theme = "invalid".to_string();
+        // Theme validation is handled elsewhere, so use a field that this service validates
+        settings.time_format = "invalid".to_string();
         
         let result = service.update(&settings);
         assert!(result.is_err());
