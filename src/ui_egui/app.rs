@@ -1,4 +1,5 @@
 use crate::models::settings::Settings;
+use crate::services::countdown::CountdownService;
 use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
@@ -48,6 +49,9 @@ pub struct CalendarApp {
     event_dialog_time: Option<chrono::NaiveTime>, // Time from clicked cell (None = use default)
     event_dialog_recurrence: Option<String>,
     event_to_edit: Option<i64>, // Event ID to edit
+
+    // Countdown cards
+    countdown_service: CountdownService,
 }
 
 impl CalendarApp {
@@ -103,6 +107,7 @@ impl CalendarApp {
             event_dialog_time: None,
             event_dialog_recurrence: None,
             event_to_edit: None,
+            countdown_service: CountdownService::new(),
         };
 
         // Apply theme from database (including custom themes)
@@ -338,6 +343,12 @@ impl eframe::App for CalendarApp {
 
         if self.show_settings_dialog {
             self.render_settings_dialog(ctx);
+        }
+
+        // Periodically refresh countdown cards even before their UI arrives.
+        let changed_counts = self.countdown_service.refresh_days_remaining(Local::now());
+        if !changed_counts.is_empty() {
+            ctx.request_repaint();
         }
 
         // Render unified theme dialog and creator
