@@ -6,6 +6,7 @@ use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
+use crate::ui_egui::views::CountdownRequest;
 
 pub struct DayView;
 
@@ -19,6 +20,7 @@ impl DayView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
+        countdown_requests: &mut Vec<CountdownRequest>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let is_today = *current_date == today;
@@ -52,6 +54,7 @@ impl DayView {
                     event_dialog_date,
                     event_dialog_time,
                     event_dialog_recurrence,
+                    countdown_requests,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -70,6 +73,7 @@ impl DayView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
+        countdown_requests: &mut Vec<CountdownRequest>,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
@@ -131,6 +135,7 @@ impl DayView {
                     event_dialog_date,
                     event_dialog_time,
                     event_dialog_recurrence,
+                    countdown_requests,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -153,6 +158,7 @@ impl DayView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
+        countdown_requests: &mut Vec<CountdownRequest>,
     ) -> Option<Event> {
         let mut clicked_event: Option<Event> = None;
 
@@ -315,6 +321,11 @@ impl DayView {
                                 let service = EventService::new(database.connection());
                                 let _ = service.delete(id);
                             }
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+
+                        if ui.button("⏱ Create Countdown").clicked() {
+                            countdown_requests.push(CountdownRequest::from_event(&event));
                             ui.memory_mut(|mem| mem.close_popup());
                         }
                     } else {

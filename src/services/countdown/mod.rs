@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Error as SerdeError};
-use std::{fs, path::Path};
+use std::{fs, path::Path, time::{Duration, Instant}};
 
 use anyhow::{Context, Result};
 
@@ -81,6 +81,8 @@ pub struct CountdownService {
     cards: Vec<CountdownCardState>,
     next_id: u64,
     dirty: bool,
+    pending_geometry: Vec<(CountdownCardId, CountdownCardGeometry)>,
+    last_geometry_update: Option<Instant>,
 }
 
 impl CountdownService {
@@ -93,6 +95,8 @@ impl CountdownService {
             cards: snapshot.cards,
             next_id: snapshot.next_id.max(1),
             dirty: false,
+            pending_geometry: Vec::new(),
+            last_geometry_update: None,
         }
     }
 
@@ -135,6 +139,35 @@ impl CountdownService {
 
     pub fn mark_clean(&mut self) {
         self.dirty = false;
+        self.pending_geometry.clear();
+        self.last_geometry_update = None;
+    }
+
+    pub fn queue_geometry_update(
+        &mut self,
+        id: CountdownCardId,
+        geometry: CountdownCardGeometry,
+    ) {
+        self.pending_geometry.push((id, geometry));
+        self.last_geometry_update = Some(Instant::now());
+    }
+
+    pub fn flush_geometry_updates(&mut self) {
+        // Only flush if enough time has passed since last update (debounce)
+        const DEBOUNCE_MS: u64 = 180;
+        if self.pending_geometry.is_empty() {
+            return;
+        }
+        if let Some(last) = self.last_geometry_update {
+            if last.elapsed() < Duration::from_millis(DEBOUNCE_MS) {
+                return;
+            }
+        }
+        let updates = std::mem::take(&mut self.pending_geometry);
+        for (id, geometry) in updates {
+            self.update_geometry(id, geometry);
+        }
+        self.last_geometry_update = None;
     }
 
     pub fn create_card(

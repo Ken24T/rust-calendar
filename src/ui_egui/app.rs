@@ -1,5 +1,5 @@
 use crate::models::settings::Settings;
-use crate::services::countdown::CountdownService;
+use crate::services::countdown::{CountdownCardGeometry, CountdownService};
 use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
@@ -17,6 +17,7 @@ use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::quarter_view::QuarterView;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
+use crate::ui_egui::views::CountdownRequest;
 use chrono::{Local, NaiveDate};
 use directories::ProjectDirs;
 use std::path::PathBuf;
@@ -97,7 +98,9 @@ impl CalendarApp {
         let current_view = Self::parse_view_type(&settings.current_view);
 
         let countdown_storage_path = Self::resolve_countdown_storage_path();
+        cc.egui_ctx.set_embed_viewports(false);
         let countdown_service = match CountdownService::load_from_disk(&countdown_storage_path) {
+
             Ok(service) => service,
             Err(err) => {
                 log::warn!(
@@ -264,6 +267,8 @@ impl eframe::App for CalendarApp {
             });
         });
 
+        let mut countdown_requests: Vec<CountdownRequest> = Vec::new();
+
         // Main content area
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(format!(
@@ -297,13 +302,19 @@ impl eframe::App for CalendarApp {
 
             // View content (placeholder for now)
             match self.current_view {
-                ViewType::Day => self.render_day_view(ui),
-                ViewType::Week => self.render_week_view(ui),
-                ViewType::WorkWeek => self.render_workweek_view(ui),
+                ViewType::Day => self.render_day_view(ui, &mut countdown_requests),
+                ViewType::Week => self.render_week_view(ui, &mut countdown_requests),
+                ViewType::WorkWeek => self.render_workweek_view(ui, &mut countdown_requests),
                 ViewType::Month => self.render_month_view(ui),
                 ViewType::Quarter => self.render_quarter_view(ui),
             }
         });
+
+        if !countdown_requests.is_empty() {
+            self.consume_countdown_requests(countdown_requests);
+        }
+
+        self.render_countdown_cards(ctx);
 
         // Dialogs (to be implemented)
         if self.show_event_dialog {
@@ -450,7 +461,11 @@ impl CalendarApp {
     }
 
     // View renderers
-    fn render_day_view(&mut self, ui: &mut egui::Ui) {
+    fn render_day_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        countdown_requests: &mut Vec<CountdownRequest>,
+    ) {
         if let Some(clicked_event) = DayView::show(
             ui,
             &mut self.current_date,
@@ -460,6 +475,7 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
+            countdown_requests,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -468,7 +484,11 @@ impl CalendarApp {
         }
     }
 
-    fn render_week_view(&mut self, ui: &mut egui::Ui) {
+    fn render_week_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        countdown_requests: &mut Vec<CountdownRequest>,
+    ) {
         if let Some(clicked_event) = WeekView::show(
             ui,
             &mut self.current_date,
@@ -478,6 +498,7 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
+            countdown_requests,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -486,7 +507,11 @@ impl CalendarApp {
         }
     }
 
-    fn render_workweek_view(&mut self, ui: &mut egui::Ui) {
+    fn render_workweek_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        countdown_requests: &mut Vec<CountdownRequest>,
+    ) {
         if let Some(clicked_event) = WorkWeekView::show(
             ui,
             &mut self.current_date,
@@ -496,6 +521,7 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
+            countdown_requests,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -681,5 +707,154 @@ impl CalendarApp {
         } else {
             PathBuf::from("countdown_cards.json")
         }
+    }
+
+    fn consume_countdown_requests(&mut self, requests: Vec<CountdownRequest>) {
+        for request in requests {
+            let card_id = self.countdown_service.create_card(
+                request.event_id,
+                request.title,
+                request.start_at,
+            );
+            log::info!("created countdown card {:?}", card_id);
+        }
+    }
+
+    fn render_countdown_cards(&mut self, ctx: &egui::Context) {
+        let cards = self.countdown_service.cards().to_vec();
+        if cards.is_empty() {
+            return;
+        }
+
+        let now = Local::now();
+        let mut removals = Vec::new();
+
+        for card in cards {
+            let viewport_id = egui::ViewportId::from_hash_of(("countdown_card", card.id.0));
+            let builder = self.viewport_builder_for_card(&card);
+
+            let card_clone = card.clone();
+            let close_via_ui = ctx.show_viewport_immediate(viewport_id, builder, move |child_ctx, class| {
+                Self::render_countdown_card_ui(child_ctx, class, &card_clone, now)
+            });
+
+            let close_via_window = ctx.input(|input| {
+                input
+                    .raw
+                    .viewports
+                    .get(&viewport_id)
+                    .map(|info| info.close_requested())
+                    .unwrap_or(false)
+            });
+
+            if close_via_ui || close_via_window {
+                removals.push(card.id);
+                continue;
+            }
+
+            if let Some((outer_left, outer_top, inner_rect)) = ctx.input(|input| {
+                input
+                    .raw
+                    .viewports
+                    .get(&viewport_id)
+                    .and_then(|info| {
+                        info.inner_rect.map(|inner| {
+                            let (outer_left, outer_top) = info
+                                .outer_rect
+                                .map(|outer| (outer.left(), outer.top()))
+                                .unwrap_or((inner.left(), inner.top()));
+                            (outer_left, outer_top, inner)
+                        })
+                    })
+            }) {
+                let new_geometry = CountdownCardGeometry {
+                    x: outer_left,
+                    y: outer_top,
+                    width: inner_rect.width(),
+                    height: inner_rect.height(),
+                };
+
+                if geometry_changed(card.geometry, new_geometry) {
+                    self
+                        .countdown_service
+                        .queue_geometry_update(card.id, new_geometry);
+                }
+            }
+        }
+
+        for id in removals {
+            self.countdown_service.remove_card(id);
+        }
+
+        self.countdown_service.flush_geometry_updates();
+
+        fn geometry_changed(a: CountdownCardGeometry, b: CountdownCardGeometry) -> bool {
+            (a.x - b.x).abs() > 2.0
+                || (a.y - b.y).abs() > 2.0
+                || (a.width - b.width).abs() > 1.0
+                || (a.height - b.height).abs() > 1.0
+        }
+    }
+
+    fn viewport_builder_for_card(&self, card: &crate::services::countdown::CountdownCardState) -> egui::ViewportBuilder {
+        let mut builder = egui::ViewportBuilder::default()
+            .with_title(card.effective_title().to_owned())
+            .with_position(egui::pos2(card.geometry.x, card.geometry.y))
+            .with_inner_size(egui::vec2(card.geometry.width.max(120.0), card.geometry.height.max(90.0)))
+            .with_resizable(true)
+            .with_transparent(false);
+
+        if card.visuals.always_on_top {
+            builder = builder.with_always_on_top();
+        }
+
+        builder
+    }
+
+    fn render_countdown_card_ui(
+        ctx: &egui::Context,
+        class: egui::ViewportClass,
+        card: &crate::services::countdown::CountdownCardState,
+        now: chrono::DateTime<chrono::Local>,
+    ) -> bool {
+        let mut close_requested = false;
+
+        let mut render_contents = |ui: &mut egui::Ui| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.heading(card.effective_title());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("✕").clicked() {
+                            close_requested = true;
+                        }
+                    });
+                });
+                ui.separator();
+                let days = card.compute_days_remaining(now);
+                let suffix = if days == 1 { "" } else { "s" };
+                ui.label(format!("{} day{} remaining", days, suffix));
+                ui.label(card.start_at.format("Starts %b %d, %Y %H:%M").to_string());
+                ui.add_space(4.0);
+                ui.label("Countdown card UI coming soon...");
+            });
+        };
+
+        match class {
+            egui::ViewportClass::Embedded => {
+                egui::Window::new(card.effective_title())
+                    .collapsible(false)
+                    .resizable(true)
+                    .show(ctx, |ui| render_contents(ui)); // placeholder to fix compile
+            }
+            _ => {
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::none().fill(ctx.style().visuals.window_fill()))
+                    .show(ctx, |ui| {
+                        render_contents(ui);
+                    });
+            }
+        }
+
+        close_requested
     }
 }
