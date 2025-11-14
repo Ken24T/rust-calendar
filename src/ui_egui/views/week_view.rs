@@ -1,10 +1,11 @@
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime};
-use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 
 pub struct WeekView;
 
@@ -20,38 +21,37 @@ impl WeekView {
         event_dialog_recurrence: &mut Option<String>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
-        
+
         // Get week start based on settings
         let week_start = Self::get_week_start(*current_date, settings.first_day_of_week);
-        let week_dates: Vec<NaiveDate> = (0..7)
-            .map(|i| week_start + Duration::days(i))
-            .collect();
-        
+        let week_dates: Vec<NaiveDate> = (0..7).map(|i| week_start + Duration::days(i)).collect();
+
         // Get events for the week
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_week(&event_service, week_start);
-        
+
         // Calculate column width accounting for scrollbar (16px typical)
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let scrollbar_width = 16.0;
         let time_label_width = 50.0;
         let spacing = 2.0;
         let total_spacing = spacing * 6.0; // 6 gaps between 7 columns
-        let available_for_cols = ui.available_width() - time_label_width - total_spacing - scrollbar_width;
+        let available_for_cols =
+            ui.available_width() - time_label_width - total_spacing - scrollbar_width;
         let col_width = available_for_cols / 7.0;
-        
+
         // Week header with day names
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0; // We'll add spacing manually
-            
+
             // Fixed width for time label area
             ui.add_space(time_label_width);
             ui.add_space(spacing);
-            
+
             for (i, day_name) in day_names.iter().enumerate() {
                 let date = week_dates[i];
                 let is_today = date == today;
-                
+
                 // Allocate exact width for column
                 ui.allocate_ui_with_layout(
                     Vec2::new(col_width, 40.0),
@@ -64,8 +64,12 @@ impl WeekView {
                             text
                         };
                         ui.label(text);
-                        
-                        let date_text = egui::RichText::new(Self::format_short_date(date, &settings.date_format)).size(11.0);
+
+                        let date_text = egui::RichText::new(Self::format_short_date(
+                            date,
+                            &settings.date_format,
+                        ))
+                        .size(11.0);
                         let date_text = if is_today {
                             date_text.color(Color32::from_rgb(100, 150, 255))
                         } else {
@@ -74,18 +78,18 @@ impl WeekView {
                         ui.label(date_text);
                     },
                 );
-                
+
                 // Add spacing between columns (but not after the last one)
                 if i < day_names.len() - 1 {
                     ui.add_space(spacing);
                 }
             }
         });
-        
+
         ui.add_space(5.0);
         ui.separator();
         ui.add_space(5.0);
-        
+
         // Scrollable time slots
         let mut clicked_event = None;
         egui::ScrollArea::vertical()
@@ -106,10 +110,10 @@ impl WeekView {
                     clicked_event = Some(event);
                 }
             });
-            
+
         clicked_event
     }
-    
+
     fn render_time_grid(
         ui: &mut egui::Ui,
         col_width: f32,
@@ -124,22 +128,22 @@ impl WeekView {
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
-        
+
         let time_label_width = 50.0;
         let spacing = 2.0;
-        
+
         let mut clicked_event: Option<Event> = None;
-        
+
         // Draw 24 hours with 4 slots each
         for hour in 0..24 {
             for slot in 0..4 {
                 let minute = slot * SLOT_INTERVAL;
                 let time = NaiveTime::from_hms_opt(hour as u32, minute as u32, 0).unwrap();
                 let is_hour_start = slot == 0;
-                
+
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0; // We'll add spacing manually
-                    
+
                     // Time label with fixed width (only on hour starts)
                     ui.allocate_ui_with_layout(
                         Vec2::new(time_label_width, 30.0),
@@ -151,14 +155,14 @@ impl WeekView {
                                 ui.label(
                                     egui::RichText::new(time_str)
                                         .size(12.0)
-                                        .color(Color32::GRAY)
+                                        .color(Color32::GRAY),
                                 );
                             }
                         },
                     );
-                    
+
                     ui.add_space(spacing);
-                    
+
                     // Day columns with exact width
                     for (day_idx, date) in week_dates.iter().enumerate() {
                         // Calculate slot time range
@@ -173,22 +177,22 @@ impl WeekView {
                                 NaiveTime::from_hms_opt(end_hour, end_minute, 0).unwrap()
                             }
                         };
-                        
+
                         // Categorize events for this slot:
                         // 1. Events that START in this slot (render full details)
                         // 2. Events that are CONTINUING through this slot (render colored block only)
                         let mut starting_events: Vec<&Event> = Vec::new();
                         let mut continuing_events: Vec<&Event> = Vec::new();
-                        
+
                         for event in events.iter() {
                             let event_date = event.start.date_naive();
                             if event_date != *date {
                                 continue;
                             }
-                            
+
                             let event_start = event.start.time();
                             let event_end = event.end.time();
-                            
+
                             // Check if event overlaps with this slot
                             if event_start < slot_end && event_end > slot_start {
                                 // Does it start in this slot?
@@ -200,7 +204,7 @@ impl WeekView {
                                 }
                             }
                         }
-                        
+
                         if let Some(event) = Self::render_time_cell(
                             ui,
                             col_width,
@@ -217,7 +221,7 @@ impl WeekView {
                         ) {
                             clicked_event = Some(event);
                         }
-                        
+
                         // Add spacing between columns (but not after the last one)
                         if day_idx < week_dates.len() - 1 {
                             ui.add_space(spacing);
@@ -226,17 +230,17 @@ impl WeekView {
                 });
             }
         }
-        
+
         clicked_event
     }
-    
+
     fn render_time_cell(
         ui: &mut egui::Ui,
         col_width: f32,
         date: NaiveDate,
         time: NaiveTime,
         is_hour_start: bool,
-        starting_events: &[&Event],  // Events that start in this slot
+        starting_events: &[&Event],   // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
         database: &'static crate::services::database::Database,
         show_event_dialog: &mut bool,
@@ -248,14 +252,15 @@ impl WeekView {
         let is_today = date == today;
         let is_weekend = date.weekday().num_days_from_sunday() == 0
             || date.weekday().num_days_from_sunday() == 6;
-        
+
         let desired_size = Vec2::new(col_width, 30.0);
         // Use union of click and hover to capture both left and right clicks
-        let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
-        
+        let (rect, response) =
+            ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
+
         // Add manual context menu handling with secondary_clicked
         let show_context_menu = response.secondary_clicked();
-        
+
         // Background
         let bg_color = if is_today {
             Color32::from_rgb(50, 70, 100)
@@ -265,7 +270,7 @@ impl WeekView {
             Color32::from_gray(40)
         };
         ui.painter().rect_filled(rect, 0.0, bg_color);
-        
+
         // Horizontal grid line
         let line_color = if is_hour_start {
             Color32::from_gray(60)
@@ -279,7 +284,7 @@ impl WeekView {
             ],
             Stroke::new(1.0, line_color),
         );
-        
+
         // Vertical grid line
         ui.painter().line_segment(
             [
@@ -288,12 +293,16 @@ impl WeekView {
             ],
             Stroke::new(1.0, Color32::from_gray(50)),
         );
-        
+
         // Hover effect
         if response.hovered() {
-            ui.painter().rect_filled(rect, 0.0, Color32::from_rgba_unmultiplied(100, 150, 255, 30));
+            ui.painter().rect_filled(
+                rect,
+                0.0,
+                Color32::from_rgba_unmultiplied(100, 150, 255, 30),
+            );
         }
-        
+
         let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
 
         // Draw continuing events first (colored blocks only)
@@ -301,7 +310,7 @@ impl WeekView {
             let event_rect = Self::render_event_continuation(ui, rect, event);
             event_hitboxes.push((event_rect, (*event).clone()));
         }
-        
+
         // Draw starting events (full details)
         for event in starting_events {
             let event_rect = Self::render_event_in_cell(ui, rect, event);
@@ -309,30 +318,57 @@ impl WeekView {
         }
 
         let pointer_pos = response.interact_pointer_pos();
-        let pointer_event = pointer_pos.and_then(|pos| {
+        let pointer_hit = pointer_pos.and_then(|pos| {
             event_hitboxes
                 .iter()
                 .rev()
                 .find(|(hit_rect, _)| hit_rect.contains(pos))
-                .map(|(_, event)| event.clone())
+                .map(|(hit_rect, event)| (*hit_rect, event.clone()))
         });
+        let pointer_event = pointer_hit.as_ref().map(|(_, event)| event.clone());
         let single_event_fallback = if event_hitboxes.len() == 1 {
             Some(event_hitboxes[0].1.clone())
         } else {
             None
         };
-        
+
+        if DragManager::is_active_for_view(ui.ctx(), DragView::Week) && response.hovered() {
+            if let Some(pointer) = response.interact_pointer_pos() {
+                DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
+                ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                ui.ctx().request_repaint();
+            }
+        }
+
+        if let Some(drag_state) = DragManager::active_for_view(ui.ctx(), DragView::Week) {
+            if drag_state.hovered_date == Some(date) && drag_state.hovered_time == Some(time) {
+                let highlight = rect.shrink2(Vec2::new(3.0, 2.0));
+                ui.painter().rect_filled(
+                    highlight,
+                    2.0,
+                    Color32::from_rgba_unmultiplied(120, 200, 120, 35),
+                );
+                ui.painter().rect_stroke(
+                    highlight,
+                    2.0,
+                    Stroke::new(1.5, Color32::from_rgb(120, 200, 120)),
+                );
+            }
+        }
+
         // Manual context menu handling - store popup state in egui memory
         let mut context_clicked_event: Option<Event> = None;
         let mut context_menu_event: Option<Event> = None;
-        let popup_id = response.id.with(format!("context_menu_{}_{:?}", date, time));
-        
+        let popup_id = response
+            .id
+            .with(format!("context_menu_{}_{:?}", date, time));
+
         // Open popup on right-click
         if show_context_menu {
             context_menu_event = pointer_event.clone();
             ui.memory_mut(|mem| mem.open_popup(popup_id));
         }
-        
+
         // Show popup if it's open
         egui::popup::popup_above_or_below_widget(
             ui,
@@ -342,7 +378,7 @@ impl WeekView {
             egui::PopupCloseBehavior::CloseOnClickOutside,
             |ui| {
                 ui.set_min_width(150.0);
-                
+
                 let popup_event = context_menu_event
                     .clone()
                     .or_else(|| single_event_fallback.clone());
@@ -350,12 +386,12 @@ impl WeekView {
                 if let Some(event) = popup_event {
                     ui.label(format!("Event: {}", event.title));
                     ui.separator();
-                    
+
                     if ui.button("✏ Edit").clicked() {
                         context_clicked_event = Some(event.clone());
                         ui.memory_mut(|mem| mem.close_popup());
                     }
-                    
+
                     if ui.button("🗑 Delete").clicked() {
                         // Delete the event immediately
                         use crate::services::event::EventService;
@@ -369,7 +405,7 @@ impl WeekView {
                     // Right-click on empty space
                     ui.label("Create event");
                     ui.separator();
-                    
+
                     if ui.button("📅 New Event").clicked() {
                         *show_event_dialog = true;
                         *event_dialog_date = Some(date);
@@ -377,7 +413,7 @@ impl WeekView {
                         *event_dialog_recurrence = None;
                         ui.memory_mut(|mem| mem.close_popup());
                     }
-                    
+
                     if ui.button("🔄 New Recurring Event").clicked() {
                         *show_event_dialog = true;
                         *event_dialog_date = Some(date);
@@ -388,50 +424,88 @@ impl WeekView {
                 }
             },
         );
-        
-        // Check if context menu returned a clicked event
+
         let mut clicked_event: Option<Event> = context_clicked_event;
-        
-        // Check if user clicked on an event (left click)
+
         if clicked_event.is_none() && response.clicked() {
             if let Some(event) = pointer_event.clone() {
                 clicked_event = Some(event);
             } else {
-                // Click on empty space - create new event
                 *show_event_dialog = true;
                 *event_dialog_date = Some(date);
-                *event_dialog_time = Some(time); // Use the clicked time slot
-                *event_dialog_recurrence = None; // Default to non-recurring
+                *event_dialog_time = Some(time);
+                *event_dialog_recurrence = None;
             }
         }
-        
-        // Handle double-click for recurring event
+
         if response.double_clicked() {
             *show_event_dialog = true;
             *event_dialog_date = Some(date);
-            *event_dialog_time = Some(time); // Use the clicked time slot
+            *event_dialog_time = Some(time);
             *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
         }
-        
+
+        if response.drag_started() {
+            if let Some((hit_rect, event)) = pointer_hit {
+                if event.recurrence_rule.is_none() {
+                    if let Some(drag_context) = DragContext::from_event(
+                        &event,
+                        pointer_pos
+                            .map(|pos| pos - hit_rect.min)
+                            .unwrap_or(Vec2::ZERO),
+                        DragView::Week,
+                    ) {
+                        DragManager::begin(ui.ctx(), drag_context);
+                        ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                    }
+                }
+            }
+        }
+
+        if response.dragged() {
+            ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+        }
+
+        if response.drag_stopped() {
+            if let Some(drag_context) = DragManager::finish_for_view(ui.ctx(), DragView::Week) {
+                if let Some(target_start) = drag_context
+                    .hovered_start()
+                    .or_else(|| date.and_time(time).and_local_timezone(Local).single())
+                {
+                    let new_end = target_start + drag_context.duration;
+                    let event_service = EventService::new(database.connection());
+                    if let Ok(Some(mut event)) = event_service.get(drag_context.event_id) {
+                        event.start = target_start;
+                        event.end = new_end;
+                        if let Err(err) = event_service.update(&event) {
+                            eprintln!("Failed to move event {}: {}", drag_context.event_id, err);
+                        }
+                    }
+                }
+            }
+        }
+
         clicked_event
     }
-    
+
     fn render_event_in_cell(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -> Rect {
-        let event_color = event.color.as_deref()
+        let event_color = event
+            .color
+            .as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
-        
+
         // Event indicator bar - fills the cell
         let bar_rect = Rect::from_min_size(
             Pos2::new(cell_rect.left() + 2.0, cell_rect.top() + 2.0),
             Vec2::new(cell_rect.width() - 4.0, cell_rect.height() - 4.0),
         );
         ui.painter().rect_filled(bar_rect, 2.0, event_color);
-        
+
         // Event title - use available width with proper truncation
         let font_id = egui::FontId::proportional(10.0);
         let available_width = cell_rect.width() - 10.0; // 5px padding on each side
-        
+
         // Use egui's layout system to properly truncate text
         let layout_job = egui::text::LayoutJob::simple(
             event.title.clone(),
@@ -439,9 +513,9 @@ impl WeekView {
             Color32::WHITE,
             available_width,
         );
-        
+
         let galley = ui.fonts(|f| f.layout_job(layout_job));
-        
+
         ui.painter().galley(
             Pos2::new(cell_rect.left() + 5.0, cell_rect.top() + 5.0),
             galley,
@@ -450,30 +524,41 @@ impl WeekView {
 
         bar_rect
     }
-    
+
     fn render_event_continuation(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -> Rect {
-        let event_color = event.color.as_deref()
+        let event_color = event
+            .color
+            .as_deref()
             .and_then(Self::parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
-        
+
         // Just render a lighter colored background to show the event continues
         let bg_rect = Rect::from_min_size(
             Pos2::new(cell_rect.left() + 2.0, cell_rect.top() + 2.0),
             Vec2::new(cell_rect.width() - 4.0, cell_rect.height() - 4.0),
         );
-        ui.painter().rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.5));
+        ui.painter()
+            .rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.5));
 
         bg_rect
     }
-    
+
     fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
         let weekday = date.weekday().num_days_from_sunday() as i64;
         let offset = (weekday - first_day_of_week as i64 + 7) % 7;
         date - Duration::days(offset)
     }
-    
+
     fn get_day_names(first_day_of_week: u8) -> Vec<&'static str> {
-        let all_days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        let all_days = [
+            "Sunday",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+        ];
         let start = first_day_of_week as usize;
         let mut result = Vec::with_capacity(7);
         for i in 0..7 {
@@ -481,7 +566,7 @@ impl WeekView {
         }
         result
     }
-    
+
     fn format_short_date(date: NaiveDate, date_format: &str) -> String {
         // Parse date_format setting and return appropriate short format
         if date_format.starts_with("DD/MM") || date_format.starts_with("dd/mm") {
@@ -493,37 +578,39 @@ impl WeekView {
             date.format("%m/%d").to_string()
         }
     }
-    
+
     fn get_events_for_week(event_service: &EventService, week_start: NaiveDate) -> Vec<Event> {
-        use chrono::{TimeZone, Local};
-        
-        let start = Local.from_local_datetime(&week_start.and_hms_opt(0, 0, 0).unwrap())
+        use chrono::{Local, TimeZone};
+
+        let start = Local
+            .from_local_datetime(&week_start.and_hms_opt(0, 0, 0).unwrap())
             .single()
             .unwrap();
         let week_end = week_start + Duration::days(6);
-        let end = Local.from_local_datetime(&week_end.and_hms_opt(23, 59, 59).unwrap())
+        let end = Local
+            .from_local_datetime(&week_end.and_hms_opt(23, 59, 59).unwrap())
             .single()
             .unwrap();
-        
+
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
     }
-    
+
     fn parse_color(hex: &str) -> Option<Color32> {
         if hex.is_empty() {
             return None;
         }
-        
+
         let hex = hex.trim_start_matches('#');
         if hex.len() != 6 {
             return None;
         }
-        
+
         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
         let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
         let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-        
+
         Some(Color32::from_rgb(r, g, b))
     }
 }
