@@ -63,17 +63,19 @@ pub(super) fn select_positional_weekday(
     if position == 1 {
         let first = NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1)?;
         let first_weekday = first.weekday();
-        let days_until_target =
-            ((weekday.num_days_from_monday() as i32 - first_weekday.num_days_from_monday() as i32 + 7)
-                % 7) as i64;
+        let days_until_target = ((weekday.num_days_from_monday() as i32
+            - first_weekday.num_days_from_monday() as i32
+            + 7)
+            % 7) as i64;
         Some(first + Duration::days(days_until_target))
     } else if position == -1 {
         let next = advance_month(current_date, 1);
         let last = next.pred_opt()?;
         let last_weekday = last.weekday();
-        let days_back_to_target =
-            ((last_weekday.num_days_from_monday() as i32 - weekday.num_days_from_monday() as i32 + 7)
-                % 7) as i64;
+        let days_back_to_target = ((last_weekday.num_days_from_monday() as i32
+            - weekday.num_days_from_monday() as i32
+            + 7)
+            % 7) as i64;
         Some(last - Duration::days(days_back_to_target))
     } else {
         None

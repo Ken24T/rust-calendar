@@ -413,12 +413,15 @@ impl eframe::App for CalendarApp {
 
             // View content (placeholder for now)
             match self.current_view {
-                ViewType::Day =>
-                    self.render_day_view(ui, &mut countdown_requests, &active_countdown_events),
-                ViewType::Week =>
-                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events),
-                ViewType::WorkWeek => self
-                    .render_workweek_view(ui, &mut countdown_requests, &active_countdown_events),
+                ViewType::Day => {
+                    self.render_day_view(ui, &mut countdown_requests, &active_countdown_events)
+                }
+                ViewType::Week => {
+                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events)
+                }
+                ViewType::WorkWeek => {
+                    self.render_workweek_view(ui, &mut countdown_requests, &active_countdown_events)
+                }
                 ViewType::Month => self.render_month_view(ui),
                 ViewType::Quarter => self.render_quarter_view(ui),
             }

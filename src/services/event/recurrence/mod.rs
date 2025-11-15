@@ -3,12 +3,12 @@ use crate::models::event::Event;
 use anyhow::Result;
 use chrono::{DateTime, Local};
 
+mod daily;
+mod monthly;
 mod parser;
 mod utils;
 mod weekly;
-mod monthly;
 mod yearly;
-mod daily;
 
 use parser::{detect_frequency, parse_count, parse_until, RecurrenceFrequency};
 
