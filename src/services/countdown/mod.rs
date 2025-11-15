@@ -1,4 +1,5 @@
 mod models;
+mod persistence;
 mod service;
 
 pub use models::{

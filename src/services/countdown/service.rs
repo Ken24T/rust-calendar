@@ -1,18 +1,17 @@
 use std::{
-    fs,
     path::Path,
     time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Local};
-use serde_json::{self, Error as SerdeError};
 
 use super::models::{
     default_body_bg_color, default_days_fg_color, default_days_font_size, default_title_bg_color,
     default_title_fg_color, CountdownCardGeometry, CountdownCardId, CountdownCardState,
     CountdownCardVisuals, CountdownPersistedState, RgbaColor,
 };
+use super::persistence::{load_snapshot, save_snapshot};
 
 /// Manages active countdown cards while the calendar app is running.
 pub struct CountdownService {
@@ -52,25 +51,13 @@ impl CountdownService {
     }
 
     pub fn load_from_disk(path: &Path) -> Result<Self> {
-        if !path.exists() {
-            return Ok(Self::new());
-        }
-        let data = fs::read_to_string(path)
-            .with_context(|| format!("failed to read countdowns from {}", path.display()))?;
-        let snapshot: CountdownPersistedState =
-            serde_json::from_str(&data).map_err(|err| map_deser_error(err, path))?;
+        let snapshot = load_snapshot(path)?;
         Ok(Self::from_snapshot(snapshot))
     }
 
     pub fn save_to_disk(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create dir {}", parent.display()))?;
-        }
         let snapshot = self.snapshot();
-        let data = serde_json::to_string_pretty(&snapshot)?;
-        fs::write(path, data)
-            .with_context(|| format!("failed to write countdowns to {}", path.display()))
+        save_snapshot(path, &snapshot)
     }
 
     pub fn cards(&self) -> &[CountdownCardState] {
@@ -331,13 +318,6 @@ impl CountdownService {
         }
         changed
     }
-}
-
-fn map_deser_error(err: SerdeError, path: &Path) -> anyhow::Error {
-    anyhow::Error::new(err).context(format!(
-        "failed to deserialize countdowns from {}",
-        path.display()
-    ))
 }
 
 #[cfg(test)]
