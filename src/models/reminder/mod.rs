@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Reminder module
 // Implementation pending - Phase 4
 

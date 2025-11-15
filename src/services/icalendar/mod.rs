@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // iCalendar service module
 // RFC 5545 .ics file import/export functionality
 

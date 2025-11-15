@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Notification service module
 // Implementation pending - Phase 4
 

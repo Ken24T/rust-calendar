@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Date utility functions
 // Implementation pending - Phase 1
 

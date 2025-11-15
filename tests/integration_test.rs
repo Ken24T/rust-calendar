@@ -1,5 +1,4 @@
 // Integration tests for database and settings persistence
-use rust_calendar::models::settings::Settings;
 use rust_calendar::services::database::Database;
 use rust_calendar::services::settings::SettingsService;
 use std::path::PathBuf;

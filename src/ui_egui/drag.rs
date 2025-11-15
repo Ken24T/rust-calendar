@@ -14,8 +14,10 @@ pub enum DragView {
 pub struct DragContext {
     pub event_id: i64,
     pub original_start: DateTime<Local>,
+    #[allow(dead_code)]
     pub original_end: DateTime<Local>,
     pub duration: Duration,
+    #[allow(dead_code)]
     pub pointer_offset: Vec2,
     pub pointer_pos: Option<Pos2>,
     pub hovered_date: Option<NaiveDate>,
@@ -124,12 +126,14 @@ impl DragManager {
         result
     }
 
+    #[allow(dead_code)]
     pub fn cancel(ctx: &Context) {
         ctx.memory_mut(|mem| {
             mem.data.remove::<DragContext>(Self::storage_id());
         });
     }
 
+    #[allow(dead_code)]
     pub fn cancel_for_view(ctx: &Context, view: DragView) {
         let id = Self::storage_id();
         ctx.memory_mut(|mem| {

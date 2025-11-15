@@ -41,6 +41,7 @@ impl Event {
     /// let end = start + chrono::Duration::hours(1);
     /// let event = Event::new("Team Meeting", start, end).unwrap();
     /// ```
+    #[allow(dead_code)]
     pub fn new(
         title: impl Into<String>,
         start: DateTime<Local>,
@@ -101,11 +102,13 @@ impl Event {
     }
 
     /// Check if this is a recurring event
+    #[allow(dead_code)]
     pub fn is_recurring(&self) -> bool {
         self.recurrence_rule.is_some()
     }
 
     /// Get the duration of the event
+    #[allow(dead_code)]
     pub fn duration(&self) -> chrono::Duration {
         self.end - self.start
     }

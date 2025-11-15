@@ -45,6 +45,7 @@ pub struct EventDialogState {
 
     // UI state
     pub error_message: Option<String>,
+    #[allow(dead_code)]
     pub show_advanced: bool,
 }
 

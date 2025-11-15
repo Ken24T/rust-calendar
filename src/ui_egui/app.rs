@@ -373,6 +373,13 @@ impl eframe::App for CalendarApp {
 
         let mut countdown_requests: Vec<CountdownRequest> = Vec::new();
 
+        let active_countdown_events: std::collections::HashSet<i64> = self
+            .countdown_service
+            .cards()
+            .iter()
+            .filter_map(|card| card.event_id)
+            .collect();
+
         // Main content area
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(format!(
@@ -406,9 +413,12 @@ impl eframe::App for CalendarApp {
 
             // View content (placeholder for now)
             match self.current_view {
-                ViewType::Day => self.render_day_view(ui, &mut countdown_requests),
-                ViewType::Week => self.render_week_view(ui, &mut countdown_requests),
-                ViewType::WorkWeek => self.render_workweek_view(ui, &mut countdown_requests),
+                ViewType::Day =>
+                    self.render_day_view(ui, &mut countdown_requests, &active_countdown_events),
+                ViewType::Week =>
+                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events),
+                ViewType::WorkWeek => self
+                    .render_workweek_view(ui, &mut countdown_requests, &active_countdown_events),
                 ViewType::Month => self.render_month_view(ui),
                 ViewType::Quarter => self.render_quarter_view(ui),
             }
@@ -571,6 +581,7 @@ impl CalendarApp {
         &mut self,
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &std::collections::HashSet<i64>,
     ) {
         if let Some(clicked_event) = DayView::show(
             ui,
@@ -582,6 +593,7 @@ impl CalendarApp {
             &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
             countdown_requests,
+            active_countdown_events,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -594,6 +606,7 @@ impl CalendarApp {
         &mut self,
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &std::collections::HashSet<i64>,
     ) {
         if let Some(clicked_event) = WeekView::show(
             ui,
@@ -605,6 +618,7 @@ impl CalendarApp {
             &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
             countdown_requests,
+            active_countdown_events,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -617,6 +631,7 @@ impl CalendarApp {
         &mut self,
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &std::collections::HashSet<i64>,
     ) {
         if let Some(clicked_event) = WorkWeekView::show(
             ui,
@@ -628,6 +643,7 @@ impl CalendarApp {
             &mut self.event_dialog_time,
             &mut self.event_dialog_recurrence,
             countdown_requests,
+            active_countdown_events,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =

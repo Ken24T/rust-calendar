@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use egui::{Context, Visuals};
 
 /// Render a simple theme picker dialog

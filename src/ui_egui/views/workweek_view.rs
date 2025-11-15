@@ -1,5 +1,6 @@
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Weekday};
 use egui::{Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
+use std::collections::HashSet;
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
@@ -21,6 +22,7 @@ impl WorkWeekView {
         event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &HashSet<i64>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
 
@@ -109,6 +111,7 @@ impl WorkWeekView {
                     event_dialog_time,
                     event_dialog_recurrence,
                     countdown_requests,
+                    active_countdown_events,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -129,6 +132,7 @@ impl WorkWeekView {
         event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &HashSet<i64>,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
@@ -223,6 +227,7 @@ impl WorkWeekView {
                             event_dialog_time,
                             event_dialog_recurrence,
                             countdown_requests,
+                            active_countdown_events,
                         ) {
                             clicked_event = Some(event);
                         }
@@ -253,6 +258,7 @@ impl WorkWeekView {
         event_dialog_time: &mut Option<NaiveTime>,
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &HashSet<i64>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let is_today = date == today;
@@ -409,20 +415,22 @@ impl WorkWeekView {
                         ui.memory_mut(|mem| mem.close_popup());
                     }
 
-                    let is_future_event = event.start > Local::now();
-                    let button =
-                        ui.add_enabled(is_future_event, egui::Button::new("⏱ Create Countdown"));
-                    if button.clicked() {
-                        countdown_requests.push(CountdownRequest::from_event(&event));
-                        ui.memory_mut(|mem| mem.close_popup());
-                    }
-                    if !is_future_event {
-                        ui.label(
-                            egui::RichText::new("Countdowns are only available for future events")
-                                .italics()
-                                .color(Color32::from_gray(150))
-                                .size(11.0),
-                        );
+                    if event.start > Local::now() {
+                        let timer_exists = event
+                            .id
+                            .map(|id| active_countdown_events.contains(&id))
+                            .unwrap_or(false);
+                        if timer_exists {
+                            ui.label(
+                                egui::RichText::new("Countdown already exists")
+                                    .italics()
+                                    .color(Color32::from_gray(150))
+                                    .size(11.0),
+                            );
+                        } else if ui.button("⏱ Create Countdown").clicked() {
+                            countdown_requests.push(CountdownRequest::from_event(&event));
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
                     }
                 } else {
                     // Right-click on empty space

@@ -42,6 +42,7 @@ impl Default for Settings {
 
 impl Settings {
     /// Validate settings values
+    #[allow(dead_code)]
     pub fn validate(&self) -> Result<(), String> {
         // Validate theme
         if !["light", "dark"].contains(&self.theme.as_str()) {

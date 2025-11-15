@@ -80,6 +80,7 @@ impl<'a> SettingsService<'a> {
     }
 
     /// Reset settings to defaults
+    #[allow(dead_code)]
     pub fn reset(&self) -> Result<()> {
         let default_settings = Settings::default();
         self.update(&default_settings)

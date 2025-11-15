@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Theme manager dialog for managing custom themes
 
 use egui::{Align, Context, Layout, RichText, Window};

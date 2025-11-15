@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Recurrence module
 // RFC 5545 iCalendar recurrence rule implementation
 

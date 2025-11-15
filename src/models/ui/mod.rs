@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // UI models module
 // Implementation pending - Phase 3
 

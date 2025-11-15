@@ -131,6 +131,7 @@ impl CalendarTheme {
     }
 
     /// Parse hex string to Color32
+    #[allow(dead_code)]
     pub fn hex_to_color(hex: &str) -> Result<Color32, String> {
         let hex = hex.trim_start_matches('#');
 

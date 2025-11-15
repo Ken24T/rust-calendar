@@ -192,6 +192,7 @@ impl<'a> EventService<'a> {
     }
 
     /// List all events
+    #[allow(dead_code)]
     pub fn list_all(&self) -> Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, title, description, location, start_datetime, end_datetime,
