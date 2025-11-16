@@ -13,6 +13,7 @@ pub(super) enum CountdownSettingsCommand {
     SetAlwaysOnTop(CountdownCardId, bool),
     SetCompactMode(CountdownCardId, bool),
     SetDaysFontSize(CountdownCardId, f32),
+    SetTitleFontSize(CountdownCardId, f32),
     SetTitleBgColor(CountdownCardId, RgbaColor),
     SetTitleFgColor(CountdownCardId, RgbaColor),
     SetBodyBgColor(CountdownCardId, RgbaColor),
@@ -30,6 +31,8 @@ pub(super) enum CountdownSettingsCommand {
     ResetDefaultDaysFgColor,
     SetDefaultDaysFontSize(f32),
     ResetDefaultDaysFontSize,
+    SetDefaultTitleFontSize(f32),
+    ResetDefaultTitleFontSize,
 }
 
 pub(super) struct CountdownSettingsUiResult {
@@ -104,18 +107,6 @@ pub(super) fn render_countdown_settings_ui(
 
         ui.separator();
         ui.heading("Layout");
-        let mut font_size = card.visuals.days_font_size;
-        if ui
-            .add(egui::Slider::new(&mut font_size, 32.0..=220.0).text("Size"))
-            .changed()
-        {
-            result
-                .commands
-                .push(CountdownSettingsCommand::SetDaysFontSize(
-                    card.id, font_size,
-                ));
-        }
-
         let mut always_on_top = card.visuals.always_on_top;
         if ui.checkbox(&mut always_on_top, "Always on top").changed() {
             result
@@ -135,9 +126,77 @@ pub(super) fn render_countdown_settings_ui(
                 ));
         }
 
+        ui.separator();
+        ui.heading("Card Title");
+        let mut title_font_size = card.visuals.title_font_size;
+        if ui
+            .add(egui::Slider::new(&mut title_font_size, 12.0..=48.0).text("Text size"))
+            .changed()
+        {
+            result
+                .commands
+                .push(CountdownSettingsCommand::SetTitleFontSize(
+                    card.id,
+                    title_font_size,
+                ));
+        }
+
+        let mut title_font_default = (title_font_size - defaults.title_font_size).abs() < 0.5;
+        if ui
+            .checkbox(&mut title_font_default, "Default card title font size")
+            .changed()
+        {
+            if title_font_default {
+                result
+                    .commands
+                    .push(CountdownSettingsCommand::SetDefaultTitleFontSize(
+                        title_font_size,
+                    ));
+            } else {
+                result
+                    .commands
+                    .push(CountdownSettingsCommand::ResetDefaultTitleFontSize);
+            }
+        }
+
+        render_color_setting(
+            ui,
+            "Card Title Background",
+            card.visuals.title_bg_color,
+            defaults.title_bg_color,
+            |color| CountdownSettingsCommand::SetTitleBgColor(card.id, color),
+            |color| CountdownSettingsCommand::SetDefaultTitleBgColor(color),
+            CountdownSettingsCommand::ResetDefaultTitleBgColor,
+            &mut result,
+        );
+        render_color_setting(
+            ui,
+            "Card Title Text",
+            card.visuals.title_fg_color,
+            defaults.title_fg_color,
+            |color| CountdownSettingsCommand::SetTitleFgColor(card.id, color),
+            |color| CountdownSettingsCommand::SetDefaultTitleFgColor(color),
+            CountdownSettingsCommand::ResetDefaultTitleFgColor,
+            &mut result,
+        );
+
+        ui.separator();
+        ui.heading("Countdown Display");
+        let mut font_size = card.visuals.days_font_size;
+        if ui
+            .add(egui::Slider::new(&mut font_size, 32.0..=220.0).text("Number size"))
+            .changed()
+        {
+            result
+                .commands
+                .push(CountdownSettingsCommand::SetDaysFontSize(
+                    card.id, font_size,
+                ));
+        }
+
         let mut font_default = (font_size - defaults.days_font_size).abs() < 0.5;
         if ui
-            .checkbox(&mut font_default, "Default Font Size")
+            .checkbox(&mut font_default, "Default countdown font size")
             .changed()
         {
             if font_default {
@@ -150,6 +209,27 @@ pub(super) fn render_countdown_settings_ui(
                     .push(CountdownSettingsCommand::ResetDefaultDaysFontSize);
             }
         }
+
+        render_color_setting(
+            ui,
+            "Countdown Background",
+            card.visuals.body_bg_color,
+            defaults.body_bg_color,
+            |color| CountdownSettingsCommand::SetBodyBgColor(card.id, color),
+            |color| CountdownSettingsCommand::SetDefaultBodyBgColor(color),
+            CountdownSettingsCommand::ResetDefaultBodyBgColor,
+            &mut result,
+        );
+        render_color_setting(
+            ui,
+            "Countdown Text",
+            card.visuals.days_fg_color,
+            defaults.days_fg_color,
+            |color| CountdownSettingsCommand::SetDaysFgColor(card.id, color),
+            |color| CountdownSettingsCommand::SetDefaultDaysFgColor(color),
+            CountdownSettingsCommand::ResetDefaultDaysFgColor,
+            &mut result,
+        );
 
         ui.separator();
         ui.heading("Comment");
@@ -171,49 +251,6 @@ pub(super) fn render_countdown_settings_ui(
                 .commands
                 .push(CountdownSettingsCommand::SetComment(card.id, payload));
         }
-
-        ui.separator();
-        ui.heading("Colors");
-        render_color_setting(
-            ui,
-            "Title Background",
-            card.visuals.title_bg_color,
-            defaults.title_bg_color,
-            |color| CountdownSettingsCommand::SetTitleBgColor(card.id, color),
-            |color| CountdownSettingsCommand::SetDefaultTitleBgColor(color),
-            CountdownSettingsCommand::ResetDefaultTitleBgColor,
-            &mut result,
-        );
-        render_color_setting(
-            ui,
-            "Title Text",
-            card.visuals.title_fg_color,
-            defaults.title_fg_color,
-            |color| CountdownSettingsCommand::SetTitleFgColor(card.id, color),
-            |color| CountdownSettingsCommand::SetDefaultTitleFgColor(color),
-            CountdownSettingsCommand::ResetDefaultTitleFgColor,
-            &mut result,
-        );
-        render_color_setting(
-            ui,
-            "Card Background",
-            card.visuals.body_bg_color,
-            defaults.body_bg_color,
-            |color| CountdownSettingsCommand::SetBodyBgColor(card.id, color),
-            |color| CountdownSettingsCommand::SetDefaultBodyBgColor(color),
-            CountdownSettingsCommand::ResetDefaultBodyBgColor,
-            &mut result,
-        );
-        render_color_setting(
-            ui,
-            "Days Text",
-            card.visuals.days_fg_color,
-            defaults.days_fg_color,
-            |color| CountdownSettingsCommand::SetDaysFgColor(card.id, color),
-            |color| CountdownSettingsCommand::SetDefaultDaysFgColor(color),
-            CountdownSettingsCommand::ResetDefaultDaysFgColor,
-            &mut result,
-        );
 
         ui.separator();
         ui.horizontal(|ui| {

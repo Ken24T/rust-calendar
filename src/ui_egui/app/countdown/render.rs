@@ -4,8 +4,8 @@ use chrono::{DateTime, Local};
 use egui::{self, ViewportClass, ViewportId};
 use std::time::Duration as StdDuration;
 
-pub(super) const COUNTDOWN_SETTINGS_DEFAULT_HEIGHT: f32 = 560.0;
-pub(super) const COUNTDOWN_SETTINGS_MIN_HEIGHT: f32 = 540.0;
+pub(super) const COUNTDOWN_SETTINGS_DEFAULT_HEIGHT: f32 = 780.0;
+pub(super) const COUNTDOWN_SETTINGS_MIN_HEIGHT: f32 = 740.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CountdownCardUiAction {
@@ -20,10 +20,10 @@ pub(super) fn viewport_builder_for_card(
     start_hidden: bool,
 ) -> egui::ViewportBuilder {
     let mut builder = egui::ViewportBuilder::default()
-        .with_title(card.effective_title().to_owned())
+        .with_title(card.event_title.clone())
         .with_position(egui::pos2(card.geometry.x, card.geometry.y))
         .with_inner_size(egui::vec2(
-            card.geometry.width.max(120.0),
+            card.geometry.width.max(110.0),
             card.geometry.height.max(90.0),
         ))
         .with_resizable(true)
@@ -76,6 +76,7 @@ pub(super) fn render_countdown_card_ui(
 
     let title_bg = rgba_to_color32(card.visuals.title_bg_color);
     let title_fg = rgba_to_color32(card.visuals.title_fg_color);
+    let title_font_size = card.visuals.title_font_size.max(12.0);
     let body_bg = rgba_to_color32(card.visuals.body_bg_color);
     let days_fg = rgba_to_color32(card.visuals.days_fg_color);
     let font_size = card.visuals.days_font_size.max(32.0);
@@ -123,57 +124,68 @@ pub(super) fn render_countdown_card_ui(
 
     let render = |ui: &mut egui::Ui| {
         let mut action = CountdownCardUiAction::None;
+        let rounding = egui::Rounding::from(8.0);
         let frame = egui::Frame::none()
             .fill(body_bg)
-            .rounding(egui::Rounding::from(8.0))
+            .rounding(rounding)
             .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(40)));
 
         let inner = frame.show(ui, |ui| {
-            ui.vertical(|ui| {
-                egui::Frame::none()
-                    .fill(title_bg)
-                    .rounding(egui::Rounding::from(8.0))
-                    .show(ui, |ui| {
-                        ui.centered_and_justified(|ui| {
-                            ui.label(
-                                egui::RichText::new(card.effective_title())
-                                    .color(title_fg)
-                                    .strong(),
-                            );
-                        });
-                    });
+            let available = ui.available_size();
+            ui.set_min_size(available);
+            let total_height = available.y.max(60.0);
+            let width = available.x;
+            let spacing = 4.0;
+            let min_countdown_height = 36.0;
+            let desired_title_height = (title_font_size * 1.4).clamp(22.0, 48.0);
+            let max_title_height = (total_height - min_countdown_height - spacing).max(20.0);
+            let title_height = desired_title_height.min(max_title_height);
+            let countdown_height =
+                (total_height - title_height - spacing).max(min_countdown_height);
 
-                ui.add_space(8.0);
-                ui.vertical_centered(|ui| {
+            let title_size = egui::vec2(width, title_height);
+            ui.allocate_ui_with_layout(
+                title_size,
+                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                |title_ui| {
+                    egui::Frame::none()
+                        .fill(title_bg)
+                        .rounding(egui::Rounding {
+                            nw: rounding.nw,
+                            ne: rounding.ne,
+                            sw: 0.0,
+                            se: 0.0,
+                        })
+                        .show(title_ui, |ui| {
+                            ui.centered_and_justified(|ui| {
+                                ui.label(
+                                    egui::RichText::new(card.effective_title())
+                                        .color(title_fg)
+                                        .size(title_font_size)
+                                        .strong(),
+                                );
+                            });
+                        });
+                },
+            );
+
+            ui.add_space(spacing);
+
+            let countdown_size = egui::vec2(width, countdown_height);
+            ui.allocate_ui_with_layout(
+                countdown_size,
+                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                |countdown_ui| {
                     let days_remaining = (card.start_at.date_naive() - now.date_naive())
                         .num_days()
                         .max(0);
-                    ui.label(
+                    countdown_ui.label(
                         egui::RichText::new(days_remaining.to_string())
                             .size(font_size)
                             .color(days_fg),
                     );
-                });
-                ui.add_space(4.0);
-                if let Some(comment) = card.comment.as_ref().and_then(|text| {
-                    let trimmed = text.trim();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_owned())
-                    }
-                }) {
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(comment)
-                                .color(days_fg)
-                                .size(font_size.min(32.0)),
-                        )
-                        .wrap(),
-                    );
-                    ui.add_space(4.0);
-                }
-            });
+                },
+            );
         });
 
         let response = ui.interact(

@@ -8,8 +8,8 @@ use chrono::{DateTime, Local};
 
 use super::models::{
     default_body_bg_color, default_days_fg_color, default_days_font_size, default_title_bg_color,
-    default_title_fg_color, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownPersistedState, RgbaColor,
+    default_title_fg_color, default_title_font_size, CountdownCardGeometry, CountdownCardId,
+    CountdownCardState, CountdownCardVisuals, CountdownPersistedState, RgbaColor,
 };
 use super::persistence::{load_snapshot, save_snapshot};
 
@@ -132,8 +132,8 @@ impl CountdownService {
             geometry: CountdownCardGeometry {
                 x: 50.0,
                 y: 50.0,
-                width: 138.0,
-                height: 128.0,
+                width: 120.0,
+                height: 110.0,
             },
             visuals: self.visual_defaults.clone(),
             last_computed_days: None,
@@ -201,6 +201,12 @@ impl CountdownService {
 
     pub fn set_days_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
         self.update_visual_flag(id, |visuals| visuals.days_font_size = size.max(16.0))
+    }
+
+    pub fn set_title_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
+        self.update_visual_flag(id, |visuals| {
+            visuals.title_font_size = size.clamp(10.0, 64.0)
+        })
     }
 
     pub fn set_comment(&mut self, id: CountdownCardId, comment: Option<String>) -> bool {
@@ -290,6 +296,15 @@ impl CountdownService {
 
     pub fn reset_default_days_font_size(&mut self) {
         self.set_default_days_font_size(default_days_font_size());
+    }
+
+    pub fn set_default_title_font_size(&mut self, size: f32) {
+        self.visual_defaults.title_font_size = size.clamp(10.0, 64.0);
+        self.dirty = true;
+    }
+
+    pub fn reset_default_title_font_size(&mut self) {
+        self.set_default_title_font_size(default_title_font_size());
     }
 
     fn update_visual_flag<F>(&mut self, id: CountdownCardId, mut update: F) -> bool

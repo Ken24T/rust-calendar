@@ -120,7 +120,7 @@ impl CountdownUiState {
             }
 
             if let Some(info) = viewport_info.as_ref() {
-                if !waiting_on_geometry && viewport_title_matches(info, card.effective_title()) {
+                if !waiting_on_geometry && viewport_title_matches(info, &card.event_title) {
                     if let Some(current_geometry) = geometry_from_viewport_info(info) {
                         if geometry_changed(card.geometry, current_geometry)
                             && service.queue_geometry_update(card.id, current_geometry)
@@ -259,6 +259,10 @@ impl CountdownUiState {
                 service.set_days_font_size(id, size);
                 false
             }
+            CountdownSettingsCommand::SetTitleFontSize(id, size) => {
+                service.set_title_font_size(id, size);
+                false
+            }
             CountdownSettingsCommand::SetTitleBgColor(id, color) => {
                 service.set_title_bg_color(id, color);
                 false
@@ -330,6 +334,14 @@ impl CountdownUiState {
             }
             CountdownSettingsCommand::ResetDefaultDaysFontSize => {
                 service.reset_default_days_font_size();
+                false
+            }
+            CountdownSettingsCommand::SetDefaultTitleFontSize(size) => {
+                service.set_default_title_font_size(size);
+                false
+            }
+            CountdownSettingsCommand::ResetDefaultTitleFontSize => {
+                service.reset_default_title_font_size();
                 false
             }
         }

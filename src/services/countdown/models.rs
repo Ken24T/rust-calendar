@@ -26,6 +26,8 @@ pub struct CountdownCardVisuals {
     pub title_bg_color: RgbaColor,
     #[serde(default = "default_title_fg_color")]
     pub title_fg_color: RgbaColor,
+    #[serde(default = "default_title_font_size")]
+    pub title_font_size: f32,
     #[serde(default = "default_body_bg_color")]
     pub body_bg_color: RgbaColor,
     #[serde(default = "default_days_fg_color")]
@@ -42,6 +44,7 @@ impl Default for CountdownCardVisuals {
             compact_mode: false,
             title_bg_color: default_title_bg_color(),
             title_fg_color: default_title_fg_color(),
+            title_font_size: default_title_font_size(),
             body_bg_color: default_body_bg_color(),
             days_fg_color: default_days_fg_color(),
             days_font_size: default_days_font_size(),
@@ -77,6 +80,10 @@ pub(crate) const fn default_title_fg_color() -> RgbaColor {
     RgbaColor::new(255, 255, 255, 255)
 }
 
+pub(crate) const fn default_title_font_size() -> f32 {
+    20.0
+}
+
 pub(crate) const fn default_body_bg_color() -> RgbaColor {
     RgbaColor::new(103, 176, 255, 255)
 }
@@ -86,7 +93,7 @@ pub(crate) const fn default_days_fg_color() -> RgbaColor {
 }
 
 pub(crate) const fn default_days_font_size() -> f32 {
-    96.0
+    80.0
 }
 
 /// Core persisted information for each countdown card.
