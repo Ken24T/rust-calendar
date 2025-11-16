@@ -1,163 +1,14 @@
-// Main Calendar Application
-// Core iced Application implementation
+use chrono::{Datelike, Duration, Local, NaiveDate};
+use iced::{Color, Command};
 
-use iced::{Application, Command, Element, Theme, Color};
-use crate::services::database::Database;
 use crate::services::theme::ThemeService;
-use crate::ui::theme::CalendarTheme;
 use crate::ui::messages::Message;
 use crate::ui::view_type::ViewType;
-use crate::ui::helpers;
-use crate::ui::views;
-use crate::ui::components;
-use crate::ui::utils;
-use std::sync::{Arc, Mutex};
-use chrono::{Local, Datelike, NaiveDate, Duration};
 
-/// Helper function to parse hex color string to iced Color
-fn parse_hex_color(hex: &str) -> Option<Color> {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() != 6 {
-        return None;
-    }
-    
-    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-    
-    Some(Color::from_rgb(
-        r as f32 / 255.0,
-        g as f32 / 255.0,
-        b as f32 / 255.0,
-    ))
-}
+use super::CalendarApp;
 
-/// Main Calendar Application
-pub struct CalendarApp {
-    /// Current theme (Light or Dark)
-    theme: Theme,
-    /// Custom calendar theme with colors
-    calendar_theme: CalendarTheme,
-    /// Current theme name
-    theme_name: String,
-    /// Available theme names
-    available_themes: Vec<String>,
-    /// Show/hide My Day panel
-    show_my_day: bool,
-    /// My Day panel position (true = right, false = left)
-    my_day_position_right: bool,
-    /// Show/hide multi-day ribbon
-    show_ribbon: bool,
-    /// Current view type
-    current_view: ViewType,
-    /// Database connection (wrapped in Arc<Mutex<>> for thread safety)
-    db: Arc<Mutex<Database>>,
-    /// Show/hide settings dialog
-    show_settings_dialog: bool,
-    /// Time format (12h or 24h)
-    time_format: String,
-    /// First day of week (0=Sunday, 1=Monday, etc.)
-    first_day_of_week: u8,
-    /// First day of work week (1=Monday, 5=Friday)
-    first_day_of_work_week: u8,
-    /// Last day of work week (1=Monday, 5=Friday)
-    last_day_of_work_week: u8,
-    /// Date format
-    date_format: String,
-    /// Currently displayed date (for navigation)
-    current_date: NaiveDate,
-    /// Show/hide month/year picker
-    show_date_picker: bool,
-    /// Show/hide theme picker
-    show_theme_picker: bool,
-    /// Show/hide theme management dialog
-    show_theme_manager: bool,
-    /// Time slot interval in minutes (15, 30, 45, or 60)
-    time_slot_interval: u32,
-    /// Default event start time (HH:MM format)
-    default_event_start_time: String,
-    /// Show theme creation dialog
-    show_create_theme: bool,
-    /// Whether we're editing an existing theme (vs creating new)
-    is_editing_theme: bool,
-    /// Original theme name when editing (for updating vs inserting)
-    editing_theme_original_name: String,
-    /// Name for the theme being created
-    creating_theme_name: String,
-    /// Base theme name to copy from
-    creating_base_theme: String,
-    /// Theme being created/edited
-    creating_theme: Option<CalendarTheme>,
-    /// Show color picker dialog
-    show_color_picker: bool,
-    /// Field name being edited in color picker
-    color_picker_field: String,
-    /// Current color in the picker
-    color_picker_color: Color,
-    /// Show event creation/edit dialog
-    show_event_dialog: bool,
-    /// Event dialog state
-    event_dialog_state: Option<crate::ui::dialogs::EventDialogState>,
-    /// Loaded events for current view range
-    events: Vec<crate::models::event::Event>,
-}
-
-impl Application for CalendarApp {
-    type Executor = iced::executor::Default;
-    type Message = Message;
-    type Theme = Theme;
-    type Flags = String;
-
-    fn new(db_path: Self::Flags) -> (Self, Command<Self::Message>) {
-        let init_data = utils::initialize_app(&db_path);
-
-        let mut app = Self {
-            theme: init_data.theme,
-            calendar_theme: init_data.calendar_theme,
-            theme_name: init_data.theme_name,
-            available_themes: init_data.available_themes,
-            show_my_day: init_data.show_my_day,
-            my_day_position_right: init_data.my_day_position_right,
-            show_ribbon: init_data.show_ribbon,
-            current_view: init_data.current_view,
-            db: init_data.db,
-            show_settings_dialog: false,
-            time_format: init_data.time_format,
-            first_day_of_week: init_data.first_day_of_week,
-            first_day_of_work_week: init_data.first_day_of_work_week,
-            last_day_of_work_week: init_data.last_day_of_work_week,
-            date_format: init_data.date_format,
-            current_date: init_data.current_date,
-            show_date_picker: false,
-            show_theme_picker: false,
-            show_theme_manager: false,
-            time_slot_interval: init_data.time_slot_interval,
-            default_event_start_time: init_data.default_event_start_time,
-            show_create_theme: false,
-            is_editing_theme: false,
-            editing_theme_original_name: String::new(),
-            creating_theme_name: String::new(),
-            creating_base_theme: "Light".to_string(),
-            creating_theme: None,
-            show_color_picker: false,
-            color_picker_field: String::new(),
-            color_picker_color: Color::BLACK,
-            show_event_dialog: false,
-            event_dialog_state: None,
-            events: Vec::new(),
-        };
-        
-        // Load events for initial view
-        app.load_events();
-        
-        (app, Command::none())
-    }
-
-    fn title(&self) -> String {
-        String::from("Rust Calendar")
-    }
-
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+impl CalendarApp {
+    pub(crate) fn handle_message(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::ToggleTheme => {
                 // If only 2 themes, toggle between them. Otherwise, show picker
@@ -168,14 +19,14 @@ impl Application for CalendarApp {
                         .unwrap_or(0);
                     let next_idx = (current_idx + 1) % self.available_themes.len();
                     let next_theme_name = self.available_themes[next_idx].clone();
-                    
+
                     // Load the theme (scope to release lock before save_settings)
                     {
                         let db = match self.db.lock() {
                             Ok(db) => db,
                             Err(_) => return Command::none(),
                         };
-                        
+
                         let theme_service = ThemeService::new(&db);
                         if let Ok(calendar_theme) = theme_service.get_theme(&next_theme_name) {
                             self.theme_name = next_theme_name;
@@ -183,7 +34,7 @@ impl Application for CalendarApp {
                             self.calendar_theme = calendar_theme;
                         }
                     } // Lock is released here
-                    
+
                     self.save_settings();
                 } else {
                     // Show theme picker for 3+ themes
@@ -203,7 +54,7 @@ impl Application for CalendarApp {
                         Ok(db) => db,
                         Err(_) => return Command::none(),
                     };
-                    
+
                     let theme_service = ThemeService::new(&db);
                     if let Ok(calendar_theme) = theme_service.get_theme(&theme_name) {
                         self.theme_name = theme_name;
@@ -211,7 +62,7 @@ impl Application for CalendarApp {
                         self.calendar_theme = calendar_theme;
                     }
                 } // Lock is released here
-                
+
                 self.show_theme_picker = false;
                 self.save_settings();
             }
@@ -240,7 +91,7 @@ impl Application for CalendarApp {
                     Ok(db) => db,
                     Err(_) => return Command::none(),
                 };
-                
+
                 let theme_service = ThemeService::new(&db);
                 if let Ok(calendar_theme) = theme_service.get_theme(&theme_name) {
                     self.theme_name = theme_name;
@@ -294,35 +145,35 @@ impl Application for CalendarApp {
                 if theme_name == "Light" || theme_name == "Dark" {
                     return Command::none();
                 }
-                
+
                 // Don't allow deletion if it's the only theme left
                 if self.available_themes.len() <= 1 {
                     return Command::none();
                 }
-                
+
                 let was_active = self.theme_name == theme_name;
-                
+
                 // Delete the theme from database and reload themes
                 let db = match self.db.lock() {
                     Ok(db) => db,
                     Err(_) => return Command::none(),
                 };
-                
+
                 let theme_service = ThemeService::new(&db);
                 let _ = theme_service.delete_theme(&theme_name);
-                
+
                 // Reload available themes
                 if let Ok(themes) = theme_service.list_themes() {
                     self.available_themes = themes;
                 }
-                
+
                 // If deleted theme was active, switch to Light
                 if was_active {
                     if let Ok(calendar_theme) = theme_service.get_theme("Light") {
                         self.theme_name = "Light".to_string();
                         self.theme = calendar_theme.base.clone();
                         self.calendar_theme = calendar_theme;
-                        
+
                         // Drop the lock before saving settings (which may need it)
                         drop(db);
                         self.save_settings();
@@ -335,13 +186,13 @@ impl Application for CalendarApp {
                 self.is_editing_theme = false;
                 self.creating_theme_name = String::new();
                 self.creating_base_theme = "Light".to_string();
-                
+
                 // Load the Light theme as default starting point
                 let db = match self.db.lock() {
                     Ok(db) => db,
                     Err(_) => return Command::none(),
                 };
-                
+
                 let theme_service = ThemeService::new(&db);
                 if let Ok(theme) = theme_service.get_theme("Light") {
                     self.creating_theme = Some(theme);
@@ -352,19 +203,19 @@ impl Application for CalendarApp {
                 if theme_name == "Light" || theme_name == "Dark" {
                     return Command::none();
                 }
-                
+
                 self.show_theme_manager = false;
                 self.show_create_theme = true;
                 self.is_editing_theme = true;
                 self.editing_theme_original_name = theme_name.clone();
                 self.creating_theme_name = theme_name.clone();
-                
+
                 // Load the theme to edit
                 let db = match self.db.lock() {
                     Ok(db) => db,
                     Err(_) => return Command::none(),
                 };
-                
+
                 let theme_service = ThemeService::new(&db);
                 if let Ok(theme) = theme_service.get_theme(&theme_name) {
                     self.creating_theme = Some(theme);
@@ -381,13 +232,13 @@ impl Application for CalendarApp {
             }
             Message::SelectBaseTheme(base_theme_name) => {
                 self.creating_base_theme = base_theme_name.clone();
-                
+
                 // Load the selected base theme
                 let db = match self.db.lock() {
                     Ok(db) => db,
                     Err(_) => return Command::none(),
                 };
-                
+
                 let theme_service = ThemeService::new(&db);
                 if let Ok(theme) = theme_service.get_theme(&base_theme_name) {
                     self.creating_theme = Some(theme);
@@ -408,7 +259,7 @@ impl Application for CalendarApp {
                         "text_secondary" => theme.text_secondary,
                         _ => Color::BLACK,
                     };
-                    
+
                     self.show_color_picker = true;
                     self.color_picker_field = field_name;
                     self.color_picker_color = color;
@@ -440,7 +291,7 @@ impl Application for CalendarApp {
                         "b" => *current_color = Color::from_rgb(current_color.r, current_color.g, val),
                         _ => {}
                     }
-                    
+
                     // Update the color picker color to show the new value
                     self.color_picker_color = *current_color;
                 }
@@ -455,7 +306,7 @@ impl Application for CalendarApp {
                 if let Some(theme) = &mut self.creating_theme {
                     // Remove any # prefix and try to parse
                     let hex = hex_input.trim_start_matches('#');
-                    
+
                     // Only parse if we have exactly 6 hex characters
                     if hex.len() == 6 {
                         if let (Ok(r), Ok(g), Ok(b)) = (
@@ -464,7 +315,7 @@ impl Application for CalendarApp {
                             u8::from_str_radix(&hex[4..6], 16),
                         ) {
                             let color = Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                            
+
                             match field_name.as_str() {
                                 "app_background" => theme.app_background = color,
                                 "calendar_background" => theme.calendar_background = color,
@@ -477,7 +328,7 @@ impl Application for CalendarApp {
                                 "text_secondary" => theme.text_secondary = color,
                                 _ => {}
                             }
-                            
+
                             // Update the color picker color to show the new value
                             self.color_picker_color = color;
                         }
@@ -508,7 +359,7 @@ impl Application for CalendarApp {
                             "b" => *current_color = Color::from_rgb(current_color.r, current_color.g, val),
                             _ => {}
                         }
-                        
+
                         // Update the color picker color to show the new value
                         self.color_picker_color = *current_color;
                     }
@@ -529,7 +380,7 @@ impl Application for CalendarApp {
                         "text_secondary" => theme.text_secondary = color,
                         _ => {}
                     }
-                    
+
                     // Update the color picker color to show the new value
                     self.color_picker_color = color;
                 }
@@ -558,38 +409,38 @@ impl Application for CalendarApp {
                 if self.creating_theme_name.trim().is_empty() {
                     return Command::none(); // Don't save without a name
                 }
-                
+
                 if let Some(theme) = &self.creating_theme {
                     let db = match self.db.lock() {
                         Ok(db) => db,
                         Err(_) => return Command::none(),
                     };
-                    
+
                     let theme_service = ThemeService::new(&db);
-                    
+
                     // If editing and name changed, delete the old theme first
                     if self.is_editing_theme && self.creating_theme_name != self.editing_theme_original_name {
                         let _ = theme_service.delete_theme(&self.editing_theme_original_name);
                     }
-                    
+
                     if theme_service.save_theme(theme, &self.creating_theme_name).is_ok() {
                         // Reload available themes
                         if let Ok(themes) = theme_service.list_themes() {
                             self.available_themes = themes;
                         }
-                        
+
                         // If the edited/created theme is now active, update the active theme
                         if self.is_editing_theme && self.editing_theme_original_name == self.theme_name {
                             self.theme_name = self.creating_theme_name.clone();
                             self.theme = theme.base.clone();
                             self.calendar_theme = theme.clone();
-                            
+
                             drop(db);
                             self.save_settings();
                         } else {
                             drop(db);
                         }
-                        
+
                         // Close create dialog and reopen theme manager
                         self.show_create_theme = false;
                         self.show_theme_manager = true;
@@ -647,19 +498,19 @@ impl Application for CalendarApp {
                 // Go back 3 months
                 let current_month = self.current_date.month();
                 let current_year = self.current_date.year();
-                
+
                 let new_month = if current_month <= 3 {
                     current_month + 9
                 } else {
                     current_month - 3
                 };
-                
+
                 let new_year = if current_month <= 3 {
                     current_year - 1
                 } else {
                     current_year
                 };
-                
+
                 if let Some(new_date) = NaiveDate::from_ymd_opt(new_year, new_month, 1) {
                     self.current_date = new_date;
                     self.load_events();
@@ -669,19 +520,19 @@ impl Application for CalendarApp {
                 // Go forward 3 months
                 let current_month = self.current_date.month();
                 let current_year = self.current_date.year();
-                
+
                 let new_month = if current_month >= 10 {
                     current_month - 9
                 } else {
                     current_month + 3
                 };
-                
+
                 let new_year = if current_month >= 10 {
                     current_year + 1
                 } else {
                     current_year
                 };
-                
+
                 if let Some(new_date) = NaiveDate::from_ymd_opt(new_year, new_month, 1) {
                     self.current_date = new_date;
                     self.load_events();
@@ -742,7 +593,7 @@ impl Application for CalendarApp {
                     self.save_settings();
                 }
             }
-            
+
             // Event dialog messages
             Message::OpenEventDialog => {
                 self.event_dialog_state = Some(crate::ui::dialogs::EventDialogState::with_settings(
@@ -834,7 +685,7 @@ impl Application for CalendarApp {
             Message::UpdateEventRecurrence(recurrence) => {
                 if let Some(state) = &mut self.event_dialog_state {
                     state.recurrence = crate::ui::dialogs::event_dialog::display_to_recurrence(&recurrence);
-                    
+
                     // Clear selected days when changing recurrence type
                     if !recurrence.contains("Weekly") {
                         state.recurrence_days.clear();
@@ -858,7 +709,7 @@ impl Application for CalendarApp {
                             let save_result = {
                                 if let Ok(db) = self.db.lock() {
                                     let service = crate::services::event::EventService::new(db.connection());
-                                    
+
                                     if state.is_editing {
                                         service.update(&event)
                                     } else {
@@ -868,7 +719,7 @@ impl Application for CalendarApp {
                                     Err(anyhow::anyhow!("Failed to acquire database lock"))
                                 }
                             }; // Lock is released here
-                            
+
                             match save_result {
                                 Ok(_) => {
                                     // Close dialog on success
@@ -919,7 +770,7 @@ impl Application for CalendarApp {
             }
             Message::KeyPressed(key, _modifiers) => {
                 use iced::keyboard::Key;
-                
+
                 // Handle ESC key to close dialogs
                 if key == Key::Named(iced::keyboard::key::Named::Escape) {
                     // Close event dialog if open
@@ -949,220 +800,21 @@ impl Application for CalendarApp {
         }
         Command::none()
     }
-
-    fn view(&self) -> Element<Self::Message> {
-        components::build_view(
-            self.current_view,
-            self.show_my_day,
-            self.show_ribbon,
-            self.my_day_position_right,
-            &self.theme,
-            &self.calendar_theme,
-            self.create_calendar_view(),
-            self.show_settings_dialog,
-            self.show_theme_manager,
-            self.show_create_theme,
-            self.is_editing_theme,
-            self.show_date_picker,
-            self.show_theme_picker,
-            &self.available_themes,
-            &self.theme_name,
-            &self.creating_theme_name,
-            &self.creating_base_theme,
-            self.creating_theme.as_ref(),
-            self.current_date.year(),
-            self.current_date.month(),
-            &self.time_format,
-            self.first_day_of_week,
-            self.first_day_of_work_week,
-            self.last_day_of_work_week,
-            self.time_slot_interval,
-            &self.default_event_start_time,
-            self.show_color_picker,
-            self.color_picker_color,
-            &self.color_picker_field,
-            self.show_event_dialog,
-            self.event_dialog_state.as_ref(),
-        )
-    }
-
-    fn theme(&self) -> Self::Theme {
-        self.theme.clone()
-    }
-    
-    fn subscription(&self) -> iced::Subscription<Self::Message> {
-        use iced::keyboard;
-        use iced::event;
-        
-        event::listen_with(|event, _status| {
-            match event {
-                iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-                    Some(Message::KeyPressed(key, modifiers))
-                },
-                _ => None,
-            }
-        })
-    }
 }
 
-impl CalendarApp {
-    /// Load events for the currently displayed date range
-    fn load_events(&mut self) {
-        use crate::services::event::EventService;
-        use chrono::{Datelike, TimeZone};
-        
-        // Calculate date range based on current view
-        let (start, end) = match self.current_view {
-            ViewType::Day => {
-                let start = self.current_date.and_hms_opt(0, 0, 0)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                let end = self.current_date.and_hms_opt(23, 59, 59)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                (start, end)
-            },
-            ViewType::WorkWeek | ViewType::Week => {
-                // Get start of week
-                let weekday = self.current_date.weekday().num_days_from_sunday();
-                let days_from_start = (weekday as i64 - self.first_day_of_week as i64 + 7) % 7;
-                let week_start = self.current_date - Duration::days(days_from_start);
-                
-                let days_in_view = if matches!(self.current_view, ViewType::WorkWeek) { 5 } else { 7 };
-                let week_end = week_start + Duration::days(days_in_view - 1);
-                
-                let start = week_start.and_hms_opt(0, 0, 0)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                let end = week_end.and_hms_opt(23, 59, 59)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                (start, end)
-            },
-            ViewType::Month => {
-                // Get first and last day of month
-                let first_day = NaiveDate::from_ymd_opt(
-                    self.current_date.year(),
-                    self.current_date.month(),
-                    1
-                ).unwrap();
-                let last_day = if self.current_date.month() == 12 {
-                    NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1)
-                        .map(|d| d.pred_opt())
-                        .flatten()
-                } else {
-                    NaiveDate::from_ymd_opt(
-                        self.current_date.year(),
-                        self.current_date.month() + 1,
-                        1
-                    ).map(|d| d.pred_opt())
-                    .flatten()
-                }.unwrap();
-                
-                let start = first_day.and_hms_opt(0, 0, 0)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                let end = last_day.and_hms_opt(23, 59, 59)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                (start, end)
-            },
-            ViewType::Quarter => {
-                // Get first day of quarter
-                let quarter_start_month = ((self.current_date.month() - 1) / 3) * 3 + 1;
-                let first_day = NaiveDate::from_ymd_opt(
-                    self.current_date.year(),
-                    quarter_start_month,
-                    1
-                ).unwrap();
-                
-                // Get last day of quarter (3 months later)
-                let quarter_end_month = quarter_start_month + 2;
-                let last_day = if quarter_end_month == 12 {
-                    NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1)
-                        .map(|d| d.pred_opt())
-                        .flatten()
-                } else {
-                    NaiveDate::from_ymd_opt(
-                        self.current_date.year(),
-                        quarter_end_month + 1,
-                        1
-                    ).map(|d| d.pred_opt())
-                    .flatten()
-                }.unwrap();
-                
-                let start = first_day.and_hms_opt(0, 0, 0)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                let end = last_day.and_hms_opt(23, 59, 59)
-                    .map(|naive| Local.from_local_datetime(&naive).single())
-                    .flatten();
-                (start, end)
-            },
-        };
-        
-        // Load events from database
-        if let (Some(start), Some(end)) = (start, end) {
-            if let Ok(db) = self.db.lock() {
-                let event_service = EventService::new(db.connection());
-                if let Ok(events) = event_service.expand_recurring_events(start, end) {
-                    self.events = events;
-                } else {
-                    self.events = Vec::new();
-                }
-            }
-        } else {
-            self.events = Vec::new();
-        }
+fn parse_hex_color(hex: &str) -> Option<Color> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
     }
 
-    /// Save current settings to database
-    fn save_settings(&self) {
-        utils::save_settings(
-            &self.db,
-            &self.theme_name,
-            self.show_my_day,
-            self.my_day_position_right,
-            self.show_ribbon,
-            self.current_view,
-            &self.time_format,
-            self.first_day_of_week,
-            self.first_day_of_work_week,
-            self.last_day_of_work_week,
-            &self.date_format,
-            self.time_slot_interval,
-            &self.default_event_start_time,
-        );
-    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
 
-    /// Create the main calendar view
-    fn create_calendar_view(&self) -> Element<Message> {
-        match self.current_view {
-            ViewType::Month => views::create_month_view(self.current_date, &self.calendar_theme),
-            ViewType::Day => views::create_day_view(
-                self.current_date,
-                &self.calendar_theme,
-                &self.time_format,
-                self.time_slot_interval,
-                &self.events,
-            ),
-            ViewType::Week => views::create_week_view(
-                self.current_date,
-                &self.calendar_theme,
-                &self.time_format,
-                self.time_slot_interval,
-                self.first_day_of_week,
-                &self.events,
-            ),
-            ViewType::WorkWeek => views::create_workweek_view(
-                self.current_date,
-                &self.calendar_theme,
-                &self.time_format,
-                self.time_slot_interval,
-                self.first_day_of_week,
-                &self.events,
-            ),
-            ViewType::Quarter => views::create_quarter_view(self.current_date, &self.calendar_theme),
-        }
-    }
+    Some(Color::from_rgb(
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+    ))
 }
