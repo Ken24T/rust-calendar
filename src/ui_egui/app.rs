@@ -19,7 +19,6 @@ use crate::ui_egui::settings_dialog::render_settings_dialog;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::MonthView;
-use crate::ui_egui::views::quarter_view::QuarterView;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::CountdownRequest;
@@ -32,7 +31,6 @@ pub enum ViewType {
     Week,
     WorkWeek,
     Month,
-    Quarter,
 }
 
 const MIN_ROOT_WIDTH: f32 = 320.0;
@@ -292,7 +290,6 @@ impl eframe::App for CalendarApp {
                     ViewType::Week => "Week",
                     ViewType::WorkWeek => "Work Week",
                     ViewType::Month => "Month",
-                    ViewType::Quarter => "Month",
                 },
                 self.current_date.format("%B %Y")
             ));
@@ -326,7 +323,6 @@ impl eframe::App for CalendarApp {
                     self.render_workweek_view(ui, &mut countdown_requests, &active_countdown_events)
                 }
                 ViewType::Month => self.render_month_view(ui),
-                ViewType::Quarter => self.render_month_view(ui),
             }
         });
 
@@ -433,19 +429,6 @@ impl CalendarApp {
                 };
                 NaiveDate::from_ymd_opt(year, prev_month, 1).unwrap()
             }
-            ViewType::Quarter => {
-                let new_month = if self.current_date.month() <= 3 {
-                    10
-                } else {
-                    self.current_date.month() - 3
-                };
-                let year = if self.current_date.month() <= 3 {
-                    self.current_date.year() - 1
-                } else {
-                    self.current_date.year()
-                };
-                NaiveDate::from_ymd_opt(year, new_month, 1).unwrap()
-            }
         };
     }
 
@@ -467,19 +450,6 @@ impl CalendarApp {
                     self.current_date.year()
                 };
                 NaiveDate::from_ymd_opt(year, next_month, 1).unwrap()
-            }
-            ViewType::Quarter => {
-                let new_month = if self.current_date.month() >= 10 {
-                    1
-                } else {
-                    self.current_date.month() + 3
-                };
-                let year = if self.current_date.month() >= 10 {
-                    self.current_date.year() + 1
-                } else {
-                    self.current_date.year()
-                };
-                NaiveDate::from_ymd_opt(year, new_month, 1).unwrap()
             }
         };
     }
@@ -573,16 +543,7 @@ impl CalendarApp {
         );
     }
 
-    fn render_quarter_view(&mut self, ui: &mut egui::Ui) {
-        QuarterView::show(
-            ui,
-            &mut self.current_date,
-            &mut self.show_event_dialog,
-            &mut self.event_dialog_date,
-            &mut self.event_dialog_recurrence,
-            &self.settings,
-        );
-    }
+    
 
     // Placeholder dialog renderers
     fn render_event_dialog(&mut self, ctx: &egui::Context) {

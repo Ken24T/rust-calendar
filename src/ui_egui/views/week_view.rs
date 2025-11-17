@@ -534,7 +534,30 @@ impl WeekView {
 
         let mut clicked_event: Option<Event> = context_clicked_event;
 
-        if clicked_event.is_none() && response.clicked() {
+        // Check drag_started BEFORE clicked to ensure drag detection works
+        if response.drag_started() {
+            eprintln!("[week_view] drag_started detected, pointer_hit: {:?}", pointer_hit.as_ref().map(|(_, e)| &e.title));
+            if let Some((hit_rect, event)) = pointer_hit {
+                eprintln!("[week_view] event under pointer: {}", event.title);
+                if event.recurrence_rule.is_none() {
+                    if let Some(drag_context) = DragContext::from_event(
+                        &event,
+                        pointer_pos
+                            .map(|pos| pos - hit_rect.min)
+                            .unwrap_or(Vec2::ZERO),
+                        DragView::Week,
+                    ) {
+                        eprintln!("[week_view] starting drag for event: {}", event.title);
+                        DragManager::begin(ui.ctx(), drag_context);
+                        ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                    }
+                } else {
+                    eprintln!("[week_view] cannot drag recurring event: {}", event.title);
+                }
+            } else {
+                eprintln!("[week_view] drag_started but no event under pointer");
+            }
+        } else if clicked_event.is_none() && response.clicked() {
             if let Some(event) = pointer_event.clone() {
                 clicked_event = Some(event);
             } else {
@@ -550,23 +573,6 @@ impl WeekView {
             *event_dialog_date = Some(date);
             *event_dialog_time = Some(time);
             *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
-        }
-
-        if response.drag_started() {
-            if let Some((hit_rect, event)) = pointer_hit {
-                if event.recurrence_rule.is_none() {
-                    if let Some(drag_context) = DragContext::from_event(
-                        &event,
-                        pointer_pos
-                            .map(|pos| pos - hit_rect.min)
-                            .unwrap_or(Vec2::ZERO),
-                        DragView::Week,
-                    ) {
-                        DragManager::begin(ui.ctx(), drag_context);
-                        ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
-                    }
-                }
-            }
         }
 
         if response.dragged() {
