@@ -26,6 +26,7 @@ pub(super) enum CountdownCardUiAction {
     Close,
     OpenSettings,
     GeometrySettled,
+    Delete,
 }
 
 pub(super) fn viewport_builder_for_card(
@@ -97,14 +98,17 @@ pub(super) fn render_countdown_card_ui(
 ) -> CountdownCardUiAction {
     ctx.request_repaint_after(StdDuration::from_secs(1));
     
-    // Explicitly enforce the card's geometry each frame
-    ctx.send_viewport_cmd_to(
-        viewport_id,
-        egui::ViewportCommand::InnerSize(egui::vec2(
-            card.geometry.width.max(CARD_MIN_WIDTH),
-            card.geometry.height.max(CARD_MIN_HEIGHT),
-        )),
-    );
+    // Enforce size while geometry is still being set up (target_geometry present)
+    // Once geometry settles (target_geometry becomes None), allow user to resize freely
+    if target_geometry.is_some() {
+        ctx.send_viewport_cmd_to(
+            viewport_id,
+            egui::ViewportCommand::InnerSize(egui::vec2(
+                card.geometry.width.max(CARD_MIN_WIDTH),
+                card.geometry.height.max(CARD_MIN_HEIGHT),
+            )),
+        );
+    }
     
     ctx.send_viewport_cmd_to(
         viewport_id,
@@ -208,11 +212,15 @@ pub(super) fn render_countdown_card_ui(
                         })
                         .show(title_ui, |ui| {
                             ui.centered_and_justified(|ui| {
-                                ui.label(
-                                    egui::RichText::new(card.effective_title())
-                                        .color(title_fg)
-                                        .size(title_font_size)
-                                        .strong(),
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(card.effective_title())
+                                            .color(title_fg)
+                                            .size(title_font_size)
+                                            .strong(),
+                                    )
+                                    .truncate()
+                                    .wrap_mode(egui::TextWrapMode::Truncate),
                                 );
                             });
                         });
@@ -254,8 +262,9 @@ pub(super) fn render_countdown_card_ui(
                 action = CountdownCardUiAction::OpenSettings;
                 ui.close_menu();
             }
-            if ui.button("Close countdown").clicked() {
-                action = CountdownCardUiAction::Close;
+            ui.separator();
+            if ui.button("Delete card").clicked() {
+                action = CountdownCardUiAction::Delete;
                 ui.close_menu();
             }
         });

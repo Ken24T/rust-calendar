@@ -66,6 +66,7 @@ impl CalendarApp {
             };
 
             // Check if a card already exists for this event
+            log::debug!("Checking for existing card for event {:?}, total cards in service: {}", event_id, self.countdown_service.cards().len());
             if let Some(existing_card) = self
                 .countdown_service
                 .cards()
@@ -73,9 +74,12 @@ impl CalendarApp {
                 .find(|card| card.event_id == event_id)
             {
                 log::info!(
-                    "Card already exists for event {:?} ({}), marking as pending",
+                    "Card already exists for event {:?} ({}), reopening card {:?} with geometry: {}x{}",
                     event_id,
-                    title
+                    title,
+                    existing_card.id,
+                    existing_card.geometry.width,
+                    existing_card.geometry.height
                 );
                 self.countdown_ui
                     .mark_card_pending(existing_card.id, existing_card.geometry);

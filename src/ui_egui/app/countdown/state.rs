@@ -138,6 +138,11 @@ impl CountdownUiState {
             match action {
                 CountdownCardUiAction::None => {}
                 CountdownCardUiAction::Close => queued_close = true,
+                CountdownCardUiAction::Delete => {
+                    log::info!("Delete action triggered for card {:?} (event {:?})", card.id, card.event_id);
+                    queued_close = true;
+                    removals.push(card.id);
+                }
                 CountdownCardUiAction::OpenSettings => {
                     self.open_settings.insert(card.id);
                     let default_geometry = default_settings_geometry_for(&card);
@@ -150,7 +155,8 @@ impl CountdownUiState {
                     self.clear_geometry_wait_state(&card.id);
                     log::debug!("card {:?} geometry settled", card.id);
                     ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
-                    ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Focus);
+                    // Don't focus on startup to allow main window to be on top
+                    // ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Focus);
                 }
             }
 
@@ -184,6 +190,7 @@ impl CountdownUiState {
         }
 
         for id in removals {
+            log::info!("Processing removal for card {:?}", id);
             service.remove_card(id);
             self.open_settings.remove(&id);
             self.settings_geometry.remove(&id);
@@ -437,6 +444,9 @@ impl CountdownUiState {
             .entry(card_id)
             .or_insert_with(|| GeometrySampleState::new(sample));
 
+        // Check if we have a target geometry we're trying to enforce
+        let target = self.pending_geometry.get(&card_id).map(|p| p.target);
+
         if geometry_changed(entry.last, sample) {
             log::debug!(
                 "card {:?} geometry sample changed {:?} -> {:?}; resetting stability",
@@ -448,6 +458,25 @@ impl CountdownUiState {
             entry.stable_frames = 1;
             entry.delivered = false;
             return false;
+        }
+
+        // If we have a target geometry, only accept stability if the sample matches the target
+        // This prevents accepting geometry that was forced by the OS/window manager
+        if let Some(target_geom) = target {
+            let size_matches = (sample.width - target_geom.width).abs() < 5.0
+                && (sample.height - target_geom.height).abs() < 5.0;
+            
+            if !size_matches {
+                log::debug!(
+                    "card {:?} geometry stable at {:?} but doesn't match target {:?}; continuing to enforce",
+                    card_id,
+                    sample,
+                    target_geom
+                );
+                // Keep resetting stability so we don't accept the wrong size
+                entry.stable_frames = 1;
+                return false;
+            }
         }
 
         if entry.stable_frames < GEOMETRY_STABILITY_FRAMES {

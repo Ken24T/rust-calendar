@@ -193,10 +193,17 @@ impl CountdownService {
 
     pub fn remove_card(&mut self, id: CountdownCardId) -> bool {
         if let Some(idx) = self.cards.iter().position(|card| card.id == id) {
-            self.cards.remove(idx);
+            let card = self.cards.remove(idx);
+            log::info!(
+                "remove_card: removed card {:?} for event {:?} ({})",
+                id,
+                card.event_id,
+                card.event_title
+            );
             self.dirty = true;
             return true;
         }
+        log::warn!("remove_card: card {:?} not found", id);
         false
     }
 
