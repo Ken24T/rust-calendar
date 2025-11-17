@@ -1,6 +1,7 @@
 use chrono::{Datelike, Local, NaiveDate};
-use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Pos2, Rect, Sense, Stroke, Vec2};
 
+use super::palette::CalendarCellPalette;
 use crate::models::settings::Settings;
 
 pub struct QuarterView;
@@ -87,6 +88,8 @@ impl QuarterView {
         // Build mini calendar grid
         let mut day_counter = 1 - first_weekday;
 
+        let palette = CalendarCellPalette::from_ui(ui);
+
         ui.vertical(|ui| {
             egui::Grid::new(format!("quarter_grid_{}", month_date.month()))
                 .spacing([2.0, 2.0])
@@ -97,7 +100,7 @@ impl QuarterView {
                                 // Empty cell
                                 let (rect, _response) =
                                     ui.allocate_exact_size(Vec2::new(30.0, 30.0), Sense::hover());
-                                ui.painter().rect_filled(rect, 2.0, Color32::from_gray(25));
+                                ui.painter().rect_filled(rect, 2.0, palette.empty_bg);
                             } else {
                                 // Day cell
                                 let date = NaiveDate::from_ymd_opt(
@@ -125,6 +128,7 @@ impl QuarterView {
                                     show_event_dialog,
                                     event_dialog_date,
                                     event_dialog_recurrence,
+                                    palette,
                                 );
                             }
                             day_counter += 1;
@@ -144,6 +148,7 @@ impl QuarterView {
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
+        palette: CalendarCellPalette,
     ) {
         let desired_size = Vec2::new(30.0, 30.0);
         let (rect, response) =
@@ -151,40 +156,35 @@ impl QuarterView {
 
         // Background color
         let bg_color = if is_today {
-            Color32::from_rgb(60, 90, 150)
+            palette.today_bg
         } else if is_weekend {
-            Color32::from_gray(30)
+            palette.weekend_bg
         } else {
-            Color32::from_gray(35)
+            palette.regular_bg
         };
-
         ui.painter().rect_filled(rect, 2.0, bg_color);
 
         // Border
         let border_color = if is_today {
-            Color32::from_rgb(100, 130, 200)
+            palette.today_border
         } else {
-            Color32::from_gray(50)
+            palette.border
         };
         ui.painter()
             .rect_stroke(rect, 2.0, Stroke::new(1.0, border_color));
 
         // Hover effect
         if response.hovered() {
-            ui.painter().rect_stroke(
-                rect,
-                2.0,
-                Stroke::new(2.0, Color32::from_rgb(100, 150, 255)),
-            );
+            ui.painter()
+                .rect_stroke(rect, 2.0, Stroke::new(2.0, palette.hover_border));
         }
 
         // Day number
         let text_color = if is_today {
-            Color32::WHITE
+            palette.today_text
         } else {
-            Color32::LIGHT_GRAY
+            palette.text
         };
-
         ui.painter().text(
             rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -193,12 +193,11 @@ impl QuarterView {
             text_color,
         );
 
+        // Context menu trigger area
         let popup_id = response.id.with(format!("quarter_context_menu_{}", date));
         let mut popup_anchor_response = response.clone();
-        popup_anchor_response.rect = Rect::from_min_size(
-            Pos2::new(rect.left(), rect.top()),
-            Vec2::new(rect.width(), rect.height()),
-        );
+        popup_anchor_response.rect =
+            Rect::from_min_size(Pos2::new(rect.left(), rect.top()), Vec2::new(140.0, 30.0));
 
         if response.secondary_clicked() {
             ui.memory_mut(|mem| mem.open_popup(popup_id));
@@ -211,8 +210,8 @@ impl QuarterView {
             egui::AboveOrBelow::Below,
             egui::PopupCloseBehavior::CloseOnClickOutside,
             |ui| {
-                ui.set_width(150.0);
-                ui.label(date.format("%A, %B %d").to_string());
+                ui.set_width(135.0);
+                ui.label(date.format("%b %d").to_string());
                 ui.separator();
 
                 if ui.button("📅 New Event").clicked() {
@@ -235,7 +234,7 @@ impl QuarterView {
         if response.clicked() {
             *show_event_dialog = true;
             *event_dialog_date = Some(date);
-            *event_dialog_recurrence = None; // Default to non-recurring
+            *event_dialog_recurrence = None;
         }
 
         // Handle double-click for quarterly recurrence

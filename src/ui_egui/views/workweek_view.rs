@@ -1,7 +1,8 @@
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Weekday};
-use egui::{Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
+use super::palette::DayStripPalette;
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -25,6 +26,7 @@ impl WorkWeekView {
         active_countdown_events: &HashSet<i64>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
+        let day_strip_palette = DayStripPalette::from_ui(ui);
 
         // Get work week dates based on settings
         let week_start = Self::get_week_start(*current_date, settings.first_day_of_week);
@@ -45,54 +47,94 @@ impl WorkWeekView {
         let col_width = available_for_cols / num_days as f32;
 
         // Work week header with day names
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0; // We'll add spacing manually
+        let header_frame = egui::Frame::none()
+            .fill(day_strip_palette.strip_bg)
+            .rounding(egui::Rounding::same(10.0))
+            .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
+            .inner_margin(Margin {
+                left: 0.0,
+                right: 0.0,
+                top: 10.0,
+                bottom: 10.0,
+            });
 
-            // Fixed width for time label area
-            ui.add_space(time_label_width);
-            ui.add_space(spacing);
+        let header_response = header_frame.show(ui, |strip_ui| {
+            strip_ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
 
-            for (i, date) in work_week_dates.iter().enumerate() {
-                let is_today = *date == today;
-                let day_name = date.format("%A").to_string();
+                // Fixed width for time label area
+                ui.add_space(time_label_width);
+                ui.add_space(spacing);
 
-                // Allocate exact width for column
-                ui.allocate_ui_with_layout(
-                    Vec2::new(col_width, 40.0),
-                    egui::Layout::top_down(egui::Align::Center),
-                    |ui| {
-                        let text = egui::RichText::new(&day_name).size(12.0);
-                        let text = if is_today {
-                            text.color(Color32::from_rgb(100, 150, 255)).strong()
-                        } else {
-                            text
-                        };
-                        ui.label(text);
+                for (i, date) in work_week_dates.iter().enumerate() {
+                    let is_today = *date == today;
+                    let day_name = date.format("%A").to_string();
+                    let cell_bg = if is_today {
+                        day_strip_palette.today_cell_bg
+                    } else {
+                        day_strip_palette.cell_bg
+                    };
+                    let border_color = if is_today {
+                        day_strip_palette.accent_line
+                    } else {
+                        day_strip_palette.strip_border
+                    };
+                    let name_color = if is_today {
+                        day_strip_palette.today_text
+                    } else {
+                        day_strip_palette.text
+                    };
+                    let date_color = if is_today {
+                        day_strip_palette.today_date_text
+                    } else {
+                        day_strip_palette.date_text
+                    };
 
-                        let date_text = egui::RichText::new(Self::format_short_date(
-                            *date,
-                            &settings.date_format,
-                        ))
-                        .size(11.0);
-                        let date_text = if is_today {
-                            date_text.color(Color32::from_rgb(100, 150, 255))
-                        } else {
-                            date_text.color(Color32::GRAY)
-                        };
-                        ui.label(date_text);
-                    },
-                );
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(col_width, 48.0),
+                        egui::Layout::top_down(egui::Align::Center),
+                        |cell_ui| {
+                            egui::Frame::none()
+                                .fill(cell_bg)
+                                .rounding(egui::Rounding::same(6.0))
+                                .stroke(Stroke::new(1.0, border_color))
+                                .inner_margin(Margin::symmetric(6.0, 4.0))
+                                .show(cell_ui, |content_ui| {
+                                    content_ui.vertical_centered(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(&day_name)
+                                                .size(12.0)
+                                                .color(name_color)
+                                                .strong(),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new(Self::format_short_date(
+                                                *date,
+                                                &settings.date_format,
+                                            ))
+                                            .size(11.0)
+                                            .color(date_color),
+                                        );
+                                    });
+                                });
+                        },
+                    );
 
-                // Add spacing between columns (but not after the last one)
-                if i < work_week_dates.len() - 1 {
-                    ui.add_space(spacing);
+                    if i < work_week_dates.len() - 1 {
+                        ui.add_space(spacing);
+                    }
                 }
-            }
+            });
         });
 
-        ui.add_space(5.0);
-        ui.separator();
-        ui.add_space(5.0);
+        let header_rect = header_response.response.rect;
+        ui.painter().hline(
+            header_rect.x_range(),
+            header_rect.bottom(),
+            Stroke::new(1.0, day_strip_palette.accent_line),
+        );
+
+        ui.add_space(8.0);
 
         // Scrollable time slots
         let mut clicked_event = None;
@@ -268,19 +310,37 @@ impl WorkWeekView {
         let drag_sense = Sense::click_and_drag().union(Sense::hover());
         let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
 
+        let dark_mode = ui.style().visuals.dark_mode;
+        let (regular_bg, today_bg, hour_line_color, slot_line_color, divider_color, hover_overlay) =
+            if dark_mode {
+                (
+                    Color32::from_gray(40),
+                    Color32::from_rgb(50, 70, 100),
+                    Color32::from_gray(60),
+                    Color32::from_gray(50),
+                    Color32::from_gray(50),
+                    Color32::from_rgba_unmultiplied(100, 150, 255, 30),
+                )
+            } else {
+                (
+                    Color32::from_rgb(245, 245, 245),
+                    Color32::from_rgb(222, 236, 255),
+                    Color32::from_rgb(210, 210, 210),
+                    Color32::from_rgb(230, 230, 230),
+                    Color32::from_rgb(210, 210, 210),
+                    Color32::from_rgba_unmultiplied(80, 120, 200, 25),
+                )
+            };
+
         // Background
-        let bg_color = if is_today {
-            Color32::from_rgb(50, 70, 100)
-        } else {
-            Color32::from_gray(40)
-        };
+        let bg_color = if is_today { today_bg } else { regular_bg };
         ui.painter().rect_filled(rect, 0.0, bg_color);
 
         // Horizontal grid line
         let line_color = if is_hour_start {
-            Color32::from_gray(60)
+            hour_line_color
         } else {
-            Color32::from_gray(50)
+            slot_line_color
         };
         ui.painter().line_segment(
             [
@@ -296,16 +356,12 @@ impl WorkWeekView {
                 Pos2::new(rect.right(), rect.top()),
                 Pos2::new(rect.right(), rect.bottom()),
             ],
-            Stroke::new(1.0, Color32::from_gray(50)),
+            Stroke::new(1.0, divider_color),
         );
 
         // Hover effect
         if response.hovered() {
-            ui.painter().rect_filled(
-                rect,
-                0.0,
-                Color32::from_rgba_unmultiplied(100, 150, 255, 30),
-            );
+            ui.painter().rect_filled(rect, 0.0, hover_overlay);
         }
 
         let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();

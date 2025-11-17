@@ -4,6 +4,7 @@ use crate::models::event::Event;
 
 pub mod day_view;
 pub mod month_view;
+mod palette;
 pub mod quarter_view;
 pub mod week_view;
 pub mod workweek_view;
@@ -13,6 +14,7 @@ pub struct CountdownRequest {
     pub event_id: Option<i64>,
     pub title: String,
     pub start_at: DateTime<Local>,
+    pub color: Option<String>,
 }
 
 impl CountdownRequest {
@@ -21,6 +23,7 @@ impl CountdownRequest {
             event_id: event.id,
             title: event.title.clone(),
             start_at: event.start,
+            color: event.color.clone(),
         }
     }
 }

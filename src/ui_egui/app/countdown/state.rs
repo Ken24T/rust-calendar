@@ -7,7 +7,7 @@ use crate::services::countdown::{
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownService,
 };
 use chrono::Local;
-use egui::Context;
+use egui::{self, Context};
 use log;
 use std::collections::{HashMap, HashSet};
 
@@ -111,6 +111,8 @@ impl CountdownUiState {
                 CountdownCardUiAction::GeometrySettled => {
                     self.clear_geometry_wait_state(&card.id);
                     log::debug!("card {:?} geometry settled", card.id);
+                    ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
+                    ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Focus);
                 }
             }
 
@@ -277,6 +279,22 @@ impl CountdownUiState {
             }
             CountdownSettingsCommand::SetDaysFgColor(id, color) => {
                 service.set_days_fg_color(id, color);
+                false
+            }
+            CountdownSettingsCommand::SetUseDefaultTitleBg(id, value) => {
+                service.set_use_default_title_bg(id, value);
+                false
+            }
+            CountdownSettingsCommand::SetUseDefaultTitleFg(id, value) => {
+                service.set_use_default_title_fg(id, value);
+                false
+            }
+            CountdownSettingsCommand::SetUseDefaultBodyBg(id, value) => {
+                service.set_use_default_body_bg(id, value);
+                false
+            }
+            CountdownSettingsCommand::SetUseDefaultDaysFg(id, value) => {
+                service.set_use_default_days_fg(id, value);
                 false
             }
             CountdownSettingsCommand::ApplyVisualDefaults(id) => {

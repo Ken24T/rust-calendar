@@ -1,6 +1,7 @@
 use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
 
+use super::palette::CalendarCellPalette;
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -57,6 +58,8 @@ impl MonthView {
         // Build calendar grid (6 rows of 7 days)
         let mut day_counter = 1 - first_weekday;
 
+        let palette = CalendarCellPalette::from_ui(ui);
+
         egui::Grid::new("month_grid")
             .spacing([spacing, spacing])
             .min_col_width(col_width)
@@ -69,7 +72,7 @@ impl MonthView {
                                 Vec2::new(ui.available_width(), 80.0),
                                 Sense::hover(),
                             );
-                            ui.painter().rect_filled(rect, 2.0, Color32::from_gray(30));
+                            ui.painter().rect_filled(rect, 2.0, palette.empty_bg);
                         } else {
                             // Day cell
                             let date = NaiveDate::from_ymd_opt(
@@ -111,6 +114,7 @@ impl MonthView {
                                 event_dialog_date,
                                 event_dialog_recurrence,
                                 event_to_edit,
+                                palette,
                             );
                         }
                         day_counter += 1;
@@ -132,50 +136,44 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
+        palette: CalendarCellPalette,
     ) {
         let desired_size = Vec2::new(ui.available_width(), 80.0);
-        // Use union of click and hover to capture both left and right clicks
         let (rect, response) =
             ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
 
-        // Background color
+        // Background
         let bg_color = if is_today {
-            Color32::from_rgb(60, 90, 150) // Blue for today
+            palette.today_bg
         } else if is_weekend {
-            Color32::from_gray(35)
+            palette.weekend_bg
         } else {
-            Color32::from_gray(40)
+            palette.regular_bg
         };
-
-        // Draw background
         ui.painter().rect_filled(rect, 2.0, bg_color);
 
-        // Draw border
+        // Border
         let border_color = if is_today {
-            Color32::from_rgb(100, 130, 200)
+            palette.today_border
         } else {
-            Color32::from_gray(60)
+            palette.border
         };
         ui.painter()
             .rect_stroke(rect, 2.0, Stroke::new(1.0, border_color));
 
-        // Hover effect
+        // Hover emphasis
         if response.hovered() {
-            ui.painter().rect_stroke(
-                rect,
-                2.0,
-                Stroke::new(2.0, Color32::from_rgb(100, 150, 255)),
-            );
+            ui.painter()
+                .rect_stroke(rect, 2.0, Stroke::new(2.0, palette.hover_border));
         }
 
-        // Day number
+        // Day number label
         let day_text = format!("{}", day);
         let text_color = if is_today {
-            Color32::WHITE
+            palette.today_text
         } else {
-            Color32::LIGHT_GRAY
+            palette.text
         };
-
         ui.painter().text(
             Pos2::new(rect.left() + 5.0, rect.top() + 5.0),
             egui::Align2::LEFT_TOP,
@@ -184,9 +182,8 @@ impl MonthView {
             text_color,
         );
 
-        // Draw events (up to 3 visible)
-        let mut y_offset = 25.0;
         let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
+        let mut y_offset = 24.0;
         for &event in events.iter().take(3) {
             let event_color = event
                 .color
@@ -203,19 +200,16 @@ impl MonthView {
             ui.painter().rect_filled(event_rect, 2.0, event_color);
             event_hitboxes.push((event_rect, event.clone()));
 
-            // Event title - use available width with proper truncation
+            // Event title with truncation
             let font_id = egui::FontId::proportional(11.0);
-            let available_width = event_rect.width() - 6.0; // 3px padding on each side
-
+            let available_width = event_rect.width() - 6.0;
             let layout_job = egui::text::LayoutJob::simple(
                 event.title.clone(),
                 font_id.clone(),
                 Color32::WHITE,
                 available_width,
             );
-
             let galley = ui.fonts(|f| f.layout_job(layout_job));
-
             ui.painter().galley(
                 Pos2::new(
                     event_rect.left() + 3.0,
