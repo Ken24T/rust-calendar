@@ -26,6 +26,12 @@ fn create_settings_table(conn: &Connection) -> Result<()> {
             show_ribbon INTEGER NOT NULL DEFAULT 0,
             current_view TEXT NOT NULL DEFAULT 'Month',
             time_slot_interval INTEGER NOT NULL DEFAULT 60,
+            default_event_duration INTEGER NOT NULL DEFAULT 60,
+            first_day_of_work_week INTEGER NOT NULL DEFAULT 1,
+            last_day_of_work_week INTEGER NOT NULL DEFAULT 5,
+            default_event_start_time TEXT NOT NULL DEFAULT '08:00',
+            default_card_width REAL NOT NULL DEFAULT 120.0,
+            default_card_height REAL NOT NULL DEFAULT 110.0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",
@@ -63,6 +69,20 @@ fn run_settings_migrations(conn: &Connection) -> Result<()> {
         "settings",
         "default_event_start_time",
         "ALTER TABLE settings ADD COLUMN default_event_start_time TEXT NOT NULL DEFAULT '08:00'",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "default_card_width",
+        "ALTER TABLE settings ADD COLUMN default_card_width REAL NOT NULL DEFAULT 120.0",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "default_card_height",
+        "ALTER TABLE settings ADD COLUMN default_card_height REAL NOT NULL DEFAULT 110.0",
     )?;
 
     let had_time_slot = migrations::column_exists(conn, "settings", "time_slot_interval")?;
@@ -150,9 +170,9 @@ fn insert_default_settings(conn: &Connection) -> Result<()> {
             id, theme, first_day_of_week, time_format, date_format,
             show_my_day, my_day_position_right, show_ribbon, current_view,
             default_event_duration, first_day_of_work_week, last_day_of_work_week,
-            default_event_start_time
+            default_event_start_time, default_card_width, default_card_height
         )
-        VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 0, 0, 0, 'Month', 60, 1, 5, '08:00')",
+        VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 0, 0, 0, 'Month', 60, 1, 5, '08:00', 120.0, 110.0)",
         [],
     )
     .context("Failed to insert default settings")?;

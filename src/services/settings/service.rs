@@ -22,7 +22,7 @@ impl<'a> SettingsService<'a> {
                 "SELECT id, theme, first_day_of_week, time_format, date_format,
                     show_my_day, my_day_position_right, show_ribbon, current_view,
                     default_event_duration, first_day_of_work_week, last_day_of_work_week,
-                    default_event_start_time
+                    default_event_start_time, default_card_width, default_card_height
              FROM settings WHERE id = 1",
                 [],
                 |row| Ok(row_to_settings(row)?),
@@ -54,6 +54,8 @@ impl<'a> SettingsService<'a> {
                  first_day_of_work_week = ?10, \
                  last_day_of_work_week = ?11, \
                  default_event_start_time = ?12, \
+                 default_card_width = ?13, \
+                 default_card_height = ?14, \
                  updated_at = CURRENT_TIMESTAMP \
              WHERE id = 1",
             (
@@ -69,6 +71,8 @@ impl<'a> SettingsService<'a> {
                 settings.first_day_of_work_week,
                 settings.last_day_of_work_week,
                 &settings.default_event_start_time,
+                settings.default_card_width,
+                settings.default_card_height,
             ),
         )
         .context("Failed to update settings")?;

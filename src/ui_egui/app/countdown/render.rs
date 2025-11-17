@@ -4,8 +4,8 @@ use chrono::{DateTime, Local};
 use egui::{self, ViewportClass, ViewportId};
 use std::time::Duration as StdDuration;
 
-pub(super) const COUNTDOWN_SETTINGS_DEFAULT_HEIGHT: f32 = 780.0;
-pub(super) const COUNTDOWN_SETTINGS_MIN_HEIGHT: f32 = 740.0;
+pub(super) const COUNTDOWN_SETTINGS_DEFAULT_HEIGHT: f32 = 920.0;
+pub(super) const COUNTDOWN_SETTINGS_MIN_HEIGHT: f32 = 640.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CountdownCardUiAction {
@@ -46,7 +46,8 @@ pub(super) fn viewport_builder_for_settings(
 ) -> egui::ViewportBuilder {
     let mut builder = egui::ViewportBuilder::default()
         .with_title(format!("Settings: {}", card.effective_title()))
-        .with_resizable(false);
+        .with_resizable(true)
+        .with_min_inner_size(egui::vec2(260.0, COUNTDOWN_SETTINGS_MIN_HEIGHT));
 
     if let Some(geometry) = geometry {
         builder = builder
@@ -179,11 +180,22 @@ pub(super) fn render_countdown_card_ui(
                     let days_remaining = (card.start_at.date_naive() - now.date_naive())
                         .num_days()
                         .max(0);
-                    countdown_ui.label(
+                    let countdown_response = countdown_ui.label(
                         egui::RichText::new(days_remaining.to_string())
                             .size(font_size)
                             .color(days_fg),
                     );
+
+                    if let Some(body) = card
+                        .comment
+                        .as_ref()
+                        .map(|text| text.trim())
+                        .filter(|text| !text.is_empty())
+                    {
+                        countdown_response.on_hover_ui_at_pointer(|ui| {
+                            ui.label(body);
+                        });
+                    }
                 },
             );
         });

@@ -27,6 +27,7 @@ pub(in super::super) struct CountdownUiState {
     settings_geometry: HashMap<CountdownCardId, CountdownCardGeometry>,
     settings_needs_layout: HashSet<CountdownCardId>,
     render_log_state: HashMap<CountdownCardId, CountdownRenderSnapshot>,
+    pending_event_body_updates: Vec<(i64, Option<String>)>,
 }
 
 const MAX_PENDING_GEOMETRY_FRAMES: u32 = 120;
@@ -235,6 +236,10 @@ impl CountdownUiState {
         }
     }
 
+    pub(in super::super) fn drain_pending_event_bodies(&mut self) -> Vec<(i64, Option<String>)> {
+        std::mem::take(&mut self.pending_event_body_updates)
+    }
+
     fn apply_settings_command(
         &mut self,
         service: &mut CountdownService,
@@ -246,7 +251,16 @@ impl CountdownUiState {
                 false
             }
             CountdownSettingsCommand::SetComment(id, comment) => {
+                let event_id = service
+                    .cards()
+                    .iter()
+                    .find(|card| card.id == id)
+                    .and_then(|card| card.event_id);
+                let next_body = comment.clone();
                 service.set_comment(id, comment);
+                if let Some(event_id) = event_id {
+                    self.pending_event_body_updates.push((event_id, next_body));
+                }
                 false
             }
             CountdownSettingsCommand::SetAlwaysOnTop(id, value) => {

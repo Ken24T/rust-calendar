@@ -1,9 +1,11 @@
 mod countdown;
 
 use self::countdown::CountdownUiState;
+use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::countdown::{CountdownCardGeometry, CountdownService};
 use crate::services::database::Database;
+use crate::services::event::EventService;
 use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
 use crate::ui_egui::dialogs::theme_creator::{
@@ -12,7 +14,7 @@ use crate::ui_egui::dialogs::theme_creator::{
 use crate::ui_egui::dialogs::theme_dialog::{
     render_theme_dialog, ThemeDialogAction, ThemeDialogState,
 };
-use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogState};
+use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogResult, EventDialogState};
 use crate::ui_egui::settings_dialog::render_settings_dialog;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::day_view::DayView;
@@ -344,6 +346,7 @@ impl eframe::App for CalendarApp {
             .render_cards(ctx, &mut self.countdown_service);
         self.countdown_ui
             .render_settings_dialogs(ctx, &mut self.countdown_service);
+        self.flush_pending_event_bodies();
 
         // Dialogs (to be implemented)
         self.capture_root_geometry(ctx);
@@ -353,7 +356,6 @@ impl eframe::App for CalendarApp {
                 // Check if we're editing an existing event
                 if let Some(event_id) = self.event_to_edit {
                     // Load event from database
-                    use crate::services::event::EventService;
                     let service = EventService::new(self.database.connection());
                     if let Ok(Some(event)) = service.get(event_id) {
                         self.event_dialog_state =
@@ -593,7 +595,7 @@ impl CalendarApp {
     // Placeholder dialog renderers
     fn render_event_dialog(&mut self, ctx: &egui::Context) {
         if let Some(ref mut state) = self.event_dialog_state {
-            let saved = render_event_dialog(
+            let EventDialogResult { saved_event } = render_event_dialog(
                 ctx,
                 state,
                 self.database,
@@ -601,14 +603,67 @@ impl CalendarApp {
                 &mut self.show_event_dialog,
             );
 
+            let auto_create_card = state.create_countdown && state.event_id.is_none();
+            let event_saved = saved_event.is_some();
+            if let Some(event) = saved_event {
+                if auto_create_card {
+                    self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
+                }
+                self.sync_card_comments_from_event(&event);
+            }
+
             // If saved, clear the dialog state
-            if saved || !self.show_event_dialog {
+            if event_saved || !self.show_event_dialog {
                 self.event_dialog_state = None;
                 self.event_dialog_time = None;
             }
         } else {
             // No state - shouldn't happen, but close dialog if it does
             self.show_event_dialog = false;
+        }
+    }
+
+    fn flush_pending_event_bodies(&mut self) {
+        let updates = self.countdown_ui.drain_pending_event_bodies();
+        if updates.is_empty() {
+            return;
+        }
+
+        let service = EventService::new(self.database.connection());
+        for (event_id, body) in updates {
+            match service.get(event_id) {
+                Ok(Some(mut event)) => {
+                    event.description = body.clone();
+                    if let Err(err) = service.update(&event) {
+                        log::error!(
+                            "Failed to update event {} body from countdown settings: {err}",
+                            event_id
+                        );
+                        continue;
+                    }
+                    self.countdown_service
+                        .sync_comment_for_event(event_id, body.clone());
+                }
+                Ok(None) => {
+                    log::warn!(
+                        "Countdown requested update for missing event id {}",
+                        event_id
+                    );
+                }
+                Err(err) => {
+                    log::error!(
+                        "Failed to load event {} for countdown body sync: {err}",
+                        event_id
+                    );
+                }
+            }
+        }
+    }
+
+    fn sync_card_comments_from_event(&mut self, event: &Event) {
+        if let Some(event_id) = event.id {
+            self.countdown_service
+                .sync_comment_for_event(event_id, event.description.clone());
         }
     }
 

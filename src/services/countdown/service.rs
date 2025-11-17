@@ -120,10 +120,30 @@ impl CountdownService {
         event_id: Option<i64>,
         event_title: impl Into<String>,
         start_at: DateTime<Local>,
+        event_color: Option<RgbaColor>,
+        event_body: Option<String>,
+        default_width: f32,
+        default_height: f32,
     ) -> CountdownCardId {
+        const MIN_DIMENSION: f32 = 40.0;
+        const MAX_DIMENSION: f32 = 600.0;
+        const FALLBACK_WIDTH: f32 = 120.0;
+        const FALLBACK_HEIGHT: f32 = 110.0;
+
+        let width = default_width
+            .is_finite()
+            .then_some(default_width)
+            .unwrap_or(FALLBACK_WIDTH)
+            .clamp(MIN_DIMENSION, MAX_DIMENSION);
+        let height = default_height
+            .is_finite()
+            .then_some(default_height)
+            .unwrap_or(FALLBACK_HEIGHT)
+            .clamp(MIN_DIMENSION, MAX_DIMENSION);
+
         let id = CountdownCardId(self.next_id);
         self.next_id += 1;
-        let card = CountdownCardState {
+        let mut card = CountdownCardState {
             id,
             event_id,
             event_title: event_title.into(),
@@ -132,13 +152,15 @@ impl CountdownService {
             geometry: CountdownCardGeometry {
                 x: 50.0,
                 y: 50.0,
-                width: 120.0,
-                height: 110.0,
+                width,
+                height,
             },
             visuals: self.visual_defaults.clone(),
             last_computed_days: None,
-            comment: None,
+            comment: event_body,
+            event_color,
         };
+        apply_event_palette_if_needed(&mut card);
         self.cards.push(card);
         self.dirty = true;
         id
@@ -184,19 +206,95 @@ impl CountdownService {
     }
 
     pub fn set_title_bg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| visuals.title_bg_color = color)
+        self.update_visual_flag(id, |visuals| {
+            visuals.title_bg_color = color;
+            visuals.use_default_title_bg = false;
+        })
     }
 
     pub fn set_title_fg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| visuals.title_fg_color = color)
+        self.update_visual_flag(id, |visuals| {
+            visuals.title_fg_color = color;
+            visuals.use_default_title_fg = false;
+        })
     }
 
     pub fn set_body_bg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| visuals.body_bg_color = color)
+        self.update_visual_flag(id, |visuals| {
+            visuals.body_bg_color = color;
+            visuals.use_default_body_bg = false;
+        })
     }
 
     pub fn set_days_fg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| visuals.days_fg_color = color)
+        self.update_visual_flag(id, |visuals| {
+            visuals.days_fg_color = color;
+            visuals.use_default_days_fg = false;
+        })
+    }
+
+    pub fn set_use_default_title_bg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
+        let fallback = self.visual_defaults.title_bg_color;
+        let updated = self.update_card_state(id, |card| {
+            card.visuals.use_default_title_bg = use_default;
+            if use_default {
+                card.visuals.title_bg_color = fallback;
+            } else {
+                apply_event_palette_if_needed(card);
+            }
+        });
+        if updated {
+            self.visual_defaults.use_default_title_bg = use_default;
+        }
+        updated
+    }
+
+    pub fn set_use_default_title_fg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
+        let fallback = self.visual_defaults.title_fg_color;
+        let updated = self.update_card_state(id, |card| {
+            card.visuals.use_default_title_fg = use_default;
+            if use_default {
+                card.visuals.title_fg_color = fallback;
+            } else {
+                apply_event_palette_if_needed(card);
+            }
+        });
+        if updated {
+            self.visual_defaults.use_default_title_fg = use_default;
+        }
+        updated
+    }
+
+    pub fn set_use_default_body_bg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
+        let fallback = self.visual_defaults.body_bg_color;
+        let updated = self.update_card_state(id, |card| {
+            card.visuals.use_default_body_bg = use_default;
+            if use_default {
+                card.visuals.body_bg_color = fallback;
+            } else {
+                apply_event_palette_if_needed(card);
+            }
+        });
+        if updated {
+            self.visual_defaults.use_default_body_bg = use_default;
+        }
+        updated
+    }
+
+    pub fn set_use_default_days_fg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
+        let fallback = self.visual_defaults.days_fg_color;
+        let updated = self.update_card_state(id, |card| {
+            card.visuals.use_default_days_fg = use_default;
+            if use_default {
+                card.visuals.days_fg_color = fallback;
+            } else {
+                apply_event_palette_if_needed(card);
+            }
+        });
+        if updated {
+            self.visual_defaults.use_default_days_fg = use_default;
+        }
+        updated
     }
 
     pub fn set_days_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
@@ -216,6 +314,29 @@ impl CountdownService {
             return true;
         }
         false
+    }
+
+    pub fn sync_comment_for_event(&mut self, event_id: i64, comment: Option<String>) {
+        let mut changed = false;
+        for card in self
+            .cards
+            .iter_mut()
+            .filter(|card| card.event_id == Some(event_id))
+        {
+            let needs_update = match (&card.comment, &comment) {
+                (Some(existing), Some(target)) => existing != target,
+                (None, None) => false,
+                _ => true,
+            };
+            if needs_update {
+                card.comment = comment.clone();
+                changed = true;
+            }
+        }
+
+        if changed {
+            self.dirty = true;
+        }
     }
 
     pub fn set_start_at(&mut self, id: CountdownCardId, start_at: DateTime<Local>) -> bool {
@@ -319,6 +440,18 @@ impl CountdownService {
         false
     }
 
+    fn update_card_state<F>(&mut self, id: CountdownCardId, mut update: F) -> bool
+    where
+        F: FnMut(&mut CountdownCardState),
+    {
+        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
+            update(card);
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
     /// Recomputes days remaining for every card, returning the ones that
     /// changed so the UI can re-render or animate them.
     pub fn refresh_days_remaining(&mut self, now: DateTime<Local>) -> Vec<(CountdownCardId, i64)> {
@@ -335,6 +468,101 @@ impl CountdownService {
     }
 }
 
+#[derive(Clone, Copy)]
+struct EventPalette {
+    title_bg: RgbaColor,
+    title_fg: RgbaColor,
+    body_bg: RgbaColor,
+    days_fg: RgbaColor,
+}
+
+fn event_palette_for(card: &CountdownCardState) -> Option<EventPalette> {
+    card.event_color.map(EventPalette::from_base)
+}
+
+fn apply_event_palette_if_needed(card: &mut CountdownCardState) {
+    let Some(palette) = event_palette_for(card) else {
+        return;
+    };
+
+    if !card.visuals.use_default_title_bg {
+        card.visuals.title_bg_color = palette.title_bg;
+    }
+    if !card.visuals.use_default_title_fg {
+        card.visuals.title_fg_color = palette.title_fg;
+    }
+    if !card.visuals.use_default_body_bg {
+        card.visuals.body_bg_color = palette.body_bg;
+    }
+    if !card.visuals.use_default_days_fg {
+        card.visuals.days_fg_color = palette.days_fg;
+    }
+}
+
+impl EventPalette {
+    fn from_base(base: RgbaColor) -> Self {
+        let title_bg = darken_color(base, 0.18);
+        let body_bg = lighten_color(base, 0.12);
+        let title_fg = readable_text_color(title_bg);
+        let days_fg = readable_text_color(body_bg);
+        Self {
+            title_bg,
+            title_fg,
+            body_bg,
+            days_fg,
+        }
+    }
+}
+
+fn readable_text_color(bg: RgbaColor) -> RgbaColor {
+    const LIGHT: RgbaColor = RgbaColor::new(255, 255, 255, 255);
+    const DARK: RgbaColor = RgbaColor::new(20, 28, 45, 255);
+    if relative_luminance(bg) > 0.5 {
+        DARK
+    } else {
+        LIGHT
+    }
+}
+
+fn lighten_color(color: RgbaColor, factor: f32) -> RgbaColor {
+    mix_colors(color, RgbaColor::new(255, 255, 255, color.a), factor)
+}
+
+fn darken_color(color: RgbaColor, factor: f32) -> RgbaColor {
+    mix_colors(color, RgbaColor::new(0, 0, 0, color.a), factor)
+}
+
+fn mix_colors(base: RgbaColor, target: RgbaColor, factor: f32) -> RgbaColor {
+    let weight = factor.clamp(0.0, 1.0);
+    let mix = |start: u8, end: u8| -> u8 {
+        let start_f = start as f32;
+        let end_f = end as f32;
+        ((start_f + (end_f - start_f) * weight).round()).clamp(0.0, 255.0) as u8
+    };
+    RgbaColor::new(
+        mix(base.r, target.r),
+        mix(base.g, target.g),
+        mix(base.b, target.b),
+        base.a,
+    )
+}
+
+fn relative_luminance(color: RgbaColor) -> f32 {
+    fn srgb_component(value: u8) -> f32 {
+        let channel = value as f32 / 255.0;
+        if channel <= 0.03928 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    let r = srgb_component(color.r);
+    let g = srgb_component(color.g);
+    let b = srgb_component(color.b);
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,7 +573,15 @@ mod tests {
     fn create_refresh_and_remove_card() {
         let mut service = CountdownService::new();
         let target_start = Local::now() + Duration::days(34);
-        let card_id = service.create_card(Some(42), "Sample Event", target_start);
+        let card_id = service.create_card(
+            Some(42),
+            "Sample Event",
+            target_start,
+            None,
+            None,
+            120.0,
+            110.0,
+        );
 
         assert_eq!(service.cards().len(), 1);
         assert_eq!(service.cards()[0].effective_title(), "Sample Event");
@@ -366,11 +602,94 @@ mod tests {
         let file_path = dir.path().join("countdowns.json");
         let mut service = CountdownService::new();
         let target_start = Local::now() + Duration::days(10);
-        service.create_card(None, "Persist", target_start);
+        service.create_card(None, "Persist", target_start, None, None, 120.0, 110.0);
         service.save_to_disk(&file_path).unwrap();
 
         let loaded = CountdownService::load_from_disk(&file_path).unwrap();
         assert_eq!(loaded.cards().len(), 1);
         assert_eq!(loaded.cards()[0].event_title, "Persist");
+    }
+
+    #[test]
+    fn toggling_default_colors_uses_event_palette() {
+        let mut service = CountdownService::new();
+        let target_start = Local::now() + Duration::days(5);
+        let accent = RgbaColor::new(180, 60, 100, 255);
+        let card_id = service.create_card(
+            Some(1),
+            "Palette",
+            target_start,
+            Some(accent),
+            None,
+            120.0,
+            110.0,
+        );
+
+        assert!(service.set_use_default_body_bg(card_id, false));
+        assert!(service.set_use_default_days_fg(card_id, false));
+        let card = service.cards().iter().find(|c| c.id == card_id).unwrap();
+        assert!(!card.visuals.use_default_body_bg);
+        assert!(!card.visuals.use_default_days_fg);
+        assert_ne!(card.visuals.body_bg_color, service.defaults().body_bg_color);
+        assert_ne!(card.visuals.days_fg_color, service.defaults().days_fg_color);
+
+        assert!(service.set_use_default_body_bg(card_id, true));
+        assert!(service.set_use_default_days_fg(card_id, true));
+        let card = service.cards().iter().find(|c| c.id == card_id).unwrap();
+        assert_eq!(card.visuals.body_bg_color, service.defaults().body_bg_color);
+        assert_eq!(card.visuals.days_fg_color, service.defaults().days_fg_color);
+    }
+
+    #[test]
+    fn toggling_default_state_is_per_card() {
+        let mut service = CountdownService::new();
+        let target_start = Local::now() + Duration::days(3);
+        let accent = RgbaColor::new(10, 150, 200, 255);
+        let card_a =
+            service.create_card(Some(1), "A", target_start, Some(accent), None, 120.0, 110.0);
+        let card_b =
+            service.create_card(Some(2), "B", target_start, Some(accent), None, 120.0, 110.0);
+
+        assert!(service.set_use_default_title_bg(card_a, false));
+        assert!(service.set_use_default_title_bg(card_b, true));
+
+        let card = service.cards().iter().find(|c| c.id == card_a).unwrap();
+        assert!(!card.visuals.use_default_title_bg);
+
+        let other = service.cards().iter().find(|c| c.id == card_b).unwrap();
+        assert!(other.visuals.use_default_title_bg);
+    }
+
+    #[test]
+    fn new_cards_inherit_default_checkbox_state() {
+        let mut service = CountdownService::new();
+        let base_time = Local::now() + Duration::days(2);
+        let accent = RgbaColor::new(120, 40, 200, 255);
+        let first = service.create_card(
+            Some(1),
+            "First",
+            base_time,
+            Some(accent),
+            None,
+            120.0,
+            110.0,
+        );
+        assert!(service.set_use_default_body_bg(first, false));
+
+        let second = service.create_card(
+            Some(2),
+            "Second",
+            base_time + Duration::days(3),
+            Some(accent),
+            None,
+            120.0,
+            110.0,
+        );
+        let second_card = service.cards().iter().find(|c| c.id == second).unwrap();
+        assert!(!second_card.visuals.use_default_body_bg);
+        assert_ne!(
+            second_card.visuals.body_bg_color,
+            service.defaults().body_bg_color
+        );
     }
 }

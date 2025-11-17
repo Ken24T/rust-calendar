@@ -5,6 +5,7 @@ mod state;
 pub(super) use state::CountdownUiState;
 
 use super::CalendarApp;
+use crate::services::countdown::RgbaColor;
 use crate::ui_egui::views::CountdownRequest;
 use chrono::Local;
 use directories::ProjectDirs;
@@ -40,19 +41,42 @@ impl CalendarApp {
     pub(super) fn consume_countdown_requests(&mut self, requests: Vec<CountdownRequest>) {
         let now = Local::now();
         for request in requests {
-            if request.start_at <= now {
+            let CountdownRequest {
+                event_id,
+                title,
+                start_at,
+                color,
+                body,
+            } = request;
+
+            if start_at <= now {
                 log::info!(
                     "Skipping countdown for past event {:?} ({}): {:?}",
-                    request.event_id,
-                    request.title,
-                    request.start_at
+                    event_id,
+                    title,
+                    start_at
                 );
                 continue;
             }
+
+            let event_color = color.as_deref().and_then(RgbaColor::from_hex_str);
+            let event_body = body.and_then(|text| {
+                let trimmed = text.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_owned())
+                }
+            });
+
             let card_id = self.countdown_service.create_card(
-                request.event_id,
-                request.title,
-                request.start_at,
+                event_id,
+                title,
+                start_at,
+                event_color,
+                event_body,
+                self.settings.default_card_width,
+                self.settings.default_card_height,
             );
             self.countdown_ui.mark_card_pending(card_id);
             log::info!("created countdown card {:?}", card_id);

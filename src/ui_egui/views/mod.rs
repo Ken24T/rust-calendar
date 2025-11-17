@@ -15,6 +15,7 @@ pub struct CountdownRequest {
     pub title: String,
     pub start_at: DateTime<Local>,
     pub color: Option<String>,
+    pub body: Option<String>,
 }
 
 impl CountdownRequest {
@@ -24,6 +25,7 @@ impl CountdownRequest {
             title: event.title.clone(),
             start_at: event.start,
             color: event.color.clone(),
+            body: event.description.clone(),
         }
     }
 }

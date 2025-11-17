@@ -3,6 +3,9 @@ use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use egui::{Color32, RichText};
 
+const MIN_CARD_DIMENSION: f32 = 40.0;
+const MAX_CARD_DIMENSION: f32 = 600.0;
+
 /// Render the settings dialog
 pub fn render_settings_dialog(
     ctx: &egui::Context,
@@ -17,6 +20,8 @@ pub fn render_settings_dialog(
         .collapsible(false)
         .resizable(true)
         .default_width(550.0)
+        .default_height(640.0)
+        .min_height(600.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -322,6 +327,71 @@ pub fn render_settings_dialog(
                 ui.separator();
                 ui.add_space(8.0);
 
+                ui.heading("Card");
+                ui.add_space(4.0);
+
+                ui.horizontal(|ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::Vec2::new(label_width, 20.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            ui.label("Default card width:");
+                        },
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut settings.default_card_width)
+                            .range(MIN_CARD_DIMENSION..=MAX_CARD_DIMENSION)
+                            .speed(1.0)
+                            .suffix(" px"),
+                    );
+                });
+
+                if !is_valid_card_dimension(settings.default_card_width) {
+                    ui.horizontal(|ui| {
+                        ui.add_space(label_width);
+                        ui.colored_label(
+                            Color32::LIGHT_RED,
+                            format!(
+                                "⚠ Width must be between {:.0} and {:.0} px",
+                                MIN_CARD_DIMENSION, MAX_CARD_DIMENSION
+                            ),
+                        );
+                    });
+                }
+
+                ui.horizontal(|ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::Vec2::new(label_width, 20.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            ui.label("Default card height:");
+                        },
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut settings.default_card_height)
+                            .range(MIN_CARD_DIMENSION..=MAX_CARD_DIMENSION)
+                            .speed(1.0)
+                            .suffix(" px"),
+                    );
+                });
+
+                if !is_valid_card_dimension(settings.default_card_height) {
+                    ui.horizontal(|ui| {
+                        ui.add_space(label_width);
+                        ui.colored_label(
+                            Color32::LIGHT_RED,
+                            format!(
+                                "⚠ Height must be between {:.0} and {:.0} px",
+                                MIN_CARD_DIMENSION, MAX_CARD_DIMENSION
+                            ),
+                        );
+                    });
+                }
+
+                ui.add_space(16.0);
+                ui.separator();
+                ui.add_space(8.0);
+
                 // Action buttons
                 ui.horizontal(|ui| {
                     if ui.button("💾 Save").clicked() {
@@ -332,6 +402,16 @@ pub fn render_settings_dialog(
                         } else if !is_valid_time_format(&settings.default_event_start_time) {
                             error_message =
                                 Some("Invalid default start time format (use HH:MM)".to_string());
+                        } else if !is_valid_card_dimension(settings.default_card_width) {
+                            error_message = Some(format!(
+                                "Default card width must be between {:.0} and {:.0} px",
+                                MIN_CARD_DIMENSION, MAX_CARD_DIMENSION
+                            ));
+                        } else if !is_valid_card_dimension(settings.default_card_height) {
+                            error_message = Some(format!(
+                                "Default card height must be between {:.0} and {:.0} px",
+                                MIN_CARD_DIMENSION, MAX_CARD_DIMENSION
+                            ));
                         } else {
                             // Save settings
                             let service = SettingsService::new(database);
@@ -396,4 +476,8 @@ fn is_valid_time_format(time_str: &str) -> bool {
     } else {
         false
     }
+}
+
+fn is_valid_card_dimension(value: f32) -> bool {
+    value.is_finite() && (MIN_CARD_DIMENSION..=MAX_CARD_DIMENSION).contains(&value)
 }

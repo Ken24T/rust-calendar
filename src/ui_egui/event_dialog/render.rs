@@ -1,6 +1,7 @@
 use chrono::{Duration, Local};
 use egui::{Color32, RichText};
 
+use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
@@ -9,14 +10,21 @@ use super::recurrence::{RecurrenceFrequency, RecurrencePattern, Weekday};
 use super::state::EventDialogState;
 use super::widgets::{parse_hex_color, render_time_picker};
 
+#[derive(Default)]
+pub struct EventDialogResult {
+    pub saved_event: Option<Event>,
+}
+
+impl EventDialogResult {}
+
 pub fn render_event_dialog(
     ctx: &egui::Context,
     state: &mut EventDialogState,
     database: &Database,
     _settings: &Settings,
     show_dialog: &mut bool,
-) -> bool {
-    let mut saved = false;
+) -> EventDialogResult {
+    let mut result = EventDialogResult::default();
 
     egui::Window::new(if state.event_id.is_some() {
         "Edit Event"
@@ -34,11 +42,14 @@ pub fn render_event_dialog(
             render_date_time_section(ui, state);
             render_appearance_section(ui, state);
             render_recurrence_section(ui, state);
-            saved = render_action_buttons(ui, state, database, show_dialog);
+            let action = render_action_buttons(ui, state, database, show_dialog);
+            if action.saved_event.is_some() {
+                result = action;
+            }
         });
     });
 
-    saved
+    result
 }
 
 fn render_error_banner(ui: &mut egui::Ui, state: &EventDialogState) {
@@ -83,6 +94,15 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
 
     ui.label("Description:");
     ui.text_edit_multiline(&mut state.description);
+
+    if state.event_id.is_none() {
+        ui.add_space(8.0);
+        ui.checkbox(
+            &mut state.create_countdown,
+            "Create countdown card after saving",
+        )
+        .on_hover_text("Also spawns a countdown using this event's color once you save.");
+    }
 
     ui.add_space(12.0);
     ui.separator();
@@ -338,8 +358,8 @@ fn render_action_buttons(
     state: &mut EventDialogState,
     database: &Database,
     show_dialog: &mut bool,
-) -> bool {
-    let mut saved = false;
+) -> EventDialogResult {
+    let mut saved_event = None;
 
     ui.horizontal(|ui| {
         let can_save = !state.title.trim().is_empty();
@@ -352,9 +372,9 @@ fn render_action_buttons(
         ui.add_enabled_ui(can_save, |ui| {
             if ui.add(save_button).clicked() {
                 match state.save(database) {
-                    Ok(_) => {
+                    Ok(event) => {
+                        saved_event = Some(event);
                         *show_dialog = false;
-                        saved = true;
                     }
                     Err(e) => {
                         state.error_message = Some(e);
@@ -387,12 +407,11 @@ fn render_action_buttons(
                         state.error_message = Some(format!("Failed to delete: {}", e));
                     } else {
                         *show_dialog = false;
-                        saved = true;
                     }
                 }
             }
         }
     });
 
-    saved
+    EventDialogResult { saved_event }
 }

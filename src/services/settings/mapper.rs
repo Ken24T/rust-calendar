@@ -17,5 +17,7 @@ pub fn row_to_settings(row: &Row) -> Result<Settings, rusqlite::Error> {
         first_day_of_work_week: row.get(10)?,
         last_day_of_work_week: row.get(11)?,
         default_event_start_time: row.get(12)?,
+        default_card_width: row.get(13)?,
+        default_card_height: row.get(14)?,
     })
 }

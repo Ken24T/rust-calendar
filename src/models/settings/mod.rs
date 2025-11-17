@@ -18,6 +18,8 @@ pub struct Settings {
     pub current_view: String,
     pub default_event_duration: u32,
     pub default_event_start_time: String,
+    pub default_card_width: f32,
+    pub default_card_height: f32,
 }
 
 impl Default for Settings {
@@ -36,6 +38,8 @@ impl Default for Settings {
             current_view: "Month".to_string(),
             default_event_duration: 60,
             default_event_start_time: "08:00".to_string(),
+            default_card_width: 120.0,
+            default_card_height: 110.0,
         }
     }
 }
@@ -97,6 +101,8 @@ impl Settings {
             return Err("Invalid default_event_start_time format".to_string());
         }
 
+        Self::validate_card_dimensions(self.default_card_width, self.default_card_height)?;
+
         Ok(())
     }
 
@@ -148,6 +154,31 @@ impl Settings {
         // Validate default_event_start_time format (HH:MM)
         if !self.default_event_start_time.contains(':') {
             return Err("Invalid default_event_start_time format".to_string());
+        }
+
+        Self::validate_card_dimensions(self.default_card_width, self.default_card_height)?;
+
+        Ok(())
+    }
+
+    fn validate_card_dimensions(width: f32, height: f32) -> Result<(), String> {
+        const MIN_WIDTH: f32 = 40.0;
+        const MAX_WIDTH: f32 = 600.0;
+        const MIN_HEIGHT: f32 = 40.0;
+        const MAX_HEIGHT: f32 = 600.0;
+
+        if !(MIN_WIDTH..=MAX_WIDTH).contains(&width) {
+            return Err(format!(
+                "Invalid default_card_width: {:.1} (expected between {:.0} and {:.0})",
+                width, MIN_WIDTH, MAX_WIDTH
+            ));
+        }
+
+        if !(MIN_HEIGHT..=MAX_HEIGHT).contains(&height) {
+            return Err(format!(
+                "Invalid default_card_height: {:.1} (expected between {:.0} and {:.0})",
+                height, MIN_HEIGHT, MAX_HEIGHT
+            ));
         }
 
         Ok(())

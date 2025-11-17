@@ -35,6 +35,7 @@ pub struct EventDialogState {
     pub error_message: Option<String>,
     #[allow(dead_code)]
     pub show_advanced: bool,
+    pub create_countdown: bool,
 }
 
 impl EventDialogState {
@@ -94,6 +95,7 @@ impl EventDialogState {
             byday_sunday: false,
             error_message: None,
             show_advanced: false,
+            create_countdown: false,
         }
     }
 
@@ -144,6 +146,7 @@ impl EventDialogState {
             byday_saturday: byday_flags[6],
             error_message: None,
             show_advanced: false,
+            create_countdown: false,
         }
     }
 
