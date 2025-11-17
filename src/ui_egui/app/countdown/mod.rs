@@ -5,7 +5,7 @@ mod state;
 pub(super) use state::CountdownUiState;
 
 use super::CalendarApp;
-use crate::services::countdown::RgbaColor;
+use crate::services::countdown::{CountdownCardGeometry, RgbaColor};
 use crate::ui_egui::views::CountdownRequest;
 use chrono::Local;
 use directories::ProjectDirs;
@@ -65,6 +65,23 @@ impl CalendarApp {
                 continue;
             };
 
+            // Check if a card already exists for this event
+            if let Some(existing_card) = self
+                .countdown_service
+                .cards()
+                .iter()
+                .find(|card| card.event_id == event_id)
+            {
+                log::info!(
+                    "Card already exists for event {:?} ({}), marking as pending",
+                    event_id,
+                    title
+                );
+                self.countdown_ui
+                    .mark_card_pending(existing_card.id, existing_card.geometry);
+                continue;
+            }
+
             let event_color = color.as_deref().and_then(RgbaColor::from_hex_str);
             let event_body = body.and_then(|text| {
                 let trimmed = text.trim();
@@ -75,6 +92,11 @@ impl CalendarApp {
                 }
             });
 
+            log::info!(
+                "Creating countdown card with dimensions from settings: width={}, height={}",
+                self.settings.default_card_width,
+                self.settings.default_card_height
+            );
             let card_id = self.countdown_service.create_card(
                 event_id,
                 title,
@@ -84,7 +106,19 @@ impl CalendarApp {
                 self.settings.default_card_width,
                 self.settings.default_card_height,
             );
-            self.countdown_ui.mark_card_pending(card_id);
+            let geometry = self
+                .countdown_service
+                .cards()
+                .iter()
+                .find(|card| card.id == card_id)
+                .map(|card| card.geometry)
+                .unwrap_or(CountdownCardGeometry {
+                    x: 50.0,
+                    y: 50.0,
+                    width: self.settings.default_card_width,
+                    height: self.settings.default_card_height,
+                });
+            self.countdown_ui.mark_card_pending(card_id, geometry);
             log::info!("created countdown card {:?}", card_id);
         }
     }

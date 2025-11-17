@@ -1,6 +1,6 @@
-use super::super::{geometry_changed, geometry_from_viewport_info, viewport_info};
+use super::super::{geometry_changed, geometry_from_viewport_info};
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardId, CountdownCardState, RgbaColor,
+    CountdownCardGeometry, CountdownCardState, RgbaColor, MAX_DAYS_FONT_SIZE,
 };
 use chrono::{DateTime, Local};
 use egui::{self, ViewportClass, ViewportId};
@@ -8,6 +8,17 @@ use std::time::Duration as StdDuration;
 
 pub(super) const COUNTDOWN_SETTINGS_HEIGHT: f32 = 1000.0;
 pub(super) const COUNTDOWN_SETTINGS_MIN_WIDTH: f32 = 640.0;
+const CARD_MIN_WIDTH: f32 = 20.0;
+const CARD_MIN_HEIGHT: f32 = 20.0;
+
+// Guard against infinite/invalid layout hints that can surface while a viewport is initializing.
+fn resolve_dimension(value: f32, fallback: f32, min: f32) -> f32 {
+    if value.is_finite() && value > 0.0 {
+        value.max(min)
+    } else {
+        fallback.max(min)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CountdownCardUiAction {
@@ -26,16 +37,17 @@ pub(super) fn viewport_builder_for_card(
         .with_resizable(true)
         .with_transparent(false)
         .with_decorations(true)
-        .with_min_inner_size(egui::vec2(110.0, 90.0));
+        .with_min_inner_size(egui::vec2(CARD_MIN_WIDTH, CARD_MIN_HEIGHT))
+        .with_position(egui::pos2(card.geometry.x, card.geometry.y))
+        .with_inner_size(egui::vec2(
+            card.geometry.width.max(CARD_MIN_WIDTH),
+            card.geometry.height.max(CARD_MIN_HEIGHT),
+        ))
+        // Disable egui's automatic viewport state persistence
+        .with_window_level(egui::WindowLevel::Normal);
 
     if waiting_on_geometry {
-        builder = builder
-            .with_position(egui::pos2(card.geometry.x, card.geometry.y))
-            .with_inner_size(egui::vec2(
-                card.geometry.width.max(110.0),
-                card.geometry.height.max(90.0),
-            ))
-            .with_visible(false);
+        builder = builder.with_visible(false);
     }
 
     if card.visuals.always_on_top {
@@ -81,69 +93,80 @@ pub(super) fn render_countdown_card_ui(
     card: &CountdownCardState,
     now: DateTime<Local>,
     waiting_on_geometry: bool,
+    target_geometry: Option<CountdownCardGeometry>,
 ) -> CountdownCardUiAction {
     ctx.request_repaint_after(StdDuration::from_secs(1));
-
-    if !waiting_on_geometry {
-        ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
-    }
+    
+    // Explicitly enforce the card's geometry each frame
+    ctx.send_viewport_cmd_to(
+        viewport_id,
+        egui::ViewportCommand::InnerSize(egui::vec2(
+            card.geometry.width.max(CARD_MIN_WIDTH),
+            card.geometry.height.max(CARD_MIN_HEIGHT),
+        )),
+    );
+    
+    ctx.send_viewport_cmd_to(
+        viewport_id,
+        egui::ViewportCommand::EnableButtons {
+            close: true,
+            minimized: false,
+            maximize: false,
+        },
+    );
 
     let title_bg = rgba_to_color32(card.visuals.title_bg_color);
     let title_fg = rgba_to_color32(card.visuals.title_fg_color);
     let title_font_size = card.visuals.title_font_size.max(12.0);
     let body_bg = rgba_to_color32(card.visuals.body_bg_color);
     let days_fg = rgba_to_color32(card.visuals.days_fg_color);
-    let font_size = card.visuals.days_font_size.max(32.0);
+    let font_size = card
+        .visuals
+        .days_font_size
+        .clamp(32.0, MAX_DAYS_FONT_SIZE);
 
     let mut geometry_settled = false;
-    if waiting_on_geometry {
-        let target_position = egui::pos2(card.geometry.x, card.geometry.y);
-        let target_size = egui::vec2(card.geometry.width, card.geometry.height);
-        log::info!(
-            "card {:?} waiting on geometry; forcing pos {:?} size {:?}",
-            card.id,
-            target_position,
-            target_size
-        );
+    if let Some(target) = target_geometry {
+        let target_position = egui::pos2(target.x, target.y);
+        let target_size = egui::vec2(target.width, target.height);
         ctx.send_viewport_cmd_to(
             viewport_id,
             egui::ViewportCommand::OuterPosition(target_position),
         );
         ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::InnerSize(target_size));
-        log::debug!(
-            "card {:?} forcing position {:?} and size {:?}",
-            card.id,
-            target_position,
-            target_size
-        );
 
         geometry_settled = ctx.input(|input| {
             let info = input.viewport();
             geometry_from_viewport_info(info)
-                .map(|current| !geometry_changed(card.geometry, current))
+                .map(|current| !geometry_changed(target, current))
                 .unwrap_or(false)
         });
 
         ctx.input(|input| {
             if let Some(current) = geometry_from_viewport_info(input.viewport()) {
                 log::debug!(
-                    "card {:?} current viewport geometry: {:?}",
+                    "card {:?} target geometry {:?}, current viewport geometry {:?}",
                     card.id,
+                    target,
                     current
                 );
             }
         });
 
         if geometry_settled {
-            log::debug!("card {:?} geometry settled during wait", card.id);
+            log::debug!("card {:?} geometry settled at {:?}", card.id, target);
             ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
-        } else {
+        } else if waiting_on_geometry {
             log::debug!(
-                "card {:?} geometry still settling; hiding viewport",
+                "card {:?} geometry still settling; keeping viewport hidden",
                 card.id
             );
             ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(false));
+        } else {
+            ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
         }
+    } else if !waiting_on_geometry {
+        ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
     }
 
     struct RenderResult {
@@ -160,9 +183,8 @@ pub(super) fn render_countdown_card_ui(
 
         let inner = frame.show(ui, |ui| {
             let available = ui.available_size();
-            ui.set_min_size(available);
-            let total_height = available.y.max(60.0);
-            let width = available.x;
+            let width = resolve_dimension(available.x, card.geometry.width, CARD_MIN_WIDTH);
+            let total_height = resolve_dimension(available.y, card.geometry.height, CARD_MIN_HEIGHT).max(60.0);
             let spacing = 4.0;
             let min_countdown_height = 36.0;
             let desired_title_height = (title_font_size * 1.4).clamp(22.0, 48.0);
@@ -257,6 +279,8 @@ pub(super) fn render_countdown_card_ui(
             egui::CentralPanel::default()
                 .frame(egui::Frame::none().fill(body_bg))
                 .show(ctx, |ui| {
+                    // Force the UI to respect the card's target geometry
+                    ui.set_min_size(egui::vec2(card.geometry.width, card.geometry.height));
                     output = Some(render(ui));
                 });
 

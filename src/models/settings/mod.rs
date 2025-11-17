@@ -162,9 +162,9 @@ impl Settings {
     }
 
     fn validate_card_dimensions(width: f32, height: f32) -> Result<(), String> {
-        const MIN_WIDTH: f32 = 40.0;
+        const MIN_WIDTH: f32 = 20.0;
         const MAX_WIDTH: f32 = 600.0;
-        const MIN_HEIGHT: f32 = 40.0;
+        const MIN_HEIGHT: f32 = 20.0;
         const MAX_HEIGHT: f32 = 600.0;
 
         if !(MIN_WIDTH..=MAX_WIDTH).contains(&width) {

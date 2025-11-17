@@ -3,7 +3,7 @@ use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use egui::{Color32, RichText};
 
-const MIN_CARD_DIMENSION: f32 = 40.0;
+const MIN_CARD_DIMENSION: f32 = 20.0;
 const MAX_CARD_DIMENSION: f32 = 600.0;
 
 /// Render the settings dialog

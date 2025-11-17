@@ -127,6 +127,9 @@ pub(crate) const fn default_days_font_size() -> f32 {
     80.0
 }
 
+pub const MIN_DAYS_FONT_SIZE: f32 = 16.0;
+pub const MAX_DAYS_FONT_SIZE: f32 = 512.0;
+
 const fn default_use_default_title_bg() -> bool {
     true
 }

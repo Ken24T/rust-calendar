@@ -10,6 +10,7 @@ use super::models::{
     default_body_bg_color, default_days_fg_color, default_days_font_size, default_title_bg_color,
     default_title_fg_color, default_title_font_size, CountdownCardGeometry, CountdownCardId,
     CountdownCardState, CountdownCardVisuals, CountdownPersistedState, RgbaColor,
+    MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
 };
 use super::persistence::{load_snapshot, save_snapshot};
 
@@ -29,7 +30,18 @@ impl CountdownService {
         Self::from_snapshot(CountdownPersistedState::default())
     }
 
-    pub fn from_snapshot(snapshot: CountdownPersistedState) -> Self {
+    pub fn from_snapshot(mut snapshot: CountdownPersistedState) -> Self {
+        for card in &mut snapshot.cards {
+            card.visuals.days_font_size = card
+                .visuals
+                .days_font_size
+                .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
+        }
+        snapshot.visual_defaults.days_font_size = snapshot
+            .visual_defaults
+            .days_font_size
+            .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
+
         Self {
             cards: snapshot.cards,
             next_id: snapshot.next_id.max(1),
@@ -125,36 +137,49 @@ impl CountdownService {
         default_width: f32,
         default_height: f32,
     ) -> CountdownCardId {
-        const MIN_DIMENSION: f32 = 40.0;
+        const MIN_DIMENSION: f32 = 20.0;
         const MAX_DIMENSION: f32 = 600.0;
         const FALLBACK_WIDTH: f32 = 120.0;
         const FALLBACK_HEIGHT: f32 = 110.0;
 
-        let width = default_width
-            .is_finite()
-            .then_some(default_width)
-            .unwrap_or(FALLBACK_WIDTH)
-            .clamp(MIN_DIMENSION, MAX_DIMENSION);
-        let height = default_height
-            .is_finite()
-            .then_some(default_height)
-            .unwrap_or(FALLBACK_HEIGHT)
-            .clamp(MIN_DIMENSION, MAX_DIMENSION);
+        // Use provided dimensions if valid, otherwise use fallbacks
+        let width = if default_width.is_finite() {
+            default_width.clamp(MIN_DIMENSION, MAX_DIMENSION)
+        } else {
+            FALLBACK_WIDTH
+        };
+        let height = if default_height.is_finite() {
+            default_height.clamp(MIN_DIMENSION, MAX_DIMENSION)
+        } else {
+            FALLBACK_HEIGHT
+        };
+        log::info!(
+            "create_card received: default_width={}, default_height={}, using: width={}, height={}",
+            default_width, default_height, width, height
+        );
 
         let id = CountdownCardId(self.next_id);
         self.next_id += 1;
+        let geometry = CountdownCardGeometry {
+            x: 50.0,
+            y: 50.0,
+            width,
+            height,
+        };
+        log::info!(
+            "create_card: creating card with geometry: x={}, y={}, width={}, height={}",
+            geometry.x,
+            geometry.y,
+            geometry.width,
+            geometry.height
+        );
         let mut card = CountdownCardState {
             id,
             event_id,
             event_title: event_title.into(),
             start_at,
             title_override: None,
-            geometry: CountdownCardGeometry {
-                x: 50.0,
-                y: 50.0,
-                width,
-                height,
-            },
+            geometry,
             visuals: self.visual_defaults.clone(),
             last_computed_days: None,
             comment: event_body,
@@ -298,7 +323,9 @@ impl CountdownService {
     }
 
     pub fn set_days_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
-        self.update_visual_flag(id, |visuals| visuals.days_font_size = size.max(16.0))
+        self.update_visual_flag(id, |visuals| {
+            visuals.days_font_size = size.clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE)
+        })
     }
 
     pub fn set_title_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
@@ -411,7 +438,7 @@ impl CountdownService {
     }
 
     pub fn set_default_days_font_size(&mut self, size: f32) {
-        self.visual_defaults.days_font_size = size.max(16.0);
+        self.visual_defaults.days_font_size = size.clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
         self.dirty = true;
     }
 

@@ -86,10 +86,7 @@ impl CalendarApp {
 
         // Load settings or create defaults
         let settings = match settings_service.get() {
-            Ok(settings) => {
-                eprintln!("Loaded settings from database - theme: {}", settings.theme);
-                settings
-            }
+            Ok(settings) => settings,
             Err(e) => {
                 eprintln!("Failed to load settings: {}, using defaults", e);
                 // No settings found, create and save defaults
@@ -100,8 +97,11 @@ impl CalendarApp {
                 defaults
             }
         };
-
-        eprintln!("Applying theme: {}", settings.theme);
+        log::info!(
+            "Loaded settings: default_card_width={}, default_card_height={}",
+            settings.default_card_width,
+            settings.default_card_height
+        );
 
         // Parse current view from settings
         let current_view = Self::parse_view_type(&settings.current_view);
@@ -178,13 +178,9 @@ impl CalendarApp {
 
         // Try to load the theme
         if let Ok(theme) = theme_service.get_theme(&self.settings.theme) {
-            eprintln!("Applying custom theme: {}", self.settings.theme);
             theme.apply_to_context(ctx);
         } else {
-            eprintln!(
-                "Theme not found, using default for: {}",
-                self.settings.theme
-            );
+            log::warn!("Theme '{}' not found, using default.", self.settings.theme);
             Self::apply_theme(ctx, &self.settings);
         }
     }
@@ -715,7 +711,6 @@ impl CalendarApp {
             ThemeDialogAction::ApplyTheme(name) => {
                 // Apply the selected theme
                 self.settings.theme = name.clone();
-                eprintln!("Applying theme: {}", name);
 
                 // Apply the custom theme or built-in theme
                 if let Ok(theme) = theme_service.get_theme(&name) {

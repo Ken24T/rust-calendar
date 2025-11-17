@@ -10,7 +10,6 @@ use chrono::Local;
 use egui::{self, Context};
 use log;
 use std::collections::{HashMap, HashSet};
-use std::time::Duration as StdDuration;
 
 use super::super::{geometry_changed, geometry_from_viewport_info, viewport_info};
 
@@ -22,8 +21,7 @@ pub(super) struct CountdownRenderSnapshot {
 
 #[derive(Default)]
 pub(in super::super) struct CountdownUiState {
-    pending_visibility: HashSet<CountdownCardId>,
-    geometry_attempts: HashMap<CountdownCardId, u32>,
+    pending_geometry: HashMap<CountdownCardId, PendingGeometryState>,
     open_settings: HashSet<CountdownCardId>,
     settings_geometry: HashMap<CountdownCardId, CountdownCardGeometry>,
     settings_needs_layout: HashSet<CountdownCardId>,
@@ -39,13 +37,47 @@ impl CountdownUiState {
     pub(in super::super) fn new(service: &CountdownService) -> Self {
         let mut state = Self::default();
         for card in service.cards() {
-            state.pending_visibility.insert(card.id);
+            state
+                .pending_geometry
+                .insert(card.id, PendingGeometryState::new(card.geometry));
         }
         state
     }
 
-    pub(in super::super) fn mark_card_pending(&mut self, card_id: CountdownCardId) {
-        self.pending_visibility.insert(card_id);
+    pub(in super::super) fn mark_card_pending(
+        &mut self,
+        card_id: CountdownCardId,
+        geometry: CountdownCardGeometry,
+    ) {
+        self.pending_geometry
+            .insert(card_id, PendingGeometryState::new(geometry));
+    }
+
+    fn pending_geometry_target(&self, card_id: CountdownCardId) -> Option<CountdownCardGeometry> {
+        self.pending_geometry.get(&card_id).map(|state| state.target)
+    }
+
+    fn should_hide_card_geometry(&mut self, card_id: CountdownCardId) -> bool {
+        if let Some(state) = self.pending_geometry.get_mut(&card_id) {
+            if state.force_visible {
+                return false;
+            }
+
+            state.attempts += 1;
+            if state.attempts >= MAX_PENDING_GEOMETRY_FRAMES {
+                state.force_visible = true;
+                log::warn!(
+                    "Countdown card {:?} geometry did not settle after {} frames; showing window but continuing to enforce configured size",
+                    card_id,
+                    MAX_PENDING_GEOMETRY_FRAMES
+                );
+                return false;
+            }
+
+            true
+        } else {
+            false
+        }
     }
 
     pub(in super::super) fn render_cards(&mut self, ctx: &Context, service: &mut CountdownService) {
@@ -59,7 +91,8 @@ impl CountdownUiState {
 
         for card in cards {
             let viewport_id = egui::ViewportId::from_hash_of(("countdown_card", card.id.0));
-            let waiting_on_geometry = self.should_wait_on_card_geometry(card.id);
+            let waiting_on_geometry = self.should_hide_card_geometry(card.id);
+            let target_geometry = self.pending_geometry_target(card.id);
             let snapshot = CountdownRenderSnapshot {
                 waiting_on_geometry,
                 geometry: card.geometry,
@@ -91,6 +124,7 @@ impl CountdownUiState {
                         &card_clone,
                         now,
                         waiting_on_geometry,
+                        target_geometry,
                     )
                 });
 
@@ -389,43 +423,8 @@ impl CountdownUiState {
         }
     }
 
-    fn should_wait_on_card_geometry(&mut self, card_id: CountdownCardId) -> bool {
-        if !self.pending_visibility.contains(&card_id) {
-            return false;
-        }
-
-        let exceeded_limit = {
-            let attempts = self.geometry_attempts.entry(card_id).or_insert(0);
-            log::debug!(
-                "card {:?} geometry attempt {} (limit {})",
-                card_id,
-                *attempts + 1,
-                MAX_PENDING_GEOMETRY_FRAMES
-            );
-            if *attempts >= MAX_PENDING_GEOMETRY_FRAMES {
-                true
-            } else {
-                *attempts += 1;
-                false
-            }
-        };
-
-        if exceeded_limit {
-            self.clear_geometry_wait_state(&card_id);
-            log::warn!(
-                "Countdown card {:?} geometry did not settle after {} frames; forcing visibility",
-                card_id,
-                MAX_PENDING_GEOMETRY_FRAMES
-            );
-            false
-        } else {
-            true
-        }
-    }
-
     fn clear_geometry_wait_state(&mut self, card_id: &CountdownCardId) {
-        self.pending_visibility.remove(card_id);
-        self.geometry_attempts.remove(card_id);
+        self.pending_geometry.remove(card_id);
         self.geometry_samples.remove(card_id);
     }
     fn record_geometry_sample(
@@ -489,6 +488,23 @@ impl GeometrySampleState {
             last: sample,
             stable_frames: 1,
             delivered: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PendingGeometryState {
+    target: CountdownCardGeometry,
+    attempts: u32,
+    force_visible: bool,
+}
+
+impl PendingGeometryState {
+    fn new(target: CountdownCardGeometry) -> Self {
+        Self {
+            target,
+            attempts: 0,
+            force_visible: false,
         }
     }
 }
