@@ -4,8 +4,8 @@ use chrono::{DateTime, Local};
 use egui::{self, ViewportClass, ViewportId};
 use std::time::Duration as StdDuration;
 
-pub(super) const COUNTDOWN_SETTINGS_DEFAULT_HEIGHT: f32 = 920.0;
-pub(super) const COUNTDOWN_SETTINGS_MIN_HEIGHT: f32 = 640.0;
+pub(super) const COUNTDOWN_SETTINGS_HEIGHT: f32 = 1000.0;
+pub(super) const COUNTDOWN_SETTINGS_MIN_WIDTH: f32 = 640.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CountdownCardUiAction {
@@ -47,15 +47,23 @@ pub(super) fn viewport_builder_for_settings(
     let mut builder = egui::ViewportBuilder::default()
         .with_title(format!("Settings: {}", card.effective_title()))
         .with_resizable(true)
-        .with_min_inner_size(egui::vec2(260.0, COUNTDOWN_SETTINGS_MIN_HEIGHT));
+        .with_min_inner_size(egui::vec2(
+            COUNTDOWN_SETTINGS_MIN_WIDTH,
+            COUNTDOWN_SETTINGS_HEIGHT,
+        ));
 
     if let Some(geometry) = geometry {
         builder = builder
             .with_position(egui::pos2(geometry.x, geometry.y))
             .with_inner_size(egui::vec2(
-                geometry.width.max(260.0),
-                geometry.height.max(COUNTDOWN_SETTINGS_MIN_HEIGHT),
+                geometry.width.max(COUNTDOWN_SETTINGS_MIN_WIDTH),
+                COUNTDOWN_SETTINGS_HEIGHT,
             ));
+    } else {
+        builder = builder.with_inner_size(egui::vec2(
+            COUNTDOWN_SETTINGS_MIN_WIDTH,
+            COUNTDOWN_SETTINGS_HEIGHT,
+        ));
     }
 
     builder

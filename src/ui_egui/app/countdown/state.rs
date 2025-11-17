@@ -1,6 +1,6 @@
 use super::render::{
     render_countdown_card_ui, viewport_builder_for_card, viewport_builder_for_settings,
-    viewport_title_matches, CountdownCardUiAction, COUNTDOWN_SETTINGS_DEFAULT_HEIGHT,
+    viewport_title_matches, CountdownCardUiAction, COUNTDOWN_SETTINGS_HEIGHT,
 };
 use super::settings::{render_countdown_settings_ui, CountdownSettingsCommand};
 use crate::services::countdown::{
@@ -424,6 +424,6 @@ fn default_settings_geometry_for(card: &CountdownCardState) -> CountdownCardGeom
         x: card.geometry.x + card.geometry.width + 16.0,
         y: card.geometry.y,
         width: 280.0,
-        height: COUNTDOWN_SETTINGS_DEFAULT_HEIGHT,
+        height: COUNTDOWN_SETTINGS_HEIGHT,
     }
 }
