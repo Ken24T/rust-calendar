@@ -16,7 +16,10 @@ pub fn render_settings_dialog(
     let mut saved = false;
     let mut error_message: Option<String> = None;
 
+    let mut dialog_open = *show_dialog;
+
     egui::Window::new("Settings")
+        .open(&mut dialog_open)
         .collapsible(false)
         .resizable(true)
         .default_width(550.0)
@@ -293,11 +296,6 @@ pub fn render_settings_dialog(
                                 "Month".to_string(),
                                 "Month",
                             );
-                            ui.selectable_value(
-                                &mut settings.current_view,
-                                "Quarter".to_string(),
-                                "Quarter",
-                            );
                         });
                 });
 
@@ -442,6 +440,10 @@ pub fn render_settings_dialog(
                 });
             });
         });
+
+    if !dialog_open {
+        *show_dialog = false;
+    }
 
     saved
 }

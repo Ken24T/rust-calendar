@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime};
 
 use crate::models::event::Event;
 
@@ -14,8 +14,56 @@ pub struct CountdownRequest {
     pub event_id: Option<i64>,
     pub title: String,
     pub start_at: DateTime<Local>,
+    pub end_at: DateTime<Local>,
     pub color: Option<String>,
     pub body: Option<String>,
+}
+
+/// Returns the start/end timestamps for the portion of `event` that should appear on `date`.
+/// This clamps long multi-day events to the original time-of-day window so they only fill
+/// the slots that correspond to their configured duration.
+pub fn event_time_segment_for_date(
+    event: &Event,
+    date: NaiveDate,
+) -> Option<(NaiveDateTime, NaiveDateTime)> {
+    let event_start = event.start.naive_local();
+    let event_end = event.end.naive_local();
+
+    if date < event_start.date() || date > event_end.date() {
+        return None;
+    }
+
+    if event_start.date() == event_end.date() {
+        return if date == event_start.date() {
+            Some((event_start, event_end))
+        } else {
+            None
+        };
+    }
+
+    let day_start = date.and_hms_opt(0, 0, 0).unwrap();
+    let day_end = day_start + Duration::days(1);
+
+    let segment_start = event_start.max(day_start);
+    let segment_end = event_end.min(day_end);
+
+    let mut adjusted_start = segment_start;
+    let mut adjusted_end = segment_end;
+
+    if event_end.time() >= event_start.time() {
+        let daily_start = date.and_time(event_start.time());
+        let daily_end = date.and_time(event_end.time());
+        adjusted_start = adjusted_start.max(daily_start);
+        adjusted_end = adjusted_end.min(daily_end);
+    }
+
+    if adjusted_start < adjusted_end {
+        Some((adjusted_start, adjusted_end))
+    } else if segment_start < segment_end {
+        Some((segment_start, segment_end))
+    } else {
+        None
+    }
 }
 
 impl CountdownRequest {
@@ -24,6 +72,7 @@ impl CountdownRequest {
             event_id: event.id,
             title: event.title.clone(),
             start_at: event.start,
+            end_at: event.end,
             color: event.color.clone(),
             body: event.description.clone(),
         }

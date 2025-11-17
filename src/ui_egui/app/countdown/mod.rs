@@ -45,19 +45,25 @@ impl CalendarApp {
                 event_id,
                 title,
                 start_at,
+                end_at,
                 color,
                 body,
             } = request;
 
-            if start_at <= now {
+            let target_at = if start_at > now {
+                start_at
+            } else if end_at > now {
+                end_at
+            } else {
                 log::info!(
-                    "Skipping countdown for past event {:?} ({}): {:?}",
+                    "Skipping countdown for finished event {:?} ({}): start {:?}, end {:?}",
                     event_id,
                     title,
-                    start_at
+                    start_at,
+                    end_at
                 );
                 continue;
-            }
+            };
 
             let event_color = color.as_deref().and_then(RgbaColor::from_hex_str);
             let event_body = body.and_then(|text| {
@@ -72,7 +78,7 @@ impl CalendarApp {
             let card_id = self.countdown_service.create_card(
                 event_id,
                 title,
-                start_at,
+                target_at,
                 event_color,
                 event_body,
                 self.settings.default_card_width,

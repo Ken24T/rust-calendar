@@ -10,6 +10,7 @@ use chrono::Local;
 use egui::{self, Context};
 use log;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration as StdDuration;
 
 use super::super::{geometry_changed, geometry_from_viewport_info, viewport_info};
 
@@ -28,9 +29,11 @@ pub(in super::super) struct CountdownUiState {
     settings_needs_layout: HashSet<CountdownCardId>,
     render_log_state: HashMap<CountdownCardId, CountdownRenderSnapshot>,
     pending_event_body_updates: Vec<(i64, Option<String>)>,
+    geometry_samples: HashMap<CountdownCardId, GeometrySampleState>,
 }
 
 const MAX_PENDING_GEOMETRY_FRAMES: u32 = 120;
+const GEOMETRY_STABILITY_FRAMES: u32 = 4;
 
 impl CountdownUiState {
     pub(in super::super) fn new(service: &CountdownService) -> Self {
@@ -125,7 +128,13 @@ impl CountdownUiState {
             if let Some(info) = viewport_info.as_ref() {
                 if !waiting_on_geometry && viewport_title_matches(info, &card.event_title) {
                     if let Some(current_geometry) = geometry_from_viewport_info(info) {
-                        if geometry_changed(card.geometry, current_geometry)
+                        log::debug!(
+                            "card {:?} sampled viewport geometry {:?}",
+                            card.id,
+                            current_geometry
+                        );
+                        if self.record_geometry_sample(card.id, current_geometry)
+                            && geometry_changed(card.geometry, current_geometry)
                             && service.queue_geometry_update(card.id, current_geometry)
                         {
                             log::debug!(
@@ -147,6 +156,7 @@ impl CountdownUiState {
             self.settings_needs_layout.remove(&id);
             self.clear_geometry_wait_state(&id);
             self.render_log_state.remove(&id);
+            self.geometry_samples.remove(&id);
         }
 
         service.flush_geometry_updates();
@@ -416,6 +426,70 @@ impl CountdownUiState {
     fn clear_geometry_wait_state(&mut self, card_id: &CountdownCardId) {
         self.pending_visibility.remove(card_id);
         self.geometry_attempts.remove(card_id);
+        self.geometry_samples.remove(card_id);
+    }
+    fn record_geometry_sample(
+        &mut self,
+        card_id: CountdownCardId,
+        sample: CountdownCardGeometry,
+    ) -> bool {
+        let entry = self
+            .geometry_samples
+            .entry(card_id)
+            .or_insert_with(|| GeometrySampleState::new(sample));
+
+        if geometry_changed(entry.last, sample) {
+            log::debug!(
+                "card {:?} geometry sample changed {:?} -> {:?}; resetting stability",
+                card_id,
+                entry.last,
+                sample
+            );
+            entry.last = sample;
+            entry.stable_frames = 1;
+            entry.delivered = false;
+            return false;
+        }
+
+        if entry.stable_frames < GEOMETRY_STABILITY_FRAMES {
+            entry.stable_frames += 1;
+            log::debug!(
+                "card {:?} geometry holding steady (frame {}/{})",
+                card_id,
+                entry.stable_frames,
+                GEOMETRY_STABILITY_FRAMES
+            );
+            return false;
+        }
+
+        if entry.delivered {
+            return false;
+        }
+
+        log::debug!(
+            "card {:?} geometry considered stable enough to persist {:?}",
+            card_id,
+            entry.last
+        );
+        entry.delivered = true;
+        true
+    }
+}
+
+#[derive(Clone, Copy)]
+struct GeometrySampleState {
+    last: CountdownCardGeometry,
+    stable_frames: u32,
+    delivered: bool,
+}
+
+impl GeometrySampleState {
+    fn new(sample: CountdownCardGeometry) -> Self {
+        Self {
+            last: sample,
+            stable_frames: 1,
+            delivered: false,
+        }
     }
 }
 

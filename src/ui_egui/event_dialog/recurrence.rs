@@ -113,6 +113,31 @@ impl Weekday {
         }
     }
 
+    pub fn from_index(index: u8) -> Option<Self> {
+        match index % 7 {
+            0 => Some(Self::Sunday),
+            1 => Some(Self::Monday),
+            2 => Some(Self::Tuesday),
+            3 => Some(Self::Wednesday),
+            4 => Some(Self::Thursday),
+            5 => Some(Self::Friday),
+            6 => Some(Self::Saturday),
+            _ => None,
+        }
+    }
+
+    pub fn short_label(&self) -> &'static str {
+        match self {
+            Self::Sunday => "Sun",
+            Self::Monday => "Mon",
+            Self::Tuesday => "Tue",
+            Self::Wednesday => "Wed",
+            Self::Thursday => "Thu",
+            Self::Friday => "Fri",
+            Self::Saturday => "Sat",
+        }
+    }
+
     pub fn all() -> [Self; 7] {
         [
             Self::Sunday,

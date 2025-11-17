@@ -2,7 +2,7 @@ use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
-use chrono::{self, Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{self, Local, LocalResult, NaiveDate, NaiveDateTime, NaiveTime};
 
 use super::recurrence::{parse_until_date, RecurrenceFrequency, RecurrencePattern, Weekday};
 
@@ -13,6 +13,7 @@ pub struct EventDialogState {
     pub description: String,
     pub location: String,
     pub date: NaiveDate,
+    pub end_date: NaiveDate,
     pub start_time: NaiveTime,
     pub end_time: NaiveTime,
     pub all_day: bool,
@@ -74,6 +75,7 @@ impl EventDialogState {
             description: String::new(),
             location: String::new(),
             date,
+            end_date: date,
             start_time,
             end_time,
             all_day: false,
@@ -125,6 +127,7 @@ impl EventDialogState {
             description: event.description.clone().unwrap_or_default(),
             location: event.location.clone().unwrap_or_default(),
             date,
+            end_date: event.end.date_naive(),
             start_time,
             end_time,
             all_day: event.all_day,
@@ -165,6 +168,31 @@ impl EventDialogState {
                 .create(event)
                 .map_err(|e| format!("Failed to create event: {}", e))
         }
+    }
+
+    fn start_end_datetimes(
+        &self,
+    ) -> Result<(chrono::DateTime<Local>, chrono::DateTime<Local>), String> {
+        let start_naive = NaiveDateTime::new(self.date, self.start_time);
+        let end_naive = NaiveDateTime::new(self.end_date, self.end_time);
+
+        let start = match start_naive.and_local_timezone(Local) {
+            LocalResult::Single(dt) => dt,
+            LocalResult::Ambiguous(dt, _) => dt,
+            LocalResult::None => {
+                return Err("Start time is invalid for the selected day".to_string());
+            }
+        };
+
+        let end = match end_naive.and_local_timezone(Local) {
+            LocalResult::Single(dt) => dt,
+            LocalResult::Ambiguous(dt, _) => dt,
+            LocalResult::None => {
+                return Err("End time is invalid for the selected day".to_string());
+            }
+        };
+
+        Ok((start, end))
     }
 
     fn parse_rrule(
@@ -344,8 +372,9 @@ impl EventDialogState {
             return Err("Event title is too long (max 200 characters)".to_string());
         }
 
-        if !self.all_day && self.end_time <= self.start_time {
-            return Err("End time must be after start time".to_string());
+        let (start_dt, end_dt) = self.start_end_datetimes()?;
+        if end_dt <= start_dt {
+            return Err("Event must end after it starts".to_string());
         }
 
         if self.is_recurring {
@@ -401,17 +430,7 @@ impl EventDialogState {
 
     fn to_event(&self) -> Result<Event, String> {
         self.validate()?;
-
-        let start_datetime = self
-            .date
-            .and_time(self.start_time)
-            .and_local_timezone(Local)
-            .unwrap();
-        let end_datetime = self
-            .date
-            .and_time(self.end_time)
-            .and_local_timezone(Local)
-            .unwrap();
+        let (start_datetime, end_datetime) = self.start_end_datetimes()?;
 
         let mut event = Event::builder()
             .title(&self.title)
@@ -440,6 +459,32 @@ impl EventDialogState {
         }
 
         event.build()
+    }
+
+    pub(super) fn weekday_flag(&self, index: u8) -> bool {
+        match index % 7 {
+            0 => self.byday_sunday,
+            1 => self.byday_monday,
+            2 => self.byday_tuesday,
+            3 => self.byday_wednesday,
+            4 => self.byday_thursday,
+            5 => self.byday_friday,
+            6 => self.byday_saturday,
+            _ => false,
+        }
+    }
+
+    pub(super) fn set_weekday_flag(&mut self, index: u8, value: bool) {
+        match index % 7 {
+            0 => self.byday_sunday = value,
+            1 => self.byday_monday = value,
+            2 => self.byday_tuesday = value,
+            3 => self.byday_wednesday = value,
+            4 => self.byday_thursday = value,
+            5 => self.byday_friday = value,
+            6 => self.byday_saturday = value,
+            _ => {}
+        }
     }
 }
 
@@ -540,6 +585,22 @@ mod tests {
         state.byday_enabled = true;
         let err = state.validate().unwrap_err();
         assert!(err.contains("Select at least one day"));
+    }
+
+    #[test]
+    fn validate_allows_multi_day_events() {
+        let mut state = base_state();
+        state.end_date = state.date.succ_opt().unwrap();
+        state.end_time = state.start_time; // equal times allowed when date advances
+        assert!(state.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_end_before_start_date() {
+        let mut state = base_state();
+        state.end_date = state.date.pred_opt().unwrap();
+        let err = state.validate().unwrap_err();
+        assert!(err.contains("Event must end"));
     }
 
     #[test]

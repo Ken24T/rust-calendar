@@ -8,7 +8,7 @@ use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
-use crate::ui_egui::views::CountdownRequest;
+use crate::ui_egui::views::{event_time_segment_for_date, CountdownRequest};
 
 pub struct WeekView;
 
@@ -236,24 +236,24 @@ impl WeekView {
                         let mut starting_events: Vec<&Event> = Vec::new();
                         let mut continuing_events: Vec<&Event> = Vec::new();
 
+                        let slot_start_dt = date.and_time(slot_start);
+                        let slot_end_dt = date.and_time(slot_end);
+
                         for event in events.iter() {
-                            let event_date = event.start.date_naive();
-                            if event_date != *date {
+                            let Some((segment_start, segment_end)) =
+                                event_time_segment_for_date(event, *date)
+                            else {
+                                continue;
+                            };
+
+                            if segment_start >= slot_end_dt || segment_end <= slot_start_dt {
                                 continue;
                             }
 
-                            let event_start = event.start.time();
-                            let event_end = event.end.time();
-
-                            // Check if event overlaps with this slot
-                            if event_start < slot_end && event_end > slot_start {
-                                // Does it start in this slot?
-                                if event_start >= slot_start && event_start < slot_end {
-                                    starting_events.push(event);
-                                } else if event_start < slot_start {
-                                    // It started earlier and is continuing through this slot
-                                    continuing_events.push(event);
-                                }
+                            if segment_start >= slot_start_dt && segment_start < slot_end_dt {
+                                starting_events.push(event);
+                            } else if segment_start < slot_start_dt {
+                                continuing_events.push(event);
                             }
                         }
 

@@ -1,5 +1,7 @@
-use super::super::{geometry_changed, geometry_from_viewport_info};
-use crate::services::countdown::{CountdownCardGeometry, CountdownCardState, RgbaColor};
+use super::super::{geometry_changed, geometry_from_viewport_info, viewport_info};
+use crate::services::countdown::{
+    CountdownCardGeometry, CountdownCardId, CountdownCardState, RgbaColor,
+};
 use chrono::{DateTime, Local};
 use egui::{self, ViewportClass, ViewportId};
 use std::time::Duration as StdDuration;
@@ -17,24 +19,27 @@ pub(super) enum CountdownCardUiAction {
 
 pub(super) fn viewport_builder_for_card(
     card: &CountdownCardState,
-    start_hidden: bool,
+    waiting_on_geometry: bool,
 ) -> egui::ViewportBuilder {
     let mut builder = egui::ViewportBuilder::default()
         .with_title(card.event_title.clone())
-        .with_position(egui::pos2(card.geometry.x, card.geometry.y))
-        .with_inner_size(egui::vec2(
-            card.geometry.width.max(110.0),
-            card.geometry.height.max(90.0),
-        ))
         .with_resizable(true)
-        .with_transparent(false);
+        .with_transparent(false)
+        .with_decorations(true)
+        .with_min_inner_size(egui::vec2(110.0, 90.0));
+
+    if waiting_on_geometry {
+        builder = builder
+            .with_position(egui::pos2(card.geometry.x, card.geometry.y))
+            .with_inner_size(egui::vec2(
+                card.geometry.width.max(110.0),
+                card.geometry.height.max(90.0),
+            ))
+            .with_visible(false);
+    }
 
     if card.visuals.always_on_top {
         builder = builder.with_always_on_top();
-    }
-
-    if start_hidden {
-        builder = builder.with_visible(false);
     }
 
     builder
@@ -94,6 +99,12 @@ pub(super) fn render_countdown_card_ui(
     if waiting_on_geometry {
         let target_position = egui::pos2(card.geometry.x, card.geometry.y);
         let target_size = egui::vec2(card.geometry.width, card.geometry.height);
+        log::info!(
+            "card {:?} waiting on geometry; forcing pos {:?} size {:?}",
+            card.id,
+            target_position,
+            target_size
+        );
         ctx.send_viewport_cmd_to(
             viewport_id,
             egui::ViewportCommand::OuterPosition(target_position),
@@ -124,11 +135,19 @@ pub(super) fn render_countdown_card_ui(
         });
 
         if geometry_settled {
-            log::debug!("card {:?} geometry settled", card.id);
+            log::debug!("card {:?} geometry settled during wait", card.id);
             ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
         } else {
+            log::debug!(
+                "card {:?} geometry still settling; hiding viewport",
+                card.id
+            );
             ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(false));
         }
+    }
+
+    struct RenderResult {
+        action: CountdownCardUiAction,
     }
 
     let render = |ui: &mut egui::Ui| {
@@ -208,12 +227,7 @@ pub(super) fn render_countdown_card_ui(
             );
         });
 
-        let response = ui.interact(
-            inner.response.rect,
-            ui.make_persistent_id(("countdown_card_surface", card.id.0)),
-            egui::Sense::click(),
-        );
-        response.context_menu(|ui| {
+        inner.response.context_menu(|ui| {
             if ui.button("Card settings...").clicked() {
                 action = CountdownCardUiAction::OpenSettings;
                 ui.close_menu();
@@ -224,7 +238,7 @@ pub(super) fn render_countdown_card_ui(
             }
         });
 
-        action
+        RenderResult { action }
     };
 
     let result = match class {
@@ -234,18 +248,21 @@ pub(super) fn render_countdown_card_ui(
                 .collapsible(false)
                 .resizable(true)
                 .show(ctx, |ui| {
-                    action = render(ui);
+                    action = render(ui).action;
                 });
             action
         }
         _ => {
-            let mut action = CountdownCardUiAction::None;
+            let mut output: Option<RenderResult> = None;
             egui::CentralPanel::default()
                 .frame(egui::Frame::none().fill(body_bg))
                 .show(ctx, |ui| {
-                    action = render(ui);
+                    output = Some(render(ui));
                 });
-            action
+
+            output
+                .map(|outcome| outcome.action)
+                .unwrap_or(CountdownCardUiAction::None)
         }
     };
 

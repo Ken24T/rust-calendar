@@ -154,7 +154,7 @@ impl CalendarApp {
             "Week" => ViewType::Week,
             "WorkWeek" => ViewType::WorkWeek,
             "Month" => ViewType::Month,
-            "Quarter" => ViewType::Quarter,
+            "Quarter" => ViewType::Month,
             _ => ViewType::Month, // Default fallback
         }
     }
@@ -215,12 +215,15 @@ impl eframe::App for CalendarApp {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
+                    if ui.button("Exit").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+
+                ui.menu_button("Edit", |ui| {
                     if ui.button("Settings").clicked() {
                         self.show_settings_dialog = true;
                         ui.close_menu();
-                    }
-                    if ui.button("Exit").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
 
@@ -251,13 +254,6 @@ impl eframe::App for CalendarApp {
                         .clicked()
                     {
                         self.current_view = ViewType::Month;
-                        ui.close_menu();
-                    }
-                    if ui
-                        .selectable_label(self.current_view == ViewType::Quarter, "Quarter")
-                        .clicked()
-                    {
-                        self.current_view = ViewType::Quarter;
                         ui.close_menu();
                     }
                 });
@@ -300,7 +296,7 @@ impl eframe::App for CalendarApp {
                     ViewType::Week => "Week",
                     ViewType::WorkWeek => "Work Week",
                     ViewType::Month => "Month",
-                    ViewType::Quarter => "Quarter",
+                    ViewType::Quarter => "Month",
                 },
                 self.current_date.format("%B %Y")
             ));
@@ -334,7 +330,7 @@ impl eframe::App for CalendarApp {
                     self.render_workweek_view(ui, &mut countdown_requests, &active_countdown_events)
                 }
                 ViewType::Month => self.render_month_view(ui),
-                ViewType::Quarter => self.render_quarter_view(ui),
+                ViewType::Quarter => self.render_month_view(ui),
             }
         });
 
