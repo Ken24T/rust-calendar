@@ -628,6 +628,9 @@ impl DayView {
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
+            .into_iter()
+            .filter(|e| !e.all_day)
+            .collect()
     }
 
     fn parse_color(hex: &str) -> Option<Color32> {

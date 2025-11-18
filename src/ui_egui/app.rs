@@ -22,7 +22,7 @@ use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::CountdownRequest;
-use chrono::{Local, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +50,9 @@ pub struct CalendarApp {
     show_settings_dialog: bool,
     theme_dialog_state: ThemeDialogState,
     theme_creator_state: ThemeCreatorState,
+
+    // Ribbon state
+    show_ribbon: bool,
 
     // Event dialog state
     event_dialog_state: Option<EventDialogState>,
@@ -129,6 +132,7 @@ impl CalendarApp {
             show_settings_dialog: false,
             theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
+            show_ribbon: true,
             event_dialog_state: None,
             event_dialog_date: None,
             event_dialog_time: None,
@@ -222,6 +226,10 @@ impl eframe::App for CalendarApp {
                 });
 
                 ui.menu_button("View", |ui| {
+                    if ui.checkbox(&mut self.show_ribbon, "Show All-Day Events Ribbon").clicked() {
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui
                         .selectable_label(self.current_view == ViewType::Day, "Day")
                         .clicked()
@@ -311,13 +319,13 @@ impl eframe::App for CalendarApp {
 
             ui.separator();
 
-            // View content (placeholder for now)
+            // View content (ribbon is now rendered inside week view)
             match self.current_view {
                 ViewType::Day => {
                     self.render_day_view(ui, &mut countdown_requests, &active_countdown_events)
                 }
                 ViewType::Week => {
-                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events)
+                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events, self.show_ribbon)
                 }
                 ViewType::WorkWeek => {
                     self.render_workweek_view(ui, &mut countdown_requests, &active_countdown_events)
@@ -485,7 +493,38 @@ impl CalendarApp {
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &std::collections::HashSet<i64>,
+        show_ribbon: bool,
     ) {
+        // Get all-day events for the ribbon
+        let all_day_events = if show_ribbon {
+            use chrono::TimeZone;
+            let event_service = EventService::new(self.database.connection());
+            
+            // Calculate week range
+            let weekday = self.current_date.weekday().num_days_from_sunday() as i64;
+            let offset = (weekday - self.settings.first_day_of_week as i64 + 7) % 7;
+            let week_start = self.current_date - chrono::Duration::days(offset);
+            let week_end = week_start + chrono::Duration::days(6);
+            
+            let start_datetime = Local
+                .from_local_datetime(&week_start.and_hms_opt(0, 0, 0).unwrap())
+                .single()
+                .unwrap();
+            let end_datetime = Local
+                .from_local_datetime(&week_end.and_hms_opt(23, 59, 59).unwrap())
+                .single()
+                .unwrap();
+            
+            event_service
+                .expand_recurring_events(start_datetime, end_datetime)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|e| e.all_day)
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
         if let Some(clicked_event) = WeekView::show(
             ui,
             &mut self.current_date,
@@ -497,6 +536,8 @@ impl CalendarApp {
             &mut self.event_dialog_recurrence,
             countdown_requests,
             active_countdown_events,
+            show_ribbon,
+            &all_day_events,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
