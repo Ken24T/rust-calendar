@@ -192,6 +192,104 @@ impl CalendarApp {
 
 impl eframe::App for CalendarApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Handle drag-and-drop of ICS files
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                for file in &i.raw.dropped_files {
+                    // Try to read the file content
+                    let ics_content = if let Some(path) = &file.path {
+                        // File dropped from file system
+                        match std::fs::read_to_string(path) {
+                            Ok(content) => Some(content),
+                            Err(e) => {
+                                log::error!("Failed to read dropped file {:?}: {}", path, e);
+                                None
+                            }
+                        }
+                    } else if let Some(bytes) = &file.bytes {
+                        // File dropped as bytes (e.g., from Outlook)
+                        match String::from_utf8(bytes.to_vec()) {
+                            Ok(content) => Some(content),
+                            Err(e) => {
+                                log::error!("Failed to parse dropped file bytes as UTF-8: {}", e);
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    if let Some(ics_content) = ics_content {
+                        // Check if it looks like ICS content
+                        if ics_content.contains("BEGIN:VCALENDAR") || ics_content.contains("BEGIN:VEVENT") {
+                            use crate::services::icalendar::import;
+                            use crate::services::event::EventService;
+                            
+                            match import::from_str(&ics_content) {
+                                Ok(events) => {
+                                    let service = EventService::new(self.database.connection());
+                                    let mut imported_count = 0;
+                                    let mut failed_count = 0;
+                                    
+                                    for event in events {
+                                        let event_title = event.title.clone();
+                                        let event_start = event.start;
+                                        match service.create(event) {
+                                            Ok(created_event) => {
+                                                imported_count += 1;
+                                                
+                                                // Auto-create countdown if enabled and event is in the future
+                                                if self.settings.auto_create_countdown_on_import && event_start > Local::now() {
+                                                    if let Some(event_id) = created_event.id {
+                                                        // Parse color string to RgbaColor if present
+                                                        use crate::services::countdown::RgbaColor;
+                                                        let event_color = created_event.color.as_ref()
+                                                            .and_then(|hex| {
+                                                                if hex.starts_with('#') && hex.len() == 7 {
+                                                                    u32::from_str_radix(&hex[1..], 16)
+                                                                        .ok()
+                                                                        .map(|rgb| {
+                                                                            let r = ((rgb >> 16) & 0xFF) as u8;
+                                                                            let g = ((rgb >> 8) & 0xFF) as u8;
+                                                                            let b = (rgb & 0xFF) as u8;
+                                                                            RgbaColor::new(r, g, b, 255)
+                                                                        })
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            });
+                                                        
+                                                        self.countdown_service.create_card(
+                                                            Some(event_id),
+                                                            created_event.title.clone(),
+                                                            created_event.start,
+                                                            event_color,
+                                                            created_event.description.clone(),
+                                                            self.settings.default_card_width,
+                                                            self.settings.default_card_height,
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::error!("Failed to import dropped event '{}': {}", event_title, e);
+                                                failed_count += 1;
+                                            }
+                                        }
+                                    }
+                                    
+                                    log::info!("Drag-and-drop import complete: {} events imported, {} failed", imported_count, failed_count);
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to parse dropped ICS content: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         // Handle keyboard shortcuts
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             // Close dialogs in priority order
@@ -377,6 +475,34 @@ impl eframe::App for CalendarApp {
 
         // Main content area
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Show drag-and-drop overlay if files are being hovered
+            let is_hovering = ctx.input(|i| !i.raw.hovered_files.is_empty());
+            if is_hovering {
+                let screen_rect = ui.max_rect();
+                ui.painter().rect_filled(
+                    screen_rect,
+                    0.0,
+                    egui::Color32::from_rgba_premultiplied(100, 100, 255, 30),
+                );
+                ui.painter().rect_stroke(
+                    screen_rect,
+                    0.0,
+                    egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 100, 255)),
+                );
+                
+                // Center text
+                let text = "📅 Drop ICS file here to import events";
+                let text_style = egui::TextStyle::Heading;
+                let font_id = text_style.resolve(ui.style());
+                let text_galley = ui.painter().layout_no_wrap(
+                    text.to_string(),
+                    font_id.clone(),
+                    egui::Color32::WHITE,
+                );
+                let text_pos = screen_rect.center() - egui::vec2(text_galley.size().x / 2.0, text_galley.size().y / 2.0);
+                ui.painter().galley(text_pos, text_galley, egui::Color32::WHITE);
+            }
+            
             ui.heading(format!(
                 "{} View - {}",
                 match self.current_view {
