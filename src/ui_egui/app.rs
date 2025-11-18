@@ -51,7 +51,7 @@ pub struct CalendarApp {
     theme_dialog_state: ThemeDialogState,
     theme_creator_state: ThemeCreatorState,
 
-    // Ribbon state
+    // Ribbon state (mirrors self.settings.show_ribbon)
     show_ribbon: bool,
 
     // Event dialog state
@@ -123,6 +123,8 @@ impl CalendarApp {
         let pending_root_geometry = countdown_service.app_window_geometry();
         let countdown_ui = CountdownUiState::new(&countdown_service);
 
+        let show_ribbon = settings.show_ribbon;
+
         let app = Self {
             database,
             settings,
@@ -132,7 +134,7 @@ impl CalendarApp {
             show_settings_dialog: false,
             theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
-            show_ribbon: true,
+            show_ribbon,
             event_dialog_state: None,
             event_dialog_date: None,
             event_dialog_time: None,
@@ -227,6 +229,11 @@ impl eframe::App for CalendarApp {
 
                 ui.menu_button("View", |ui| {
                     if ui.checkbox(&mut self.show_ribbon, "Show All-Day Events Ribbon").clicked() {
+                        self.settings.show_ribbon = self.show_ribbon;
+                        let settings_service = SettingsService::new(self.database);
+                        if let Err(err) = settings_service.update(&self.settings) {
+                            log::error!("Failed to persist ribbon setting: {err}");
+                        }
                         ui.close_menu();
                     }
                     ui.separator();
@@ -662,15 +669,19 @@ impl CalendarApp {
     }
 
     fn render_settings_dialog(&mut self, ctx: &egui::Context) {
-        let saved = render_settings_dialog(
+        let response = render_settings_dialog(
             ctx,
             &mut self.settings,
             self.database,
             &mut self.show_settings_dialog,
         );
 
+        if response.show_ribbon_changed || response.saved {
+            self.show_ribbon = self.settings.show_ribbon;
+        }
+
         // If settings were saved, apply theme
-        if saved {
+        if response.saved {
             self.apply_theme_from_db(ctx);
         }
     }
