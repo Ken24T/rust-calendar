@@ -28,17 +28,19 @@ pub fn render_event_dialog(
     show_dialog: &mut bool,
 ) -> EventDialogResult {
     let mut result = EventDialogResult::default();
+    let mut dialog_open = *show_dialog;
 
     egui::Window::new(if state.event_id.is_some() {
         "Edit Event"
     } else {
         "New Event"
     })
+    .open(&mut dialog_open)
     .collapsible(false)
     .resizable(true)
     .default_width(600.0)
-    .default_height(640.0)
-    .min_height(600.0)
+    .default_height(720.0)
+    .min_height(680.0)
     .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
     .show(ctx, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -53,6 +55,10 @@ pub fn render_event_dialog(
             }
         });
     });
+
+    if !dialog_open {
+        *show_dialog = false;
+    }
 
     result
 }

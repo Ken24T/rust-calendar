@@ -2,7 +2,7 @@ use super::shared::{deserialize_exceptions, serialize_exceptions, to_local_datet
 use super::EventService;
 use crate::models::event::Event;
 use anyhow::{anyhow, Context, Result};
-use chrono::Local;
+use chrono::{Local, TimeZone};
 use rusqlite::{self, params};
 
 impl<'a> EventService<'a> {
@@ -130,6 +130,40 @@ impl<'a> EventService<'a> {
 
         if rows_affected == 0 {
             return Err(anyhow!("Event with id {} not found", id));
+        }
+
+        Ok(())
+    }
+
+    /// Add an exception date to a recurring event (deletes single occurrence).
+    pub fn delete_occurrence(&self, id: i64, occurrence_date: chrono::DateTime<Local>) -> Result<()> {
+        // Get the event
+        let mut event = self.get(id)?
+            .ok_or_else(|| anyhow!("Event with id {} not found", id))?;
+
+        // Ensure it's a recurring event
+        if event.recurrence_rule.is_none() {
+            return Err(anyhow!("Event is not recurring, use delete() instead"));
+        }
+
+        // Add the occurrence date to exceptions
+        let mut exceptions = event.recurrence_exceptions.unwrap_or_default();
+        
+        // Normalize to midnight for all-day events, or keep exact time
+        let exception_date = if event.all_day {
+            occurrence_date.date_naive().and_hms_opt(0, 0, 0)
+                .map(|dt| Local.from_local_datetime(&dt).single())
+                .flatten()
+                .unwrap_or(occurrence_date)
+        } else {
+            occurrence_date
+        };
+
+        // Add if not already present
+        if !exceptions.contains(&exception_date) {
+            exceptions.push(exception_date);
+            event.recurrence_exceptions = Some(exceptions);
+            self.update(&event)?;
         }
 
         Ok(())

@@ -461,12 +461,55 @@ impl WorkWeekView {
                         ui.memory_mut(|mem| mem.close_popup());
                     }
 
-                    if ui.button("🗑 Delete").clicked() {
-                        // Delete the event immediately
-                        use crate::services::event::EventService;
-                        if let Some(id) = event.id {
-                            let service = EventService::new(database.connection());
-                            let _ = service.delete(id);
+                    // Delete options - different for recurring events
+                    if event.recurrence_rule.is_some() {
+                        if ui.button("🗑 Delete This Occurrence").clicked() {
+                            use crate::services::event::EventService;
+                            if let Some(id) = event.id {
+                                let service = EventService::new(database.connection());
+                                let _ = service.delete_occurrence(id, event.start);
+                            }
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+                        if ui.button("🗑 Delete All Occurrences").clicked() {
+                            use crate::services::event::EventService;
+                            if let Some(id) = event.id {
+                                let service = EventService::new(database.connection());
+                                let _ = service.delete(id);
+                            }
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+                    } else {
+                        if ui.button("🗑 Delete").clicked() {
+                            use crate::services::event::EventService;
+                            if let Some(id) = event.id {
+                                let service = EventService::new(database.connection());
+                                let _ = service.delete(id);
+                            }
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+                    }
+
+                    if ui.button("📤 Export this event").clicked() {
+                        // Export event to ICS file
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_file_name(&format!("{}.ics", event.title.replace(' ', "_")))
+                            .add_filter("iCalendar", &["ics"])
+                            .save_file()
+                        {
+                            use crate::services::icalendar::export;
+                            match export::single(&event) {
+                                Ok(ics_content) => {
+                                    if let Err(e) = std::fs::write(&path, ics_content) {
+                                        log::error!("Failed to write ICS file: {}", e);
+                                    } else {
+                                        log::info!("Exported event to {:?}", path);
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to export event: {}", e);
+                                }
+                            }
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }

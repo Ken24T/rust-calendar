@@ -2,8 +2,8 @@
 
 //! RFC 5545 (.ics) import/export service.
 
-mod export;
-mod import;
+pub mod export;
+pub mod import;
 mod service;
 mod utils;
 

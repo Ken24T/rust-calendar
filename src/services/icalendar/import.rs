@@ -4,7 +4,7 @@ use chrono::Local;
 
 use super::utils::{parse_date, parse_datetime, unescape_text};
 
-pub(super) fn from_str(ics_content: &str) -> Result<Vec<Event>> {
+pub fn from_str(ics_content: &str) -> Result<Vec<Event>> {
     let mut events = Vec::new();
     let lines: Vec<&str> = ics_content.lines().collect();
 

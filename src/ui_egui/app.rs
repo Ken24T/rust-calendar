@@ -225,6 +225,49 @@ impl eframe::App for CalendarApp {
                         self.show_settings_dialog = true;
                         ui.close_menu();
                     }
+                    ui.separator();
+                    if ui.button("Import Event...").clicked() {
+                        // Import ICS file
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("iCalendar", &["ics"])
+                            .pick_file()
+                        {
+                            match std::fs::read_to_string(&path) {
+                                Ok(ics_content) => {
+                                    use crate::services::icalendar::import;
+                                    use crate::services::event::EventService;
+                                    
+                                    match import::from_str(&ics_content) {
+                                        Ok(events) => {
+                                            let service = EventService::new(self.database.connection());
+                                            let mut imported_count = 0;
+                                            let mut failed_count = 0;
+                                            
+                                            for event in events {
+                                                let event_title = event.title.clone();
+                                                match service.create(event) {
+                                                    Ok(_) => imported_count += 1,
+                                                    Err(e) => {
+                                                        log::error!("Failed to import event '{}': {}", event_title, e);
+                                                        failed_count += 1;
+                                                    }
+                                                }
+                                            }
+                                            
+                                            log::info!("Import complete: {} events imported, {} failed", imported_count, failed_count);
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to parse ICS file: {}", e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to read ICS file: {}", e);
+                                }
+                            }
+                        }
+                        ui.close_menu();
+                    }
                 });
 
                 ui.menu_button("View", |ui| {

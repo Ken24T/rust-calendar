@@ -4,14 +4,14 @@ use chrono::{Local, Utc};
 
 use super::utils::{escape_text, format_date, format_datetime};
 
-pub(super) fn single(event: &Event) -> Result<String> {
+pub fn single(event: &Event) -> Result<String> {
     let mut ics = calendar_header();
     append_event(&mut ics, event);
     ics.push_str("END:VCALENDAR\r\n");
     Ok(ics)
 }
 
-pub(super) fn multiple(events: &[Event]) -> Result<String> {
+pub fn multiple(events: &[Event]) -> Result<String> {
     let mut ics = calendar_header();
     for event in events {
         append_event(&mut ics, event);
