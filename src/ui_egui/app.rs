@@ -210,10 +210,27 @@ impl eframe::App for CalendarApp {
                                             let service = EventService::new(self.database.connection());
                                             let mut imported_count = 0;
                                             let mut failed_count = 0;
+                                            let mut duplicate_count = 0;
                                             
                                             for event in events {
                                                 let event_title = event.title.clone();
                                                 let event_start = event.start;
+                                                let event_end = event.end;
+                                                
+                                                // Check for duplicates (same title, start, and end time)
+                                                let existing_events = service.list_all().unwrap_or_default();
+                                                let is_duplicate = existing_events.iter().any(|e| {
+                                                    e.title == event_title &&
+                                                    e.start == event_start &&
+                                                    e.end == event_end
+                                                });
+                                                
+                                                if is_duplicate {
+                                                    log::info!("Skipping duplicate event: '{}'", event_title);
+                                                    duplicate_count += 1;
+                                                    continue;
+                                                }
+                                                
                                                 match service.create(event) {
                                                     Ok(created_event) => {
                                                         imported_count += 1;
@@ -258,7 +275,11 @@ impl eframe::App for CalendarApp {
                                                 }
                                             }
                                             
-                                            log::info!("Drag-and-drop import complete: {} events imported, {} failed", imported_count, failed_count);
+                                            if duplicate_count > 0 {
+                                                log::info!("Drag-and-drop import complete: {} events imported, {} duplicates skipped, {} failed", imported_count, duplicate_count, failed_count);
+                                            } else {
+                                                log::info!("Drag-and-drop import complete: {} events imported, {} failed", imported_count, failed_count);
+                                            }
                                         }
                                         Err(e) => {
                                             log::error!("Failed to parse dropped ICS content: {}", e);
@@ -325,10 +346,27 @@ impl eframe::App for CalendarApp {
                                             let service = EventService::new(self.database.connection());
                                             let mut imported_count = 0;
                                             let mut failed_count = 0;
+                                            let mut duplicate_count = 0;
                                             
                                             for event in events {
                                                 let event_title = event.title.clone();
                                                 let event_start = event.start;
+                                                let event_end = event.end;
+                                                
+                                                // Check for duplicates (same title, start, and end time)
+                                                let existing_events = service.list_all().unwrap_or_default();
+                                                let is_duplicate = existing_events.iter().any(|e| {
+                                                    e.title == event_title &&
+                                                    e.start == event_start &&
+                                                    e.end == event_end
+                                                });
+                                                
+                                                if is_duplicate {
+                                                    log::info!("Skipping duplicate event: '{}'", event_title);
+                                                    duplicate_count += 1;
+                                                    continue;
+                                                }
+                                                
                                                 match service.create(event) {
                                                     Ok(created_event) => {
                                                         imported_count += 1;
@@ -373,7 +411,11 @@ impl eframe::App for CalendarApp {
                                                 }
                                             }
                                             
-                                            log::info!("Import complete: {} events imported, {} failed", imported_count, failed_count);
+                                            if duplicate_count > 0 {
+                                                log::info!("Import complete: {} events imported, {} duplicates skipped, {} failed", imported_count, duplicate_count, failed_count);
+                                            } else {
+                                                log::info!("Import complete: {} events imported, {} failed", imported_count, failed_count);
+                                            }
                                         }
                                         Err(e) => {
                                             log::error!("Failed to parse ICS file: {}", e);
@@ -460,43 +502,6 @@ impl eframe::App for CalendarApp {
 
         // Main content area
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Show drag-and-drop overlay if ICS files are being hovered
-            let is_hovering = ctx.input(|i| {
-                !i.raw.hovered_files.is_empty() && 
-                i.raw.hovered_files.iter().any(|f| {
-                    f.path.as_ref()
-                        .and_then(|p| p.extension())
-                        .map(|ext| ext.eq_ignore_ascii_case("ics"))
-                        .unwrap_or(false)
-                })
-            });
-            
-            if is_hovering {
-                let screen_rect = ui.max_rect();
-                ui.painter().rect_filled(
-                    screen_rect,
-                    0.0,
-                    egui::Color32::from_rgba_premultiplied(100, 100, 255, 30),
-                );
-                ui.painter().rect_stroke(
-                    screen_rect,
-                    0.0,
-                    egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 100, 255)),
-                );
-                
-                // Center text
-                let text = "📅 Drop ICS file here to import events";
-                let text_style = egui::TextStyle::Heading;
-                let font_id = text_style.resolve(ui.style());
-                let text_galley = ui.painter().layout_no_wrap(
-                    text.to_string(),
-                    font_id.clone(),
-                    egui::Color32::WHITE,
-                );
-                let text_pos = screen_rect.center() - egui::vec2(text_galley.size().x / 2.0, text_galley.size().y / 2.0);
-                ui.painter().galley(text_pos, text_galley, egui::Color32::WHITE);
-            }
-            
             ui.heading(format!(
                 "{} View - {}",
                 match self.current_view {
@@ -1096,3 +1101,4 @@ fn geometry_changed(a: CountdownCardGeometry, b: CountdownCardGeometry) -> bool 
         || (a.width - b.width).abs() > 1.0
         || (a.height - b.height).abs() > 1.0
 }
+
