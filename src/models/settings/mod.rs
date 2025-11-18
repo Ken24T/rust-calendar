@@ -20,6 +20,7 @@ pub struct Settings {
     pub default_event_start_time: String,
     pub default_card_width: f32,
     pub default_card_height: f32,
+    pub auto_create_countdown_on_import: bool,
 }
 
 impl Default for Settings {
@@ -40,6 +41,7 @@ impl Default for Settings {
             default_event_start_time: "08:00".to_string(),
             default_card_width: 120.0,
             default_card_height: 110.0,
+            auto_create_countdown_on_import: false,
         }
     }
 }

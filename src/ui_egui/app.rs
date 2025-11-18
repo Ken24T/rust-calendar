@@ -245,8 +245,44 @@ impl eframe::App for CalendarApp {
                                             
                                             for event in events {
                                                 let event_title = event.title.clone();
+                                                let event_start = event.start;
                                                 match service.create(event) {
-                                                    Ok(_) => imported_count += 1,
+                                                    Ok(created_event) => {
+                                                        imported_count += 1;
+                                                        
+                                                        // Auto-create countdown if enabled and event is in the future
+                                                        if self.settings.auto_create_countdown_on_import && event_start > Local::now() {
+                                                            if let Some(event_id) = created_event.id {
+                                                                // Parse color string to RgbaColor if present
+                                                                use crate::services::countdown::RgbaColor;
+                                                                let event_color = created_event.color.as_ref()
+                                                                    .and_then(|hex| {
+                                                                        if hex.starts_with('#') && hex.len() == 7 {
+                                                                            u32::from_str_radix(&hex[1..], 16)
+                                                                                .ok()
+                                                                                .map(|rgb| {
+                                                                                    let r = ((rgb >> 16) & 0xFF) as u8;
+                                                                                    let g = ((rgb >> 8) & 0xFF) as u8;
+                                                                                    let b = (rgb & 0xFF) as u8;
+                                                                                    RgbaColor::new(r, g, b, 255)
+                                                                                })
+                                                                        } else {
+                                                                            None
+                                                                        }
+                                                                    });
+                                                                
+                                                                self.countdown_service.create_card(
+                                                                    Some(event_id),
+                                                                    created_event.title.clone(),
+                                                                    created_event.start,
+                                                                    event_color,
+                                                                    created_event.description.clone(),
+                                                                    self.settings.default_card_width,
+                                                                    self.settings.default_card_height,
+                                                                );
+                                                            }
+                                                        }
+                                                    }
                                                     Err(e) => {
                                                         log::error!("Failed to import event '{}': {}", event_title, e);
                                                         failed_count += 1;
@@ -364,6 +400,47 @@ impl eframe::App for CalendarApp {
                 }
                 if ui.button("Next ▶").clicked() {
                     self.navigate_next();
+                }
+                
+                ui.separator();
+                
+                // Year/Month picker
+                ui.label("Jump to:");
+                
+                // Month dropdown
+                let month_names = [
+                    "January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"
+                ];
+                let current_month = self.current_date.month() as usize;
+                egui::ComboBox::from_id_source("month_picker")
+                    .selected_text(month_names[current_month - 1])
+                    .show_ui(ui, |ui| {
+                        for (idx, month_name) in month_names.iter().enumerate() {
+                            if ui.selectable_value(&mut (idx + 1), current_month, *month_name).clicked() {
+                                let new_month = (idx + 1) as u32;
+                                if let Some(new_date) = chrono::NaiveDate::from_ymd_opt(
+                                    self.current_date.year(),
+                                    new_month,
+                                    1
+                                ) {
+                                    self.current_date = new_date;
+                                }
+                            }
+                        }
+                    });
+                
+                // Year spinner
+                let mut year = self.current_date.year();
+                ui.add(egui::DragValue::new(&mut year).range(1900..=2100).speed(1.0));
+                if year != self.current_date.year() {
+                    if let Some(new_date) = chrono::NaiveDate::from_ymd_opt(
+                        year,
+                        self.current_date.month(),
+                        1
+                    ) {
+                        self.current_date = new_date;
+                    }
                 }
             });
 

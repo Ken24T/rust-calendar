@@ -407,6 +407,13 @@ pub fn render_settings_dialog(
                     });
                 }
 
+                ui.add_space(8.0);
+
+                ui.horizontal(|ui| {
+                    ui.add_space(label_width);
+                    ui.checkbox(&mut settings.auto_create_countdown_on_import, "Auto-create countdown cards on ICS import");
+                });
+
                 ui.add_space(16.0);
                 ui.separator();
                 ui.add_space(8.0);
