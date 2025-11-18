@@ -19,11 +19,10 @@ use crate::ui_egui::settings_dialog::render_settings_dialog;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::MonthView;
-use crate::ui_egui::views::quarter_view::QuarterView;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::CountdownRequest;
-use chrono::{Local, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +31,6 @@ pub enum ViewType {
     Week,
     WorkWeek,
     Month,
-    Quarter,
 }
 
 const MIN_ROOT_WIDTH: f32 = 320.0;
@@ -52,6 +50,9 @@ pub struct CalendarApp {
     show_settings_dialog: bool,
     theme_dialog_state: ThemeDialogState,
     theme_creator_state: ThemeCreatorState,
+
+    // Ribbon state (mirrors self.settings.show_ribbon)
+    show_ribbon: bool,
 
     // Event dialog state
     event_dialog_state: Option<EventDialogState>,
@@ -122,6 +123,8 @@ impl CalendarApp {
         let pending_root_geometry = countdown_service.app_window_geometry();
         let countdown_ui = CountdownUiState::new(&countdown_service);
 
+        let show_ribbon = settings.show_ribbon;
+
         let app = Self {
             database,
             settings,
@@ -131,6 +134,7 @@ impl CalendarApp {
             show_settings_dialog: false,
             theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
+            show_ribbon,
             event_dialog_state: None,
             event_dialog_date: None,
             event_dialog_time: None,
@@ -224,6 +228,15 @@ impl eframe::App for CalendarApp {
                 });
 
                 ui.menu_button("View", |ui| {
+                    if ui.checkbox(&mut self.show_ribbon, "Show All-Day Events Ribbon").clicked() {
+                        self.settings.show_ribbon = self.show_ribbon;
+                        let settings_service = SettingsService::new(self.database);
+                        if let Err(err) = settings_service.update(&self.settings) {
+                            log::error!("Failed to persist ribbon setting: {err}");
+                        }
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui
                         .selectable_label(self.current_view == ViewType::Day, "Day")
                         .clicked()
@@ -292,7 +305,6 @@ impl eframe::App for CalendarApp {
                     ViewType::Week => "Week",
                     ViewType::WorkWeek => "Work Week",
                     ViewType::Month => "Month",
-                    ViewType::Quarter => "Month",
                 },
                 self.current_date.format("%B %Y")
             ));
@@ -314,19 +326,18 @@ impl eframe::App for CalendarApp {
 
             ui.separator();
 
-            // View content (placeholder for now)
+            // View content (ribbon is now rendered inside week view)
             match self.current_view {
                 ViewType::Day => {
                     self.render_day_view(ui, &mut countdown_requests, &active_countdown_events)
                 }
                 ViewType::Week => {
-                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events)
+                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events, self.show_ribbon)
                 }
                 ViewType::WorkWeek => {
                     self.render_workweek_view(ui, &mut countdown_requests, &active_countdown_events)
                 }
                 ViewType::Month => self.render_month_view(ui),
-                ViewType::Quarter => self.render_month_view(ui),
             }
         });
 
@@ -433,19 +444,6 @@ impl CalendarApp {
                 };
                 NaiveDate::from_ymd_opt(year, prev_month, 1).unwrap()
             }
-            ViewType::Quarter => {
-                let new_month = if self.current_date.month() <= 3 {
-                    10
-                } else {
-                    self.current_date.month() - 3
-                };
-                let year = if self.current_date.month() <= 3 {
-                    self.current_date.year() - 1
-                } else {
-                    self.current_date.year()
-                };
-                NaiveDate::from_ymd_opt(year, new_month, 1).unwrap()
-            }
         };
     }
 
@@ -467,19 +465,6 @@ impl CalendarApp {
                     self.current_date.year()
                 };
                 NaiveDate::from_ymd_opt(year, next_month, 1).unwrap()
-            }
-            ViewType::Quarter => {
-                let new_month = if self.current_date.month() >= 10 {
-                    1
-                } else {
-                    self.current_date.month() + 3
-                };
-                let year = if self.current_date.month() >= 10 {
-                    self.current_date.year() + 1
-                } else {
-                    self.current_date.year()
-                };
-                NaiveDate::from_ymd_opt(year, new_month, 1).unwrap()
             }
         };
     }
@@ -515,7 +500,38 @@ impl CalendarApp {
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &std::collections::HashSet<i64>,
+        show_ribbon: bool,
     ) {
+        // Get all-day events for the ribbon
+        let all_day_events = if show_ribbon {
+            use chrono::TimeZone;
+            let event_service = EventService::new(self.database.connection());
+            
+            // Calculate week range
+            let weekday = self.current_date.weekday().num_days_from_sunday() as i64;
+            let offset = (weekday - self.settings.first_day_of_week as i64 + 7) % 7;
+            let week_start = self.current_date - chrono::Duration::days(offset);
+            let week_end = week_start + chrono::Duration::days(6);
+            
+            let start_datetime = Local
+                .from_local_datetime(&week_start.and_hms_opt(0, 0, 0).unwrap())
+                .single()
+                .unwrap();
+            let end_datetime = Local
+                .from_local_datetime(&week_end.and_hms_opt(23, 59, 59).unwrap())
+                .single()
+                .unwrap();
+            
+            event_service
+                .expand_recurring_events(start_datetime, end_datetime)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|e| e.all_day)
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
         if let Some(clicked_event) = WeekView::show(
             ui,
             &mut self.current_date,
@@ -527,6 +543,8 @@ impl CalendarApp {
             &mut self.event_dialog_recurrence,
             countdown_requests,
             active_countdown_events,
+            show_ribbon,
+            &all_day_events,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -573,16 +591,7 @@ impl CalendarApp {
         );
     }
 
-    fn render_quarter_view(&mut self, ui: &mut egui::Ui) {
-        QuarterView::show(
-            ui,
-            &mut self.current_date,
-            &mut self.show_event_dialog,
-            &mut self.event_dialog_date,
-            &mut self.event_dialog_recurrence,
-            &self.settings,
-        );
-    }
+    
 
     // Placeholder dialog renderers
     fn render_event_dialog(&mut self, ctx: &egui::Context) {
@@ -660,15 +669,19 @@ impl CalendarApp {
     }
 
     fn render_settings_dialog(&mut self, ctx: &egui::Context) {
-        let saved = render_settings_dialog(
+        let response = render_settings_dialog(
             ctx,
             &mut self.settings,
             self.database,
             &mut self.show_settings_dialog,
         );
 
+        if response.show_ribbon_changed || response.saved {
+            self.show_ribbon = self.settings.show_ribbon;
+        }
+
         // If settings were saved, apply theme
-        if saved {
+        if response.saved {
             self.apply_theme_from_db(ctx);
         }
     }

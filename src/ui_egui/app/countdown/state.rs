@@ -137,7 +137,6 @@ impl CountdownUiState {
 
             match action {
                 CountdownCardUiAction::None => {}
-                CountdownCardUiAction::Close => queued_close = true,
                 CountdownCardUiAction::Delete => {
                     log::info!("Delete action triggered for card {:?} (event {:?})", card.id, card.event_id);
                     queued_close = true;
@@ -155,8 +154,7 @@ impl CountdownUiState {
                     self.clear_geometry_wait_state(&card.id);
                     log::debug!("card {:?} geometry settled", card.id);
                     ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
-                    // Don't focus on startup to allow main window to be on top
-                    // ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Focus);
+                    ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Focus);
                 }
             }
 
@@ -539,10 +537,31 @@ impl PendingGeometryState {
 }
 
 fn default_settings_geometry_for(card: &CountdownCardState) -> CountdownCardGeometry {
+    // Try to position to the right of the card, but ensure it fits on screen
+    let settings_width = 640.0;
+    let settings_height = COUNTDOWN_SETTINGS_HEIGHT;
+    
+    // Start with position to the right of the card
+    let mut x = card.geometry.x + card.geometry.width + 16.0;
+    let mut y = card.geometry.y;
+    
+    // If that would go off the right edge, position to the left instead
+    // Use a reasonable screen width assumption of 1920px if we can't detect
+    let max_x = 1920.0 - settings_width - 20.0;
+    if x + settings_width > max_x {
+        x = (card.geometry.x - settings_width - 16.0).max(20.0);
+    }
+    
+    // If would go off bottom, adjust y position
+    let max_y = 1080.0 - settings_height - 20.0;
+    if y + settings_height > max_y {
+        y = max_y.max(20.0);
+    }
+    
     CountdownCardGeometry {
-        x: card.geometry.x + card.geometry.width + 16.0,
-        y: card.geometry.y,
-        width: 280.0,
-        height: COUNTDOWN_SETTINGS_HEIGHT,
+        x,
+        y,
+        width: settings_width,
+        height: settings_height,
     }
 }

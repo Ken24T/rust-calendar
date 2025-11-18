@@ -363,6 +363,9 @@ impl MonthView {
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
+            .into_iter()
+            .filter(|e| !e.all_day)
+            .collect()
     }
 
     fn get_days_in_month(year: i32, month: u32) -> i32 {

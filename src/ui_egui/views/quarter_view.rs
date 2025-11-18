@@ -4,8 +4,10 @@ use egui::{Pos2, Rect, Sense, Stroke, Vec2};
 use super::palette::CalendarCellPalette;
 use crate::models::settings::Settings;
 
+#[allow(dead_code)]
 pub struct QuarterView;
 
+#[allow(dead_code)]
 impl QuarterView {
     pub fn show(
         ui: &mut egui::Ui,

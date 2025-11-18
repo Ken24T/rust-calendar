@@ -6,15 +6,30 @@ use egui::{Color32, RichText};
 const MIN_CARD_DIMENSION: f32 = 20.0;
 const MAX_CARD_DIMENSION: f32 = 600.0;
 
+pub struct SettingsDialogResponse {
+    pub saved: bool,
+    pub show_ribbon_changed: bool,
+}
+
+impl SettingsDialogResponse {
+    fn new(saved: bool, show_ribbon_changed: bool) -> Self {
+        Self {
+            saved,
+            show_ribbon_changed,
+        }
+    }
+}
+
 /// Render the settings dialog
 pub fn render_settings_dialog(
     ctx: &egui::Context,
     settings: &mut Settings,
     database: &Database,
     show_dialog: &mut bool,
-) -> bool {
+) -> SettingsDialogResponse {
     let mut saved = false;
     let mut error_message: Option<String> = None;
+    let mut show_ribbon_changed = false;
 
     let mut dialog_open = *show_dialog;
 
@@ -316,10 +331,16 @@ pub fn render_settings_dialog(
                     });
                 }
 
-                ui.horizontal(|ui| {
-                    ui.add_space(label_width);
-                    ui.checkbox(&mut settings.show_ribbon, "Show ribbon");
-                });
+                let ribbon_response = ui
+                    .horizontal(|ui| {
+                        ui.add_space(label_width);
+                        ui.checkbox(&mut settings.show_ribbon, "Show ribbon")
+                    })
+                    .inner;
+
+                if ribbon_response.changed() {
+                    show_ribbon_changed = true;
+                }
 
                 ui.add_space(16.0);
                 ui.separator();
@@ -435,7 +456,11 @@ pub fn render_settings_dialog(
                         .button(RichText::new("↺ Reset to Defaults").color(Color32::LIGHT_BLUE))
                         .clicked()
                     {
+                        let previous = settings.show_ribbon;
                         *settings = Settings::default();
+                        if settings.show_ribbon != previous {
+                            show_ribbon_changed = true;
+                        }
                     }
                 });
             });
@@ -445,7 +470,7 @@ pub fn render_settings_dialog(
         *show_dialog = false;
     }
 
-    saved
+    SettingsDialogResponse::new(saved, show_ribbon_changed)
 }
 
 /// Convert weekday number to name
