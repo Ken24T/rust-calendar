@@ -186,6 +186,7 @@ impl CountdownService {
             event_title: event_title.into(),
             start_at,
             title_override: None,
+            auto_title_override: false,
             geometry,
             visuals: self.visual_defaults.clone(),
             last_computed_days: None,
@@ -233,6 +234,21 @@ impl CountdownService {
     pub fn set_title_override(&mut self, id: CountdownCardId, title: Option<String>) -> bool {
         if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
             card.title_override = title;
+            card.auto_title_override = false;
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    pub fn set_auto_title_override(
+        &mut self,
+        id: CountdownCardId,
+        title: Option<String>,
+    ) -> bool {
+        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
+            card.title_override = title;
+            card.auto_title_override = card.title_override.is_some();
             self.dirty = true;
             return true;
         }
@@ -360,6 +376,27 @@ impl CountdownService {
         false
     }
 
+    /// Synchronize stored card titles with the latest event label.
+    /// Only updates cards that are still using the automatic event title (no override).
+    pub fn sync_title_for_event(&mut self, event_id: i64, title: impl Into<String>) {
+        let title = title.into();
+        let mut changed = false;
+        for card in self
+            .cards
+            .iter_mut()
+            .filter(|card| card.event_id == Some(event_id) && card.title_override.is_none())
+        {
+            if card.event_title != title {
+                card.event_title = title.clone();
+                changed = true;
+            }
+        }
+
+        if changed {
+            self.dirty = true;
+        }
+    }
+
     pub fn sync_comment_for_event(&mut self, event_id: i64, comment: Option<String>) {
         let mut changed = false;
         for card in self
@@ -374,6 +411,34 @@ impl CountdownService {
             };
             if needs_update {
                 card.comment = comment.clone();
+                changed = true;
+            }
+        }
+
+        if changed {
+            self.dirty = true;
+        }
+    }
+
+    pub fn sync_title_override_for_event(
+        &mut self,
+        event_id: i64,
+        label: Option<String>,
+    ) {
+        let mut changed = false;
+        for card in self
+            .cards
+            .iter_mut()
+            .filter(|card| card.event_id == Some(event_id))
+        {
+            let managed = card.auto_title_override || card.title_override.is_none();
+            if !managed {
+                continue;
+            }
+
+            if card.title_override != label {
+                card.title_override = label.clone();
+                card.auto_title_override = label.is_some();
                 changed = true;
             }
         }

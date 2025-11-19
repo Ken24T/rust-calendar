@@ -236,6 +236,8 @@ pub struct CountdownCardState {
     pub event_title: String,
     pub start_at: DateTime<Local>,
     pub title_override: Option<String>,
+    #[serde(default)]
+    pub auto_title_override: bool,
     pub geometry: CountdownCardGeometry,
     pub visuals: CountdownCardVisuals,
     pub last_computed_days: Option<i64>,

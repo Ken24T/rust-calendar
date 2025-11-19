@@ -17,6 +17,7 @@ pub struct CountdownRequest {
     pub end_at: DateTime<Local>,
     pub color: Option<String>,
     pub body: Option<String>,
+    pub display_label: Option<String>,
 }
 
 /// Returns the start/end timestamps for the portion of `event` that should appear on `date`.
@@ -68,6 +69,13 @@ pub fn event_time_segment_for_date(
 
 impl CountdownRequest {
     pub fn from_event(event: &Event) -> Self {
+        let location_label = event
+            .location
+            .as_deref()
+            .map(str::trim)
+            .filter(|loc| !loc.is_empty())
+            .map(|loc| loc.to_string());
+
         Self {
             event_id: event.id,
             title: event.title.clone(),
@@ -75,6 +83,7 @@ impl CountdownRequest {
             end_at: event.end,
             color: event.color.clone(),
             body: event.description.clone(),
+            display_label: location_label,
         }
     }
 }

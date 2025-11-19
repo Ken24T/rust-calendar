@@ -144,7 +144,7 @@ impl CalendarApp {
 
         let countdown_storage_path = Self::resolve_countdown_storage_path();
         cc.egui_ctx.set_embed_viewports(false);
-        let countdown_service = match CountdownService::load_from_disk(&countdown_storage_path) {
+        let mut countdown_service = match CountdownService::load_from_disk(&countdown_storage_path) {
             Ok(service) => service,
             Err(err) => {
                 log::warn!(
@@ -154,6 +154,8 @@ impl CalendarApp {
                 CountdownService::new()
             }
         };
+
+        Self::hydrate_countdown_titles_from_events(&mut countdown_service, database);
 
         let pending_root_geometry = countdown_service.app_window_geometry();
         let countdown_ui = CountdownUiState::new(&countdown_service);
@@ -349,7 +351,14 @@ impl eframe::App for CalendarApp {
                                                                         }
                                                                     });
                                                                 
-                                                                self.countdown_service.create_card(
+                                                                let location_label = created_event
+                                                                    .location
+                                                                    .as_deref()
+                                                                    .map(str::trim)
+                                                                    .filter(|loc| !loc.is_empty())
+                                                                    .map(|loc| loc.to_string());
+
+                                                                let card_id = self.countdown_service.create_card(
                                                                     Some(event_id),
                                                                     created_event.title.clone(),
                                                                     created_event.start,
@@ -358,6 +367,11 @@ impl eframe::App for CalendarApp {
                                                                     self.settings.default_card_width,
                                                                     self.settings.default_card_height,
                                                                 );
+
+                                                                if let Some(label) = location_label {
+                                                                    self.countdown_service
+                                                                        .set_auto_title_override(card_id, Some(label));
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -618,7 +632,14 @@ impl eframe::App for CalendarApp {
                                                                         }
                                                                     });
                                                                 
-                                                                self.countdown_service.create_card(
+                                                                let location_label = created_event
+                                                                    .location
+                                                                    .as_deref()
+                                                                    .map(str::trim)
+                                                                    .filter(|loc| !loc.is_empty())
+                                                                    .map(|loc| loc.to_string());
+
+                                                                let card_id = self.countdown_service.create_card(
                                                                     Some(event_id),
                                                                     created_event.title.clone(),
                                                                     created_event.start,
@@ -627,6 +648,11 @@ impl eframe::App for CalendarApp {
                                                                     self.settings.default_card_width,
                                                                     self.settings.default_card_height,
                                                                 );
+
+                                                                if let Some(label) = location_label {
+                                                                    self.countdown_service
+                                                                        .set_auto_title_override(card_id, Some(label));
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1196,7 +1222,7 @@ impl CalendarApp {
                 if auto_create_card {
                     self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
                 }
-                self.sync_card_comments_from_event(&event);
+                self.sync_cards_from_event(&event);
             }
 
             // If saved, clear the dialog state
@@ -1207,6 +1233,57 @@ impl CalendarApp {
         } else {
             // No state - shouldn't happen, but close dialog if it does
             self.show_event_dialog = false;
+        }
+    }
+
+    fn hydrate_countdown_titles_from_events(
+        countdown_service: &mut CountdownService,
+        database: &'static Database,
+    ) {
+        let mut seen_ids = std::collections::HashSet::new();
+        let mut event_ids = Vec::new();
+
+        for card in countdown_service.cards() {
+            if let Some(event_id) = card.event_id {
+                if seen_ids.insert(event_id) {
+                    event_ids.push(event_id);
+                }
+            }
+        }
+
+        if event_ids.is_empty() {
+            return;
+        }
+
+        let event_service = EventService::new(database.connection());
+        for event_id in event_ids {
+            match event_service.get(event_id) {
+                Ok(Some(event)) => {
+                    let location_label = event
+                        .location
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|loc| !loc.is_empty())
+                        .map(|loc| loc.to_string());
+
+                    countdown_service.sync_title_for_event(event_id, event.title.clone());
+                    countdown_service
+                        .sync_title_override_for_event(event_id, location_label);
+                }
+                Ok(None) => {
+                    log::warn!(
+                        "Countdown card references missing event id {} while syncing titles",
+                        event_id
+                    );
+                }
+                Err(err) => {
+                    log::error!(
+                        "Failed to load event {} while syncing countdown titles: {}",
+                        event_id,
+                        err
+                    );
+                }
+            }
         }
     }
 
@@ -1247,8 +1324,19 @@ impl CalendarApp {
         }
     }
 
-    fn sync_card_comments_from_event(&mut self, event: &Event) {
+    fn sync_cards_from_event(&mut self, event: &Event) {
         if let Some(event_id) = event.id {
+            let location_label = event
+                .location
+                .as_deref()
+                .map(str::trim)
+                .filter(|loc| !loc.is_empty())
+                .map(|loc| loc.to_string());
+
+            self.countdown_service
+                .sync_title_for_event(event_id, event.title.clone());
+            self.countdown_service
+                .sync_title_override_for_event(event_id, location_label);
             self.countdown_service
                 .sync_comment_for_event(event_id, event.description.clone());
         }

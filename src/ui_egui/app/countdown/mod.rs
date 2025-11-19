@@ -48,6 +48,7 @@ impl CalendarApp {
                 end_at,
                 color,
                 body,
+                display_label,
             } = request;
 
             let target_at = if start_at > now {
@@ -110,6 +111,11 @@ impl CalendarApp {
                 self.settings.default_card_width,
                 self.settings.default_card_height,
             );
+
+                if let Some(label) = display_label {
+                self.countdown_service
+                    .set_auto_title_override(card_id, Some(label));
+            }
             let geometry = self
                 .countdown_service
                 .cards()

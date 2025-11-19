@@ -112,6 +112,19 @@ impl Event {
     pub fn duration(&self) -> chrono::Duration {
         self.end - self.start
     }
+
+    /// Returns the preferred label for display components.
+    /// Uses the event location when it is present and non-empty, otherwise falls back to the title.
+    #[allow(dead_code)]
+    pub fn display_label(&self) -> &str {
+        if let Some(location) = self.location.as_deref() {
+            if !location.trim().is_empty() {
+                return location;
+            }
+        }
+
+        self.title.as_str()
+    }
 }
 
 /// Builder for creating events with optional fields

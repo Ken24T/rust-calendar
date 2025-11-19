@@ -210,7 +210,7 @@ pub fn create_day_view(
                 
                 let event_btn = button(
                     column![
-                        text(&event.title).size(12),
+                        text(event.display_label()).size(12),
                         text(&event_time).size(10),
                     ]
                     .spacing(2)

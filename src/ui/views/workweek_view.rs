@@ -248,7 +248,7 @@ pub fn create_workweek_view(
                     // Only show event in the slot where it starts
                     if event_start_minutes >= slot_start_minutes && event_start_minutes < slot_end_minutes {
                         let event_btn = button(
-                            text(&event.title).size(9)
+                            text(event.display_label()).size(9)
                         )
                         .on_press(Message::EditEvent(event.id.unwrap_or(0)))
                         .padding([2, 4]);
