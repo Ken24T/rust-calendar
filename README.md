@@ -59,6 +59,15 @@ A modern, feature-rich Windows desktop calendar application built with Rust.
 - Automatic data backup
 - UI preferences persistence
 
+⌨️ **Keyboard Shortcuts**
+- `Ctrl+N` - Create new event
+- `Ctrl+T` - Navigate to today
+- `Ctrl+S` - Open settings
+- `Ctrl+B` - Backup database
+- `Arrow Left/Right` - Navigate previous/next period (day/week/month)
+- `Arrow Up/Down` - Navigate vertically (contextual to current view)
+- `Escape` - Close dialogs
+
 ## Project Status
 
 🚧 **Currently in Planning Phase** 🚧
