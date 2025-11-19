@@ -1,7 +1,7 @@
 use chrono::{Datelike, Local, NaiveDate};
-use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
-use super::palette::CalendarCellPalette;
+use super::palette::{CalendarCellPalette, DayStripPalette};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -34,13 +34,37 @@ impl MonthView {
         let total_spacing = spacing * 6.0; // 6 gaps between 7 columns
         let col_width = (ui.available_width() - total_spacing) / 7.0;
 
+        let day_strip_palette = DayStripPalette::from_theme(theme);
         egui::Grid::new("month_header_grid")
             .spacing([spacing, spacing])
             .min_col_width(col_width)
             .show(ui, |ui| {
-                for day in &day_names {
+                for (idx, day) in day_names.iter().enumerate() {
+                    let weekday = (settings.first_day_of_week as usize + idx) % 7;
+                    let is_weekend = weekday == 0 || weekday == 6;
+                    let header_bg = if is_weekend {
+                        day_strip_palette.weekend_cell_bg
+                    } else {
+                        day_strip_palette.cell_bg
+                    };
+                    let text_color = day_strip_palette.text;
+
                     ui.vertical_centered(|ui| {
-                        ui.label(egui::RichText::new(*day).size(14.0).strong());
+                        egui::Frame::none()
+                            .fill(header_bg)
+                            .rounding(egui::Rounding::same(6.0))
+                            .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
+                            .inner_margin(Margin::symmetric(8.0, 6.0))
+                            .show(ui, |cell_ui| {
+                                cell_ui.centered_and_justified(|label_ui| {
+                                    label_ui.label(
+                                        egui::RichText::new(*day)
+                                            .size(14.0)
+                                            .color(text_color)
+                                            .strong(),
+                                    );
+                                });
+                            });
                     });
                 }
             });

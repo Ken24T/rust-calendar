@@ -84,8 +84,12 @@ impl WeekView {
                 for (i, day_name) in day_names.iter().enumerate() {
                     let date = week_dates[i];
                     let is_today = date == today;
+                    let weekday_idx = date.weekday().num_days_from_sunday();
+                    let is_weekend = weekday_idx == 0 || weekday_idx == 6;
                     let cell_bg = if is_today {
                         day_strip_palette.today_cell_bg
+                    } else if is_weekend {
+                        day_strip_palette.weekend_cell_bg
                     } else {
                         day_strip_palette.cell_bg
                     };

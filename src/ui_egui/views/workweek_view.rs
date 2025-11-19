@@ -71,9 +71,13 @@ impl WorkWeekView {
 
                 for (i, date) in work_week_dates.iter().enumerate() {
                     let is_today = *date == today;
+                    let weekday_idx = date.weekday().num_days_from_sunday();
+                    let is_weekend = weekday_idx == 0 || weekday_idx == 6;
                     let day_name = date.format("%A").to_string();
                     let cell_bg = if is_today {
                         day_strip_palette.today_cell_bg
+                    } else if is_weekend {
+                        day_strip_palette.weekend_cell_bg
                     } else {
                         day_strip_palette.cell_bg
                     };
