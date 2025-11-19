@@ -1095,6 +1095,7 @@ fn test_frequency_intervals(freq: Frequency, expected_interval: u32) {
 
 ## Future Enhancements (Post-MVP)
 
+- [ ] Auto-scroll day/week views to center current time indicator on app open
 - [ ] Cloud synchronization (CalDAV support)
 - [ ] Mobile companion app
 - [ ] Calendar sharing
