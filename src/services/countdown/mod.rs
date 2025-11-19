@@ -3,7 +3,8 @@ mod persistence;
 mod service;
 
 pub use models::{
-    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
+    CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardState,
+    CountdownCardVisuals, CountdownNotificationConfig, CountdownWarningState, WarningThresholds,
     MAX_DAYS_FONT_SIZE, RgbaColor,
 };
 pub use service::CountdownService;

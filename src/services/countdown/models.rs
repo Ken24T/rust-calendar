@@ -1,6 +1,88 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
+/// Warning state for countdown cards based on time remaining
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CountdownWarningState {
+    /// More than 1 day remaining
+    Normal,
+    /// 1 day or less, but more than 1 hour
+    Approaching,
+    /// 1 hour or less, but more than 5 minutes
+    Imminent,
+    /// 5 minutes or less, but event hasn't started
+    Critical,
+    /// Event has started (time <= 0)
+    Starting,
+}
+
+impl Default for CountdownWarningState {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+/// Configuration for countdown card notifications
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CountdownNotificationConfig {
+    pub enabled: bool,
+    pub use_visual_warnings: bool,
+    pub use_system_notifications: bool,
+    pub warning_thresholds: WarningThresholds,
+}
+
+impl Default for CountdownNotificationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            use_visual_warnings: true,
+            use_system_notifications: true,
+            warning_thresholds: WarningThresholds::default(),
+        }
+    }
+}
+
+/// Thresholds for different warning states
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WarningThresholds {
+    /// Hours before event to enter "approaching" state (default: 24)
+    pub approaching_hours: u32,
+    /// Hours before event to enter "imminent" state (default: 1)
+    pub imminent_hours: u32,
+    /// Minutes before event to enter "critical" state (default: 5)
+    pub critical_minutes: u32,
+}
+
+impl Default for WarningThresholds {
+    fn default() -> Self {
+        Self {
+            approaching_hours: 24,
+            imminent_hours: 1,
+            critical_minutes: 5,
+        }
+    }
+}
+
+/// Configuration for auto-dismiss behavior
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CountdownAutoDismissConfig {
+    pub enabled: bool,
+    pub on_event_start: bool,
+    pub on_event_end: bool,
+    pub delay_seconds: u32,
+}
+
+impl Default for CountdownAutoDismissConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            on_event_start: true,
+            on_event_end: false,
+            delay_seconds: 10,
+        }
+    }
+}
+
 /// Unique identifier for countdown cards. We start with a monotonic u64 so we
 /// can serialize it easily and evolve to UUIDs later if needed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -161,6 +243,15 @@ pub struct CountdownCardState {
     pub comment: Option<String>,
     #[serde(default)]
     pub event_color: Option<RgbaColor>,
+    /// Tracks the last warning state to detect transitions
+    #[serde(default)]
+    pub last_warning_state: Option<CountdownWarningState>,
+    /// Last time a notification was sent for this card
+    #[serde(default)]
+    pub last_notification_time: Option<DateTime<Local>>,
+    /// Auto-dismiss configuration for this card
+    #[serde(default)]
+    pub auto_dismiss: CountdownAutoDismissConfig,
 }
 
 impl CountdownCardState {
@@ -180,6 +271,45 @@ impl CountdownCardState {
         let today = now.date_naive();
         (start_date - today).num_days().max(0)
     }
+
+    /// Calculate the current warning state based on time remaining and thresholds.
+    pub fn warning_state(
+        &self,
+        now: DateTime<Local>,
+        thresholds: &WarningThresholds,
+    ) -> CountdownWarningState {
+        let remaining = self.start_at.signed_duration_since(now);
+        
+        if remaining.num_seconds() <= 0 {
+            CountdownWarningState::Starting
+        } else if remaining.num_minutes() <= thresholds.critical_minutes as i64 {
+            CountdownWarningState::Critical
+        } else if remaining.num_hours() <= thresholds.imminent_hours as i64 {
+            CountdownWarningState::Imminent
+        } else if remaining.num_hours() <= thresholds.approaching_hours as i64 {
+            CountdownWarningState::Approaching
+        } else {
+            CountdownWarningState::Normal
+        }
+    }
+
+    /// Check if this card should be auto-dismissed based on current time.
+    pub fn should_auto_dismiss(&self, now: DateTime<Local>) -> bool {
+        if !self.auto_dismiss.enabled {
+            return false;
+        }
+
+        let remaining = self.start_at.signed_duration_since(now);
+        let seconds_past_start = -remaining.num_seconds();
+        
+        if self.auto_dismiss.on_event_start && seconds_past_start >= self.auto_dismiss.delay_seconds as i64 {
+            return true;
+        }
+        
+        // TODO: Implement on_event_end when we have event end times
+        
+        false
+    }
 }
 
 /// Serializable container for persisting card state between sessions.
@@ -191,6 +321,12 @@ pub struct CountdownPersistedState {
     pub visual_defaults: CountdownCardVisuals,
     #[serde(default)]
     pub app_window_geometry: Option<CountdownCardGeometry>,
+    /// Global notification configuration
+    #[serde(default)]
+    pub notification_config: CountdownNotificationConfig,
+    /// Default auto-dismiss configuration for new cards
+    #[serde(default)]
+    pub auto_dismiss_defaults: CountdownAutoDismissConfig,
 }
 
 pub(crate) fn default_visuals() -> CountdownCardVisuals {

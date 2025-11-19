@@ -8,9 +8,10 @@ use chrono::{DateTime, Local};
 
 use super::models::{
     default_body_bg_color, default_days_fg_color, default_days_font_size, default_title_bg_color,
-    default_title_fg_color, default_title_font_size, CountdownCardGeometry, CountdownCardId,
-    CountdownCardState, CountdownCardVisuals, CountdownPersistedState, RgbaColor,
-    MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
+    default_title_fg_color, default_title_font_size, CountdownAutoDismissConfig,
+    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
+    CountdownNotificationConfig, CountdownPersistedState, RgbaColor, MAX_DAYS_FONT_SIZE,
+    MIN_DAYS_FONT_SIZE,
 };
 use super::persistence::{load_snapshot, save_snapshot};
 
@@ -23,6 +24,8 @@ pub struct CountdownService {
     last_geometry_update: Option<Instant>,
     visual_defaults: CountdownCardVisuals,
     app_window_geometry: Option<CountdownCardGeometry>,
+    notification_config: CountdownNotificationConfig,
+    auto_dismiss_defaults: CountdownAutoDismissConfig,
 }
 
 impl CountdownService {
@@ -50,6 +53,8 @@ impl CountdownService {
             last_geometry_update: None,
             visual_defaults: snapshot.visual_defaults,
             app_window_geometry: snapshot.app_window_geometry,
+            notification_config: snapshot.notification_config,
+            auto_dismiss_defaults: snapshot.auto_dismiss_defaults,
         }
     }
 
@@ -59,6 +64,8 @@ impl CountdownService {
             cards: self.cards.clone(),
             visual_defaults: self.visual_defaults.clone(),
             app_window_geometry: self.app_window_geometry,
+            notification_config: self.notification_config.clone(),
+            auto_dismiss_defaults: self.auto_dismiss_defaults.clone(),
         }
     }
 
@@ -184,6 +191,9 @@ impl CountdownService {
             last_computed_days: None,
             comment: event_body,
             event_color,
+            last_warning_state: None,
+            last_notification_time: None,
+            auto_dismiss: self.auto_dismiss_defaults.clone(),
         };
         apply_event_palette_if_needed(&mut card);
         self.cards.push(card);
