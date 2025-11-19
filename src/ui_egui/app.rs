@@ -280,9 +280,6 @@ impl eframe::App for CalendarApp {
                                             } else {
                                                 log::info!("Drag-and-drop import complete: {} events imported, {} failed", imported_count, failed_count);
                                             }
-                                            
-                                            // Request repaint to refresh the calendar view
-                                            ctx.request_repaint();
                                         }
                                         Err(e) => {
                                             log::error!("Failed to parse dropped ICS content: {}", e);
