@@ -43,6 +43,8 @@ impl WeekView {
         let spacing = 2.0;
         let total_spacing = spacing * 6.0; // 6 gaps between 7 columns
 
+        let mut clicked_event = None;
+
         // Week header with day names
         let header_frame = egui::Frame::none()
             .fill(day_strip_palette.strip_bg)
@@ -160,14 +162,22 @@ impl WeekView {
                             Vec2::new(col_width, 24.0),
                             egui::Layout::top_down(egui::Align::Min),
                             |day_ui| {
-                                // Find event for this specific date
+                                // Find events for this specific date
+                                let mut found_event = false;
                                 for event in all_day_events {
                                     let event_start_date = event.start.date_naive();
-                                    let event_end_date = event.end.date_naive();
                                     
-                                    if event_start_date <= *date && event_end_date >= *date {
-                                        Self::render_ribbon_event(day_ui, event, countdown_requests, active_countdown_events);
+                                    if event_start_date == *date {
+                                        found_event = true;
+                                        if let Some(ev) = Self::render_ribbon_event(day_ui, event, countdown_requests, active_countdown_events, database) {
+                                            clicked_event = Some(ev);
+                                        }
                                     }
+                                }
+                                
+                                // If no event was found, allocate empty space to maintain column structure
+                                if !found_event {
+                                    day_ui.allocate_space(Vec2::new(col_width, 0.0));
                                 }
                             },
                         );
@@ -191,7 +201,6 @@ impl WeekView {
         ui.add_space(8.0);
 
         // Scrollable time slots
-        let mut clicked_event = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |scroll_ui| {
@@ -226,25 +235,25 @@ impl WeekView {
         event: &Event,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
-    ) {
+        database: &'static Database,
+    ) -> Option<Event> {
         let event_color = event
             .color
             .as_deref()
             .and_then(|c| Self::parse_color(c))
             .unwrap_or(Color32::from_rgb(100, 150, 200));
 
-        // Set max width to prevent overflow
-        ui.set_max_width(ui.available_width());
+        let available_width = ui.available_width();
         
         let event_frame = egui::Frame::none()
             .fill(event_color)
             .rounding(egui::Rounding::same(4.0))
-            .inner_margin(egui::Margin::symmetric(8.0, 4.0));
+            .inner_margin(egui::Margin::symmetric(6.0, 3.0));
 
         let response = event_frame.show(ui, |ui| {
-            ui.set_max_width(ui.available_width());
+            ui.set_min_width(available_width - 8.0); // Leave margin to prevent overlap
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&event.title).color(Color32::WHITE).size(13.0));
+                ui.label(egui::RichText::new(&event.title).color(Color32::WHITE).size(12.0));
                 
                 // Show date range if multi-day
                 if event.start.date_naive() != event.end.date_naive() {
@@ -255,15 +264,80 @@ impl WeekView {
                             event.end.format("%b %d")
                         ))
                         .color(Color32::from_gray(220))
-                        .size(11.0)
+                        .size(10.0)
                     );
                 }
             });
         }).response;
 
+        // Make the response interactive for right-clicks
+        let interactive_response = response.interact(egui::Sense::click());
+        
+        let mut clicked_event = None;
+        
         // Context menu on right-click
-        response.context_menu(|ui| {
+        interactive_response.context_menu(|ui| {
             ui.set_min_width(150.0);
+            ui.label(format!("Event: {}", event.title));
+            ui.separator();
+
+            if ui.button("✏ Edit").clicked() {
+                clicked_event = Some(event.clone());
+                ui.close_menu();
+            }
+
+            // Delete options - different for recurring events
+            if event.recurrence_rule.is_some() {
+                if ui.button("🗑 Delete This Occurrence").clicked() {
+                    use crate::services::event::EventService;
+                    if let Some(id) = event.id {
+                        let service = EventService::new(database.connection());
+                        let _ = service.delete_occurrence(id, event.start);
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("🗑 Delete All Occurrences").clicked() {
+                    use crate::services::event::EventService;
+                    if let Some(id) = event.id {
+                        let service = EventService::new(database.connection());
+                        let _ = service.delete(id);
+                    }
+                    ui.close_menu();
+                }
+            } else {
+                if ui.button("🗑 Delete").clicked() {
+                    use crate::services::event::EventService;
+                    if let Some(id) = event.id {
+                        let service = EventService::new(database.connection());
+                        let _ = service.delete(id);
+                    }
+                    ui.close_menu();
+                }
+            }
+
+            if ui.button("📤 Export this event").clicked() {
+                // Export event to ICS file
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name(&format!("{}.ics", event.title.replace(' ', "_")))
+                    .add_filter("iCalendar", &["ics"])
+                    .save_file()
+                {
+                    use crate::services::icalendar::export;
+                    match export::single(&event) {
+                        Ok(ics_content) => {
+                            if let Err(e) = std::fs::write(&path, ics_content) {
+                                log::error!("Failed to write ICS file: {}", e);
+                            } else {
+                                log::info!("Exported event to {:?}", path);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to export event: {}", e);
+                        }
+                    }
+                }
+                ui.close_menu();
+            }
 
             if event.start > chrono::Local::now() {
                 let timer_exists = event
@@ -283,6 +357,8 @@ impl WeekView {
                 }
             }
         });
+        
+        clicked_event
     }
 
     fn render_time_grid(

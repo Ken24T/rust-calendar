@@ -23,6 +23,7 @@ use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::CountdownRequest;
 use chrono::{Datelike, Local, NaiveDate};
+#[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
 use std::path::PathBuf;
 
