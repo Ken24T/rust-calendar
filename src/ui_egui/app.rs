@@ -391,21 +391,142 @@ impl eframe::App for CalendarApp {
         });
 
         // Handle keyboard shortcuts
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            // Close dialogs in priority order
-            if self.show_event_dialog {
-                self.show_event_dialog = false;
-                self.event_dialog_state = None;
-                self.event_dialog_date = None;
+        ctx.input(|i| {
+            // Escape - Close dialogs in priority order
+            if i.key_pressed(egui::Key::Escape) {
+                if self.show_event_dialog {
+                    self.show_event_dialog = false;
+                    self.event_dialog_state = None;
+                    self.event_dialog_date = None;
+                    self.event_dialog_time = None;
+                    self.event_dialog_recurrence = None;
+                    self.event_to_edit = None;
+                } else if self.show_settings_dialog {
+                    self.show_settings_dialog = false;
+                } else if self.theme_dialog_state.is_open {
+                    self.theme_dialog_state.close();
+                }
+            }
+            
+            // Ctrl+N - New Event
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::N) && !self.show_event_dialog {
+                self.show_event_dialog = true;
+                self.event_dialog_date = Some(self.current_date);
                 self.event_dialog_time = None;
                 self.event_dialog_recurrence = None;
                 self.event_to_edit = None;
-            } else if self.show_settings_dialog {
-                self.show_settings_dialog = false;
-            } else if self.theme_dialog_state.is_open {
-                self.theme_dialog_state.close();
             }
-        }
+            
+            // Ctrl+T - Today (navigate to current date)
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::T) {
+                self.current_date = Local::now().date_naive();
+            }
+            
+            // Ctrl+S - Settings
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
+                self.show_settings_dialog = true;
+            }
+            
+            // Ctrl+B - Backup Database
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
+                if let Err(e) = self.backup_manager_state.create_backup() {
+                    log::error!("Failed to create backup: {}", e);
+                }
+            }
+            
+            // Arrow keys for navigation (only when dialogs are closed)
+            if !self.show_event_dialog && !self.show_settings_dialog && !self.theme_dialog_state.is_open {
+                // Left/Right - Navigate backwards/forwards
+                if i.key_pressed(egui::Key::ArrowLeft) {
+                    self.current_date = match self.current_view {
+                        ViewType::Day => self.current_date - chrono::Duration::days(1),
+                        ViewType::Week | ViewType::WorkWeek => self.current_date - chrono::Duration::weeks(1),
+                        ViewType::Month => {
+                            // Navigate to previous month
+                            let new_date = if self.current_date.month() == 1 {
+                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1).unwrap()
+                            } else {
+                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() - 1, 1).unwrap()
+                            };
+                            // Try to keep the same day, fall back to last day of month if invalid
+                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
+                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                                .pred_opt()
+                                .unwrap()
+                                .day();
+                            let day = self.current_date.day().min(max_day);
+                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
+                        }
+                    };
+                }
+                if i.key_pressed(egui::Key::ArrowRight) {
+                    self.current_date = match self.current_view {
+                        ViewType::Day => self.current_date + chrono::Duration::days(1),
+                        ViewType::Week | ViewType::WorkWeek => self.current_date + chrono::Duration::weeks(1),
+                        ViewType::Month => {
+                            // Navigate to next month
+                            let new_date = if self.current_date.month() == 12 {
+                                NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1).unwrap()
+                            } else {
+                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() + 1, 1).unwrap()
+                            };
+                            // Try to keep the same day, fall back to last day of month if invalid
+                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
+                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                                .pred_opt()
+                                .unwrap()
+                                .day();
+                            let day = self.current_date.day().min(max_day);
+                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
+                        }
+                    };
+                }
+                
+                // Up/Down - Navigate up/down (weeks in week view, months in month view)
+                if i.key_pressed(egui::Key::ArrowUp) {
+                    self.current_date = match self.current_view {
+                        ViewType::Day => self.current_date - chrono::Duration::days(7), // Move by week in day view
+                        ViewType::Week | ViewType::WorkWeek => self.current_date - chrono::Duration::weeks(1),
+                        ViewType::Month => {
+                            // Navigate to previous month (same as left arrow)
+                            let new_date = if self.current_date.month() == 1 {
+                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1).unwrap()
+                            } else {
+                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() - 1, 1).unwrap()
+                            };
+                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
+                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                                .pred_opt()
+                                .unwrap()
+                                .day();
+                            let day = self.current_date.day().min(max_day);
+                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
+                        }
+                    };
+                }
+                if i.key_pressed(egui::Key::ArrowDown) {
+                    self.current_date = match self.current_view {
+                        ViewType::Day => self.current_date + chrono::Duration::days(7), // Move by week in day view
+                        ViewType::Week | ViewType::WorkWeek => self.current_date + chrono::Duration::weeks(1),
+                        ViewType::Month => {
+                            // Navigate to next month (same as right arrow)
+                            let new_date = if self.current_date.month() == 12 {
+                                NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1).unwrap()
+                            } else {
+                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() + 1, 1).unwrap()
+                            };
+                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
+                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                                .pred_opt()
+                                .unwrap()
+                                .day();
+                            let day = self.current_date.day().min(max_day);
+                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
+                        }
+                    };
+                }
+            }
+        });
 
         self.apply_pending_root_geometry(ctx);
 
@@ -413,7 +534,7 @@ impl eframe::App for CalendarApp {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("💾 Backup Database...").clicked() {
+                    if ui.button("💾 Backup Database...    Ctrl+B").clicked() {
                         if let Err(e) = self.backup_manager_state.create_backup() {
                             log::error!("Failed to create backup: {}", e);
                         }
@@ -430,7 +551,7 @@ impl eframe::App for CalendarApp {
                 });
 
                 ui.menu_button("Edit", |ui| {
-                    if ui.button("Settings").clicked() {
+                    if ui.button("Settings    Ctrl+S").clicked() {
                         self.show_settings_dialog = true;
                         ui.close_menu();
                     }
@@ -584,7 +705,7 @@ impl eframe::App for CalendarApp {
                 });
 
                 ui.menu_button("Events", |ui| {
-                    if ui.button("New Event...").clicked() {
+                    if ui.button("New Event...    Ctrl+N").clicked() {
                         self.show_event_dialog = true;
                         self.event_dialog_state = Some(EventDialogState::new_event(
                             self.current_date,
@@ -625,7 +746,7 @@ impl eframe::App for CalendarApp {
                 if ui.button("◀ Previous").clicked() {
                     self.navigate_previous();
                 }
-                if ui.button("Today").clicked() {
+                if ui.button("Today    Ctrl+T").clicked() {
                     self.current_date = Local::now().date_naive();
                 }
                 if ui.button("Next ▶").clicked() {
