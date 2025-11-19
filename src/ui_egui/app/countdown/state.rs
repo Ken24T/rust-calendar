@@ -115,6 +115,7 @@ impl CountdownUiState {
 
             let builder = viewport_builder_for_card(&card, waiting_on_geometry);
             let card_clone = card.clone();
+            let notification_config = service.notification_config().clone();
             let action =
                 ctx.show_viewport_immediate(viewport_id, builder, move |child_ctx, class| {
                     render_countdown_card_ui(
@@ -125,6 +126,7 @@ impl CountdownUiState {
                         now,
                         waiting_on_geometry,
                         target_geometry,
+                        &notification_config,
                     )
                 });
 

@@ -1,6 +1,7 @@
 use super::super::{geometry_changed, geometry_from_viewport_info};
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardState, RgbaColor, MAX_DAYS_FONT_SIZE,
+    CountdownCardGeometry, CountdownCardState, CountdownNotificationConfig, CountdownWarningState,
+    RgbaColor, MAX_DAYS_FONT_SIZE,
 };
 use chrono::{DateTime, Local};
 use egui::{self, ViewportClass, ViewportId};
@@ -94,6 +95,7 @@ pub(super) fn render_countdown_card_ui(
     now: DateTime<Local>,
     waiting_on_geometry: bool,
     target_geometry: Option<CountdownCardGeometry>,
+    notification_config: &CountdownNotificationConfig,
 ) -> CountdownCardUiAction {
     ctx.request_repaint_after(StdDuration::from_secs(1));
     
@@ -118,11 +120,32 @@ pub(super) fn render_countdown_card_ui(
         },
     );
 
+    // Calculate warning state for visual feedback
+    let warning_state = if notification_config.enabled && notification_config.use_visual_warnings {
+        card.warning_state(now, &notification_config.warning_thresholds)
+    } else {
+        CountdownWarningState::Normal
+    };
+
+    // Base colors from card visuals
     let title_bg = rgba_to_color32(card.visuals.title_bg_color);
     let title_fg = rgba_to_color32(card.visuals.title_fg_color);
     let title_font_size = card.visuals.title_font_size.max(12.0);
-    let body_bg = rgba_to_color32(card.visuals.body_bg_color);
-    let days_fg = rgba_to_color32(card.visuals.days_fg_color);
+    
+    // Apply warning state color overrides if enabled
+    let (body_bg, days_fg, stroke_color, stroke_width) = if notification_config.enabled
+        && notification_config.use_visual_warnings
+    {
+        apply_warning_colors(warning_state, card, ctx)
+    } else {
+        (
+            rgba_to_color32(card.visuals.body_bg_color),
+            rgba_to_color32(card.visuals.days_fg_color),
+            egui::Color32::from_gray(40),
+            1.0,
+        )
+    };
+    
     let font_size = card
         .visuals
         .days_font_size
@@ -182,7 +205,7 @@ pub(super) fn render_countdown_card_ui(
         let frame = egui::Frame::none()
             .fill(body_bg)
             .rounding(rounding)
-            .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(40)));
+            .stroke(egui::Stroke::new(stroke_width, stroke_color));
 
         let inner = frame.show(ui, |ui| {
             let available = ui.available_size();
@@ -339,5 +362,57 @@ pub(super) fn color32_to_rgba(color: egui::Color32) -> RgbaColor {
         g: color.g(),
         b: color.b(),
         a: color.a(),
+    }
+}
+
+/// Apply visual warning colors based on countdown state.
+/// Returns (body_bg, days_fg, stroke_color, stroke_width)
+fn apply_warning_colors(
+    warning_state: CountdownWarningState,
+    card: &CountdownCardState,
+    ctx: &egui::Context,
+) -> (egui::Color32, egui::Color32, egui::Color32, f32) {
+    match warning_state {
+        CountdownWarningState::Critical => {
+            // Critical: Red/orange with pulsing effect
+            let pulse_phase = (ctx.input(|i| i.time) * 2.0) % 1.0; // 2 Hz pulse
+            let pulse_alpha = (pulse_phase * 255.0) as u8;
+            let body_bg = egui::Color32::from_rgba_unmultiplied(255, 100, 100, 255 - pulse_alpha / 2);
+            let days_fg = egui::Color32::from_rgb(139, 0, 0); // Dark red
+            let stroke_color = egui::Color32::from_rgb(200, 0, 0);
+            ctx.request_repaint(); // Continuous animation
+            (body_bg, days_fg, stroke_color, 4.0)
+        }
+        CountdownWarningState::Imminent => {
+            // Imminent: Orange warning
+            let body_bg = egui::Color32::from_rgb(255, 165, 0);
+            let days_fg = egui::Color32::from_rgb(139, 69, 0);
+            let stroke_color = egui::Color32::from_rgb(255, 140, 0);
+            (body_bg, days_fg, stroke_color, 3.0)
+        }
+        CountdownWarningState::Starting => {
+            // Starting: Bright green with pulsing
+            let pulse_phase = (ctx.input(|i| i.time) * 3.0) % 1.0; // 3 Hz fast pulse
+            let pulse_alpha = (pulse_phase * 255.0) as u8;
+            let body_bg = egui::Color32::from_rgba_unmultiplied(0, 255, 100, 255 - pulse_alpha / 3);
+            let days_fg = egui::Color32::from_rgb(0, 100, 0);
+            let stroke_color = egui::Color32::from_rgb(0, 200, 0);
+            ctx.request_repaint(); // Continuous animation
+            (body_bg, days_fg, stroke_color, 5.0)
+        }
+        CountdownWarningState::Approaching => {
+            // Approaching: Slight yellow tint
+            let body_bg = rgba_to_color32(card.visuals.body_bg_color);
+            let days_fg = rgba_to_color32(card.visuals.days_fg_color);
+            let stroke_color = egui::Color32::from_rgb(255, 200, 0);
+            (body_bg, days_fg, stroke_color, 2.0)
+        }
+        CountdownWarningState::Normal => {
+            // Normal: Use card's configured colors
+            let body_bg = rgba_to_color32(card.visuals.body_bg_color);
+            let days_fg = rgba_to_color32(card.visuals.days_fg_color);
+            let stroke_color = egui::Color32::from_gray(40);
+            (body_bg, days_fg, stroke_color, 1.0)
+        }
     }
 }

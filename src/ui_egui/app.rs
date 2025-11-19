@@ -714,6 +714,30 @@ impl eframe::App for CalendarApp {
         if !changed_counts.is_empty() {
             ctx.request_repaint();
         }
+
+        // Check for notification triggers (warning state transitions)
+        let now = Local::now();
+        let notification_triggers = self
+            .countdown_service
+            .check_notification_triggers(now);
+        for (card_id, old_state, new_state) in notification_triggers {
+            log::info!(
+                "Countdown notification trigger: card {:?} transitioned from {:?} to {:?}",
+                card_id,
+                old_state,
+                new_state
+            );
+            // TODO: Show system notification here when NotificationService is implemented
+            ctx.request_repaint();
+        }
+
+        // Check for auto-dismiss
+        let dismissed_cards = self.countdown_service.check_auto_dismiss(now);
+        if !dismissed_cards.is_empty() {
+            log::info!("Auto-dismissed {} countdown card(s)", dismissed_cards.len());
+            ctx.request_repaint();
+        }
+
         self.persist_countdowns_if_needed();
 
         // Render unified theme dialog and creator
