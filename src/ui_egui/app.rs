@@ -3,9 +3,10 @@ mod countdown;
 use self::countdown::CountdownUiState;
 use crate::models::event::Event;
 use crate::models::settings::Settings;
-use crate::services::countdown::{CountdownCardGeometry, CountdownService};
+use crate::services::countdown::{CountdownCardGeometry, CountdownService, CountdownWarningState};
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::services::notification::NotificationService;
 use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
 use crate::ui_egui::dialogs::theme_creator::{
@@ -68,6 +69,9 @@ pub struct CalendarApp {
     countdown_storage_path: PathBuf,
     countdown_ui: CountdownUiState,
     pending_root_geometry: Option<CountdownCardGeometry>,
+
+    // Notifications
+    notification_service: NotificationService,
 }
 
 impl CalendarApp {
@@ -144,6 +148,9 @@ impl CalendarApp {
 
         let show_ribbon = settings.show_ribbon;
 
+        // Initialize notification service
+        let notification_service = NotificationService::new();
+
         let app = Self {
             database,
             settings,
@@ -163,6 +170,7 @@ impl CalendarApp {
             countdown_storage_path,
             countdown_ui,
             pending_root_geometry,
+            notification_service,
         };
 
         // Apply theme from database (including custom themes)
@@ -720,14 +728,50 @@ impl eframe::App for CalendarApp {
         let notification_triggers = self
             .countdown_service
             .check_notification_triggers(now);
-        for (card_id, old_state, new_state) in notification_triggers {
-            log::info!(
-                "Countdown notification trigger: card {:?} transitioned from {:?} to {:?}",
-                card_id,
-                old_state,
-                new_state
-            );
-            // TODO: Show system notification here when NotificationService is implemented
+        
+        if !notification_triggers.is_empty() {
+            // Get notification config to check if system notifications are enabled
+            let notification_config = self.countdown_service.notification_config();
+            
+            if notification_config.use_system_notifications {
+                for (card_id, _old_state, new_state) in &notification_triggers {
+                    // Find the card to get event details
+                    if let Some(card) = self
+                        .countdown_service
+                        .cards()
+                        .iter()
+                        .find(|c| c.id == *card_id)
+                    {
+                        let (message, urgency) = Self::notification_message_for_state(*new_state, card.start_at, now);
+                        
+                        if let Err(e) = self.notification_service.show_countdown_alert(
+                            card.effective_title(),
+                            &message,
+                            urgency,
+                        ) {
+                            log::warn!("Failed to show system notification: {}", e);
+                        } else {
+                            log::info!(
+                                "Showed system notification for card {:?} ({}) - state: {:?}",
+                                card_id,
+                                card.effective_title(),
+                                new_state
+                            );
+                        }
+                    }
+                }
+            }
+            
+            // Log all transitions
+            for (card_id, old_state, new_state) in notification_triggers {
+                log::info!(
+                    "Countdown notification trigger: card {:?} transitioned from {:?} to {:?}",
+                    card_id,
+                    old_state,
+                    new_state
+                );
+            }
+            
             ctx.request_repaint();
         }
 
@@ -751,6 +795,52 @@ impl eframe::App for CalendarApp {
 }
 
 impl CalendarApp {
+    /// Generate notification message and urgency based on countdown warning state
+    fn notification_message_for_state(
+        state: CountdownWarningState,
+        event_time: chrono::DateTime<Local>,
+        now: chrono::DateTime<Local>,
+    ) -> (String, crate::services::notification::NotificationUrgency) {
+        use crate::services::notification::NotificationUrgency;
+        
+        let remaining = event_time.signed_duration_since(now);
+        
+        match state {
+            CountdownWarningState::Critical => {
+                let minutes = remaining.num_minutes();
+                let message = if minutes > 0 {
+                    format!("Starting in {} minute{}", minutes, if minutes == 1 { "" } else { "s" })
+                } else {
+                    "Starting very soon!".to_string()
+                };
+                (message, NotificationUrgency::Critical)
+            }
+            CountdownWarningState::Imminent => {
+                let hours = remaining.num_hours();
+                let minutes = remaining.num_minutes() % 60;
+                let message = if hours > 0 {
+                    format!("Starting in {} hour{} {} minute{}", 
+                        hours, if hours == 1 { "" } else { "s" },
+                        minutes, if minutes == 1 { "" } else { "s" })
+                } else {
+                    format!("Starting in {} minute{}", minutes, if minutes == 1 { "" } else { "s" })
+                };
+                (message, NotificationUrgency::Critical)
+            }
+            CountdownWarningState::Approaching => {
+                let hours = remaining.num_hours();
+                let message = format!("Starting in {} hour{}", hours, if hours == 1 { "" } else { "s" });
+                (message, NotificationUrgency::Normal)
+            }
+            CountdownWarningState::Starting => {
+                ("Event is starting now!".to_string(), NotificationUrgency::Critical)
+            }
+            CountdownWarningState::Normal => {
+                ("Event approaching".to_string(), NotificationUrgency::Normal)
+            }
+        }
+    }
+
     fn navigate_previous(&mut self) {
         use chrono::Datelike;
 
