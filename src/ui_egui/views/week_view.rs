@@ -149,7 +149,7 @@ impl WeekView {
 
                     // Time label placeholder - same width as header
                     ui.allocate_ui_with_layout(
-                        Vec2::new(time_label_width, 24.0),
+                        Vec2::new(time_label_width, 0.0),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |_ui| {},
                     );
@@ -158,29 +158,51 @@ impl WeekView {
 
                     // Render each day column - same loop structure as header
                     for (i, date) in week_dates.iter().enumerate() {
-                        ui.allocate_ui_with_layout(
-                            Vec2::new(col_width, 24.0),
-                            egui::Layout::top_down(egui::Align::Min),
-                            |day_ui| {
-                                // Find events for this specific date
-                                let mut found_event = false;
-                                for event in all_day_events {
-                                    let event_start_date = event.start.date_naive();
-                                    
+                        ui.vertical(|day_ui| {
+                            day_ui.set_width(col_width);
+                            
+                            // Separate events into multi-day and single-day
+                            let mut multi_day_events = Vec::new();
+                            let mut single_day_events = Vec::new();
+                            
+                            for event in all_day_events {
+                                let event_start_date = event.start.date_naive();
+                                let event_end_date = event.end.date_naive();
+                                
+                                if event_start_date != event_end_date {
+                                    // Multi-day event - check if it spans this date
+                                    if event_start_date <= *date && event_end_date >= *date {
+                                        multi_day_events.push(event);
+                                    }
+                                } else {
+                                    // Single-day event - check if it's on this date
                                     if event_start_date == *date {
-                                        found_event = true;
-                                        if let Some(ev) = Self::render_ribbon_event(day_ui, event, countdown_requests, active_countdown_events, database) {
-                                            clicked_event = Some(ev);
-                                        }
+                                        single_day_events.push(event);
                                     }
                                 }
-                                
-                                // If no event was found, allocate empty space to maintain column structure
-                                if !found_event {
-                                    day_ui.allocate_space(Vec2::new(col_width, 0.0));
+                            }
+                            
+                            let found_event = !multi_day_events.is_empty() || !single_day_events.is_empty();
+                            
+                            // Render multi-day events first (at the top)
+                            for event in multi_day_events {
+                                if let Some(ev) = Self::render_ribbon_event(day_ui, event, countdown_requests, active_countdown_events, database) {
+                                    clicked_event = Some(ev);
                                 }
-                            },
-                        );
+                            }
+                            
+                            // Then render single-day events
+                            for event in single_day_events {
+                                if let Some(ev) = Self::render_ribbon_event(day_ui, event, countdown_requests, active_countdown_events, database) {
+                                    clicked_event = Some(ev);
+                                }
+                            }
+                            
+                            // If no event was found, allocate minimum space to maintain column structure
+                            if !found_event {
+                                day_ui.allocate_space(Vec2::new(col_width, 24.0));
+                            }
+                        });
 
                         // Add spacing between columns (but not after the last one)
                         if i < week_dates.len() - 1 {
