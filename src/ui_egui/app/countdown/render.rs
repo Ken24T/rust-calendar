@@ -27,6 +27,7 @@ pub(super) enum CountdownCardUiAction {
     OpenSettings,
     GeometrySettled,
     Delete,
+    Refresh,
 }
 
 pub(super) fn viewport_builder_for_card(
@@ -299,6 +300,10 @@ pub(super) fn render_countdown_card_ui(
         inner.response.context_menu(|ui| {
             if ui.button("Card settings...").clicked() {
                 action = CountdownCardUiAction::OpenSettings;
+                ui.close_menu();
+            }
+            if ui.button("Refresh countdown").clicked() {
+                action = CountdownCardUiAction::Refresh;
                 ui.close_menu();
             }
             ui.separator();

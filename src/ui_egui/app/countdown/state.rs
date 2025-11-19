@@ -158,6 +158,10 @@ impl CountdownUiState {
                     ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Focus);
                 }
+                CountdownCardUiAction::Refresh => {
+                    log::info!("Refresh action triggered for card {:?}", card.id);
+                    ctx.request_repaint();
+                }
             }
 
             if queued_close {
