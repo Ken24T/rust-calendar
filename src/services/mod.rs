@@ -1,6 +1,7 @@
 // Service module exports
 // This file will be populated as services are implemented
 
+pub mod backup;
 pub mod countdown;
 pub mod database;
 pub mod event;
