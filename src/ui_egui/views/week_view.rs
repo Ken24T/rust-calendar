@@ -521,7 +521,9 @@ impl WeekView {
             event_hitboxes.push((event_rect, (*event).clone()));
         }
 
-        let pointer_pos = response.interact_pointer_pos();
+        // Check for pointer position - use hover position to catch right-clicks too
+        let pointer_pos = response.interact_pointer_pos()
+            .or_else(|| ui.input(|i| i.pointer.hover_pos()));
         let pointer_hit = pointer_pos.and_then(|pos| {
             event_hitboxes
                 .iter()
