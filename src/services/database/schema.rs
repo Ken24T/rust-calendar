@@ -85,6 +85,20 @@ fn run_settings_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE settings ADD COLUMN default_card_height REAL NOT NULL DEFAULT 110.0",
     )?;
 
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "auto_create_countdown_on_import",
+        "ALTER TABLE settings ADD COLUMN auto_create_countdown_on_import INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "edit_before_import",
+        "ALTER TABLE settings ADD COLUMN edit_before_import INTEGER NOT NULL DEFAULT 0",
+    )?;
+
     let had_time_slot = migrations::column_exists(conn, "settings", "time_slot_interval")?;
     let has_default_duration =
         migrations::column_exists(conn, "settings", "default_event_duration")?;

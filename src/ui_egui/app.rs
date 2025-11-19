@@ -212,26 +212,63 @@ impl eframe::App for CalendarApp {
                                             let mut failed_count = 0;
                                             let mut duplicate_count = 0;
                                             
-                                            for event in events {
-                                                let event_title = event.title.clone();
-                                                let event_start = event.start;
-                                                let event_end = event.end;
+                                            // If edit_before_import is enabled, open the first event for editing
+                                            if self.settings.edit_before_import && !events.is_empty() {
+                                                let first_event = &events[0];
                                                 
-                                                // Check for duplicates (same title, start, and end time)
+                                                // Check if it's a duplicate
                                                 let existing_events = service.list_all().unwrap_or_default();
                                                 let is_duplicate = existing_events.iter().any(|e| {
-                                                    e.title == event_title &&
-                                                    e.start == event_start &&
-                                                    e.end == event_end
+                                                    e.title == first_event.title &&
+                                                    e.start == first_event.start &&
+                                                    e.end == first_event.end
                                                 });
                                                 
                                                 if is_duplicate {
-                                                    log::info!("Skipping duplicate event: '{}'", event_title);
-                                                    duplicate_count += 1;
-                                                    continue;
+                                                    log::info!("Skipping duplicate event (edit mode): '{}'", first_event.title);
+                                                } else {
+                                                    // Create the event first so it has an ID
+                                                    match service.create(first_event.clone()) {
+                                                        Ok(created_event) => {
+                                                            // Open it for editing
+                                                            if let Some(event_id) = created_event.id {
+                                                                self.event_to_edit = Some(event_id);
+                                                                self.show_event_dialog = true;
+                                                                log::info!("Opening event '{}' for editing", first_event.title);
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            log::error!("Failed to create event for editing: {}", e);
+                                                        }
+                                                    }
                                                 }
                                                 
-                                                match service.create(event) {
+                                                // Note: Only the first event is opened for editing
+                                                if events.len() > 1 {
+                                                    log::info!("Note: Only the first event was opened for editing. {} other events were not imported.", events.len() - 1);
+                                                }
+                                            } else {
+                                                // Direct import without editing
+                                                for event in events {
+                                                    let event_title = event.title.clone();
+                                                    let event_start = event.start;
+                                                    let event_end = event.end;
+                                                    
+                                                    // Check for duplicates (same title, start, and end time)
+                                                    let existing_events = service.list_all().unwrap_or_default();
+                                                    let is_duplicate = existing_events.iter().any(|e| {
+                                                        e.title == event_title &&
+                                                        e.start == event_start &&
+                                                        e.end == event_end
+                                                    });
+                                                    
+                                                    if is_duplicate {
+                                                        log::info!("Skipping duplicate event: '{}'", event_title);
+                                                        duplicate_count += 1;
+                                                        continue;
+                                                    }
+                                                    
+                                                    match service.create(event) {
                                                     Ok(created_event) => {
                                                         imported_count += 1;
                                                         
@@ -275,10 +312,11 @@ impl eframe::App for CalendarApp {
                                                 }
                                             }
                                             
-                                            if duplicate_count > 0 {
-                                                log::info!("Drag-and-drop import complete: {} events imported, {} duplicates skipped, {} failed", imported_count, duplicate_count, failed_count);
-                                            } else {
-                                                log::info!("Drag-and-drop import complete: {} events imported, {} failed", imported_count, failed_count);
+                                                if duplicate_count > 0 {
+                                                    log::info!("Drag-and-drop import complete: {} events imported, {} duplicates skipped, {} failed", imported_count, duplicate_count, failed_count);
+                                                } else {
+                                                    log::info!("Drag-and-drop import complete: {} events imported, {} failed", imported_count, failed_count);
+                                                }
                                             }
                                         }
                                         Err(e) => {

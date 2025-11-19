@@ -56,6 +56,8 @@ impl<'a> SettingsService<'a> {
                  default_event_start_time = ?12, \
                  default_card_width = ?13, \
                  default_card_height = ?14, \
+                 auto_create_countdown_on_import = ?15, \
+                 edit_before_import = ?16, \
                  updated_at = CURRENT_TIMESTAMP \
              WHERE id = 1",
             (
@@ -73,6 +75,8 @@ impl<'a> SettingsService<'a> {
                 &settings.default_event_start_time,
                 settings.default_card_width,
                 settings.default_card_height,
+                settings.auto_create_countdown_on_import as i32,
+                settings.edit_before_import as i32,
             ),
         )
         .context("Failed to update settings")?;
