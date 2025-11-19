@@ -212,6 +212,7 @@ impl CalendarApp {
 
         // Apply theme from database (including custom themes)
         app.apply_theme_from_db(&cc.egui_ctx);
+        app.focus_on_current_time_if_visible();
 
         app
     }
@@ -505,6 +506,7 @@ impl eframe::App for CalendarApp {
                         .clicked()
                     {
                         self.current_view = ViewType::Day;
+                        self.focus_on_current_time_if_visible();
                         ui.close_menu();
                     }
                     if ui
@@ -512,6 +514,7 @@ impl eframe::App for CalendarApp {
                         .clicked()
                     {
                         self.current_view = ViewType::Week;
+                        self.focus_on_current_time_if_visible();
                         ui.close_menu();
                     }
                     if ui
@@ -519,6 +522,7 @@ impl eframe::App for CalendarApp {
                         .clicked()
                     {
                         self.current_view = ViewType::WorkWeek;
+                        self.focus_on_current_time_if_visible();
                         ui.close_menu();
                     }
                     if ui
@@ -1553,6 +1557,40 @@ impl CalendarApp {
         self.current_date = event.start.date_naive();
         if matches!(self.current_view, ViewType::Day | ViewType::Week | ViewType::WorkWeek) {
             self.pending_focus = Some(AutoFocusRequest::from_event(event));
+        }
+    }
+
+    fn focus_on_current_time_if_visible(&mut self) {
+        if !matches!(self.current_view, ViewType::Day | ViewType::Week | ViewType::WorkWeek) {
+            return;
+        }
+
+        let now = Local::now();
+        let today = now.date_naive();
+
+        let should_focus = match self.current_view {
+            ViewType::Day => self.current_date == today,
+            ViewType::Week => {
+                let week_start =
+                    WeekView::get_week_start(self.current_date, self.settings.first_day_of_week);
+                let week_end = week_start + chrono::Duration::days(6);
+                today >= week_start && today <= week_end
+            }
+            ViewType::WorkWeek => {
+                let week_start =
+                    WorkWeekView::get_week_start(self.current_date, self.settings.first_day_of_week);
+                let work_week_dates =
+                    WorkWeekView::get_work_week_dates(week_start, &self.settings);
+                work_week_dates.contains(&today)
+            }
+            ViewType::Month => false,
+        };
+
+        if should_focus {
+            self.pending_focus = Some(AutoFocusRequest {
+                date: today,
+                time: Some(now.time()),
+            });
         }
     }
 

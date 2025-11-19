@@ -979,7 +979,7 @@ impl WeekView {
         bg_rect
     }
 
-    fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
+    pub(crate) fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
         let weekday = date.weekday().num_days_from_sunday() as i64;
         let offset = (weekday - first_day_of_week as i64 + 7) % 7;
         date - Duration::days(offset)
