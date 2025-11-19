@@ -273,180 +273,11 @@ impl eframe::App for CalendarApp {
                             continue;
                         }
 
-                        use crate::services::event::EventService;
                         use crate::services::icalendar::import;
 
                         match import::from_str(&ics_content) {
                             Ok(events) => {
-                                if events.is_empty() {
-                                    log::info!("No events found in dropped file {:?}", path);
-                                    continue;
-                                }
-
-                                let service = EventService::new(self.database.connection());
-                                let mut imported_count = 0;
-                                let mut failed_count = 0;
-                                let mut duplicate_count = 0;
-
-                                if self.settings.edit_before_import {
-                                    let first_event = &events[0];
-                                    let existing_events = service.list_all().unwrap_or_default();
-                                    let is_duplicate = existing_events.iter().any(|e| {
-                                        e.title == first_event.title
-                                            && e.start == first_event.start
-                                            && e.end == first_event.end
-                                    });
-
-                                    if is_duplicate {
-                                        log::info!(
-                                            "Skipping duplicate event (edit mode): '{}'",
-                                            first_event.title
-                                        );
-                                    } else {
-                                        match service.create(first_event.clone()) {
-                                            Ok(created_event) => {
-                                                if let Some(event_id) = created_event.id {
-                                                    self.event_to_edit = Some(event_id);
-                                                    self.show_event_dialog = true;
-                                                    log::info!(
-                                                        "Opening event '{}' for editing",
-                                                        first_event.title
-                                                    );
-                                                }
-                                            }
-                                            Err(e) => {
-                                                log::error!(
-                                                    "Failed to create event for editing: {}",
-                                                    e
-                                                );
-                                            }
-                                        }
-                                    }
-
-                                    if events.len() > 1 {
-                                        log::info!(
-                                            "Note: Only the first event was opened for editing. {} other events were not imported.",
-                                            events.len() - 1
-                                        );
-                                    }
-                                } else {
-                                    for event in events {
-                                        let event_title = event.title.clone();
-                                        let event_start = event.start;
-                                        let event_end = event.end;
-
-                                        let existing_events = service.list_all().unwrap_or_default();
-                                        let is_duplicate = existing_events.iter().any(|e| {
-                                            e.title == event_title
-                                                && e.start == event_start
-                                                && e.end == event_end
-                                        });
-
-                                        if is_duplicate {
-                                            log::info!(
-                                                "Skipping duplicate event: '{}'",
-                                                event_title
-                                            );
-                                            duplicate_count += 1;
-                                            continue;
-                                        }
-
-                                        match service.create(event) {
-                                            Ok(created_event) => {
-                                                imported_count += 1;
-
-                                                if self.settings.auto_create_countdown_on_import
-                                                    && event_start > Local::now()
-                                                {
-                                                    if let Some(event_id) = created_event.id {
-                                                        use crate::services::countdown::RgbaColor;
-
-                                                        let event_color = created_event
-                                                            .color
-                                                            .as_ref()
-                                                            .and_then(|hex| {
-                                                                if hex.starts_with('#')
-                                                                    && hex.len() == 7
-                                                                {
-                                                                    u32::from_str_radix(
-                                                                        &hex[1..],
-                                                                        16,
-                                                                    )
-                                                                    .ok()
-                                                                    .map(|rgb| {
-                                                                        let r =
-                                                                            ((rgb >> 16)
-                                                                                & 0xFF)
-                                                                                as u8;
-                                                                        let g =
-                                                                            ((rgb >> 8)
-                                                                                & 0xFF)
-                                                                                as u8;
-                                                                        let b =
-                                                                            (rgb & 0xFF)
-                                                                                as u8;
-                                                                        RgbaColor::new(
-                                                                            r, g, b, 255,
-                                                                        )
-                                                                    })
-                                                                } else {
-                                                                    None
-                                                                }
-                                                            });
-
-                                                        let location_label = created_event
-                                                            .location
-                                                            .as_deref()
-                                                            .map(str::trim)
-                                                            .filter(|loc| !loc.is_empty())
-                                                            .map(|loc| loc.to_string());
-
-                                                        let card_id = self.countdown_service.create_card(
-                                                            Some(event_id),
-                                                            created_event.title.clone(),
-                                                            created_event.start,
-                                                            event_color,
-                                                            created_event.description.clone(),
-                                                            self.settings.default_card_width,
-                                                            self.settings.default_card_height,
-                                                        );
-
-                                                        if let Some(label) = location_label {
-                                                            self.countdown_service
-                                                                .set_auto_title_override(
-                                                                    card_id,
-                                                                    Some(label),
-                                                                );
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                log::error!(
-                                                    "Failed to import dropped event '{}': {}",
-                                                    event_title,
-                                                    e
-                                                );
-                                                failed_count += 1;
-                                            }
-                                        }
-                                    }
-
-                                    if duplicate_count > 0 {
-                                        log::info!(
-                                            "Import complete: {} events imported, {} duplicates skipped, {} failed",
-                                            imported_count,
-                                            duplicate_count,
-                                            failed_count
-                                        );
-                                    } else {
-                                        log::info!(
-                                            "Import complete: {} events imported, {} failed",
-                                            imported_count,
-                                            failed_count
-                                        );
-                                    }
-                                }
+                                self.handle_ics_import(events, "drag-and-drop");
                             }
                             Err(e) => {
                                 log::error!(
@@ -639,95 +470,9 @@ impl eframe::App for CalendarApp {
                             match std::fs::read_to_string(&path) {
                                 Ok(ics_content) => {
                                     use crate::services::icalendar::import;
-                                    use crate::services::event::EventService;
-                                    
                                     match import::from_str(&ics_content) {
                                         Ok(events) => {
-                                            let service = EventService::new(self.database.connection());
-                                            let mut imported_count = 0;
-                                            let mut failed_count = 0;
-                                            let mut duplicate_count = 0;
-                                            
-                                            for event in events {
-                                                let event_title = event.title.clone();
-                                                let event_start = event.start;
-                                                let event_end = event.end;
-                                                
-                                                // Check for duplicates (same title, start, and end time)
-                                                let existing_events = service.list_all().unwrap_or_default();
-                                                let is_duplicate = existing_events.iter().any(|e| {
-                                                    e.title == event_title &&
-                                                    e.start == event_start &&
-                                                    e.end == event_end
-                                                });
-                                                
-                                                if is_duplicate {
-                                                    log::info!("Skipping duplicate event: '{}'", event_title);
-                                                    duplicate_count += 1;
-                                                    continue;
-                                                }
-                                                
-                                                match service.create(event) {
-                                                    Ok(created_event) => {
-                                                        imported_count += 1;
-                                                        
-                                                        // Auto-create countdown if enabled and event is in the future
-                                                        if self.settings.auto_create_countdown_on_import && event_start > Local::now() {
-                                                            if let Some(event_id) = created_event.id {
-                                                                // Parse color string to RgbaColor if present
-                                                                use crate::services::countdown::RgbaColor;
-                                                                let event_color = created_event.color.as_ref()
-                                                                    .and_then(|hex| {
-                                                                        if hex.starts_with('#') && hex.len() == 7 {
-                                                                            u32::from_str_radix(&hex[1..], 16)
-                                                                                .ok()
-                                                                                .map(|rgb| {
-                                                                                    let r = ((rgb >> 16) & 0xFF) as u8;
-                                                                                    let g = ((rgb >> 8) & 0xFF) as u8;
-                                                                                    let b = (rgb & 0xFF) as u8;
-                                                                                    RgbaColor::new(r, g, b, 255)
-                                                                                })
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    });
-                                                                
-                                                                let location_label = created_event
-                                                                    .location
-                                                                    .as_deref()
-                                                                    .map(str::trim)
-                                                                    .filter(|loc| !loc.is_empty())
-                                                                    .map(|loc| loc.to_string());
-
-                                                                let card_id = self.countdown_service.create_card(
-                                                                    Some(event_id),
-                                                                    created_event.title.clone(),
-                                                                    created_event.start,
-                                                                    event_color,
-                                                                    created_event.description.clone(),
-                                                                    self.settings.default_card_width,
-                                                                    self.settings.default_card_height,
-                                                                );
-
-                                                                if let Some(label) = location_label {
-                                                                    self.countdown_service
-                                                                        .set_auto_title_override(card_id, Some(label));
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        log::error!("Failed to import event '{}': {}", event_title, e);
-                                                        failed_count += 1;
-                                                    }
-                                                }
-                                            }
-                                            
-                                            if duplicate_count > 0 {
-                                                log::info!("Import complete: {} events imported, {} duplicates skipped, {} failed", imported_count, duplicate_count, failed_count);
-                                            } else {
-                                                log::info!("Import complete: {} events imported, {} failed", imported_count, failed_count);
-                                            }
+                                            self.handle_ics_import(events, "file import dialog");
                                         }
                                         Err(e) => {
                                             log::error!("Failed to parse ICS file: {}", e);
@@ -1268,6 +1013,171 @@ impl CalendarApp {
     }
 
     
+    fn handle_ics_import(&mut self, events: Vec<Event>, source_label: &str) {
+        if events.is_empty() {
+            log::info!("No events found in {} import", source_label);
+            return;
+        }
+
+        let event_service = EventService::new(self.database.connection());
+        let mut existing_events = event_service.list_all().unwrap_or_else(|err| {
+            log::error!(
+                "Failed to list existing events before {} import: {}",
+                source_label,
+                err
+            );
+            Vec::new()
+        });
+
+        if self.settings.edit_before_import {
+            let first_event = events[0].clone();
+            let remaining = events.len().saturating_sub(1);
+
+            if Self::is_duplicate_event(&existing_events, &first_event) {
+                log::info!(
+                    "Skipping duplicate event (edit mode) from {}: '{}'",
+                    source_label,
+                    first_event.title
+                );
+            } else {
+                match event_service.create(first_event.clone()) {
+                    Ok(created_event) => {
+                        if let Some(event_id) = created_event.id {
+                            self.event_to_edit = Some(event_id);
+                            self.show_event_dialog = true;
+                            log::info!(
+                                "Opening event '{}' for editing from {}",
+                                created_event.title,
+                                source_label
+                            );
+                        }
+                        existing_events.push(created_event);
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "Failed to create event for editing from {}: {}",
+                            source_label,
+                            err
+                        );
+                    }
+                }
+            }
+
+            if remaining > 0 {
+                log::info!(
+                    "Note: Only the first event was opened for editing from {}. {} other event(s) were not imported.",
+                    source_label,
+                    remaining
+                );
+            }
+
+            return;
+        }
+
+        let mut imported_count = 0;
+        let mut failed_count = 0;
+        let mut duplicate_count = 0;
+
+        for event in events {
+            let event_title = event.title.clone();
+
+            if Self::is_duplicate_event(&existing_events, &event) {
+                log::info!(
+                    "Skipping duplicate event from {}: '{}'",
+                    source_label,
+                    event_title
+                );
+                duplicate_count += 1;
+                continue;
+            }
+
+            match event_service.create(event) {
+                Ok(created_event) => {
+                    imported_count += 1;
+
+                    if self.settings.auto_create_countdown_on_import
+                        && created_event.start > Local::now()
+                    {
+                        if let Some(event_id) = created_event.id {
+                            use crate::services::countdown::RgbaColor;
+
+                            let event_color = created_event.color.as_ref().and_then(|hex| {
+                                if hex.starts_with('#') && hex.len() == 7 {
+                                    u32::from_str_radix(&hex[1..], 16).ok().map(|rgb| {
+                                        let r = ((rgb >> 16) & 0xFF) as u8;
+                                        let g = ((rgb >> 8) & 0xFF) as u8;
+                                        let b = (rgb & 0xFF) as u8;
+                                        RgbaColor::new(r, g, b, 255)
+                                    })
+                                } else {
+                                    None
+                                }
+                            });
+
+                            let location_label = created_event
+                                .location
+                                .as_deref()
+                                .map(str::trim)
+                                .filter(|loc| !loc.is_empty())
+                                .map(|loc| loc.to_string());
+
+                            let card_id = self.countdown_service.create_card(
+                                Some(event_id),
+                                created_event.title.clone(),
+                                created_event.start,
+                                event_color,
+                                created_event.description.clone(),
+                                self.settings.default_card_width,
+                                self.settings.default_card_height,
+                            );
+
+                            if let Some(label) = location_label {
+                                self.countdown_service
+                                    .set_auto_title_override(card_id, Some(label));
+                            }
+                        }
+                    }
+
+                    existing_events.push(created_event.clone());
+                }
+                Err(err) => {
+                    log::error!(
+                        "Failed to import event '{}' from {}: {}",
+                        event_title,
+                        source_label,
+                        err
+                    );
+                    failed_count += 1;
+                }
+            }
+        }
+
+        if duplicate_count > 0 {
+            log::info!(
+                "{} import complete: {} events imported, {} duplicates skipped, {} failed",
+                source_label,
+                imported_count,
+                duplicate_count,
+                failed_count
+            );
+        } else {
+            log::info!(
+                "{} import complete: {} events imported, {} failed",
+                source_label,
+                imported_count,
+                failed_count
+            );
+        }
+    }
+
+    fn is_duplicate_event(existing_events: &[Event], candidate: &Event) -> bool {
+        existing_events.iter().any(|event| {
+            event.title == candidate.title
+                && event.start == candidate.start
+                && event.end == candidate.end
+        })
+    }
+
 
     // Placeholder dialog renderers
     fn render_event_dialog(&mut self, ctx: &egui::Context) {
