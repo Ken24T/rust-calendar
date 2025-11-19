@@ -236,9 +236,26 @@ pub(super) fn render_countdown_card_ui(
                     let days_remaining = (card.start_at.date_naive() - now.date_naive())
                         .num_days()
                         .max(0);
+                    
+                    let days_text = days_remaining.to_string();
+                    
+                    // Calculate font size based on available space and number of digits
+                    let digit_count = days_text.len();
+                    let available_width = width * 0.9; // Leave 10% margin
+                    
+                    // Estimate width per character (roughly 0.6 of font size for monospace digits)
+                    let estimated_text_width = font_size * 0.6 * digit_count as f32;
+                    
+                    let adjusted_font_size = if estimated_text_width > available_width {
+                        // Scale down to fit available width
+                        (available_width / (0.6 * digit_count as f32)).max(32.0).min(font_size)
+                    } else {
+                        font_size
+                    };
+                    
                     let countdown_response = countdown_ui.label(
-                        egui::RichText::new(days_remaining.to_string())
-                            .size(font_size)
+                        egui::RichText::new(days_text)
+                            .size(adjusted_font_size)
                             .color(days_fg),
                     );
 
