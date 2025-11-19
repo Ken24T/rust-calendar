@@ -3,12 +3,16 @@ mod countdown;
 use self::countdown::CountdownUiState;
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::services::backup::BackupService;
 use crate::services::countdown::{CountdownCardGeometry, CountdownService, CountdownWarningState};
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::services::notification::NotificationService;
 use crate::services::settings::SettingsService;
 use crate::services::theme::ThemeService;
+use crate::ui_egui::dialogs::backup_manager::{
+    render_backup_manager_dialog, BackupManagerState,
+};
 use crate::ui_egui::dialogs::theme_creator::{
     render_theme_creator, ThemeCreatorAction, ThemeCreatorState,
 };
@@ -51,6 +55,7 @@ pub struct CalendarApp {
     // Dialog states
     show_event_dialog: bool,
     show_settings_dialog: bool,
+    backup_manager_state: BackupManagerState,
     theme_dialog_state: ThemeDialogState,
     theme_creator_state: ThemeCreatorState,
 
@@ -102,6 +107,13 @@ impl CalendarApp {
             db.initialize_schema()
                 .expect("Failed to initialize database schema");
 
+            // Create auto-backup on startup
+            if let Err(e) = BackupService::auto_backup_on_startup(std::path::Path::new(&db_path), Some(5)) {
+                log::warn!("Failed to create automatic backup on startup: {}", e);
+            } else {
+                log::info!("Automatic backup created successfully");
+            }
+
             Box::leak(Box::new(db))
         };
 
@@ -151,6 +163,22 @@ impl CalendarApp {
         // Initialize notification service
         let notification_service = NotificationService::new();
 
+        // Initialize backup manager state
+        #[cfg(debug_assertions)]
+        let db_path_for_backup = PathBuf::from("calendar.db");
+        
+        #[cfg(not(debug_assertions))]
+        let db_path_for_backup = {
+            if let Some(proj_dirs) = ProjectDirs::from("com", "KenBoyle", "RustCalendar") {
+                let data_dir = proj_dirs.data_dir();
+                data_dir.join("calendar.db")
+            } else {
+                PathBuf::from("calendar_prod.db")
+            }
+        };
+        
+        let backup_manager_state = BackupManagerState::new(db_path_for_backup);
+
         let app = Self {
             database,
             settings,
@@ -158,6 +186,7 @@ impl CalendarApp {
             current_date: Local::now().date_naive(),
             show_event_dialog: false,
             show_settings_dialog: false,
+            backup_manager_state,
             theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
             show_ribbon,
@@ -384,6 +413,17 @@ impl eframe::App for CalendarApp {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
+                    if ui.button("💾 Backup Database...").clicked() {
+                        if let Err(e) = self.backup_manager_state.create_backup() {
+                            log::error!("Failed to create backup: {}", e);
+                        }
+                        ui.close_menu();
+                    }
+                    if ui.button("📂 Manage Backups...").clicked() {
+                        self.backup_manager_state.open();
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button("Exit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
@@ -787,6 +827,15 @@ impl eframe::App for CalendarApp {
         // Render unified theme dialog and creator
         self.render_theme_dialog(ctx);
         self.render_theme_creator(ctx);
+        
+        // Render backup manager dialog
+        let should_reload_db = render_backup_manager_dialog(ctx, &mut self.backup_manager_state);
+        if should_reload_db {
+            // Note: Database restoration requires app restart
+            // Show message and close app
+            log::info!("Database restored. Application should be restarted.");
+            // TODO: Implement graceful restart or reload mechanism
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
