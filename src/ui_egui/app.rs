@@ -26,7 +26,7 @@ use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
-use crate::ui_egui::views::CountdownRequest;
+use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
 use chrono::{Datelike, Local, NaiveDate};
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
@@ -71,6 +71,7 @@ pub struct CalendarApp {
     event_dialog_time: Option<chrono::NaiveTime>, // Time from clicked cell (None = use default)
     event_dialog_recurrence: Option<String>,
     event_to_edit: Option<i64>, // Event ID to edit
+    pending_focus: Option<AutoFocusRequest>,
 
     // Countdown cards
     countdown_service: CountdownService,
@@ -200,6 +201,7 @@ impl CalendarApp {
             event_dialog_time: None,
             event_dialog_recurrence: None,
             event_to_edit: None,
+            pending_focus: None,
             countdown_service,
             countdown_storage_path,
             countdown_ui,
@@ -629,18 +631,36 @@ impl eframe::App for CalendarApp {
             ui.separator();
 
             // View content (ribbon is now rendered inside week view)
+            let mut focus_request = self.pending_focus.take();
             match self.current_view {
                 ViewType::Day => {
-                    self.render_day_view(ui, &mut countdown_requests, &active_countdown_events)
+                    self.render_day_view(
+                        ui,
+                        &mut countdown_requests,
+                        &active_countdown_events,
+                        &mut focus_request,
+                    )
                 }
                 ViewType::Week => {
-                    self.render_week_view(ui, &mut countdown_requests, &active_countdown_events, self.show_ribbon)
+                    self.render_week_view(
+                        ui,
+                        &mut countdown_requests,
+                        &active_countdown_events,
+                        self.show_ribbon,
+                        &mut focus_request,
+                    )
                 }
                 ViewType::WorkWeek => {
-                    self.render_workweek_view(ui, &mut countdown_requests, &active_countdown_events)
+                    self.render_workweek_view(
+                        ui,
+                        &mut countdown_requests,
+                        &active_countdown_events,
+                        &mut focus_request,
+                    )
                 }
                 ViewType::Month => self.render_month_view(ui),
             }
+            self.pending_focus = focus_request;
         });
 
         if !countdown_requests.is_empty() {
@@ -892,6 +912,7 @@ impl CalendarApp {
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &std::collections::HashSet<i64>,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) {
         if let Some(clicked_event) = DayView::show(
             ui,
@@ -905,6 +926,7 @@ impl CalendarApp {
             &mut self.event_dialog_recurrence,
             countdown_requests,
             active_countdown_events,
+            focus_request,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -919,6 +941,7 @@ impl CalendarApp {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &std::collections::HashSet<i64>,
         show_ribbon: bool,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) {
         // Get all-day events for the ribbon
         let all_day_events = if show_ribbon {
@@ -964,6 +987,7 @@ impl CalendarApp {
             active_countdown_events,
             show_ribbon,
             &all_day_events,
+            focus_request,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -977,6 +1001,7 @@ impl CalendarApp {
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &std::collections::HashSet<i64>,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) {
         let all_day_events = if self.show_ribbon {
             use chrono::TimeZone;
@@ -1025,6 +1050,7 @@ impl CalendarApp {
             active_countdown_events,
             self.show_ribbon,
             &all_day_events,
+            focus_request,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =
@@ -1077,6 +1103,7 @@ impl CalendarApp {
             } else {
                 match event_service.create(first_event.clone()) {
                     Ok(created_event) => {
+                        self.focus_on_event(&created_event);
                         if let Some(event_id) = created_event.id {
                             self.event_to_edit = Some(event_id);
                             self.show_event_dialog = true;
@@ -1128,6 +1155,7 @@ impl CalendarApp {
 
             match event_service.create(event) {
                 Ok(created_event) => {
+                    self.focus_on_event(&created_event);
                     imported_count += 1;
 
                     if self.settings.auto_create_countdown_on_import
@@ -1216,7 +1244,14 @@ impl CalendarApp {
 
     // Placeholder dialog renderers
     fn render_event_dialog(&mut self, ctx: &egui::Context) {
-        if let Some(ref mut state) = self.event_dialog_state {
+        if self.event_dialog_state.is_none() {
+            // No state - shouldn't happen, but close dialog if it does
+            self.show_event_dialog = false;
+            return;
+        }
+
+        let (saved_event, auto_create_card, was_new_event, event_saved) = {
+            let state = self.event_dialog_state.as_mut().expect("dialog state just checked");
             let EventDialogResult { saved_event } = render_event_dialog(
                 ctx,
                 state,
@@ -1226,22 +1261,26 @@ impl CalendarApp {
             );
 
             let auto_create_card = state.create_countdown && state.event_id.is_none();
+            let was_new_event = state.event_id.is_none();
             let event_saved = saved_event.is_some();
-            if let Some(event) = saved_event {
-                if auto_create_card {
-                    self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
-                }
-                self.sync_cards_from_event(&event);
-            }
+            (saved_event, auto_create_card, was_new_event, event_saved)
+        };
 
-            // If saved, clear the dialog state
-            if event_saved || !self.show_event_dialog {
-                self.event_dialog_state = None;
-                self.event_dialog_time = None;
+        if let Some(event) = saved_event {
+            if auto_create_card {
+                self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
             }
-        } else {
-            // No state - shouldn't happen, but close dialog if it does
-            self.show_event_dialog = false;
+            self.sync_cards_from_event(&event);
+
+            if was_new_event {
+                self.focus_on_event(&event);
+            }
+        }
+
+        // If saved, clear the dialog state
+        if event_saved || !self.show_event_dialog {
+            self.event_dialog_state = None;
+            self.event_dialog_time = None;
         }
     }
 
@@ -1507,6 +1546,13 @@ impl CalendarApp {
                     self.countdown_service.update_app_window_geometry(geometry);
                 }
             }
+        }
+    }
+
+    fn focus_on_event(&mut self, event: &Event) {
+        self.current_date = event.start.date_naive();
+        if matches!(self.current_view, ViewType::Day | ViewType::Week | ViewType::WorkWeek) {
+            self.pending_focus = Some(AutoFocusRequest::from_event(event));
         }
     }
 

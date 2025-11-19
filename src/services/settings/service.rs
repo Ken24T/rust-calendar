@@ -22,7 +22,8 @@ impl<'a> SettingsService<'a> {
                 "SELECT id, theme, first_day_of_week, time_format, date_format,
                     show_my_day, my_day_position_right, show_ribbon, current_view,
                     default_event_duration, first_day_of_work_week, last_day_of_work_week,
-                    default_event_start_time, default_card_width, default_card_height
+                    default_event_start_time, default_card_width, default_card_height,
+                    auto_create_countdown_on_import, edit_before_import
              FROM settings WHERE id = 1",
                 [],
                 |row| Ok(row_to_settings(row)?),

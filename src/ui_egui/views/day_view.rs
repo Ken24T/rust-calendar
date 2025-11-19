@@ -1,5 +1,5 @@
 use chrono::{Local, NaiveDate, NaiveTime, Timelike};
-use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Align, Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
@@ -9,7 +9,7 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::theme::CalendarTheme;
-use crate::ui_egui::views::CountdownRequest;
+use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
 
 pub struct DayView;
 
@@ -26,6 +26,7 @@ impl DayView {
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let is_today = *current_date == today;
@@ -123,6 +124,7 @@ impl DayView {
                     countdown_requests,
                     active_countdown_events,
                     &time_palette,
+                    focus_request,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -144,6 +146,7 @@ impl DayView {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         palette: &TimeGridPalette,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
@@ -197,6 +200,7 @@ impl DayView {
                     date,
                     time,
                     hour,
+                    slot_end,
                     is_hour_start,
                     &starting_events,
                     &continuing_events,
@@ -208,6 +212,7 @@ impl DayView {
                     countdown_requests,
                     active_countdown_events,
                     palette,
+                    focus_request,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -261,6 +266,7 @@ impl DayView {
         date: NaiveDate,
         time: NaiveTime,
         hour: i64,
+        slot_end: NaiveTime,
         is_hour_start: bool,
         starting_events: &[&Event],   // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
@@ -272,6 +278,7 @@ impl DayView {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         palette: &TimeGridPalette,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) -> Option<Event> {
         let mut clicked_event: Option<Event> = None;
 
@@ -297,6 +304,8 @@ impl DayView {
             let desired_size = Vec2::new(ui.available_width(), 40.0);
             let drag_sense = Sense::click_and_drag().union(Sense::hover());
             let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
+
+            Self::maybe_focus_slot(ui, rect, date, time, slot_end, focus_request);
 
             let hour_bg = palette.hour_bg;
             let regular_bg = palette.regular_bg;
@@ -724,5 +733,21 @@ impl DayView {
         let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
 
         Some(Color32::from_rgb(r, g, b))
+    }
+
+    fn maybe_focus_slot(
+        ui: &mut egui::Ui,
+        rect: Rect,
+        date: NaiveDate,
+        slot_start: NaiveTime,
+        slot_end: NaiveTime,
+        focus_request: &mut Option<AutoFocusRequest>,
+    ) {
+        if let Some(target) = focus_request.as_ref() {
+            if target.matches_slot(date, slot_start, slot_end) {
+                ui.scroll_to_rect(rect.expand2(Vec2::new(0.0, 20.0)), Some(Align::Center));
+                *focus_request = None;
+            }
+        }
     }
 }

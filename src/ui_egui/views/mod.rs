@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime};
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 
 use crate::models::event::Event;
 
@@ -18,6 +18,47 @@ pub struct CountdownRequest {
     pub color: Option<String>,
     pub body: Option<String>,
     pub display_label: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AutoFocusRequest {
+    pub date: NaiveDate,
+    pub time: Option<NaiveTime>,
+}
+
+impl AutoFocusRequest {
+    pub fn from_event(event: &Event) -> Self {
+        Self {
+            date: event.start.date_naive(),
+            time: (!event.all_day).then(|| event.start.time()),
+        }
+    }
+
+    pub fn matches_slot(
+        &self,
+        date: NaiveDate,
+        slot_start: NaiveTime,
+        slot_end: NaiveTime,
+    ) -> bool {
+        if self.date != date {
+            return false;
+        }
+
+        let target_time = self
+            .time
+            .unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap());
+
+        let target_secs = target_time.num_seconds_from_midnight();
+        let slot_start_secs = slot_start.num_seconds_from_midnight();
+        let slot_end_secs = slot_end.num_seconds_from_midnight();
+
+        // slot_end for final slot can be 23:59:59, so treat it as inclusive.
+        if slot_start_secs <= target_secs && target_secs < slot_end_secs {
+            return true;
+        }
+
+        slot_end_secs == target_secs
+    }
 }
 
 /// Returns the start/end timestamps for the portion of `event` that should appear on `date`.

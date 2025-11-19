@@ -1,5 +1,5 @@
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Timelike, Weekday};
-use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Align, Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
@@ -9,7 +9,7 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::theme::CalendarTheme;
-use crate::ui_egui::views::{event_time_segment_for_date, CountdownRequest};
+use crate::ui_egui::views::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 
 pub struct WorkWeekView;
 
@@ -28,6 +28,7 @@ impl WorkWeekView {
         active_countdown_events: &HashSet<i64>,
         show_ribbon: bool,
         all_day_events: &[Event],
+        focus_request: &mut Option<AutoFocusRequest>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let day_strip_palette = DayStripPalette::from_theme(theme);
@@ -239,12 +240,29 @@ impl WorkWeekView {
                     countdown_requests,
                     active_countdown_events,
                     &grid_palette,
+                    focus_request,
                 ) {
                     clicked_event = Some(event);
                 }
             });
 
         clicked_event
+    }
+
+    fn maybe_focus_slot(
+        ui: &mut egui::Ui,
+        rect: Rect,
+        date: NaiveDate,
+        slot_start: NaiveTime,
+        slot_end: NaiveTime,
+        focus_request: &mut Option<AutoFocusRequest>,
+    ) {
+        if let Some(target) = focus_request.as_ref() {
+            if target.matches_slot(date, slot_start, slot_end) {
+                ui.scroll_to_rect(rect.expand2(Vec2::new(0.0, 20.0)), Some(Align::Center));
+                *focus_request = None;
+            }
+        }
     }
 
     fn render_ribbon_event(
@@ -387,6 +405,7 @@ impl WorkWeekView {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         palette: &TimeGridPalette,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
@@ -472,6 +491,7 @@ impl WorkWeekView {
                             col_width,
                             *date,
                             time,
+                            slot_end,
                             is_hour_start,
                             &starting_events,
                             &continuing_events,
@@ -483,6 +503,7 @@ impl WorkWeekView {
                             countdown_requests,
                             active_countdown_events,
                             palette,
+                            focus_request,
                         ) {
                             clicked_event = Some(event);
                         }
@@ -544,6 +565,7 @@ impl WorkWeekView {
         col_width: f32,
         date: NaiveDate,
         time: NaiveTime,
+        slot_end: NaiveTime,
         is_hour_start: bool,
         starting_events: &[&Event],   // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
@@ -555,6 +577,7 @@ impl WorkWeekView {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         palette: &TimeGridPalette,
+        focus_request: &mut Option<AutoFocusRequest>,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let is_today = date == today;
@@ -563,6 +586,15 @@ impl WorkWeekView {
         // Use union of click and hover to capture both left and right clicks
         let drag_sense = Sense::click_and_drag().union(Sense::hover());
         let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
+
+        Self::maybe_focus_slot(
+            ui,
+            rect,
+            date,
+            time,
+            slot_end,
+            focus_request,
+        );
 
         let regular_bg = palette.regular_bg;
         let today_bg = palette.today_bg;
