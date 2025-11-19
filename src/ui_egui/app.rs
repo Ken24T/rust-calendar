@@ -23,6 +23,7 @@ use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::CountdownRequest;
 use chrono::{Datelike, Local, NaiveDate};
+use directories::ProjectDirs;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,7 +74,24 @@ impl CalendarApp {
         // Initialize database and leak it for 'static lifetime
         // This is necessary because eframe requires 'static App implementations
         let database = {
-            let db = Database::new("calendar.db").expect("Failed to create database connection");
+            // Use separate database files for debug and release builds
+            #[cfg(debug_assertions)]
+            let db_path = "calendar.db".to_string();
+            
+            #[cfg(not(debug_assertions))]
+            let db_path = {
+                // For release builds, use AppData directory
+                if let Some(proj_dirs) = ProjectDirs::from("com", "KenBoyle", "RustCalendar") {
+                    let data_dir = proj_dirs.data_dir();
+                    std::fs::create_dir_all(data_dir).expect("Failed to create data directory");
+                    data_dir.join("calendar.db").to_string_lossy().to_string()
+                } else {
+                    // Fallback to current directory if AppData not available
+                    "calendar_prod.db".to_string()
+                }
+            };
+            
+            let db = Database::new(&db_path).expect("Failed to create database connection");
 
             // Initialize schema (create tables and insert defaults)
             db.initialize_schema()

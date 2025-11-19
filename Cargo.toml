@@ -22,6 +22,7 @@ path = "src/main.rs"
 eframe = { version = "0.28", default-features = true }
 egui = "0.28"
 egui_extras = { version = "0.28", features = ["datepicker", "image"] }
+png = "0.17"
 
 # Database
 rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
@@ -84,11 +85,17 @@ criterion = "0.5"                # Benchmarking framework
 # Coverage (install separately: cargo install cargo-tarpaulin)
 # cargo-tarpaulin provides code coverage reports
 
+[build-dependencies]
+embed-resource = "2.4"
+
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+# Hide console window on Windows for release builds
+[target.'cfg(windows)'.build-dependencies]
 
 [profile.dev]
 opt-level = 0
