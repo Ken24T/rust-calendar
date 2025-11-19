@@ -12,11 +12,13 @@ impl NotificationService {
     }
 
     /// Check if notifications are enabled
+    #[allow(dead_code)]
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 
     /// Enable or disable notifications
+    #[allow(dead_code)]
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
@@ -48,6 +50,7 @@ impl NotificationService {
     }
 
     /// Show a simple notification with a title and body
+    #[allow(dead_code)]
     pub fn show_simple(&self, title: &str, body: &str) -> Result<()> {
         if !self.enabled {
             return Ok(());

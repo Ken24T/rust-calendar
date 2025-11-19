@@ -517,17 +517,20 @@ impl CountdownService {
     }
 
     /// Returns mutable notification config for settings updates
+    #[allow(dead_code)]
     pub fn notification_config_mut(&mut self) -> &mut CountdownNotificationConfig {
         self.dirty = true;
         &mut self.notification_config
     }
 
     /// Returns auto-dismiss defaults for external use
+    #[allow(dead_code)]
     pub fn auto_dismiss_defaults(&self) -> &CountdownAutoDismissConfig {
         &self.auto_dismiss_defaults
     }
 
     /// Returns mutable auto-dismiss defaults for settings updates
+    #[allow(dead_code)]
     pub fn auto_dismiss_defaults_mut(&mut self) -> &mut CountdownAutoDismissConfig {
         self.dirty = true;
         &mut self.auto_dismiss_defaults
