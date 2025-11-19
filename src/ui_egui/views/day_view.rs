@@ -2,12 +2,13 @@ use chrono::{Local, NaiveDate, NaiveTime, Timelike};
 use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
-use super::palette::DayStripPalette;
+use super::palette::{DayStripPalette, TimeGridPalette};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
+use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
 
 pub struct DayView;
@@ -18,6 +19,7 @@ impl DayView {
         current_date: &mut NaiveDate,
         database: &'static Database,
         settings: &Settings,
+        theme: &CalendarTheme,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
@@ -27,7 +29,8 @@ impl DayView {
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let is_today = *current_date == today;
-        let day_strip_palette = DayStripPalette::from_ui(ui);
+        let day_strip_palette = DayStripPalette::from_theme(theme);
+        let time_palette = TimeGridPalette::from_theme(theme);
 
         // Get events for this day
         let event_service = EventService::new(database.connection());
@@ -119,6 +122,7 @@ impl DayView {
                     event_dialog_recurrence,
                     countdown_requests,
                     active_countdown_events,
+                    &time_palette,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -139,6 +143,7 @@ impl DayView {
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
+        palette: &TimeGridPalette,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
@@ -202,6 +207,7 @@ impl DayView {
                     event_dialog_recurrence,
                     countdown_requests,
                     active_countdown_events,
+                    palette,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -265,6 +271,7 @@ impl DayView {
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
+        palette: &TimeGridPalette,
     ) -> Option<Event> {
         let mut clicked_event: Option<Event> = None;
 
@@ -291,25 +298,11 @@ impl DayView {
             let drag_sense = Sense::click_and_drag().union(Sense::hover());
             let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
 
-            let dark_mode = ui.style().visuals.dark_mode;
-            let (hour_bg, regular_bg, hour_line_color, slot_line_color, hover_overlay) =
-                if dark_mode {
-                    (
-                        Color32::from_gray(45),
-                        Color32::from_gray(40),
-                        Color32::from_gray(60),
-                        Color32::from_gray(50),
-                        Color32::from_rgba_unmultiplied(100, 150, 255, 30),
-                    )
-                } else {
-                    (
-                        Color32::from_rgb(235, 235, 235),
-                        Color32::from_rgb(245, 245, 245),
-                        Color32::from_rgb(210, 210, 210),
-                        Color32::from_rgb(230, 230, 230),
-                        Color32::from_rgba_unmultiplied(80, 120, 200, 25),
-                    )
-                };
+            let hour_bg = palette.hour_bg;
+            let regular_bg = palette.regular_bg;
+            let hour_line_color = palette.hour_line;
+            let slot_line_color = palette.slot_line;
+            let hover_overlay = palette.hover_overlay;
 
             // Background
             let bg_color = if is_hour_start { hour_bg } else { regular_bg };

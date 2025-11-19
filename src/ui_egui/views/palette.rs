@@ -1,4 +1,17 @@
-use egui::{Color32, Ui};
+use crate::ui_egui::theme::CalendarTheme;
+use egui::Color32;
+
+fn with_alpha(color: Color32, alpha: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
+}
+
+fn blend(a: Color32, b: Color32, t: f32) -> Color32 {
+    let t = t.clamp(0.0, 1.0);
+    let lerp = |c1: u8, c2: u8| -> u8 {
+        ((c1 as f32 * (1.0 - t)) + (c2 as f32 * t)).round() as u8
+    };
+    Color32::from_rgb(lerp(a.r(), b.r()), lerp(a.g(), b.g()), lerp(a.b(), b.b()))
+}
 
 #[derive(Clone, Copy)]
 pub(crate) struct CalendarCellPalette {
@@ -14,35 +27,17 @@ pub(crate) struct CalendarCellPalette {
 }
 
 impl CalendarCellPalette {
-    pub fn from_ui(ui: &Ui) -> Self {
-        Self::from_dark_mode(ui.style().visuals.dark_mode)
-    }
-
-    fn from_dark_mode(dark_mode: bool) -> Self {
-        if dark_mode {
-            Self {
-                regular_bg: Color32::from_gray(40),
-                weekend_bg: Color32::from_gray(35),
-                today_bg: Color32::from_rgb(60, 90, 150),
-                empty_bg: Color32::from_gray(30),
-                border: Color32::from_gray(60),
-                today_border: Color32::from_rgb(100, 130, 200),
-                text: Color32::LIGHT_GRAY,
-                today_text: Color32::WHITE,
-                hover_border: Color32::from_rgb(100, 150, 255),
-            }
-        } else {
-            Self {
-                regular_bg: Color32::from_rgb(246, 248, 252),
-                weekend_bg: Color32::from_rgb(236, 240, 248),
-                today_bg: Color32::from_rgb(221, 235, 255),
-                empty_bg: Color32::from_rgb(236, 239, 245),
-                border: Color32::from_rgb(205, 210, 220),
-                today_border: Color32::from_rgb(118, 156, 224),
-                text: Color32::from_rgb(55, 65, 85),
-                today_text: Color32::from_rgb(30, 45, 90),
-                hover_border: Color32::from_rgb(90, 140, 220),
-            }
+    pub fn from_theme(theme: &CalendarTheme) -> Self {
+        Self {
+            regular_bg: theme.day_background,
+            weekend_bg: theme.weekend_background,
+            today_bg: theme.today_background,
+            empty_bg: theme.calendar_background,
+            border: theme.day_border,
+            today_border: theme.today_border,
+            text: theme.text_primary,
+            today_text: theme.text_primary,
+            hover_border: with_alpha(theme.today_border, if theme.is_dark { 160 } else { 120 }),
         }
     }
 }
@@ -63,39 +58,51 @@ pub(crate) struct DayStripPalette {
 }
 
 impl DayStripPalette {
-    pub fn from_ui(ui: &Ui) -> Self {
-        Self::from_dark_mode(ui.style().visuals.dark_mode)
+    pub fn from_theme(theme: &CalendarTheme) -> Self {
+        Self {
+            strip_bg: blend(theme.app_background, theme.calendar_background, 0.5),
+            strip_border: theme.day_border,
+            accent_line: theme.today_border,
+            cell_bg: theme.day_background,
+            today_cell_bg: theme.today_background,
+            text: theme.text_primary,
+            date_text: theme.text_secondary,
+            today_text: theme.text_primary,
+            today_date_text: theme.text_secondary,
+            badge_bg: theme.today_border,
+            badge_text: if theme.is_dark {
+                Color32::from_rgb(20, 20, 20)
+            } else {
+                Color32::from_rgb(245, 245, 245)
+            },
+        }
     }
+}
 
-    fn from_dark_mode(dark_mode: bool) -> Self {
-        if dark_mode {
-            Self {
-                strip_bg: Color32::from_rgb(30, 33, 41),
-                strip_border: Color32::from_rgb(55, 60, 72),
-                accent_line: Color32::from_rgb(100, 150, 255),
-                cell_bg: Color32::from_rgb(40, 44, 54),
-                today_cell_bg: Color32::from_rgb(60, 90, 150),
-                text: Color32::from_rgb(215, 220, 232),
-                date_text: Color32::from_rgb(140, 146, 160),
-                today_text: Color32::from_rgb(240, 245, 255),
-                today_date_text: Color32::from_rgb(200, 220, 255),
-                badge_bg: Color32::from_rgb(100, 150, 255),
-                badge_text: Color32::from_rgb(20, 24, 36),
-            }
-        } else {
-            Self {
-                strip_bg: Color32::from_rgb(245, 248, 255),
-                strip_border: Color32::from_rgb(210, 215, 230),
-                accent_line: Color32::from_rgb(130, 170, 240),
-                cell_bg: Color32::from_rgb(255, 255, 255),
-                today_cell_bg: Color32::from_rgb(227, 237, 255),
-                text: Color32::from_rgb(55, 65, 90),
-                date_text: Color32::from_rgb(115, 125, 150),
-                today_text: Color32::from_rgb(40, 70, 120),
-                today_date_text: Color32::from_rgb(70, 105, 165),
-                badge_bg: Color32::from_rgb(120, 160, 230),
-                badge_text: Color32::WHITE,
-            }
+#[derive(Clone, Copy)]
+pub(crate) struct TimeGridPalette {
+    pub hour_bg: Color32,
+    pub regular_bg: Color32,
+    pub weekend_bg: Color32,
+    pub today_bg: Color32,
+    pub hour_line: Color32,
+    pub slot_line: Color32,
+    pub divider: Color32,
+    pub hover_overlay: Color32,
+}
+
+impl TimeGridPalette {
+    pub fn from_theme(theme: &CalendarTheme) -> Self {
+        let divider = with_alpha(theme.day_border, 220);
+        Self {
+            hour_bg: blend(theme.calendar_background, theme.day_background, 0.4),
+            regular_bg: theme.day_background,
+            weekend_bg: theme.weekend_background,
+            today_bg: theme.today_background,
+            hour_line: theme.day_border,
+            slot_line: with_alpha(theme.day_border, 170),
+            divider,
+            hover_overlay: with_alpha(theme.today_border, if theme.is_dark { 60 } else { 30 }),
         }
     }
 }

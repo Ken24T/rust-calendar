@@ -2,12 +2,13 @@ use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Timelike};
 use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
-use super::palette::DayStripPalette;
+use super::palette::{DayStripPalette, TimeGridPalette};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
+use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::{event_time_segment_for_date, CountdownRequest};
 
 pub struct WeekView;
@@ -18,6 +19,7 @@ impl WeekView {
         current_date: &mut NaiveDate,
         database: &'static Database,
         settings: &Settings,
+        theme: &CalendarTheme,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_time: &mut Option<NaiveTime>,
@@ -28,7 +30,8 @@ impl WeekView {
         all_day_events: &[Event],
     ) -> Option<Event> {
         let today = Local::now().date_naive();
-        let day_strip_palette = DayStripPalette::from_ui(ui);
+        let day_strip_palette = DayStripPalette::from_theme(theme);
+        let grid_palette = TimeGridPalette::from_theme(theme);
 
         // Get week start based on settings
         let week_start = Self::get_week_start(*current_date, settings.first_day_of_week);
@@ -244,6 +247,7 @@ impl WeekView {
                     event_dialog_recurrence,
                     countdown_requests,
                     active_countdown_events,
+                    &grid_palette,
                 ) {
                     clicked_event = Some(event);
                 }
@@ -396,6 +400,7 @@ impl WeekView {
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
+        palette: &TimeGridPalette,
     ) -> Option<Event> {
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
@@ -491,6 +496,7 @@ impl WeekView {
                             event_dialog_recurrence,
                             countdown_requests,
                             active_countdown_events,
+                            palette,
                         ) {
                             clicked_event = Some(event);
                         }
@@ -561,6 +567,7 @@ impl WeekView {
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
+        palette: &TimeGridPalette,
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let is_today = date == today;
@@ -575,36 +582,13 @@ impl WeekView {
         // Add manual context menu handling with secondary_clicked
         let show_context_menu = response.secondary_clicked();
 
-        let dark_mode = ui.style().visuals.dark_mode;
-        let (
-            regular_bg,
-            today_bg,
-            weekend_bg,
-            hour_line_color,
-            slot_line_color,
-            divider_color,
-            hover_overlay,
-        ) = if dark_mode {
-            (
-                Color32::from_gray(40),
-                Color32::from_rgb(50, 70, 100),
-                Color32::from_gray(35),
-                Color32::from_gray(60),
-                Color32::from_gray(50),
-                Color32::from_gray(50),
-                Color32::from_rgba_unmultiplied(100, 150, 255, 30),
-            )
-        } else {
-            (
-                Color32::from_rgb(245, 245, 245),
-                Color32::from_rgb(222, 236, 255),
-                Color32::from_rgb(235, 238, 244),
-                Color32::from_rgb(210, 210, 210),
-                Color32::from_rgb(230, 230, 230),
-                Color32::from_rgb(210, 210, 210),
-                Color32::from_rgba_unmultiplied(80, 120, 200, 25),
-            )
-        };
+        let regular_bg = palette.regular_bg;
+        let today_bg = palette.today_bg;
+        let weekend_bg = palette.weekend_bg;
+        let hour_line_color = palette.hour_line;
+        let slot_line_color = palette.slot_line;
+        let divider_color = palette.divider;
+        let hover_overlay = palette.hover_overlay;
 
         // Background
         let bg_color = if is_today {

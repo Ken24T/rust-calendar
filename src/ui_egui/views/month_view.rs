@@ -6,6 +6,7 @@ use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::ui_egui::theme::CalendarTheme;
 
 pub struct MonthView;
 
@@ -15,6 +16,7 @@ impl MonthView {
         current_date: &mut NaiveDate,
         database: &'static Database,
         settings: &Settings,
+        theme: &CalendarTheme,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
@@ -58,7 +60,7 @@ impl MonthView {
         // Build calendar grid (6 rows of 7 days)
         let mut day_counter = 1 - first_weekday;
 
-        let palette = CalendarCellPalette::from_ui(ui);
+        let palette = CalendarCellPalette::from_theme(theme);
 
         egui::Grid::new("month_grid")
             .spacing([spacing, spacing])

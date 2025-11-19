@@ -3,6 +3,7 @@ use egui::{Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::CalendarCellPalette;
 use crate::models::settings::Settings;
+use crate::ui_egui::theme::CalendarTheme;
 
 #[allow(dead_code)]
 pub struct QuarterView;
@@ -16,6 +17,7 @@ impl QuarterView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         settings: &Settings,
+        theme: &CalendarTheme,
     ) {
         let today = Local::now().date_naive();
 
@@ -65,6 +67,7 @@ impl QuarterView {
                         event_dialog_date,
                         event_dialog_recurrence,
                         settings,
+                        theme,
                     );
                 });
             }
@@ -79,6 +82,7 @@ impl QuarterView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         settings: &Settings,
+        theme: &CalendarTheme,
     ) {
         // Calculate calendar grid based on first_day_of_week setting
         let first_weekday = (month_date.weekday().num_days_from_sunday() as i32
@@ -90,7 +94,7 @@ impl QuarterView {
         // Build mini calendar grid
         let mut day_counter = 1 - first_weekday;
 
-        let palette = CalendarCellPalette::from_ui(ui);
+        let palette = CalendarCellPalette::from_theme(theme);
 
         ui.vertical(|ui| {
             egui::Grid::new(format!("quarter_grid_{}", month_date.month()))

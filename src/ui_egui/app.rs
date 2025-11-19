@@ -62,6 +62,9 @@ pub struct CalendarApp {
     // Ribbon state (mirrors self.settings.show_ribbon)
     show_ribbon: bool,
 
+    // Currently applied theme colors
+    active_theme: CalendarTheme,
+
     // Event dialog state
     event_dialog_state: Option<EventDialogState>,
     event_dialog_date: Option<NaiveDate>,
@@ -181,7 +184,7 @@ impl CalendarApp {
         
         let backup_manager_state = BackupManagerState::new(db_path_for_backup);
 
-        let app = Self {
+        let mut app = Self {
             database,
             settings,
             current_view,
@@ -202,6 +205,7 @@ impl CalendarApp {
             countdown_ui,
             pending_root_geometry,
             notification_service,
+            active_theme: CalendarTheme::light(),
         };
 
         // Apply theme from database (including custom themes)
@@ -221,29 +225,25 @@ impl CalendarApp {
         }
     }
 
-    fn apply_theme(ctx: &egui::Context, settings: &Settings) {
-        // Try to load custom theme from database
-        // Note: We need a database reference, but we're in a static method
-        // For now, we'll just apply basic Light/Dark themes
-        // Custom themes are applied directly in render_theme_manager
-        let visuals = if settings.theme.to_lowercase().contains("dark") {
-            egui::Visuals::dark()
+    fn fallback_theme_for_settings(settings: &Settings) -> CalendarTheme {
+        if settings.theme.to_lowercase().contains("dark") {
+            CalendarTheme::dark()
         } else {
-            egui::Visuals::light()
-        };
-
-        ctx.set_visuals(visuals);
+            CalendarTheme::light()
+        }
     }
 
-    fn apply_theme_from_db(&self, ctx: &egui::Context) {
+    fn apply_theme_from_db(&mut self, ctx: &egui::Context) {
         let theme_service = ThemeService::new(self.database);
 
-        // Try to load the theme
         if let Ok(theme) = theme_service.get_theme(&self.settings.theme) {
             theme.apply_to_context(ctx);
+            self.active_theme = theme;
         } else {
-            log::warn!("Theme '{}' not found, using default.", self.settings.theme);
-            Self::apply_theme(ctx, &self.settings);
+            log::warn!("Theme '{}' not found, using fallback.", self.settings.theme);
+            let fallback = Self::fallback_theme_for_settings(&self.settings);
+            fallback.apply_to_context(ctx);
+            self.active_theme = fallback;
         }
     }
 }
@@ -252,153 +252,213 @@ impl eframe::App for CalendarApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Handle drag-and-drop of ICS files from file system
         ctx.input(|i| {
-            if !i.raw.dropped_files.is_empty() {
-                for file in &i.raw.dropped_files {
-                    // Only handle files dropped from file system (with a path)
-                    if let Some(path) = &file.path {
-                        match std::fs::read_to_string(path) {
-                            Ok(ics_content) => {
-                                // Check if it looks like ICS content
-                                if ics_content.contains("BEGIN:VCALENDAR") || ics_content.contains("BEGIN:VEVENT") {
-                                    use crate::services::icalendar::import;
-                                    use crate::services::event::EventService;
-                                    
-                                    match import::from_str(&ics_content) {
-                                        Ok(events) => {
-                                            let service = EventService::new(self.database.connection());
-                                            let mut imported_count = 0;
-                                            let mut failed_count = 0;
-                                            let mut duplicate_count = 0;
-                                            
-                                            // If edit_before_import is enabled, open the first event for editing
-                                            if self.settings.edit_before_import && !events.is_empty() {
-                                                let first_event = &events[0];
-                                                
-                                                // Check if it's a duplicate
-                                                let existing_events = service.list_all().unwrap_or_default();
-                                                let is_duplicate = existing_events.iter().any(|e| {
-                                                    e.title == first_event.title &&
-                                                    e.start == first_event.start &&
-                                                    e.end == first_event.end
-                                                });
-                                                
-                                                if is_duplicate {
-                                                    log::info!("Skipping duplicate event (edit mode): '{}'", first_event.title);
-                                                } else {
-                                                    // Create the event first so it has an ID
-                                                    match service.create(first_event.clone()) {
-                                                        Ok(created_event) => {
-                                                            // Open it for editing
-                                                            if let Some(event_id) = created_event.id {
-                                                                self.event_to_edit = Some(event_id);
-                                                                self.show_event_dialog = true;
-                                                                log::info!("Opening event '{}' for editing", first_event.title);
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            log::error!("Failed to create event for editing: {}", e);
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // Note: Only the first event is opened for editing
-                                                if events.len() > 1 {
-                                                    log::info!("Note: Only the first event was opened for editing. {} other events were not imported.", events.len() - 1);
-                                                }
-                                            } else {
-                                                // Direct import without editing
-                                                for event in events {
-                                                    let event_title = event.title.clone();
-                                                    let event_start = event.start;
-                                                    let event_end = event.end;
-                                                    
-                                                    // Check for duplicates (same title, start, and end time)
-                                                    let existing_events = service.list_all().unwrap_or_default();
-                                                    let is_duplicate = existing_events.iter().any(|e| {
-                                                        e.title == event_title &&
-                                                        e.start == event_start &&
-                                                        e.end == event_end
-                                                    });
-                                                    
-                                                    if is_duplicate {
-                                                        log::info!("Skipping duplicate event: '{}'", event_title);
-                                                        duplicate_count += 1;
-                                                        continue;
-                                                    }
-                                                    
-                                                    match service.create(event) {
-                                                    Ok(created_event) => {
-                                                        imported_count += 1;
-                                                        
-                                                        // Auto-create countdown if enabled and event is in the future
-                                                        if self.settings.auto_create_countdown_on_import && event_start > Local::now() {
-                                                            if let Some(event_id) = created_event.id {
-                                                                // Parse color string to RgbaColor if present
-                                                                use crate::services::countdown::RgbaColor;
-                                                                let event_color = created_event.color.as_ref()
-                                                                    .and_then(|hex| {
-                                                                        if hex.starts_with('#') && hex.len() == 7 {
-                                                                            u32::from_str_radix(&hex[1..], 16)
-                                                                                .ok()
-                                                                                .map(|rgb| {
-                                                                                    let r = ((rgb >> 16) & 0xFF) as u8;
-                                                                                    let g = ((rgb >> 8) & 0xFF) as u8;
-                                                                                    let b = (rgb & 0xFF) as u8;
-                                                                                    RgbaColor::new(r, g, b, 255)
-                                                                                })
-                                                                        } else {
-                                                                            None
-                                                                        }
-                                                                    });
-                                                                
-                                                                let location_label = created_event
-                                                                    .location
-                                                                    .as_deref()
-                                                                    .map(str::trim)
-                                                                    .filter(|loc| !loc.is_empty())
-                                                                    .map(|loc| loc.to_string());
+            if i.raw.dropped_files.is_empty() {
+                return;
+            }
 
-                                                                let card_id = self.countdown_service.create_card(
-                                                                    Some(event_id),
-                                                                    created_event.title.clone(),
-                                                                    created_event.start,
-                                                                    event_color,
-                                                                    created_event.description.clone(),
-                                                                    self.settings.default_card_width,
-                                                                    self.settings.default_card_height,
-                                                                );
+            for file in &i.raw.dropped_files {
+                let Some(path) = &file.path else {
+                    continue;
+                };
 
-                                                                if let Some(label) = location_label {
-                                                                    self.countdown_service
-                                                                        .set_auto_title_override(card_id, Some(label));
+                match std::fs::read_to_string(path) {
+                    Ok(ics_content) => {
+                        if !(ics_content.contains("BEGIN:VCALENDAR")
+                            || ics_content.contains("BEGIN:VEVENT"))
+                        {
+                            log::warn!(
+                                "Dropped file {:?} does not look like an iCalendar file",
+                                path
+                            );
+                            continue;
+                        }
+
+                        use crate::services::event::EventService;
+                        use crate::services::icalendar::import;
+
+                        match import::from_str(&ics_content) {
+                            Ok(events) => {
+                                if events.is_empty() {
+                                    log::info!("No events found in dropped file {:?}", path);
+                                    continue;
+                                }
+
+                                let service = EventService::new(self.database.connection());
+                                let mut imported_count = 0;
+                                let mut failed_count = 0;
+                                let mut duplicate_count = 0;
+
+                                if self.settings.edit_before_import {
+                                    let first_event = &events[0];
+                                    let existing_events = service.list_all().unwrap_or_default();
+                                    let is_duplicate = existing_events.iter().any(|e| {
+                                        e.title == first_event.title
+                                            && e.start == first_event.start
+                                            && e.end == first_event.end
+                                    });
+
+                                    if is_duplicate {
+                                        log::info!(
+                                            "Skipping duplicate event (edit mode): '{}'",
+                                            first_event.title
+                                        );
+                                    } else {
+                                        match service.create(first_event.clone()) {
+                                            Ok(created_event) => {
+                                                if let Some(event_id) = created_event.id {
+                                                    self.event_to_edit = Some(event_id);
+                                                    self.show_event_dialog = true;
+                                                    log::info!(
+                                                        "Opening event '{}' for editing",
+                                                        first_event.title
+                                                    );
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::error!(
+                                                    "Failed to create event for editing: {}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+
+                                    if events.len() > 1 {
+                                        log::info!(
+                                            "Note: Only the first event was opened for editing. {} other events were not imported.",
+                                            events.len() - 1
+                                        );
+                                    }
+                                } else {
+                                    for event in events {
+                                        let event_title = event.title.clone();
+                                        let event_start = event.start;
+                                        let event_end = event.end;
+
+                                        let existing_events = service.list_all().unwrap_or_default();
+                                        let is_duplicate = existing_events.iter().any(|e| {
+                                            e.title == event_title
+                                                && e.start == event_start
+                                                && e.end == event_end
+                                        });
+
+                                        if is_duplicate {
+                                            log::info!(
+                                                "Skipping duplicate event: '{}'",
+                                                event_title
+                                            );
+                                            duplicate_count += 1;
+                                            continue;
+                                        }
+
+                                        match service.create(event) {
+                                            Ok(created_event) => {
+                                                imported_count += 1;
+
+                                                if self.settings.auto_create_countdown_on_import
+                                                    && event_start > Local::now()
+                                                {
+                                                    if let Some(event_id) = created_event.id {
+                                                        use crate::services::countdown::RgbaColor;
+
+                                                        let event_color = created_event
+                                                            .color
+                                                            .as_ref()
+                                                            .and_then(|hex| {
+                                                                if hex.starts_with('#')
+                                                                    && hex.len() == 7
+                                                                {
+                                                                    u32::from_str_radix(
+                                                                        &hex[1..],
+                                                                        16,
+                                                                    )
+                                                                    .ok()
+                                                                    .map(|rgb| {
+                                                                        let r =
+                                                                            ((rgb >> 16)
+                                                                                & 0xFF)
+                                                                                as u8;
+                                                                        let g =
+                                                                            ((rgb >> 8)
+                                                                                & 0xFF)
+                                                                                as u8;
+                                                                        let b =
+                                                                            (rgb & 0xFF)
+                                                                                as u8;
+                                                                        RgbaColor::new(
+                                                                            r, g, b, 255,
+                                                                        )
+                                                                    })
+                                                                } else {
+                                                                    None
                                                                 }
-                                                            }
+                                                            });
+
+                                                        let location_label = created_event
+                                                            .location
+                                                            .as_deref()
+                                                            .map(str::trim)
+                                                            .filter(|loc| !loc.is_empty())
+                                                            .map(|loc| loc.to_string());
+
+                                                        let card_id = self.countdown_service.create_card(
+                                                            Some(event_id),
+                                                            created_event.title.clone(),
+                                                            created_event.start,
+                                                            event_color,
+                                                            created_event.description.clone(),
+                                                            self.settings.default_card_width,
+                                                            self.settings.default_card_height,
+                                                        );
+
+                                                        if let Some(label) = location_label {
+                                                            self.countdown_service
+                                                                .set_auto_title_override(
+                                                                    card_id,
+                                                                    Some(label),
+                                                                );
                                                         }
                                                     }
-                                                    Err(e) => {
-                                                        log::error!("Failed to import dropped event '{}': {}", event_title, e);
-                                                        failed_count += 1;
-                                                    }
                                                 }
                                             }
-                                            
-                                                if duplicate_count > 0 {
-                                                    log::info!("Drag-and-drop import complete: {} events imported, {} duplicates skipped, {} failed", imported_count, duplicate_count, failed_count);
-                                                } else {
-                                                    log::info!("Drag-and-drop import complete: {} events imported, {} failed", imported_count, failed_count);
-                                                }
+                                            Err(e) => {
+                                                log::error!(
+                                                    "Failed to import dropped event '{}': {}",
+                                                    event_title,
+                                                    e
+                                                );
+                                                failed_count += 1;
                                             }
                                         }
-                                        Err(e) => {
-                                            log::error!("Failed to parse dropped ICS content: {}", e);
-                                        }
+                                    }
+
+                                    if duplicate_count > 0 {
+                                        log::info!(
+                                            "Import complete: {} events imported, {} duplicates skipped, {} failed",
+                                            imported_count,
+                                            duplicate_count,
+                                            failed_count
+                                        );
+                                    } else {
+                                        log::info!(
+                                            "Import complete: {} events imported, {} failed",
+                                            imported_count,
+                                            failed_count
+                                        );
                                     }
                                 }
                             }
                             Err(e) => {
-                                log::error!("Failed to read dropped file {:?}: {}", path, e);
+                                log::error!(
+                                    "Failed to parse dropped ICS file {:?}: {}",
+                                    path,
+                                    e
+                                );
                             }
                         }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to read dropped file {:?}: {}", path, e);
                     }
                 }
             }
@@ -1093,6 +1153,7 @@ impl CalendarApp {
             &mut self.current_date,
             self.database,
             &self.settings,
+            &self.active_theme,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_time,
@@ -1149,6 +1210,7 @@ impl CalendarApp {
             &mut self.current_date,
             self.database,
             &self.settings,
+            &self.active_theme,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_time,
@@ -1176,6 +1238,7 @@ impl CalendarApp {
             &mut self.current_date,
             self.database,
             &self.settings,
+            &self.active_theme,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_time,
@@ -1196,6 +1259,7 @@ impl CalendarApp {
             &mut self.current_date,
             self.database,
             &self.settings,
+            &self.active_theme,
             &mut self.show_event_dialog,
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
@@ -1402,8 +1466,11 @@ impl CalendarApp {
                 // Apply the custom theme or built-in theme
                 if let Ok(theme) = theme_service.get_theme(&name) {
                     theme.apply_to_context(ctx);
+                    self.active_theme = theme;
                 } else {
-                    Self::apply_theme(ctx, &self.settings);
+                    let fallback = Self::fallback_theme_for_settings(&self.settings);
+                    fallback.apply_to_context(ctx);
+                    self.active_theme = fallback;
                 }
 
                 // Save to database
@@ -1437,6 +1504,7 @@ impl CalendarApp {
                     // Apply the new theme
                     self.settings.theme = name.clone();
                     theme.apply_to_context(ctx);
+                    self.active_theme = theme.clone();
 
                     // Save settings
                     let settings_service = SettingsService::new(self.database);
