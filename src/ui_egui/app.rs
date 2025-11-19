@@ -978,6 +978,39 @@ impl CalendarApp {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &std::collections::HashSet<i64>,
     ) {
+        let all_day_events = if self.show_ribbon {
+            use chrono::TimeZone;
+
+            let week_start =
+                WorkWeekView::get_week_start(self.current_date, self.settings.first_day_of_week);
+            let work_week_dates = WorkWeekView::get_work_week_dates(week_start, &self.settings);
+
+            if let (Some(first_day), Some(last_day)) =
+                (work_week_dates.first(), work_week_dates.last())
+            {
+                let event_service = EventService::new(self.database.connection());
+                let start_datetime = Local
+                    .from_local_datetime(&first_day.and_hms_opt(0, 0, 0).unwrap())
+                    .single()
+                    .unwrap();
+                let end_datetime = Local
+                    .from_local_datetime(&last_day.and_hms_opt(23, 59, 59).unwrap())
+                    .single()
+                    .unwrap();
+
+                event_service
+                    .expand_recurring_events(start_datetime, end_datetime)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|e| e.all_day)
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+
         if let Some(clicked_event) = WorkWeekView::show(
             ui,
             &mut self.current_date,
@@ -990,6 +1023,8 @@ impl CalendarApp {
             &mut self.event_dialog_recurrence,
             countdown_requests,
             active_countdown_events,
+            self.show_ribbon,
+            &all_day_events,
         ) {
             // User clicked on an event - open dialog with event details
             self.event_dialog_state =

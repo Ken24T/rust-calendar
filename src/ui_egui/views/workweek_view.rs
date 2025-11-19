@@ -26,6 +26,8 @@ impl WorkWeekView {
         event_dialog_recurrence: &mut Option<String>,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
+        show_ribbon: bool,
+        all_day_events: &[Event],
     ) -> Option<Event> {
         let today = Local::now().date_naive();
         let day_strip_palette = DayStripPalette::from_theme(theme);
@@ -60,6 +62,8 @@ impl WorkWeekView {
                 top: 10.0,
                 bottom: 10.0,
             });
+
+        let mut clicked_event = None;
 
         let header_response = header_frame.show(ui, |strip_ui| {
             strip_ui.horizontal(|ui| {
@@ -132,6 +136,80 @@ impl WorkWeekView {
                     }
                 }
             });
+
+            if show_ribbon && !all_day_events.is_empty() {
+                strip_ui.add_space(4.0);
+
+                strip_ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+
+                    // Time label placeholder to align with grid
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(time_label_width, 0.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |_ui| {},
+                    );
+
+                    ui.add_space(spacing);
+
+                    for (i, date) in work_week_dates.iter().enumerate() {
+                        ui.vertical(|day_ui| {
+                            day_ui.set_width(col_width);
+
+                            let mut multi_day_events = Vec::new();
+                            let mut single_day_events = Vec::new();
+
+                            for event in all_day_events {
+                                let start_date = event.start.date_naive();
+                                let end_date = event.end.date_naive();
+
+                                if start_date != end_date {
+                                    if start_date <= *date && end_date >= *date {
+                                        multi_day_events.push(event);
+                                    }
+                                } else if start_date == *date {
+                                    single_day_events.push(event);
+                                }
+                            }
+
+                            let found_event =
+                                !multi_day_events.is_empty() || !single_day_events.is_empty();
+
+                            for event in multi_day_events {
+                                if let Some(ev) = Self::render_ribbon_event(
+                                    day_ui,
+                                    event,
+                                    countdown_requests,
+                                    active_countdown_events,
+                                    database,
+                                ) {
+                                    clicked_event = Some(ev);
+                                }
+                            }
+
+                            for event in single_day_events {
+                                if let Some(ev) = Self::render_ribbon_event(
+                                    day_ui,
+                                    event,
+                                    countdown_requests,
+                                    active_countdown_events,
+                                    database,
+                                ) {
+                                    clicked_event = Some(ev);
+                                }
+                            }
+
+                            if !found_event {
+                                day_ui.allocate_space(Vec2::new(col_width, 24.0));
+                            }
+                        });
+
+                        if i < work_week_dates.len() - 1 {
+                            ui.add_space(spacing);
+                        }
+                    }
+                });
+            }
         });
 
         let header_rect = header_response.response.rect;
@@ -144,7 +222,6 @@ impl WorkWeekView {
         ui.add_space(8.0);
 
         // Scrollable time slots
-        let mut clicked_event = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -166,6 +243,132 @@ impl WorkWeekView {
                     clicked_event = Some(event);
                 }
             });
+
+        clicked_event
+    }
+
+    fn render_ribbon_event(
+        ui: &mut egui::Ui,
+        event: &Event,
+        countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &HashSet<i64>,
+        database: &'static Database,
+    ) -> Option<Event> {
+        let event_color = event
+            .color
+            .as_deref()
+            .and_then(Self::parse_color)
+            .unwrap_or(Color32::from_rgb(100, 150, 200));
+
+        let available_width = ui.available_width();
+
+        let event_frame = egui::Frame::none()
+            .fill(event_color)
+            .rounding(egui::Rounding::same(4.0))
+            .inner_margin(egui::Margin::symmetric(6.0, 3.0));
+
+        let response = event_frame
+            .show(ui, |ui| {
+                ui.set_min_width(available_width - 8.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(&event.title)
+                            .color(Color32::WHITE)
+                            .size(12.0),
+                    );
+
+                    if event.start.date_naive() != event.end.date_naive() {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "({} - {})",
+                                event.start.format("%b %d"),
+                                event.end.format("%b %d")
+                            ))
+                            .color(Color32::from_gray(220))
+                            .size(10.0),
+                        );
+                    }
+                });
+            })
+            .response;
+
+        let interactive_response = response.interact(Sense::click());
+        let mut clicked_event = None;
+
+        interactive_response.context_menu(|ui| {
+            ui.set_min_width(150.0);
+            ui.label(format!("Event: {}", event.title));
+            ui.separator();
+
+            if ui.button("✏ Edit").clicked() {
+                clicked_event = Some(event.clone());
+                ui.close_menu();
+            }
+
+            if event.recurrence_rule.is_some() {
+                if ui.button("🗑 Delete This Occurrence").clicked() {
+                    if let Some(id) = event.id {
+                        let service = EventService::new(database.connection());
+                        let _ = service.delete_occurrence(id, event.start);
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("🗑 Delete All Occurrences").clicked() {
+                    if let Some(id) = event.id {
+                        let service = EventService::new(database.connection());
+                        let _ = service.delete(id);
+                    }
+                    ui.close_menu();
+                }
+            } else if ui.button("🗑 Delete").clicked() {
+                if let Some(id) = event.id {
+                    let service = EventService::new(database.connection());
+                    let _ = service.delete(id);
+                }
+                ui.close_menu();
+            }
+
+            if ui.button("📤 Export this event").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name(&format!("{}.ics", event.title.replace(' ', "_")))
+                    .add_filter("iCalendar", &["ics"])
+                    .save_file()
+                {
+                    use crate::services::icalendar::export;
+                    match export::single(event) {
+                        Ok(ics_content) => {
+                            if let Err(e) = std::fs::write(&path, ics_content) {
+                                log::error!("Failed to write ICS file: {}", e);
+                            } else {
+                                log::info!("Exported event to {:?}", path);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to export event: {}", e);
+                        }
+                    }
+                }
+                ui.close_menu();
+            }
+
+            if event.start > Local::now() {
+                let timer_exists = event
+                    .id
+                    .map(|id| active_countdown_events.contains(&id))
+                    .unwrap_or(false);
+                if timer_exists {
+                    ui.label(
+                        egui::RichText::new("Countdown already exists")
+                            .italics()
+                            .color(Color32::from_gray(150))
+                            .size(11.0),
+                    );
+                } else if ui.button("⏱ Create Countdown").clicked() {
+                    countdown_requests.push(CountdownRequest::from_event(event));
+                    ui.close_menu();
+                }
+            }
+        });
 
         clicked_event
     }
@@ -297,34 +500,35 @@ impl WorkWeekView {
         let now = Local::now();
         let now_date = now.date_naive();
         let now_time = now.time();
-        
+
         // Check if current time is within the work week
         if let Some(day_index) = work_week_dates.iter().position(|d| *d == now_date) {
             // Calculate Y position based on time
             let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
             let slots_since_midnight = (hours_since_midnight * 4.0).floor() as usize; // 4 slots per hour
             let slot_offset = (hours_since_midnight * 4.0) - slots_since_midnight as f32;
-            
+
             // Each slot is 30.0 pixels high, calculate relative Y
             let relative_y = (slots_since_midnight as f32 * 30.0) + (slot_offset * 30.0);
-            
+
             // Get the UI's current position to calculate absolute coordinates
             let ui_top = ui.min_rect().top();
             let y_position = ui_top + relative_y;
-            
+
             // Calculate X position for the day column
             let ui_left = ui.min_rect().left();
-            let x_start = ui_left + time_label_width + spacing + (day_index as f32 * (col_width + spacing));
+            let x_start = ui_left + time_label_width + spacing
+                + (day_index as f32 * (col_width + spacing));
             let x_end = x_start + col_width;
-            
+
             // Draw the indicator line
             let painter = ui.painter();
             let line_color = Color32::from_rgb(255, 100, 100); // Red indicator
             let circle_center = egui::pos2(x_start - 4.0, y_position);
-            
+
             // Draw a small circle at the start
             painter.circle_filled(circle_center, 3.0, line_color);
-            
+
             // Draw the horizontal line
             painter.line_segment(
                 [egui::pos2(x_start, y_position), egui::pos2(x_end, y_position)],
@@ -596,7 +800,10 @@ impl WorkWeekView {
 
         // Check drag_started BEFORE clicked to ensure drag detection works
         if response.drag_started() {
-            eprintln!("[workweek_view] drag_started detected, pointer_hit: {:?}", pointer_hit.as_ref().map(|(_, e)| &e.title));
+            eprintln!(
+                "[workweek_view] drag_started detected, pointer_hit: {:?}",
+                pointer_hit.as_ref().map(|(_, e)| &e.title)
+            );
             if let Some((hit_rect, event)) = pointer_hit {
                 eprintln!("[workweek_view] event under pointer: {}", event.title);
                 if event.recurrence_rule.is_none() {
@@ -612,7 +819,10 @@ impl WorkWeekView {
                         ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
                     }
                 } else {
-                    eprintln!("[workweek_view] cannot drag recurring event: {}", event.title);
+                    eprintln!(
+                        "[workweek_view] cannot drag recurring event: {}",
+                        event.title
+                    );
                 }
             } else {
                 eprintln!("[workweek_view] drag_started but no event under pointer");
@@ -716,13 +926,16 @@ impl WorkWeekView {
         bg_rect
     }
 
-    fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
+    pub(crate) fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
         let weekday = date.weekday().num_days_from_sunday() as i64;
         let offset = (weekday - first_day_of_week as i64 + 7) % 7;
         date - Duration::days(offset)
     }
 
-    fn get_work_week_dates(week_start: NaiveDate, settings: &Settings) -> Vec<NaiveDate> {
+    pub(crate) fn get_work_week_dates(
+        week_start: NaiveDate,
+        settings: &Settings,
+    ) -> Vec<NaiveDate> {
         let first_day = Self::weekday_from_num(settings.first_day_of_work_week);
         let last_day = Self::weekday_from_num(settings.last_day_of_work_week);
 

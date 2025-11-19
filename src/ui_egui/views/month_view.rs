@@ -123,8 +123,13 @@ impl MonthView {
                             let day_events: Vec<&Event> = events
                                 .iter()
                                 .filter(|e| {
-                                    let event_date = e.start.date_naive();
-                                    event_date == date
+                                    if e.all_day {
+                                        let start_date = e.start.date_naive();
+                                        let end_date = e.end.date_naive();
+                                        date >= start_date && date <= end_date
+                                    } else {
+                                        e.start.date_naive() == date
+                                    }
                                 })
                                 .collect();
 
@@ -389,9 +394,6 @@ impl MonthView {
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
-            .into_iter()
-            .filter(|e| !e.all_day)
-            .collect()
     }
 
     fn get_days_in_month(year: i32, month: u32) -> i32 {
