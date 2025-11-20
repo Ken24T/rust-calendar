@@ -1,4 +1,6 @@
+use super::state::ViewType;
 use super::CalendarApp;
+use crate::models::event::Event;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::MonthView;
@@ -168,5 +170,53 @@ impl CalendarApp {
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
         );
+    }
+
+    pub(super) fn focus_on_event(&mut self, event: &Event) {
+        self.current_date = event.start.date_naive();
+        if matches!(
+            self.current_view,
+            ViewType::Day | ViewType::Week | ViewType::WorkWeek
+        ) {
+            self.pending_focus = Some(AutoFocusRequest::from_event(event));
+        }
+    }
+
+    pub(super) fn focus_on_current_time_if_visible(&mut self) {
+        if !matches!(
+            self.current_view,
+            ViewType::Day | ViewType::Week | ViewType::WorkWeek
+        ) {
+            return;
+        }
+
+        let now = Local::now();
+        let today = now.date_naive();
+
+        let should_focus = match self.current_view {
+            ViewType::Day => self.current_date == today,
+            ViewType::Week => {
+                let week_start =
+                    WeekView::get_week_start(self.current_date, self.settings.first_day_of_week);
+                let week_end = week_start + chrono::Duration::days(6);
+                today >= week_start && today <= week_end
+            }
+            ViewType::WorkWeek => {
+                let week_start = WorkWeekView::get_week_start(
+                    self.current_date,
+                    self.settings.first_day_of_week,
+                );
+                let work_week_dates = WorkWeekView::get_work_week_dates(week_start, &self.settings);
+                work_week_dates.contains(&today)
+            }
+            ViewType::Month => false,
+        };
+
+        if should_focus {
+            self.pending_focus = Some(AutoFocusRequest {
+                date: today,
+                time: Some(now.time()),
+            });
+        }
     }
 }

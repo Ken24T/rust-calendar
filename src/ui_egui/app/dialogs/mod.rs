@@ -1,0 +1,155 @@
+use super::CalendarApp;
+use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
+use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
+use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogResult};
+use crate::ui_egui::settings_dialog::render_settings_dialog;
+use crate::ui_egui::theme::CalendarTheme;
+use crate::ui_egui::views::CountdownRequest;
+
+impl CalendarApp {
+    pub(super) fn render_event_dialog(&mut self, ctx: &egui::Context) {
+        if self.event_dialog_state.is_none() {
+            self.show_event_dialog = false;
+            return;
+        }
+
+        let (saved_event, auto_create_card, was_new_event, event_saved) = {
+            let state = self
+                .event_dialog_state
+                .as_mut()
+                .expect("dialog state just checked");
+            let EventDialogResult { saved_event } = render_event_dialog(
+                ctx,
+                state,
+                self.context.database(),
+                &self.settings,
+                &mut self.show_event_dialog,
+            );
+
+            let auto_create_card = state.create_countdown && state.event_id.is_none();
+            let was_new_event = state.event_id.is_none();
+            let event_saved = saved_event.is_some();
+            (saved_event, auto_create_card, was_new_event, event_saved)
+        };
+
+        if let Some(event) = saved_event {
+            if auto_create_card {
+                self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
+            }
+            self.sync_cards_from_event(&event);
+
+            if was_new_event {
+                self.focus_on_event(&event);
+            }
+        }
+
+        if event_saved || !self.show_event_dialog {
+            self.event_dialog_state = None;
+            self.event_dialog_time = None;
+        }
+    }
+
+    pub(super) fn render_settings_dialog(&mut self, ctx: &egui::Context) {
+        let response = render_settings_dialog(
+            ctx,
+            &mut self.settings,
+            self.context.database(),
+            &mut self.show_settings_dialog,
+        );
+
+        if response.show_ribbon_changed || response.saved {
+            self.show_ribbon = self.settings.show_ribbon;
+        }
+
+        if response.saved {
+            self.apply_theme_from_db(ctx);
+        }
+    }
+
+    pub(super) fn render_theme_dialog(&mut self, ctx: &egui::Context) {
+        let theme_service = self.context.theme_service();
+        let available_themes = theme_service.list_themes().unwrap_or_default();
+
+        let action = render_theme_dialog(
+            ctx,
+            &mut self.state.theme_dialog_state,
+            &available_themes,
+            &self.settings.theme,
+        );
+
+        match action {
+            ThemeDialogAction::None => {}
+            ThemeDialogAction::CreateTheme => {
+                let base_theme = theme_service
+                    .get_theme(&self.settings.theme)
+                    .unwrap_or_else(|_| CalendarTheme::light());
+                self.state.theme_creator_state.open_create(base_theme);
+            }
+            ThemeDialogAction::EditTheme(name) => {
+                if let Ok(theme) = theme_service.get_theme(&name) {
+                    self.state.theme_creator_state.open_edit(name, theme);
+                }
+            }
+            ThemeDialogAction::DeleteTheme(name) => {
+                if let Err(e) = theme_service.delete_theme(&name) {
+                    eprintln!("Failed to delete theme: {}", e);
+                } else {
+                    eprintln!("Successfully deleted theme: {}", name);
+                }
+            }
+            ThemeDialogAction::ApplyTheme(name) => {
+                self.settings.theme = name.clone();
+
+                if let Ok(theme) = theme_service.get_theme(&name) {
+                    theme.apply_to_context(ctx);
+                    self.active_theme = theme;
+                } else {
+                    let fallback = Self::fallback_theme_for_settings(&self.settings);
+                    fallback.apply_to_context(ctx);
+                    self.active_theme = fallback;
+                }
+
+                let settings_service = self.context.settings_service();
+                if let Err(e) = settings_service.update(&self.settings) {
+                    eprintln!("Failed to save theme setting: {}", e);
+                }
+            }
+            ThemeDialogAction::Close => {
+                self.state.theme_dialog_state.close();
+            }
+        }
+    }
+
+    pub(super) fn render_theme_creator(&mut self, ctx: &egui::Context) {
+        let action = render_theme_creator(ctx, &mut self.state.theme_creator_state);
+
+        match action {
+            ThemeCreatorAction::None => {}
+            ThemeCreatorAction::Save(name, theme) => {
+                let theme_service = self.context.theme_service();
+                if let Err(e) = theme_service.save_theme(&theme, &name) {
+                    eprintln!("Failed to save theme: {}", e);
+                    self.state.theme_creator_state.validation_error =
+                        Some(format!("Failed to save: {}", e));
+                    self.state.theme_creator_state.is_open = true;
+                } else {
+                    eprintln!("Successfully saved theme: {}", name);
+
+                    self.settings.theme = name.clone();
+                    theme.apply_to_context(ctx);
+                    self.active_theme = theme.clone();
+
+                    let settings_service = self.context.settings_service();
+                    if let Err(e) = settings_service.update(&self.settings) {
+                        eprintln!("Failed to save settings: {}", e);
+                    }
+
+                    self.state.theme_creator_state.close();
+                }
+            }
+            ThemeCreatorAction::Cancel => {
+                self.state.theme_creator_state.close();
+            }
+        }
+    }
+}

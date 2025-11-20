@@ -1,4 +1,4 @@
-use super::super::{geometry_changed, geometry_from_viewport_info};
+use super::super::geometry::{geometry_changed, geometry_from_viewport_info};
 use crate::services::countdown::{
     CountdownCardGeometry, CountdownCardState, CountdownNotificationConfig, CountdownWarningState,
     RgbaColor, MAX_DAYS_FONT_SIZE,

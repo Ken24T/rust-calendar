@@ -1,6 +1,7 @@
 mod render;
 mod settings;
 mod state;
+mod sync;
 
 pub(super) use state::CountdownUiState;
 

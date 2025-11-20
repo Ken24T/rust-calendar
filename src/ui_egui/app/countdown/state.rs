@@ -11,7 +11,7 @@ use egui::{self, Context};
 use log;
 use std::collections::{HashMap, HashSet};
 
-use super::super::{geometry_changed, geometry_from_viewport_info, viewport_info};
+use super::super::geometry::{geometry_changed, geometry_from_viewport_info, viewport_info};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct CountdownRenderSnapshot {
