@@ -11,6 +11,127 @@ use chrono::{Datelike, Local};
 use std::collections::HashSet;
 
 impl CalendarApp {
+    pub(super) fn render_main_panel(
+        &mut self,
+        ctx: &egui::Context,
+        countdown_requests: &mut Vec<CountdownRequest>,
+    ) {
+        let active_countdown_events: HashSet<i64> = self
+            .context
+            .countdown_service()
+            .cards()
+            .iter()
+            .filter_map(|card| card.event_id)
+            .collect();
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading(format!(
+                "{} View - {}",
+                match self.current_view {
+                    ViewType::Day => "Day",
+                    ViewType::Week => "Week",
+                    ViewType::WorkWeek => "Work Week",
+                    ViewType::Month => "Month",
+                },
+                self.current_date.format("%B %Y")
+            ));
+
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                if ui.button("◀ Previous").clicked() {
+                    self.navigate_previous();
+                }
+                if ui.button("Today    Ctrl+T").clicked() {
+                    self.jump_to_today();
+                }
+                if ui.button("Next ▶").clicked() {
+                    self.navigate_next();
+                }
+
+                ui.separator();
+
+                ui.label("Jump to:");
+
+                let month_names = [
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December",
+                ];
+                let current_month = self.current_date.month() as usize;
+                egui::ComboBox::from_id_source("month_picker")
+                    .selected_text(month_names[current_month - 1])
+                    .show_ui(ui, |ui| {
+                        for (idx, month_name) in month_names.iter().enumerate() {
+                            if ui
+                                .selectable_value(&mut (idx + 1), current_month, *month_name)
+                                .clicked()
+                            {
+                                let new_month = (idx + 1) as u32;
+                                if let Some(new_date) = chrono::NaiveDate::from_ymd_opt(
+                                    self.current_date.year(),
+                                    new_month,
+                                    1,
+                                ) {
+                                    self.current_date = new_date;
+                                }
+                            }
+                        }
+                    });
+
+                let mut year = self.current_date.year();
+                ui.add(
+                    egui::DragValue::new(&mut year)
+                        .range(1900..=2100)
+                        .speed(1.0),
+                );
+                if year != self.current_date.year() {
+                    if let Some(new_date) =
+                        chrono::NaiveDate::from_ymd_opt(year, self.current_date.month(), 1)
+                    {
+                        self.current_date = new_date;
+                    }
+                }
+            });
+
+            ui.separator();
+
+            let mut focus_request = self.pending_focus.take();
+            match self.current_view {
+                ViewType::Day => self.render_day_view(
+                    ui,
+                    countdown_requests,
+                    &active_countdown_events,
+                    &mut focus_request,
+                ),
+                ViewType::Week => self.render_week_view(
+                    ui,
+                    countdown_requests,
+                    &active_countdown_events,
+                    self.show_ribbon,
+                    &mut focus_request,
+                ),
+                ViewType::WorkWeek => self.render_workweek_view(
+                    ui,
+                    countdown_requests,
+                    &active_countdown_events,
+                    &mut focus_request,
+                ),
+                ViewType::Month => self.render_month_view(ui),
+            }
+            self.pending_focus = focus_request;
+        });
+    }
+
     pub(super) fn render_day_view(
         &mut self,
         ui: &mut egui::Ui,

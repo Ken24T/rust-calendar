@@ -3,14 +3,6 @@ use anyhow::Result;
 use egui::{Color32, RichText};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackupAction {
-    None,
-    CreateBackup,
-    RestoreBackup(usize), // Index in backup list
-    DeleteBackup(usize),  // Index in backup list
-}
-
 pub struct BackupManagerState {
     pub show_dialog: bool,
     backups: Vec<BackupInfo>,

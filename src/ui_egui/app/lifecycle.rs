@@ -12,7 +12,7 @@ use crate::ui_egui::dialogs::backup_manager::{render_backup_manager_dialog, Back
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
-use chrono::{Datelike, Local};
+use chrono::Local;
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
 use std::path::PathBuf;
@@ -184,127 +184,7 @@ impl CalendarApp {
         self.render_menu_bar(ctx);
 
         let mut countdown_requests: Vec<CountdownRequest> = Vec::new();
-
-        let active_countdown_events: std::collections::HashSet<i64> = self
-            .context
-            .countdown_service()
-            .cards()
-            .iter()
-            .filter_map(|card| card.event_id)
-            .collect();
-
-        // Main content area
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading(format!(
-                "{} View - {}",
-                match self.current_view {
-                    ViewType::Day => "Day",
-                    ViewType::Week => "Week",
-                    ViewType::WorkWeek => "Work Week",
-                    ViewType::Month => "Month",
-                },
-                self.current_date.format("%B %Y")
-            ));
-
-            ui.separator();
-
-            // Navigation buttons
-            ui.horizontal(|ui| {
-                if ui.button("◀ Previous").clicked() {
-                    self.navigate_previous();
-                }
-                if ui.button("Today    Ctrl+T").clicked() {
-                    self.jump_to_today();
-                }
-                if ui.button("Next ▶").clicked() {
-                    self.navigate_next();
-                }
-
-                ui.separator();
-
-                // Year/Month picker
-                ui.label("Jump to:");
-
-                // Month dropdown
-                let month_names = [
-                    "January",
-                    "February",
-                    "March",
-                    "April",
-                    "May",
-                    "June",
-                    "July",
-                    "August",
-                    "September",
-                    "October",
-                    "November",
-                    "December",
-                ];
-                let current_month = self.current_date.month() as usize;
-                egui::ComboBox::from_id_source("month_picker")
-                    .selected_text(month_names[current_month - 1])
-                    .show_ui(ui, |ui| {
-                        for (idx, month_name) in month_names.iter().enumerate() {
-                            if ui
-                                .selectable_value(&mut (idx + 1), current_month, *month_name)
-                                .clicked()
-                            {
-                                let new_month = (idx + 1) as u32;
-                                if let Some(new_date) = chrono::NaiveDate::from_ymd_opt(
-                                    self.current_date.year(),
-                                    new_month,
-                                    1,
-                                ) {
-                                    self.current_date = new_date;
-                                }
-                            }
-                        }
-                    });
-
-                // Year spinner
-                let mut year = self.current_date.year();
-                ui.add(
-                    egui::DragValue::new(&mut year)
-                        .range(1900..=2100)
-                        .speed(1.0),
-                );
-                if year != self.current_date.year() {
-                    if let Some(new_date) =
-                        chrono::NaiveDate::from_ymd_opt(year, self.current_date.month(), 1)
-                    {
-                        self.current_date = new_date;
-                    }
-                }
-            });
-
-            ui.separator();
-
-            // View content (ribbon is now rendered inside week view)
-            let mut focus_request = self.pending_focus.take();
-            match self.current_view {
-                ViewType::Day => self.render_day_view(
-                    ui,
-                    &mut countdown_requests,
-                    &active_countdown_events,
-                    &mut focus_request,
-                ),
-                ViewType::Week => self.render_week_view(
-                    ui,
-                    &mut countdown_requests,
-                    &active_countdown_events,
-                    self.show_ribbon,
-                    &mut focus_request,
-                ),
-                ViewType::WorkWeek => self.render_workweek_view(
-                    ui,
-                    &mut countdown_requests,
-                    &active_countdown_events,
-                    &mut focus_request,
-                ),
-                ViewType::Month => self.render_month_view(ui),
-            }
-            self.pending_focus = focus_request;
-        });
+        self.render_main_panel(ctx, &mut countdown_requests);
 
         if !countdown_requests.is_empty() {
             self.consume_countdown_requests(countdown_requests);
