@@ -4,6 +4,48 @@ use crate::services::countdown::RgbaColor;
 use chrono::Local;
 
 impl CalendarApp {
+    pub(super) fn handle_file_drops(&mut self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            if i.raw.dropped_files.is_empty() {
+                return;
+            }
+
+            for file in &i.raw.dropped_files {
+                let Some(path) = &file.path else {
+                    continue;
+                };
+
+                match std::fs::read_to_string(path) {
+                    Ok(ics_content) => {
+                        if !(ics_content.contains("BEGIN:VCALENDAR")
+                            || ics_content.contains("BEGIN:VEVENT"))
+                        {
+                            log::warn!(
+                                "Dropped file {:?} does not look like an iCalendar file",
+                                path
+                            );
+                            continue;
+                        }
+
+                        use crate::services::icalendar::import;
+
+                        match import::from_str(&ics_content) {
+                            Ok(events) => {
+                                self.handle_ics_import(events, "drag-and-drop");
+                            }
+                            Err(e) => {
+                                log::error!("Failed to parse dropped ICS file {:?}: {}", path, e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to read dropped file {:?}: {}", path, e);
+                    }
+                }
+            }
+        });
+    }
+
     pub(super) fn handle_ics_import(&mut self, events: Vec<Event>, source_label: &str) {
         if events.is_empty() {
             log::info!("No events found in {} import", source_label);

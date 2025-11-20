@@ -5,6 +5,7 @@ mod dialogs;
 mod geometry;
 mod imports;
 mod lifecycle;
+mod menu;
 mod navigation;
 mod notifications;
 mod state;

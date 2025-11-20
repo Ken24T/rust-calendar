@@ -12,7 +12,7 @@ use crate::ui_egui::dialogs::backup_manager::{render_backup_manager_dialog, Back
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::{Datelike, Local};
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
 use std::path::PathBuf;
@@ -110,46 +110,7 @@ impl CalendarApp {
     }
 
     pub(super) fn handle_update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Handle drag-and-drop of ICS files from file system
-        ctx.input(|i| {
-            if i.raw.dropped_files.is_empty() {
-                return;
-            }
-
-            for file in &i.raw.dropped_files {
-                let Some(path) = &file.path else {
-                    continue;
-                };
-
-                match std::fs::read_to_string(path) {
-                    Ok(ics_content) => {
-                        if !(ics_content.contains("BEGIN:VCALENDAR")
-                            || ics_content.contains("BEGIN:VEVENT"))
-                        {
-                            log::warn!(
-                                "Dropped file {:?} does not look like an iCalendar file",
-                                path
-                            );
-                            continue;
-                        }
-
-                        use crate::services::icalendar::import;
-
-                        match import::from_str(&ics_content) {
-                            Ok(events) => {
-                                self.handle_ics_import(events, "drag-and-drop");
-                            }
-                            Err(e) => {
-                                log::error!("Failed to parse dropped ICS file {:?}: {}", path, e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("Failed to read dropped file {:?}: {}", path, e);
-                    }
-                }
-            }
-        });
+        self.handle_file_drops(ctx);
 
         // Handle keyboard shortcuts
         ctx.input(|i| {
@@ -180,7 +141,7 @@ impl CalendarApp {
 
             // Ctrl+T - Today (navigate to current date)
             if i.modifiers.ctrl && i.key_pressed(egui::Key::T) {
-                self.current_date = Local::now().date_naive();
+                self.jump_to_today();
             }
 
             // Ctrl+S - Settings
@@ -202,262 +163,25 @@ impl CalendarApp {
             {
                 // Left/Right - Navigate backwards/forwards
                 if i.key_pressed(egui::Key::ArrowLeft) {
-                    self.current_date = match self.current_view {
-                        ViewType::Day => self.current_date - chrono::Duration::days(1),
-                        ViewType::Week | ViewType::WorkWeek => {
-                            self.current_date - chrono::Duration::weeks(1)
-                        }
-                        ViewType::Month => {
-                            // Navigate to previous month
-                            let new_date = if self.current_date.month() == 1 {
-                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1)
-                                    .unwrap()
-                            } else {
-                                NaiveDate::from_ymd_opt(
-                                    self.current_date.year(),
-                                    self.current_date.month() - 1,
-                                    1,
-                                )
-                                .unwrap()
-                            };
-                            // Try to keep the same day, fall back to last day of month if invalid
-                            let max_day = chrono::NaiveDate::from_ymd_opt(
-                                new_date.year(),
-                                new_date.month() + 1,
-                                1,
-                            )
-                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                            .pred_opt()
-                            .unwrap()
-                            .day();
-                            let day = self.current_date.day().min(max_day);
-                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
-                        }
-                    };
+                    self.navigate_previous();
                 }
                 if i.key_pressed(egui::Key::ArrowRight) {
-                    self.current_date = match self.current_view {
-                        ViewType::Day => self.current_date + chrono::Duration::days(1),
-                        ViewType::Week | ViewType::WorkWeek => {
-                            self.current_date + chrono::Duration::weeks(1)
-                        }
-                        ViewType::Month => {
-                            // Navigate to next month
-                            let new_date = if self.current_date.month() == 12 {
-                                NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1).unwrap()
-                            } else {
-                                NaiveDate::from_ymd_opt(
-                                    self.current_date.year(),
-                                    self.current_date.month() + 1,
-                                    1,
-                                )
-                                .unwrap()
-                            };
-                            // Try to keep the same day, fall back to last day of month if invalid
-                            let max_day = chrono::NaiveDate::from_ymd_opt(
-                                new_date.year(),
-                                new_date.month() + 1,
-                                1,
-                            )
-                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                            .pred_opt()
-                            .unwrap()
-                            .day();
-                            let day = self.current_date.day().min(max_day);
-                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
-                        }
-                    };
+                    self.navigate_next();
                 }
 
                 // Up/Down - Navigate up/down (weeks in week view, months in month view)
                 if i.key_pressed(egui::Key::ArrowUp) {
-                    self.current_date = match self.current_view {
-                        ViewType::Day => self.current_date - chrono::Duration::days(7), // Move by week in day view
-                        ViewType::Week | ViewType::WorkWeek => {
-                            self.current_date - chrono::Duration::weeks(1)
-                        }
-                        ViewType::Month => {
-                            // Navigate to previous month (same as left arrow)
-                            let new_date = if self.current_date.month() == 1 {
-                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1)
-                                    .unwrap()
-                            } else {
-                                NaiveDate::from_ymd_opt(
-                                    self.current_date.year(),
-                                    self.current_date.month() - 1,
-                                    1,
-                                )
-                                .unwrap()
-                            };
-                            let max_day = chrono::NaiveDate::from_ymd_opt(
-                                new_date.year(),
-                                new_date.month() + 1,
-                                1,
-                            )
-                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                            .pred_opt()
-                            .unwrap()
-                            .day();
-                            let day = self.current_date.day().min(max_day);
-                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
-                        }
-                    };
+                    self.navigate_up();
                 }
                 if i.key_pressed(egui::Key::ArrowDown) {
-                    self.current_date = match self.current_view {
-                        ViewType::Day => self.current_date + chrono::Duration::days(7), // Move by week in day view
-                        ViewType::Week | ViewType::WorkWeek => {
-                            self.current_date + chrono::Duration::weeks(1)
-                        }
-                        ViewType::Month => {
-                            // Navigate to next month (same as right arrow)
-                            let new_date = if self.current_date.month() == 12 {
-                                NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1).unwrap()
-                            } else {
-                                NaiveDate::from_ymd_opt(
-                                    self.current_date.year(),
-                                    self.current_date.month() + 1,
-                                    1,
-                                )
-                                .unwrap()
-                            };
-                            let max_day = chrono::NaiveDate::from_ymd_opt(
-                                new_date.year(),
-                                new_date.month() + 1,
-                                1,
-                            )
-                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                            .pred_opt()
-                            .unwrap()
-                            .day();
-                            let day = self.current_date.day().min(max_day);
-                            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
-                        }
-                    };
+                    self.navigate_down();
                 }
             }
         });
 
         self.apply_pending_root_geometry(ctx);
 
-        // Top menu bar
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("💾 Backup Database...    Ctrl+B").clicked() {
-                        if let Err(e) = self.state.backup_manager_state.create_backup() {
-                            log::error!("Failed to create backup: {}", e);
-                        }
-                        ui.close_menu();
-                    }
-                    if ui.button("📂 Manage Backups...").clicked() {
-                        self.state.backup_manager_state.open();
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui.button("Exit").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-                });
-
-                ui.menu_button("Edit", |ui| {
-                    if ui.button("Settings    Ctrl+S").clicked() {
-                        self.show_settings_dialog = true;
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui.button("Import Event...").clicked() {
-                        // Import ICS file
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("iCalendar", &["ics"])
-                            .pick_file()
-                        {
-                            match std::fs::read_to_string(&path) {
-                                Ok(ics_content) => {
-                                    use crate::services::icalendar::import;
-                                    match import::from_str(&ics_content) {
-                                        Ok(events) => {
-                                            self.handle_ics_import(events, "file import dialog");
-                                        }
-                                        Err(e) => {
-                                            log::error!("Failed to parse ICS file: {}", e);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to read ICS file: {}", e);
-                                }
-                            }
-                        }
-                        ui.close_menu();
-                    }
-                });
-
-                ui.menu_button("View", |ui| {
-                    if ui
-                        .checkbox(&mut self.show_ribbon, "Show All-Day Events Ribbon")
-                        .clicked()
-                    {
-                        self.settings.show_ribbon = self.show_ribbon;
-                        let settings_service = self.context.settings_service();
-                        if let Err(err) = settings_service.update(&self.settings) {
-                            log::error!("Failed to persist ribbon setting: {err}");
-                        }
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui
-                        .selectable_label(self.current_view == ViewType::Day, "Day")
-                        .clicked()
-                    {
-                        self.current_view = ViewType::Day;
-                        self.focus_on_current_time_if_visible();
-                        ui.close_menu();
-                    }
-                    if ui
-                        .selectable_label(self.current_view == ViewType::Week, "Week")
-                        .clicked()
-                    {
-                        self.current_view = ViewType::Week;
-                        self.focus_on_current_time_if_visible();
-                        ui.close_menu();
-                    }
-                    if ui
-                        .selectable_label(self.current_view == ViewType::WorkWeek, "Work Week")
-                        .clicked()
-                    {
-                        self.current_view = ViewType::WorkWeek;
-                        self.focus_on_current_time_if_visible();
-                        ui.close_menu();
-                    }
-                    if ui
-                        .selectable_label(self.current_view == ViewType::Month, "Month")
-                        .clicked()
-                    {
-                        self.current_view = ViewType::Month;
-                        ui.close_menu();
-                    }
-                });
-
-                ui.menu_button("Theme", |ui| {
-                    if ui.button("Themes...").clicked() {
-                        self.state.theme_dialog_state.open();
-                        ui.close_menu();
-                    }
-                });
-
-                ui.menu_button("Events", |ui| {
-                    if ui.button("New Event...    Ctrl+N").clicked() {
-                        self.show_event_dialog = true;
-                        self.event_dialog_state = Some(EventDialogState::new_event(
-                            self.current_date,
-                            &self.settings,
-                        ));
-                        ui.close_menu();
-                    }
-                });
-            });
-        });
+        self.render_menu_bar(ctx);
 
         let mut countdown_requests: Vec<CountdownRequest> = Vec::new();
 
@@ -490,7 +214,7 @@ impl CalendarApp {
                     self.navigate_previous();
                 }
                 if ui.button("Today    Ctrl+T").clicked() {
-                    self.current_date = Local::now().date_naive();
+                    self.jump_to_today();
                 }
                 if ui.button("Next ▶").clicked() {
                     self.navigate_next();
