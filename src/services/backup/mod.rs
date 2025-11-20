@@ -51,24 +51,24 @@ impl BackupService {
             .context("Failed to get base directories")?
             .data_dir()
             .to_path_buf();
-        
+
         let backup_dir = app_data.join("rust-calendar").join("backups");
-        
+
         // Create directory if it doesn't exist
         if !backup_dir.exists() {
             fs::create_dir_all(&backup_dir)
                 .with_context(|| format!("Failed to create backup directory: {:?}", backup_dir))?;
         }
-        
+
         Ok(backup_dir)
     }
 
     /// Create a backup of the database file
-    /// 
+    ///
     /// # Arguments
     /// * `db_path` - Path to the database file to backup
     /// * `backup_dir` - Directory to store the backup (uses default if None)
-    /// 
+    ///
     /// # Returns
     /// Path to the created backup file
     pub fn create_backup(db_path: &Path, backup_dir: Option<&Path>) -> Result<PathBuf> {
@@ -96,19 +96,23 @@ impl BackupService {
         let backup_path = backup_dir.join(&backup_filename);
 
         // Copy database file to backup location
-        fs::copy(db_path, &backup_path)
-            .with_context(|| format!("Failed to copy database from {:?} to {:?}", db_path, backup_path))?;
+        fs::copy(db_path, &backup_path).with_context(|| {
+            format!(
+                "Failed to copy database from {:?} to {:?}",
+                db_path, backup_path
+            )
+        })?;
 
         log::info!("Created backup: {:?}", backup_path);
         Ok(backup_path)
     }
 
     /// Restore a database from a backup file
-    /// 
+    ///
     /// # Arguments
     /// * `backup_path` - Path to the backup file to restore from
     /// * `db_path` - Path where the database should be restored
-    /// 
+    ///
     /// # Safety
     /// This will overwrite the existing database file. The caller should ensure
     /// the database is not in use and ideally create a backup before restoring.
@@ -136,18 +140,22 @@ impl BackupService {
         }
 
         // Copy backup file to database location
-        fs::copy(backup_path, db_path)
-            .with_context(|| format!("Failed to restore backup from {:?} to {:?}", backup_path, db_path))?;
+        fs::copy(backup_path, db_path).with_context(|| {
+            format!(
+                "Failed to restore backup from {:?} to {:?}",
+                backup_path, db_path
+            )
+        })?;
 
         log::info!("Restored backup from {:?} to {:?}", backup_path, db_path);
         Ok(())
     }
 
     /// List all backups in the specified directory
-    /// 
+    ///
     /// # Arguments
     /// * `backup_dir` - Directory to search for backups (uses default if None)
-    /// 
+    ///
     /// # Returns
     /// Vector of BackupInfo sorted by creation date (newest first)
     pub fn list_backups(backup_dir: Option<&Path>) -> Result<Vec<BackupInfo>> {
@@ -186,7 +194,7 @@ impl BackupService {
     }
 
     /// Delete old backups, keeping only the specified number of most recent backups
-    /// 
+    ///
     /// # Arguments
     /// * `backup_dir` - Directory containing backups (uses default if None)
     /// * `keep_count` - Number of recent backups to keep
@@ -213,14 +221,17 @@ impl BackupService {
     }
 
     /// Create a backup on startup and clean up old backups
-    /// 
+    ///
     /// # Arguments
     /// * `db_path` - Path to the database file
     /// * `keep_count` - Number of backups to keep (default: 5)
-    /// 
+    ///
     /// # Returns
     /// Path to the created backup file, or None if backup creation was skipped
-    pub fn auto_backup_on_startup(db_path: &Path, keep_count: Option<usize>) -> Result<Option<PathBuf>> {
+    pub fn auto_backup_on_startup(
+        db_path: &Path,
+        keep_count: Option<usize>,
+    ) -> Result<Option<PathBuf>> {
         let keep_count = keep_count.unwrap_or(5);
 
         // Only create backup if database exists
@@ -256,14 +267,15 @@ impl BackupService {
 
     /// Verify that a file is a valid SQLite database
     fn verify_sqlite_file(path: &Path) -> Result<()> {
-        let file = fs::File::open(path)
-            .with_context(|| format!("Failed to open file: {:?}", path))?;
+        let file =
+            fs::File::open(path).with_context(|| format!("Failed to open file: {:?}", path))?;
 
         // SQLite files start with "SQLite format 3\0" (16 bytes)
         use std::io::Read;
         let mut header = [0u8; 16];
         let mut reader = std::io::BufReader::new(file);
-        reader.read_exact(&mut header)
+        reader
+            .read_exact(&mut header)
             .context("Failed to read file header")?;
 
         let sqlite_header = b"SQLite format 3\0";
@@ -343,8 +355,10 @@ mod tests {
         // Create and populate original database
         {
             let conn = rusqlite::Connection::open(&original_db).unwrap();
-            conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)", []).unwrap();
-            conn.execute("INSERT INTO test (value) VALUES (?)", ["test_value"]).unwrap();
+            conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)", [])
+                .unwrap();
+            conn.execute("INSERT INTO test (value) VALUES (?)", ["test_value"])
+                .unwrap();
         }
 
         // Create backup
@@ -357,7 +371,9 @@ mod tests {
         assert!(restored_db.exists());
 
         let conn = rusqlite::Connection::open(&restored_db).unwrap();
-        let value: String = conn.query_row("SELECT value FROM test", [], |row| row.get(0)).unwrap();
+        let value: String = conn
+            .query_row("SELECT value FROM test", [], |row| row.get(0))
+            .unwrap();
         assert_eq!(value, "test_value");
     }
 

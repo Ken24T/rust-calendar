@@ -54,7 +54,9 @@ impl CountdownUiState {
     }
 
     fn pending_geometry_target(&self, card_id: CountdownCardId) -> Option<CountdownCardGeometry> {
-        self.pending_geometry.get(&card_id).map(|state| state.target)
+        self.pending_geometry
+            .get(&card_id)
+            .map(|state| state.target)
     }
 
     fn should_hide_card_geometry(&mut self, card_id: CountdownCardId) -> bool {
@@ -140,7 +142,11 @@ impl CountdownUiState {
             match action {
                 CountdownCardUiAction::None => {}
                 CountdownCardUiAction::Delete => {
-                    log::info!("Delete action triggered for card {:?} (event {:?})", card.id, card.event_id);
+                    log::info!(
+                        "Delete action triggered for card {:?} (event {:?})",
+                        card.id,
+                        card.event_id
+                    );
                     queued_close = true;
                     removals.push(card.id);
                 }
@@ -469,7 +475,7 @@ impl CountdownUiState {
         if let Some(target_geom) = target {
             let size_matches = (sample.width - target_geom.width).abs() < 5.0
                 && (sample.height - target_geom.height).abs() < 5.0;
-            
+
             if !size_matches {
                 log::debug!(
                     "card {:?} geometry stable at {:?} but doesn't match target {:?}; continuing to enforce",
@@ -546,24 +552,24 @@ fn default_settings_geometry_for(card: &CountdownCardState) -> CountdownCardGeom
     // Try to position to the right of the card, but ensure it fits on screen
     let settings_width = 640.0;
     let settings_height = COUNTDOWN_SETTINGS_HEIGHT;
-    
+
     // Start with position to the right of the card
     let mut x = card.geometry.x + card.geometry.width + 16.0;
     let mut y = card.geometry.y;
-    
+
     // If that would go off the right edge, position to the left instead
     // Use a reasonable screen width assumption of 1920px if we can't detect
     let max_x = 1920.0 - settings_width - 20.0;
     if x + settings_width > max_x {
         x = (card.geometry.x - settings_width - 16.0).max(20.0);
     }
-    
+
     // If would go off bottom, adjust y position
     let max_y = 1080.0 - settings_height - 20.0;
     if y + settings_height > max_y {
         y = max_y.max(20.0);
     }
-    
+
     CountdownCardGeometry {
         x,
         y,

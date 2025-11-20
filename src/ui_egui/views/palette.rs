@@ -7,9 +7,7 @@ fn with_alpha(color: Color32, alpha: u8) -> Color32 {
 
 fn blend(a: Color32, b: Color32, t: f32) -> Color32 {
     let t = t.clamp(0.0, 1.0);
-    let lerp = |c1: u8, c2: u8| -> u8 {
-        ((c1 as f32 * (1.0 - t)) + (c2 as f32 * t)).round() as u8
-    };
+    let lerp = |c1: u8, c2: u8| -> u8 { ((c1 as f32 * (1.0 - t)) + (c2 as f32 * t)).round() as u8 };
     Color32::from_rgb(lerp(a.r(), b.r()), lerp(a.g(), b.g()), lerp(a.b(), b.b()))
 }
 

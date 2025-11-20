@@ -24,17 +24,19 @@ impl CalendarApp {
     }
 
     pub(super) fn persist_countdowns_if_needed(&mut self) {
-        if !self.countdown_service.is_dirty() {
+        if !self.context.countdown_service().is_dirty() {
             return;
         }
 
+        let storage_path = self.context.countdown_storage_path().to_path_buf();
         if let Err(err) = self
-            .countdown_service
-            .save_to_disk(&self.countdown_storage_path)
+            .context
+            .countdown_service_mut()
+            .save_to_disk(&storage_path)
         {
             log::error!("Failed to persist countdown cards: {err:?}");
         } else {
-            self.countdown_service.mark_clean();
+            self.context.countdown_service_mut().mark_clean();
         }
     }
 
@@ -67,9 +69,14 @@ impl CalendarApp {
             };
 
             // Check if a card already exists for this event
-            log::debug!("Checking for existing card for event {:?}, total cards in service: {}", event_id, self.countdown_service.cards().len());
+            log::debug!(
+                "Checking for existing card for event {:?}, total cards in service: {}",
+                event_id,
+                self.context.countdown_service().cards().len()
+            );
             if let Some(existing_card) = self
-                .countdown_service
+                .context
+                .countdown_service()
                 .cards()
                 .iter()
                 .find(|card| card.event_id == event_id)
@@ -102,7 +109,7 @@ impl CalendarApp {
                 self.settings.default_card_width,
                 self.settings.default_card_height
             );
-            let card_id = self.countdown_service.create_card(
+            let card_id = self.context.countdown_service_mut().create_card(
                 event_id,
                 title,
                 target_at,
@@ -112,12 +119,14 @@ impl CalendarApp {
                 self.settings.default_card_height,
             );
 
-                if let Some(label) = display_label {
-                self.countdown_service
+            if let Some(label) = display_label {
+                self.context
+                    .countdown_service_mut()
                     .set_auto_title_override(card_id, Some(label));
             }
             let geometry = self
-                .countdown_service
+                .context
+                .countdown_service()
                 .cards()
                 .iter()
                 .find(|card| card.id == card_id)

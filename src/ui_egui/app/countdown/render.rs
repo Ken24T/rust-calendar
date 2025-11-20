@@ -66,10 +66,7 @@ pub(super) fn viewport_builder_for_settings(
     let mut builder = egui::ViewportBuilder::default()
         .with_title(format!("Settings: {}", card.effective_title()))
         .with_resizable(true)
-        .with_min_inner_size(egui::vec2(
-            COUNTDOWN_SETTINGS_MIN_WIDTH,
-            400.0,
-        ));
+        .with_min_inner_size(egui::vec2(COUNTDOWN_SETTINGS_MIN_WIDTH, 400.0));
 
     if let Some(geometry) = geometry {
         builder = builder
@@ -99,7 +96,7 @@ pub(super) fn render_countdown_card_ui(
     notification_config: &CountdownNotificationConfig,
 ) -> CountdownCardUiAction {
     ctx.request_repaint_after(StdDuration::from_secs(1));
-    
+
     // Enforce size while geometry is still being set up (target_geometry present)
     // Once geometry settles (target_geometry becomes None), allow user to resize freely
     if target_geometry.is_some() {
@@ -111,7 +108,7 @@ pub(super) fn render_countdown_card_ui(
             )),
         );
     }
-    
+
     ctx.send_viewport_cmd_to(
         viewport_id,
         egui::ViewportCommand::EnableButtons {
@@ -132,25 +129,21 @@ pub(super) fn render_countdown_card_ui(
     let title_bg = rgba_to_color32(card.visuals.title_bg_color);
     let title_fg = rgba_to_color32(card.visuals.title_fg_color);
     let title_font_size = card.visuals.title_font_size.max(12.0);
-    
+
     // Apply warning state color overrides if enabled
-    let (body_bg, days_fg, stroke_color, stroke_width) = if notification_config.enabled
-        && notification_config.use_visual_warnings
-    {
-        apply_warning_colors(warning_state, card, ctx)
-    } else {
-        (
-            rgba_to_color32(card.visuals.body_bg_color),
-            rgba_to_color32(card.visuals.days_fg_color),
-            egui::Color32::from_gray(40),
-            1.0,
-        )
-    };
-    
-    let font_size = card
-        .visuals
-        .days_font_size
-        .clamp(32.0, MAX_DAYS_FONT_SIZE);
+    let (body_bg, days_fg, stroke_color, stroke_width) =
+        if notification_config.enabled && notification_config.use_visual_warnings {
+            apply_warning_colors(warning_state, card, ctx)
+        } else {
+            (
+                rgba_to_color32(card.visuals.body_bg_color),
+                rgba_to_color32(card.visuals.days_fg_color),
+                egui::Color32::from_gray(40),
+                1.0,
+            )
+        };
+
+    let font_size = card.visuals.days_font_size.clamp(32.0, MAX_DAYS_FONT_SIZE);
 
     let mut geometry_settled = false;
     if let Some(target) = target_geometry {
@@ -211,7 +204,8 @@ pub(super) fn render_countdown_card_ui(
         let inner = frame.show(ui, |ui| {
             let available = ui.available_size();
             let width = resolve_dimension(available.x, card.geometry.width, CARD_MIN_WIDTH);
-            let total_height = resolve_dimension(available.y, card.geometry.height, CARD_MIN_HEIGHT).max(60.0);
+            let total_height =
+                resolve_dimension(available.y, card.geometry.height, CARD_MIN_HEIGHT).max(60.0);
             let spacing = 4.0;
             let min_countdown_height = 36.0;
             let desired_title_height = (title_font_size * 1.4).clamp(22.0, 48.0);
@@ -260,23 +254,25 @@ pub(super) fn render_countdown_card_ui(
                     let days_remaining = (card.start_at.date_naive() - now.date_naive())
                         .num_days()
                         .max(0);
-                    
+
                     let days_text = days_remaining.to_string();
-                    
+
                     // Calculate font size based on available space and number of digits
                     let digit_count = days_text.len();
                     let available_width = width * 0.9; // Leave 10% margin
-                    
+
                     // Estimate width per character (roughly 0.6 of font size for monospace digits)
                     let estimated_text_width = font_size * 0.6 * digit_count as f32;
-                    
+
                     let adjusted_font_size = if estimated_text_width > available_width {
                         // Scale down to fit available width
-                        (available_width / (0.6 * digit_count as f32)).max(32.0).min(font_size)
+                        (available_width / (0.6 * digit_count as f32))
+                            .max(32.0)
+                            .min(font_size)
                     } else {
                         font_size
                     };
-                    
+
                     let countdown_response = countdown_ui.label(
                         egui::RichText::new(days_text)
                             .size(adjusted_font_size)
@@ -382,7 +378,8 @@ fn apply_warning_colors(
             // Critical: Red/orange with pulsing effect
             let pulse_phase = (ctx.input(|i| i.time) * 2.0) % 1.0; // 2 Hz pulse
             let pulse_alpha = (pulse_phase * 255.0) as u8;
-            let body_bg = egui::Color32::from_rgba_unmultiplied(255, 100, 100, 255 - pulse_alpha / 2);
+            let body_bg =
+                egui::Color32::from_rgba_unmultiplied(255, 100, 100, 255 - pulse_alpha / 2);
             let days_fg = egui::Color32::from_rgb(139, 0, 0); // Dark red
             let stroke_color = egui::Color32::from_rgb(200, 0, 0);
             ctx.request_repaint(); // Continuous animation

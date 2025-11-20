@@ -411,12 +411,18 @@ pub fn render_settings_dialog(
 
                 ui.horizontal(|ui| {
                     ui.add_space(label_width);
-                    ui.checkbox(&mut settings.auto_create_countdown_on_import, "Auto-create countdown cards on ICS import");
+                    ui.checkbox(
+                        &mut settings.auto_create_countdown_on_import,
+                        "Auto-create countdown cards on ICS import",
+                    );
                 });
 
                 ui.horizontal(|ui| {
                     ui.add_space(label_width);
-                    ui.checkbox(&mut settings.edit_before_import, "Open event dialog when importing/dragging ICS files");
+                    ui.checkbox(
+                        &mut settings.edit_before_import,
+                        "Open event dialog when importing/dragging ICS files",
+                    );
                 });
 
                 ui.add_space(16.0);

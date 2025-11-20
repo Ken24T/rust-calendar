@@ -281,7 +281,7 @@ impl CountdownCardState {
         thresholds: &WarningThresholds,
     ) -> CountdownWarningState {
         let remaining = self.start_at.signed_duration_since(now);
-        
+
         if remaining.num_seconds() <= 0 {
             CountdownWarningState::Starting
         } else if remaining.num_minutes() <= thresholds.critical_minutes as i64 {
@@ -303,13 +303,15 @@ impl CountdownCardState {
 
         let remaining = self.start_at.signed_duration_since(now);
         let seconds_past_start = -remaining.num_seconds();
-        
-        if self.auto_dismiss.on_event_start && seconds_past_start >= self.auto_dismiss.delay_seconds as i64 {
+
+        if self.auto_dismiss.on_event_start
+            && seconds_past_start >= self.auto_dismiss.delay_seconds as i64
+        {
             return true;
         }
-        
+
         // TODO: Implement on_event_end when we have event end times
-        
+
         false
     }
 }

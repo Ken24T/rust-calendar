@@ -136,9 +136,14 @@ impl<'a> EventService<'a> {
     }
 
     /// Add an exception date to a recurring event (deletes single occurrence).
-    pub fn delete_occurrence(&self, id: i64, occurrence_date: chrono::DateTime<Local>) -> Result<()> {
+    pub fn delete_occurrence(
+        &self,
+        id: i64,
+        occurrence_date: chrono::DateTime<Local>,
+    ) -> Result<()> {
         // Get the event
-        let mut event = self.get(id)?
+        let mut event = self
+            .get(id)?
             .ok_or_else(|| anyhow!("Event with id {} not found", id))?;
 
         // Ensure it's a recurring event
@@ -148,10 +153,12 @@ impl<'a> EventService<'a> {
 
         // Add the occurrence date to exceptions
         let mut exceptions = event.recurrence_exceptions.unwrap_or_default();
-        
+
         // Normalize to midnight for all-day events, or keep exact time
         let exception_date = if event.all_day {
-            occurrence_date.date_naive().and_hms_opt(0, 0, 0)
+            occurrence_date
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
                 .map(|dt| Local.from_local_datetime(&dt).single())
                 .flatten()
                 .unwrap_or(occurrence_date)

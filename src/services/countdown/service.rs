@@ -162,7 +162,10 @@ impl CountdownService {
         };
         log::info!(
             "create_card received: default_width={}, default_height={}, using: width={}, height={}",
-            default_width, default_height, width, height
+            default_width,
+            default_height,
+            width,
+            height
         );
 
         let id = CountdownCardId(self.next_id);
@@ -241,11 +244,7 @@ impl CountdownService {
         false
     }
 
-    pub fn set_auto_title_override(
-        &mut self,
-        id: CountdownCardId,
-        title: Option<String>,
-    ) -> bool {
+    pub fn set_auto_title_override(&mut self, id: CountdownCardId, title: Option<String>) -> bool {
         if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
             card.title_override = title;
             card.auto_title_override = card.title_override.is_some();
@@ -420,11 +419,7 @@ impl CountdownService {
         }
     }
 
-    pub fn sync_title_override_for_event(
-        &mut self,
-        event_id: i64,
-        label: Option<String>,
-    ) {
+    pub fn sync_title_override_for_event(&mut self, event_id: i64, label: Option<String>) {
         let mut changed = false;
         for card in self
             .cards
@@ -606,7 +601,11 @@ impl CountdownService {
     pub fn check_notification_triggers(
         &mut self,
         now: DateTime<Local>,
-    ) -> Vec<(CountdownCardId, Option<CountdownWarningState>, CountdownWarningState)> {
+    ) -> Vec<(
+        CountdownCardId,
+        Option<CountdownWarningState>,
+        CountdownWarningState,
+    )> {
         if !self.notification_config.enabled {
             return Vec::new();
         }
@@ -624,7 +623,7 @@ impl CountdownService {
                 // (e.g., notify when going from Normal->Approaching, but not Approaching->Normal)
                 let should_notify = match (old_state, new_state) {
                     (None, CountdownWarningState::Normal) => false, // Initial state, not urgent
-                    (None, _) => true, // Initial state and it's urgent
+                    (None, _) => true,                              // Initial state and it's urgent
                     (Some(old), new) if new as u8 > old as u8 => true, // Urgency increased
                     _ => false, // Urgency decreased or stayed same
                 };

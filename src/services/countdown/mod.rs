@@ -4,6 +4,6 @@ mod service;
 
 pub use models::{
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownNotificationConfig, CountdownWarningState, MAX_DAYS_FONT_SIZE, RgbaColor,
+    CountdownNotificationConfig, CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
 };
 pub use service::CountdownService;

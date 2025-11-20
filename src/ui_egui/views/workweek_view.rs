@@ -538,8 +538,8 @@ impl WorkWeekView {
 
             // Calculate X position for the day column
             let ui_left = ui.min_rect().left();
-            let x_start = ui_left + time_label_width + spacing
-                + (day_index as f32 * (col_width + spacing));
+            let x_start =
+                ui_left + time_label_width + spacing + (day_index as f32 * (col_width + spacing));
             let x_end = x_start + col_width;
 
             // Draw the indicator line
@@ -552,7 +552,10 @@ impl WorkWeekView {
 
             // Draw the horizontal line
             painter.line_segment(
-                [egui::pos2(x_start, y_position), egui::pos2(x_end, y_position)],
+                [
+                    egui::pos2(x_start, y_position),
+                    egui::pos2(x_end, y_position),
+                ],
                 egui::Stroke::new(2.0, line_color),
             );
         }
@@ -587,14 +590,7 @@ impl WorkWeekView {
         let drag_sense = Sense::click_and_drag().union(Sense::hover());
         let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
 
-        Self::maybe_focus_slot(
-            ui,
-            rect,
-            date,
-            time,
-            slot_end,
-            focus_request,
-        );
+        Self::maybe_focus_slot(ui, rect, date, time, slot_end, focus_request);
 
         let regular_bg = palette.regular_bg;
         let today_bg = palette.today_bg;
@@ -650,7 +646,8 @@ impl WorkWeekView {
         }
 
         // Check for pointer position - use hover position to catch right-clicks too
-        let pointer_pos = response.interact_pointer_pos()
+        let pointer_pos = response
+            .interact_pointer_pos()
             .or_else(|| ui.input(|i| i.pointer.hover_pos()));
         let pointer_hit = pointer_pos.and_then(|pos| {
             event_hitboxes

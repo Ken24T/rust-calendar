@@ -66,7 +66,7 @@ impl WeekView {
             let frame_available_width = strip_ui.available_width();
             let frame_available_for_cols = frame_available_width - time_label_width - total_spacing;
             let col_width = frame_available_for_cols / 7.0;
-            
+
             // Header row with day names
             strip_ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -79,7 +79,7 @@ impl WeekView {
                         // Empty placeholder to match time grid spacing
                     },
                 );
-                
+
                 ui.add_space(spacing);
 
                 for (i, day_name) in day_names.iter().enumerate() {
@@ -151,7 +151,7 @@ impl WeekView {
             // Ribbon row with all-day events (inside same frame, using same col_width)
             if show_ribbon && !all_day_events.is_empty() {
                 strip_ui.add_space(4.0);
-                
+
                 strip_ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
 
@@ -161,22 +161,22 @@ impl WeekView {
                         egui::Layout::right_to_left(egui::Align::Center),
                         |_ui| {},
                     );
-                    
+
                     ui.add_space(spacing);
 
                     // Render each day column - same loop structure as header
                     for (i, date) in week_dates.iter().enumerate() {
                         ui.vertical(|day_ui| {
                             day_ui.set_width(col_width);
-                            
+
                             // Separate events into multi-day and single-day
                             let mut multi_day_events = Vec::new();
                             let mut single_day_events = Vec::new();
-                            
+
                             for event in all_day_events {
                                 let event_start_date = event.start.date_naive();
                                 let event_end_date = event.end.date_naive();
-                                
+
                                 if event_start_date != event_end_date {
                                     // Multi-day event - check if it spans this date
                                     if event_start_date <= *date && event_end_date >= *date {
@@ -189,23 +189,36 @@ impl WeekView {
                                     }
                                 }
                             }
-                            
-                            let found_event = !multi_day_events.is_empty() || !single_day_events.is_empty();
-                            
+
+                            let found_event =
+                                !multi_day_events.is_empty() || !single_day_events.is_empty();
+
                             // Render multi-day events first (at the top)
                             for event in multi_day_events {
-                                if let Some(ev) = Self::render_ribbon_event(day_ui, event, countdown_requests, active_countdown_events, database) {
+                                if let Some(ev) = Self::render_ribbon_event(
+                                    day_ui,
+                                    event,
+                                    countdown_requests,
+                                    active_countdown_events,
+                                    database,
+                                ) {
                                     clicked_event = Some(ev);
                                 }
                             }
-                            
+
                             // Then render single-day events
                             for event in single_day_events {
-                                if let Some(ev) = Self::render_ribbon_event(day_ui, event, countdown_requests, active_countdown_events, database) {
+                                if let Some(ev) = Self::render_ribbon_event(
+                                    day_ui,
+                                    event,
+                                    countdown_requests,
+                                    active_countdown_events,
+                                    database,
+                                ) {
                                     clicked_event = Some(ev);
                                 }
                             }
-                            
+
                             // If no event was found, allocate minimum space to maintain column structure
                             if !found_event {
                                 day_ui.allocate_space(Vec2::new(col_width, 24.0));
@@ -238,7 +251,7 @@ impl WeekView {
                 let available_width = scroll_ui.available_width();
                 let available_for_cols = available_width - time_label_width - total_spacing;
                 let col_width = available_for_cols / 7.0;
-                
+
                 if let Some(event) = Self::render_time_grid(
                     scroll_ui,
                     col_width,
@@ -292,37 +305,43 @@ impl WeekView {
             .unwrap_or(Color32::from_rgb(100, 150, 200));
 
         let available_width = ui.available_width();
-        
+
         let event_frame = egui::Frame::none()
             .fill(event_color)
             .rounding(egui::Rounding::same(4.0))
             .inner_margin(egui::Margin::symmetric(6.0, 3.0));
 
-        let response = event_frame.show(ui, |ui| {
-            ui.set_min_width(available_width - 8.0); // Leave margin to prevent overlap
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&event.title).color(Color32::WHITE).size(12.0));
-                
-                // Show date range if multi-day
-                if event.start.date_naive() != event.end.date_naive() {
+        let response = event_frame
+            .show(ui, |ui| {
+                ui.set_min_width(available_width - 8.0); // Leave margin to prevent overlap
+                ui.horizontal(|ui| {
                     ui.label(
-                        egui::RichText::new(format!(
-                            "({} - {})",
-                            event.start.format("%b %d"),
-                            event.end.format("%b %d")
-                        ))
-                        .color(Color32::from_gray(220))
-                        .size(10.0)
+                        egui::RichText::new(&event.title)
+                            .color(Color32::WHITE)
+                            .size(12.0),
                     );
-                }
-            });
-        }).response;
+
+                    // Show date range if multi-day
+                    if event.start.date_naive() != event.end.date_naive() {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "({} - {})",
+                                event.start.format("%b %d"),
+                                event.end.format("%b %d")
+                            ))
+                            .color(Color32::from_gray(220))
+                            .size(10.0),
+                        );
+                    }
+                });
+            })
+            .response;
 
         // Make the response interactive for right-clicks
         let interactive_response = response.interact(egui::Sense::click());
-        
+
         let mut clicked_event = None;
-        
+
         // Context menu on right-click
         interactive_response.context_menu(|ui| {
             ui.set_min_width(150.0);
@@ -405,7 +424,7 @@ impl WeekView {
                 }
             }
         });
-        
+
         clicked_event
     }
 
@@ -539,37 +558,41 @@ impl WeekView {
         let now = Local::now();
         let now_date = now.date_naive();
         let now_time = now.time();
-        
+
         // Check if current time is within the week
         if let Some(day_index) = week_dates.iter().position(|d| *d == now_date) {
             // Calculate Y position based on time
             let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
             let slots_since_midnight = (hours_since_midnight * 4.0).floor() as usize; // 4 slots per hour
             let slot_offset = (hours_since_midnight * 4.0) - slots_since_midnight as f32;
-            
+
             // Each slot is 30.0 pixels high, calculate relative Y
             let relative_y = (slots_since_midnight as f32 * 30.0) + (slot_offset * 30.0);
-            
+
             // Get the UI's current position to calculate absolute coordinates
             let ui_top = ui.min_rect().top();
             let y_position = ui_top + relative_y;
-            
+
             // Calculate X position for the day column
             let ui_left = ui.min_rect().left();
-            let x_start = ui_left + time_label_width + spacing + (day_index as f32 * (col_width + spacing));
+            let x_start =
+                ui_left + time_label_width + spacing + (day_index as f32 * (col_width + spacing));
             let x_end = x_start + col_width;
-            
+
             // Draw the indicator line
             let painter = ui.painter();
             let line_color = Color32::from_rgb(255, 100, 100); // Red indicator
             let circle_center = egui::pos2(x_start - 4.0, y_position);
-            
+
             // Draw a small circle at the start
             painter.circle_filled(circle_center, 3.0, line_color);
-            
+
             // Draw the horizontal line
             painter.line_segment(
-                [egui::pos2(x_start, y_position), egui::pos2(x_end, y_position)],
+                [
+                    egui::pos2(x_start, y_position),
+                    egui::pos2(x_end, y_position),
+                ],
                 egui::Stroke::new(2.0, line_color),
             );
         }
@@ -606,14 +629,7 @@ impl WeekView {
         let drag_sense = Sense::click_and_drag().union(Sense::hover());
         let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
 
-        Self::maybe_focus_slot(
-            ui,
-            rect,
-            date,
-            time,
-            slot_end,
-            focus_request,
-        );
+        Self::maybe_focus_slot(ui, rect, date, time, slot_end, focus_request);
 
         // Add manual context menu handling with secondary_clicked
         let show_context_menu = response.secondary_clicked();
@@ -679,7 +695,8 @@ impl WeekView {
         }
 
         // Check for pointer position - use hover position to catch right-clicks too
-        let pointer_pos = response.interact_pointer_pos()
+        let pointer_pos = response
+            .interact_pointer_pos()
             .or_else(|| ui.input(|i| i.pointer.hover_pos()));
         let pointer_hit = pointer_pos.and_then(|pos| {
             event_hitboxes
@@ -859,7 +876,10 @@ impl WeekView {
 
         // Check drag_started BEFORE clicked to ensure drag detection works
         if response.drag_started() {
-            eprintln!("[week_view] drag_started detected, pointer_hit: {:?}", pointer_hit.as_ref().map(|(_, e)| &e.title));
+            eprintln!(
+                "[week_view] drag_started detected, pointer_hit: {:?}",
+                pointer_hit.as_ref().map(|(_, e)| &e.title)
+            );
             if let Some((hit_rect, event)) = pointer_hit {
                 eprintln!("[week_view] event under pointer: {}", event.title);
                 if event.recurrence_rule.is_none() {

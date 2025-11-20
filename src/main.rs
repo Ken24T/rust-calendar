@@ -13,13 +13,13 @@ use eframe::egui;
 
 fn load_icon() -> egui::IconData {
     let icon_bytes = include_bytes!("../assets/icons/663353.png");
-    
+
     // Decode PNG manually
     let decoder = png::Decoder::new(&icon_bytes[..]);
     let mut reader = decoder.read_info().expect("Failed to read PNG info");
     let mut buf = vec![0; reader.output_buffer_size()];
     let info = reader.next_frame(&mut buf).expect("Failed to decode PNG");
-    
+
     egui::IconData {
         rgba: buf,
         width: info.width,

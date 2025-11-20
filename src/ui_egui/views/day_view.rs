@@ -223,37 +223,40 @@ impl DayView {
         let now = Local::now();
         let now_date = now.date_naive();
         let now_time = now.time();
-        
+
         if date == now_date {
             // Calculate Y position based on time
             let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
             let slots_since_midnight = (hours_since_midnight * 4.0).floor() as usize; // 4 slots per hour
             let slot_offset = (hours_since_midnight * 4.0) - slots_since_midnight as f32;
-            
+
             // Each slot is 30.0 pixels high, calculate relative Y
             let relative_y = (slots_since_midnight as f32 * 30.0) + (slot_offset * 30.0);
-            
+
             // Get the UI's current position to calculate absolute coordinates
             let ui_top = ui.min_rect().top();
             let y_position = ui_top + relative_y;
-            
+
             // Calculate X position across the full width
             let ui_left = ui.min_rect().left();
             let ui_right = ui.min_rect().right();
             let x_start = ui_left + 50.0; // After time labels
             let x_end = ui_right;
-            
+
             // Draw the indicator line
             let painter = ui.painter();
             let line_color = Color32::from_rgb(255, 100, 100); // Red indicator
             let circle_center = egui::pos2(ui_left + 46.0, y_position);
-            
+
             // Draw a small circle at the start
             painter.circle_filled(circle_center, 3.0, line_color);
-            
+
             // Draw the horizontal line
             painter.line_segment(
-                [egui::pos2(x_start, y_position), egui::pos2(x_end, y_position)],
+                [
+                    egui::pos2(x_start, y_position),
+                    egui::pos2(x_end, y_position),
+                ],
                 egui::Stroke::new(2.0, line_color),
             );
         }
@@ -351,7 +354,8 @@ impl DayView {
             }
 
             // Check for pointer position - use hover position to catch right-clicks too
-            let pointer_pos = response.interact_pointer_pos()
+            let pointer_pos = response
+                .interact_pointer_pos()
                 .or_else(|| ui.input(|i| i.pointer.hover_pos()));
             let pointer_hit = pointer_pos.and_then(|pos| {
                 event_hitboxes
@@ -532,7 +536,10 @@ impl DayView {
 
             // Check drag_started BEFORE clicked to ensure drag detection works
             if response.drag_started() {
-                eprintln!("[day_view] drag_started detected, pointer_hit: {:?}", pointer_hit.as_ref().map(|(_, e)| &e.title));
+                eprintln!(
+                    "[day_view] drag_started detected, pointer_hit: {:?}",
+                    pointer_hit.as_ref().map(|(_, e)| &e.title)
+                );
                 if let Some((hit_rect, event)) = pointer_hit.clone() {
                     eprintln!("[day_view] event under pointer: {}", event.title);
                     if event.recurrence_rule.is_none() {

@@ -1,24 +1,20 @@
+#[path = "app/context.rs"]
+mod context;
 mod countdown;
+mod lifecycle;
+mod state;
 
+use self::context::AppContext;
 use self::countdown::CountdownUiState;
+use self::state::{AppState, ViewType};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
-use crate::services::backup::BackupService;
 use crate::services::countdown::{CountdownCardGeometry, CountdownService, CountdownWarningState};
 use crate::services::database::Database;
 use crate::services::event::EventService;
-use crate::services::notification::NotificationService;
-use crate::services::settings::SettingsService;
-use crate::services::theme::ThemeService;
-use crate::ui_egui::dialogs::backup_manager::{
-    render_backup_manager_dialog, BackupManagerState,
-};
-use crate::ui_egui::dialogs::theme_creator::{
-    render_theme_creator, ThemeCreatorAction, ThemeCreatorState,
-};
-use crate::ui_egui::dialogs::theme_dialog::{
-    render_theme_dialog, ThemeDialogAction, ThemeDialogState,
-};
+use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
+use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
+use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
 use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogResult, EventDialogState};
 use crate::ui_egui::settings_dialog::render_settings_dialog;
 use crate::ui_egui::theme::CalendarTheme;
@@ -30,225 +26,34 @@ use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
 use chrono::{Datelike, Local, NaiveDate};
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
-use std::path::PathBuf;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ViewType {
-    Day,
-    Week,
-    WorkWeek,
-    Month,
-}
 
 const MIN_ROOT_WIDTH: f32 = 320.0;
 const MIN_ROOT_HEIGHT: f32 = 220.0;
 
 pub struct CalendarApp {
-    // Core database (leaked for 'static lifetime to satisfy service requirements)
-    database: &'static Database,
-
-    // Application state
+    /// Shared access to leaked database and supporting services
+    context: AppContext,
+    /// Core application settings/stateful data
     settings: Settings,
     current_view: ViewType,
     current_date: NaiveDate,
-
-    // Dialog states
     show_event_dialog: bool,
     show_settings_dialog: bool,
-    backup_manager_state: BackupManagerState,
-    theme_dialog_state: ThemeDialogState,
-    theme_creator_state: ThemeCreatorState,
-
-    // Ribbon state (mirrors self.settings.show_ribbon)
+    /// Ribbon toggle mirrors persisted settings
     show_ribbon: bool,
-
-    // Currently applied theme colors
+    /// Currently applied theme colors
     active_theme: CalendarTheme,
-
-    // Event dialog state
+    /// Event dialog state management
     event_dialog_state: Option<EventDialogState>,
     event_dialog_date: Option<NaiveDate>,
-    event_dialog_time: Option<chrono::NaiveTime>, // Time from clicked cell (None = use default)
+    event_dialog_time: Option<chrono::NaiveTime>,
     event_dialog_recurrence: Option<String>,
-    event_to_edit: Option<i64>, // Event ID to edit
+    event_to_edit: Option<i64>,
     pending_focus: Option<AutoFocusRequest>,
-
-    // Countdown cards
-    countdown_service: CountdownService,
-    countdown_storage_path: PathBuf,
+    /// Countdown window and dialogs
     countdown_ui: CountdownUiState,
-    pending_root_geometry: Option<CountdownCardGeometry>,
-
-    // Notifications
-    notification_service: NotificationService,
-}
-
-impl CalendarApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Initialize database and leak it for 'static lifetime
-        // This is necessary because eframe requires 'static App implementations
-        let database = {
-            // Use separate database files for debug and release builds
-            #[cfg(debug_assertions)]
-            let db_path = "calendar.db".to_string();
-            
-            #[cfg(not(debug_assertions))]
-            let db_path = {
-                // For release builds, use AppData directory
-                if let Some(proj_dirs) = ProjectDirs::from("com", "KenBoyle", "RustCalendar") {
-                    let data_dir = proj_dirs.data_dir();
-                    std::fs::create_dir_all(data_dir).expect("Failed to create data directory");
-                    data_dir.join("calendar.db").to_string_lossy().to_string()
-                } else {
-                    // Fallback to current directory if AppData not available
-                    "calendar_prod.db".to_string()
-                }
-            };
-            
-            let db = Database::new(&db_path).expect("Failed to create database connection");
-
-            // Initialize schema (create tables and insert defaults)
-            db.initialize_schema()
-                .expect("Failed to initialize database schema");
-
-            // Create auto-backup on startup
-            if let Err(e) = BackupService::auto_backup_on_startup(std::path::Path::new(&db_path), Some(5)) {
-                log::warn!("Failed to create automatic backup on startup: {}", e);
-            } else {
-                log::info!("Automatic backup created successfully");
-            }
-
-            Box::leak(Box::new(db))
-        };
-
-        // Create temporary services to load settings
-        let settings_service = SettingsService::new(database);
-
-        // Load settings or create defaults
-        let settings = match settings_service.get() {
-            Ok(settings) => settings,
-            Err(e) => {
-                eprintln!("Failed to load settings: {}, using defaults", e);
-                // No settings found, create and save defaults
-                let defaults = Settings::default();
-                // Note: The database INSERT OR IGNORE should handle initial creation,
-                // but if somehow the row doesn't exist, this won't work.
-                // The database initialization should ensure the row exists.
-                defaults
-            }
-        };
-        log::info!(
-            "Loaded settings: default_card_width={}, default_card_height={}",
-            settings.default_card_width,
-            settings.default_card_height
-        );
-
-        // Parse current view from settings
-        let current_view = Self::parse_view_type(&settings.current_view);
-
-        let countdown_storage_path = Self::resolve_countdown_storage_path();
-        cc.egui_ctx.set_embed_viewports(false);
-        let mut countdown_service = match CountdownService::load_from_disk(&countdown_storage_path) {
-            Ok(service) => service,
-            Err(err) => {
-                log::warn!(
-                    "Failed to load countdown cards from {}: {err:?}",
-                    countdown_storage_path.display()
-                );
-                CountdownService::new()
-            }
-        };
-
-        Self::hydrate_countdown_titles_from_events(&mut countdown_service, database);
-
-        let pending_root_geometry = countdown_service.app_window_geometry();
-        let countdown_ui = CountdownUiState::new(&countdown_service);
-
-        let show_ribbon = settings.show_ribbon;
-
-        // Initialize notification service
-        let notification_service = NotificationService::new();
-
-        // Initialize backup manager state
-        #[cfg(debug_assertions)]
-        let db_path_for_backup = PathBuf::from("calendar.db");
-        
-        #[cfg(not(debug_assertions))]
-        let db_path_for_backup = {
-            if let Some(proj_dirs) = ProjectDirs::from("com", "KenBoyle", "RustCalendar") {
-                let data_dir = proj_dirs.data_dir();
-                data_dir.join("calendar.db")
-            } else {
-                PathBuf::from("calendar_prod.db")
-            }
-        };
-        
-        let backup_manager_state = BackupManagerState::new(db_path_for_backup);
-
-        let mut app = Self {
-            database,
-            settings,
-            current_view,
-            current_date: Local::now().date_naive(),
-            show_event_dialog: false,
-            show_settings_dialog: false,
-            backup_manager_state,
-            theme_dialog_state: ThemeDialogState::new(),
-            theme_creator_state: ThemeCreatorState::new(),
-            show_ribbon,
-            event_dialog_state: None,
-            event_dialog_date: None,
-            event_dialog_time: None,
-            event_dialog_recurrence: None,
-            event_to_edit: None,
-            pending_focus: None,
-            countdown_service,
-            countdown_storage_path,
-            countdown_ui,
-            pending_root_geometry,
-            notification_service,
-            active_theme: CalendarTheme::light(),
-        };
-
-        // Apply theme from database (including custom themes)
-        app.apply_theme_from_db(&cc.egui_ctx);
-        app.focus_on_current_time_if_visible();
-
-        app
-    }
-
-    fn parse_view_type(view_str: &str) -> ViewType {
-        match view_str {
-            "Day" => ViewType::Day,
-            "Week" => ViewType::Week,
-            "WorkWeek" => ViewType::WorkWeek,
-            "Month" => ViewType::Month,
-            "Quarter" => ViewType::Month,
-            _ => ViewType::Month, // Default fallback
-        }
-    }
-
-    fn fallback_theme_for_settings(settings: &Settings) -> CalendarTheme {
-        if settings.theme.to_lowercase().contains("dark") {
-            CalendarTheme::dark()
-        } else {
-            CalendarTheme::light()
-        }
-    }
-
-    fn apply_theme_from_db(&mut self, ctx: &egui::Context) {
-        let theme_service = ThemeService::new(self.database);
-
-        if let Ok(theme) = theme_service.get_theme(&self.settings.theme) {
-            theme.apply_to_context(ctx);
-            self.active_theme = theme;
-        } else {
-            log::warn!("Theme '{}' not found, using fallback.", self.settings.theme);
-            let fallback = Self::fallback_theme_for_settings(&self.settings);
-            fallback.apply_to_context(ctx);
-            self.active_theme = fallback;
-        }
-    }
+    /// Aggregated dialog/control state
+    state: AppState,
 }
 
 impl eframe::App for CalendarApp {
@@ -283,11 +88,7 @@ impl eframe::App for CalendarApp {
                                 self.handle_ics_import(events, "drag-and-drop");
                             }
                             Err(e) => {
-                                log::error!(
-                                    "Failed to parse dropped ICS file {:?}: {}",
-                                    path,
-                                    e
-                                );
+                                log::error!("Failed to parse dropped ICS file {:?}: {}", path, e);
                             }
                         }
                     }
@@ -311,11 +112,11 @@ impl eframe::App for CalendarApp {
                     self.event_to_edit = None;
                 } else if self.show_settings_dialog {
                     self.show_settings_dialog = false;
-                } else if self.theme_dialog_state.is_open {
-                    self.theme_dialog_state.close();
+                } else if self.state.theme_dialog_state.is_open {
+                    self.state.theme_dialog_state.close();
                 }
             }
-            
+
             // Ctrl+N - New Event
             if i.modifiers.ctrl && i.key_pressed(egui::Key::N) && !self.show_event_dialog {
                 self.show_event_dialog = true;
@@ -324,44 +125,59 @@ impl eframe::App for CalendarApp {
                 self.event_dialog_recurrence = None;
                 self.event_to_edit = None;
             }
-            
+
             // Ctrl+T - Today (navigate to current date)
             if i.modifiers.ctrl && i.key_pressed(egui::Key::T) {
                 self.current_date = Local::now().date_naive();
             }
-            
+
             // Ctrl+S - Settings
             if i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
                 self.show_settings_dialog = true;
             }
-            
+
             // Ctrl+B - Backup Database
             if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
-                if let Err(e) = self.backup_manager_state.create_backup() {
+                if let Err(e) = self.state.backup_manager_state.create_backup() {
                     log::error!("Failed to create backup: {}", e);
                 }
             }
-            
+
             // Arrow keys for navigation (only when dialogs are closed)
-            if !self.show_event_dialog && !self.show_settings_dialog && !self.theme_dialog_state.is_open {
+            if !self.show_event_dialog
+                && !self.show_settings_dialog
+                && !self.state.theme_dialog_state.is_open
+            {
                 // Left/Right - Navigate backwards/forwards
                 if i.key_pressed(egui::Key::ArrowLeft) {
                     self.current_date = match self.current_view {
                         ViewType::Day => self.current_date - chrono::Duration::days(1),
-                        ViewType::Week | ViewType::WorkWeek => self.current_date - chrono::Duration::weeks(1),
+                        ViewType::Week | ViewType::WorkWeek => {
+                            self.current_date - chrono::Duration::weeks(1)
+                        }
                         ViewType::Month => {
                             // Navigate to previous month
                             let new_date = if self.current_date.month() == 1 {
-                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1).unwrap()
+                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1)
+                                    .unwrap()
                             } else {
-                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() - 1, 1).unwrap()
+                                NaiveDate::from_ymd_opt(
+                                    self.current_date.year(),
+                                    self.current_date.month() - 1,
+                                    1,
+                                )
+                                .unwrap()
                             };
                             // Try to keep the same day, fall back to last day of month if invalid
-                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
-                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                                .pred_opt()
-                                .unwrap()
-                                .day();
+                            let max_day = chrono::NaiveDate::from_ymd_opt(
+                                new_date.year(),
+                                new_date.month() + 1,
+                                1,
+                            )
+                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                            .pred_opt()
+                            .unwrap()
+                            .day();
                             let day = self.current_date.day().min(max_day);
                             NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
                         }
@@ -370,43 +186,66 @@ impl eframe::App for CalendarApp {
                 if i.key_pressed(egui::Key::ArrowRight) {
                     self.current_date = match self.current_view {
                         ViewType::Day => self.current_date + chrono::Duration::days(1),
-                        ViewType::Week | ViewType::WorkWeek => self.current_date + chrono::Duration::weeks(1),
+                        ViewType::Week | ViewType::WorkWeek => {
+                            self.current_date + chrono::Duration::weeks(1)
+                        }
                         ViewType::Month => {
                             // Navigate to next month
                             let new_date = if self.current_date.month() == 12 {
                                 NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1).unwrap()
                             } else {
-                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() + 1, 1).unwrap()
+                                NaiveDate::from_ymd_opt(
+                                    self.current_date.year(),
+                                    self.current_date.month() + 1,
+                                    1,
+                                )
+                                .unwrap()
                             };
                             // Try to keep the same day, fall back to last day of month if invalid
-                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
-                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                                .pred_opt()
-                                .unwrap()
-                                .day();
+                            let max_day = chrono::NaiveDate::from_ymd_opt(
+                                new_date.year(),
+                                new_date.month() + 1,
+                                1,
+                            )
+                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                            .pred_opt()
+                            .unwrap()
+                            .day();
                             let day = self.current_date.day().min(max_day);
                             NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
                         }
                     };
                 }
-                
+
                 // Up/Down - Navigate up/down (weeks in week view, months in month view)
                 if i.key_pressed(egui::Key::ArrowUp) {
                     self.current_date = match self.current_view {
                         ViewType::Day => self.current_date - chrono::Duration::days(7), // Move by week in day view
-                        ViewType::Week | ViewType::WorkWeek => self.current_date - chrono::Duration::weeks(1),
+                        ViewType::Week | ViewType::WorkWeek => {
+                            self.current_date - chrono::Duration::weeks(1)
+                        }
                         ViewType::Month => {
                             // Navigate to previous month (same as left arrow)
                             let new_date = if self.current_date.month() == 1 {
-                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1).unwrap()
+                                NaiveDate::from_ymd_opt(self.current_date.year() - 1, 12, 1)
+                                    .unwrap()
                             } else {
-                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() - 1, 1).unwrap()
-                            };
-                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
-                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                                .pred_opt()
+                                NaiveDate::from_ymd_opt(
+                                    self.current_date.year(),
+                                    self.current_date.month() - 1,
+                                    1,
+                                )
                                 .unwrap()
-                                .day();
+                            };
+                            let max_day = chrono::NaiveDate::from_ymd_opt(
+                                new_date.year(),
+                                new_date.month() + 1,
+                                1,
+                            )
+                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                            .pred_opt()
+                            .unwrap()
+                            .day();
                             let day = self.current_date.day().min(max_day);
                             NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
                         }
@@ -415,19 +254,30 @@ impl eframe::App for CalendarApp {
                 if i.key_pressed(egui::Key::ArrowDown) {
                     self.current_date = match self.current_view {
                         ViewType::Day => self.current_date + chrono::Duration::days(7), // Move by week in day view
-                        ViewType::Week | ViewType::WorkWeek => self.current_date + chrono::Duration::weeks(1),
+                        ViewType::Week | ViewType::WorkWeek => {
+                            self.current_date + chrono::Duration::weeks(1)
+                        }
                         ViewType::Month => {
                             // Navigate to next month (same as right arrow)
                             let new_date = if self.current_date.month() == 12 {
                                 NaiveDate::from_ymd_opt(self.current_date.year() + 1, 1, 1).unwrap()
                             } else {
-                                NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() + 1, 1).unwrap()
-                            };
-                            let max_day = chrono::NaiveDate::from_ymd_opt(new_date.year(), new_date.month() + 1, 1)
-                                .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
-                                .pred_opt()
+                                NaiveDate::from_ymd_opt(
+                                    self.current_date.year(),
+                                    self.current_date.month() + 1,
+                                    1,
+                                )
                                 .unwrap()
-                                .day();
+                            };
+                            let max_day = chrono::NaiveDate::from_ymd_opt(
+                                new_date.year(),
+                                new_date.month() + 1,
+                                1,
+                            )
+                            .unwrap_or(NaiveDate::from_ymd_opt(new_date.year() + 1, 1, 1).unwrap())
+                            .pred_opt()
+                            .unwrap()
+                            .day();
                             let day = self.current_date.day().min(max_day);
                             NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), day).unwrap()
                         }
@@ -443,13 +293,13 @@ impl eframe::App for CalendarApp {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("💾 Backup Database...    Ctrl+B").clicked() {
-                        if let Err(e) = self.backup_manager_state.create_backup() {
+                        if let Err(e) = self.state.backup_manager_state.create_backup() {
                             log::error!("Failed to create backup: {}", e);
                         }
                         ui.close_menu();
                     }
                     if ui.button("📂 Manage Backups...").clicked() {
-                        self.backup_manager_state.open();
+                        self.state.backup_manager_state.open();
                         ui.close_menu();
                     }
                     ui.separator();
@@ -492,9 +342,12 @@ impl eframe::App for CalendarApp {
                 });
 
                 ui.menu_button("View", |ui| {
-                    if ui.checkbox(&mut self.show_ribbon, "Show All-Day Events Ribbon").clicked() {
+                    if ui
+                        .checkbox(&mut self.show_ribbon, "Show All-Day Events Ribbon")
+                        .clicked()
+                    {
                         self.settings.show_ribbon = self.show_ribbon;
-                        let settings_service = SettingsService::new(self.database);
+                        let settings_service = self.context.settings_service();
                         if let Err(err) = settings_service.update(&self.settings) {
                             log::error!("Failed to persist ribbon setting: {err}");
                         }
@@ -536,7 +389,7 @@ impl eframe::App for CalendarApp {
 
                 ui.menu_button("Theme", |ui| {
                     if ui.button("Themes...").clicked() {
-                        self.theme_dialog_state.open();
+                        self.state.theme_dialog_state.open();
                         ui.close_menu();
                     }
                 });
@@ -557,7 +410,8 @@ impl eframe::App for CalendarApp {
         let mut countdown_requests: Vec<CountdownRequest> = Vec::new();
 
         let active_countdown_events: std::collections::HashSet<i64> = self
-            .countdown_service
+            .context
+            .countdown_service()
             .cards()
             .iter()
             .filter_map(|card| card.event_id)
@@ -589,44 +443,59 @@ impl eframe::App for CalendarApp {
                 if ui.button("Next ▶").clicked() {
                     self.navigate_next();
                 }
-                
+
                 ui.separator();
-                
+
                 // Year/Month picker
                 ui.label("Jump to:");
-                
+
                 // Month dropdown
                 let month_names = [
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December"
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December",
                 ];
                 let current_month = self.current_date.month() as usize;
                 egui::ComboBox::from_id_source("month_picker")
                     .selected_text(month_names[current_month - 1])
                     .show_ui(ui, |ui| {
                         for (idx, month_name) in month_names.iter().enumerate() {
-                            if ui.selectable_value(&mut (idx + 1), current_month, *month_name).clicked() {
+                            if ui
+                                .selectable_value(&mut (idx + 1), current_month, *month_name)
+                                .clicked()
+                            {
                                 let new_month = (idx + 1) as u32;
                                 if let Some(new_date) = chrono::NaiveDate::from_ymd_opt(
                                     self.current_date.year(),
                                     new_month,
-                                    1
+                                    1,
                                 ) {
                                     self.current_date = new_date;
                                 }
                             }
                         }
                     });
-                
+
                 // Year spinner
                 let mut year = self.current_date.year();
-                ui.add(egui::DragValue::new(&mut year).range(1900..=2100).speed(1.0));
+                ui.add(
+                    egui::DragValue::new(&mut year)
+                        .range(1900..=2100)
+                        .speed(1.0),
+                );
                 if year != self.current_date.year() {
-                    if let Some(new_date) = chrono::NaiveDate::from_ymd_opt(
-                        year,
-                        self.current_date.month(),
-                        1
-                    ) {
+                    if let Some(new_date) =
+                        chrono::NaiveDate::from_ymd_opt(year, self.current_date.month(), 1)
+                    {
                         self.current_date = new_date;
                     }
                 }
@@ -637,31 +506,25 @@ impl eframe::App for CalendarApp {
             // View content (ribbon is now rendered inside week view)
             let mut focus_request = self.pending_focus.take();
             match self.current_view {
-                ViewType::Day => {
-                    self.render_day_view(
-                        ui,
-                        &mut countdown_requests,
-                        &active_countdown_events,
-                        &mut focus_request,
-                    )
-                }
-                ViewType::Week => {
-                    self.render_week_view(
-                        ui,
-                        &mut countdown_requests,
-                        &active_countdown_events,
-                        self.show_ribbon,
-                        &mut focus_request,
-                    )
-                }
-                ViewType::WorkWeek => {
-                    self.render_workweek_view(
-                        ui,
-                        &mut countdown_requests,
-                        &active_countdown_events,
-                        &mut focus_request,
-                    )
-                }
+                ViewType::Day => self.render_day_view(
+                    ui,
+                    &mut countdown_requests,
+                    &active_countdown_events,
+                    &mut focus_request,
+                ),
+                ViewType::Week => self.render_week_view(
+                    ui,
+                    &mut countdown_requests,
+                    &active_countdown_events,
+                    self.show_ribbon,
+                    &mut focus_request,
+                ),
+                ViewType::WorkWeek => self.render_workweek_view(
+                    ui,
+                    &mut countdown_requests,
+                    &active_countdown_events,
+                    &mut focus_request,
+                ),
                 ViewType::Month => self.render_month_view(ui),
             }
             self.pending_focus = focus_request;
@@ -672,9 +535,9 @@ impl eframe::App for CalendarApp {
         }
 
         self.countdown_ui
-            .render_cards(ctx, &mut self.countdown_service);
+            .render_cards(ctx, self.context.countdown_service_mut());
         self.countdown_ui
-            .render_settings_dialogs(ctx, &mut self.countdown_service);
+            .render_settings_dialogs(ctx, self.context.countdown_service_mut());
         self.flush_pending_event_bodies();
 
         // Dialogs (to be implemented)
@@ -685,7 +548,7 @@ impl eframe::App for CalendarApp {
                 // Check if we're editing an existing event
                 if let Some(event_id) = self.event_to_edit {
                     // Load event from database
-                    let service = EventService::new(self.database.connection());
+                    let service = self.context.event_service();
                     if let Ok(Some(event)) = service.get(event_id) {
                         self.event_dialog_state =
                             Some(EventDialogState::from_event(&event, &self.settings));
@@ -734,7 +597,10 @@ impl eframe::App for CalendarApp {
         }
 
         // Periodically refresh countdown cards even before their UI arrives.
-        let changed_counts = self.countdown_service.refresh_days_remaining(Local::now());
+        let changed_counts = self
+            .context
+            .countdown_service_mut()
+            .refresh_days_remaining(Local::now());
         if !changed_counts.is_empty() {
             ctx.request_repaint();
         }
@@ -742,42 +608,46 @@ impl eframe::App for CalendarApp {
         // Check for notification triggers (warning state transitions)
         let now = Local::now();
         let notification_triggers = self
-            .countdown_service
+            .context
+            .countdown_service_mut()
             .check_notification_triggers(now);
-        
+
         if !notification_triggers.is_empty() {
             // Get notification config to check if system notifications are enabled
-            let notification_config = self.countdown_service.notification_config();
-            
+            let notification_config = self.context.countdown_service().notification_config();
+
             if notification_config.use_system_notifications {
                 for (card_id, _old_state, new_state) in &notification_triggers {
-                    // Find the card to get event details
-                    if let Some(card) = self
-                        .countdown_service
+                    let card_info = self
+                        .context
+                        .countdown_service()
                         .cards()
                         .iter()
                         .find(|c| c.id == *card_id)
-                    {
-                        let (message, urgency) = Self::notification_message_for_state(*new_state, card.start_at, now);
-                        
-                        if let Err(e) = self.notification_service.show_countdown_alert(
-                            card.effective_title(),
-                            &message,
-                            urgency,
-                        ) {
+                        .map(|card| (card.effective_title().to_owned(), card.start_at));
+
+                    if let Some((title, start_at)) = card_info {
+                        let (message, urgency) =
+                            Self::notification_message_for_state(*new_state, start_at, now);
+
+                        if let Err(e) = self
+                            .context
+                            .notification_service_mut()
+                            .show_countdown_alert(&title, &message, urgency)
+                        {
                             log::warn!("Failed to show system notification: {}", e);
                         } else {
                             log::info!(
                                 "Showed system notification for card {:?} ({}) - state: {:?}",
                                 card_id,
-                                card.effective_title(),
+                                title,
                                 new_state
                             );
                         }
                     }
                 }
             }
-            
+
             // Log all transitions
             for (card_id, old_state, new_state) in notification_triggers {
                 log::info!(
@@ -787,12 +657,12 @@ impl eframe::App for CalendarApp {
                     new_state
                 );
             }
-            
+
             ctx.request_repaint();
         }
 
         // Check for auto-dismiss
-        let dismissed_cards = self.countdown_service.check_auto_dismiss(now);
+        let dismissed_cards = self.context.countdown_service_mut().check_auto_dismiss(now);
         if !dismissed_cards.is_empty() {
             log::info!("Auto-dismissed {} countdown card(s)", dismissed_cards.len());
             ctx.request_repaint();
@@ -803,9 +673,10 @@ impl eframe::App for CalendarApp {
         // Render unified theme dialog and creator
         self.render_theme_dialog(ctx);
         self.render_theme_creator(ctx);
-        
+
         // Render backup manager dialog
-        let should_reload_db = render_backup_manager_dialog(ctx, &mut self.backup_manager_state);
+        let should_reload_db =
+            render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
         if should_reload_db {
             // Note: Database restoration requires app restart
             // Show message and close app
@@ -827,14 +698,18 @@ impl CalendarApp {
         now: chrono::DateTime<Local>,
     ) -> (String, crate::services::notification::NotificationUrgency) {
         use crate::services::notification::NotificationUrgency;
-        
+
         let remaining = event_time.signed_duration_since(now);
-        
+
         match state {
             CountdownWarningState::Critical => {
                 let minutes = remaining.num_minutes();
                 let message = if minutes > 0 {
-                    format!("Starting in {} minute{}", minutes, if minutes == 1 { "" } else { "s" })
+                    format!(
+                        "Starting in {} minute{}",
+                        minutes,
+                        if minutes == 1 { "" } else { "s" }
+                    )
                 } else {
                     "Starting very soon!".to_string()
                 };
@@ -844,22 +719,35 @@ impl CalendarApp {
                 let hours = remaining.num_hours();
                 let minutes = remaining.num_minutes() % 60;
                 let message = if hours > 0 {
-                    format!("Starting in {} hour{} {} minute{}", 
-                        hours, if hours == 1 { "" } else { "s" },
-                        minutes, if minutes == 1 { "" } else { "s" })
+                    format!(
+                        "Starting in {} hour{} {} minute{}",
+                        hours,
+                        if hours == 1 { "" } else { "s" },
+                        minutes,
+                        if minutes == 1 { "" } else { "s" }
+                    )
                 } else {
-                    format!("Starting in {} minute{}", minutes, if minutes == 1 { "" } else { "s" })
+                    format!(
+                        "Starting in {} minute{}",
+                        minutes,
+                        if minutes == 1 { "" } else { "s" }
+                    )
                 };
                 (message, NotificationUrgency::Critical)
             }
             CountdownWarningState::Approaching => {
                 let hours = remaining.num_hours();
-                let message = format!("Starting in {} hour{}", hours, if hours == 1 { "" } else { "s" });
+                let message = format!(
+                    "Starting in {} hour{}",
+                    hours,
+                    if hours == 1 { "" } else { "s" }
+                );
                 (message, NotificationUrgency::Normal)
             }
-            CountdownWarningState::Starting => {
-                ("Event is starting now!".to_string(), NotificationUrgency::Critical)
-            }
+            CountdownWarningState::Starting => (
+                "Event is starting now!".to_string(),
+                NotificationUrgency::Critical,
+            ),
             CountdownWarningState::Normal => {
                 ("Event approaching".to_string(), NotificationUrgency::Normal)
             }
@@ -921,7 +809,7 @@ impl CalendarApp {
         if let Some(clicked_event) = DayView::show(
             ui,
             &mut self.current_date,
-            self.database,
+            self.context.database(),
             &self.settings,
             &self.active_theme,
             &mut self.show_event_dialog,
@@ -950,14 +838,14 @@ impl CalendarApp {
         // Get all-day events for the ribbon
         let all_day_events = if show_ribbon {
             use chrono::TimeZone;
-            let event_service = EventService::new(self.database.connection());
-            
+            let event_service = self.context.event_service();
+
             // Calculate week range
             let weekday = self.current_date.weekday().num_days_from_sunday() as i64;
             let offset = (weekday - self.settings.first_day_of_week as i64 + 7) % 7;
             let week_start = self.current_date - chrono::Duration::days(offset);
             let week_end = week_start + chrono::Duration::days(6);
-            
+
             let start_datetime = Local
                 .from_local_datetime(&week_start.and_hms_opt(0, 0, 0).unwrap())
                 .single()
@@ -966,7 +854,7 @@ impl CalendarApp {
                 .from_local_datetime(&week_end.and_hms_opt(23, 59, 59).unwrap())
                 .single()
                 .unwrap();
-            
+
             event_service
                 .expand_recurring_events(start_datetime, end_datetime)
                 .unwrap_or_default()
@@ -980,7 +868,7 @@ impl CalendarApp {
         if let Some(clicked_event) = WeekView::show(
             ui,
             &mut self.current_date,
-            self.database,
+            self.context.database(),
             &self.settings,
             &self.active_theme,
             &mut self.show_event_dialog,
@@ -1017,7 +905,7 @@ impl CalendarApp {
             if let (Some(first_day), Some(last_day)) =
                 (work_week_dates.first(), work_week_dates.last())
             {
-                let event_service = EventService::new(self.database.connection());
+                let event_service = self.context.event_service();
                 let start_datetime = Local
                     .from_local_datetime(&first_day.and_hms_opt(0, 0, 0).unwrap())
                     .single()
@@ -1043,7 +931,7 @@ impl CalendarApp {
         if let Some(clicked_event) = WorkWeekView::show(
             ui,
             &mut self.current_date,
-            self.database,
+            self.context.database(),
             &self.settings,
             &self.active_theme,
             &mut self.show_event_dialog,
@@ -1067,7 +955,7 @@ impl CalendarApp {
         MonthView::show(
             ui,
             &mut self.current_date,
-            self.database,
+            self.context.database(),
             &self.settings,
             &self.active_theme,
             &mut self.show_event_dialog,
@@ -1077,22 +965,24 @@ impl CalendarApp {
         );
     }
 
-    
     fn handle_ics_import(&mut self, events: Vec<Event>, source_label: &str) {
         if events.is_empty() {
             log::info!("No events found in {} import", source_label);
             return;
         }
 
-        let event_service = EventService::new(self.database.connection());
-        let mut existing_events = event_service.list_all().unwrap_or_else(|err| {
-            log::error!(
-                "Failed to list existing events before {} import: {}",
-                source_label,
-                err
-            );
-            Vec::new()
-        });
+        let mut existing_events = self
+            .context
+            .event_service()
+            .list_all()
+            .unwrap_or_else(|err| {
+                log::error!(
+                    "Failed to list existing events before {} import: {}",
+                    source_label,
+                    err
+                );
+                Vec::new()
+            });
 
         if self.settings.edit_before_import {
             let first_event = events[0].clone();
@@ -1105,7 +995,7 @@ impl CalendarApp {
                     first_event.title
                 );
             } else {
-                match event_service.create(first_event.clone()) {
+                match self.context.event_service().create(first_event.clone()) {
                     Ok(created_event) => {
                         self.focus_on_event(&created_event);
                         if let Some(event_id) = created_event.id {
@@ -1157,7 +1047,7 @@ impl CalendarApp {
                 continue;
             }
 
-            match event_service.create(event) {
+            match self.context.event_service().create(event) {
                 Ok(created_event) => {
                     self.focus_on_event(&created_event);
                     imported_count += 1;
@@ -1188,7 +1078,7 @@ impl CalendarApp {
                                 .filter(|loc| !loc.is_empty())
                                 .map(|loc| loc.to_string());
 
-                            let card_id = self.countdown_service.create_card(
+                            let card_id = self.context.countdown_service_mut().create_card(
                                 Some(event_id),
                                 created_event.title.clone(),
                                 created_event.start,
@@ -1199,7 +1089,8 @@ impl CalendarApp {
                             );
 
                             if let Some(label) = location_label {
-                                self.countdown_service
+                                self.context
+                                    .countdown_service_mut()
                                     .set_auto_title_override(card_id, Some(label));
                             }
                         }
@@ -1245,7 +1136,6 @@ impl CalendarApp {
         })
     }
 
-
     // Placeholder dialog renderers
     fn render_event_dialog(&mut self, ctx: &egui::Context) {
         if self.event_dialog_state.is_none() {
@@ -1255,11 +1145,14 @@ impl CalendarApp {
         }
 
         let (saved_event, auto_create_card, was_new_event, event_saved) = {
-            let state = self.event_dialog_state.as_mut().expect("dialog state just checked");
+            let state = self
+                .event_dialog_state
+                .as_mut()
+                .expect("dialog state just checked");
             let EventDialogResult { saved_event } = render_event_dialog(
                 ctx,
                 state,
-                self.database,
+                self.context.database(),
                 &self.settings,
                 &mut self.show_event_dialog,
             );
@@ -1319,8 +1212,7 @@ impl CalendarApp {
                         .map(|loc| loc.to_string());
 
                     countdown_service.sync_title_for_event(event_id, event.title.clone());
-                    countdown_service
-                        .sync_title_override_for_event(event_id, location_label);
+                    countdown_service.sync_title_override_for_event(event_id, location_label);
                 }
                 Ok(None) => {
                     log::warn!(
@@ -1345,19 +1237,19 @@ impl CalendarApp {
             return;
         }
 
-        let service = EventService::new(self.database.connection());
         for (event_id, body) in updates {
-            match service.get(event_id) {
+            match self.context.event_service().get(event_id) {
                 Ok(Some(mut event)) => {
                     event.description = body.clone();
-                    if let Err(err) = service.update(&event) {
+                    if let Err(err) = self.context.event_service().update(&event) {
                         log::error!(
                             "Failed to update event {} body from countdown settings: {err}",
                             event_id
                         );
                         continue;
                     }
-                    self.countdown_service
+                    self.context
+                        .countdown_service_mut()
                         .sync_comment_for_event(event_id, body.clone());
                 }
                 Ok(None) => {
@@ -1385,12 +1277,10 @@ impl CalendarApp {
                 .filter(|loc| !loc.is_empty())
                 .map(|loc| loc.to_string());
 
-            self.countdown_service
-                .sync_title_for_event(event_id, event.title.clone());
-            self.countdown_service
-                .sync_title_override_for_event(event_id, location_label);
-            self.countdown_service
-                .sync_comment_for_event(event_id, event.description.clone());
+            let countdown_service = self.context.countdown_service_mut();
+            countdown_service.sync_title_for_event(event_id, event.title.clone());
+            countdown_service.sync_title_override_for_event(event_id, location_label);
+            countdown_service.sync_comment_for_event(event_id, event.description.clone());
         }
     }
 
@@ -1398,7 +1288,7 @@ impl CalendarApp {
         let response = render_settings_dialog(
             ctx,
             &mut self.settings,
-            self.database,
+            self.context.database(),
             &mut self.show_settings_dialog,
         );
 
@@ -1414,12 +1304,12 @@ impl CalendarApp {
 
     fn render_theme_dialog(&mut self, ctx: &egui::Context) {
         // Get available themes from database
-        let theme_service = ThemeService::new(self.database);
+        let theme_service = self.context.theme_service();
         let available_themes = theme_service.list_themes().unwrap_or_default();
 
         let action = render_theme_dialog(
             ctx,
-            &mut self.theme_dialog_state,
+            &mut self.state.theme_dialog_state,
             &available_themes,
             &self.settings.theme,
         );
@@ -1431,12 +1321,12 @@ impl CalendarApp {
                 let base_theme = theme_service
                     .get_theme(&self.settings.theme)
                     .unwrap_or_else(|_| CalendarTheme::light());
-                self.theme_creator_state.open_create(base_theme);
+                self.state.theme_creator_state.open_create(base_theme);
             }
             ThemeDialogAction::EditTheme(name) => {
                 // Load and edit the theme
                 if let Ok(theme) = theme_service.get_theme(&name) {
-                    self.theme_creator_state.open_edit(name, theme);
+                    self.state.theme_creator_state.open_edit(name, theme);
                 }
             }
             ThemeDialogAction::DeleteTheme(name) => {
@@ -1462,30 +1352,30 @@ impl CalendarApp {
                 }
 
                 // Save to database
-                let settings_service = SettingsService::new(self.database);
+                let settings_service = self.context.settings_service();
                 if let Err(e) = settings_service.update(&self.settings) {
                     eprintln!("Failed to save theme setting: {}", e);
                 }
             }
             ThemeDialogAction::Close => {
-                self.theme_dialog_state.close();
+                self.state.theme_dialog_state.close();
             }
         }
     }
 
     fn render_theme_creator(&mut self, ctx: &egui::Context) {
-        let action = render_theme_creator(ctx, &mut self.theme_creator_state);
+        let action = render_theme_creator(ctx, &mut self.state.theme_creator_state);
 
         match action {
             ThemeCreatorAction::None => {}
             ThemeCreatorAction::Save(name, theme) => {
                 // Save the theme to database
-                let theme_service = ThemeService::new(self.database);
+                let theme_service = self.context.theme_service();
                 if let Err(e) = theme_service.save_theme(&theme, &name) {
                     eprintln!("Failed to save theme: {}", e);
-                    self.theme_creator_state.validation_error =
+                    self.state.theme_creator_state.validation_error =
                         Some(format!("Failed to save: {}", e));
-                    self.theme_creator_state.is_open = true; // Reopen to show error
+                    self.state.theme_creator_state.is_open = true; // Reopen to show error
                 } else {
                     eprintln!("Successfully saved theme: {}", name);
 
@@ -1495,22 +1385,22 @@ impl CalendarApp {
                     self.active_theme = theme.clone();
 
                     // Save settings
-                    let settings_service = SettingsService::new(self.database);
+                    let settings_service = self.context.settings_service();
                     if let Err(e) = settings_service.update(&self.settings) {
                         eprintln!("Failed to save settings: {}", e);
                     }
 
-                    self.theme_creator_state.close();
+                    self.state.theme_creator_state.close();
                 }
             }
             ThemeCreatorAction::Cancel => {
-                self.theme_creator_state.close();
+                self.state.theme_creator_state.close();
             }
         }
     }
 
     fn apply_pending_root_geometry(&mut self, ctx: &egui::Context) {
-        if let Some(geometry) = self.pending_root_geometry.take() {
+        if let Some(geometry) = self.state.pending_root_geometry.take() {
             if !Self::is_plausible_root_geometry(&geometry) {
                 log::warn!(
                     "Ignoring persisted root geometry due to implausible size: {:?}",
@@ -1541,13 +1431,15 @@ impl CalendarApp {
                     );
                     return;
                 }
-                let needs_update = match self.countdown_service.app_window_geometry() {
+                let needs_update = match self.context.countdown_service().app_window_geometry() {
                     Some(current) => geometry_changed(current, geometry),
                     None => true,
                 };
                 if needs_update {
                     log::debug!("Captured new root geometry: {:?}", geometry);
-                    self.countdown_service.update_app_window_geometry(geometry);
+                    self.context
+                        .countdown_service_mut()
+                        .update_app_window_geometry(geometry);
                 }
             }
         }
@@ -1555,13 +1447,19 @@ impl CalendarApp {
 
     fn focus_on_event(&mut self, event: &Event) {
         self.current_date = event.start.date_naive();
-        if matches!(self.current_view, ViewType::Day | ViewType::Week | ViewType::WorkWeek) {
+        if matches!(
+            self.current_view,
+            ViewType::Day | ViewType::Week | ViewType::WorkWeek
+        ) {
             self.pending_focus = Some(AutoFocusRequest::from_event(event));
         }
     }
 
     fn focus_on_current_time_if_visible(&mut self) {
-        if !matches!(self.current_view, ViewType::Day | ViewType::Week | ViewType::WorkWeek) {
+        if !matches!(
+            self.current_view,
+            ViewType::Day | ViewType::Week | ViewType::WorkWeek
+        ) {
             return;
         }
 
@@ -1577,10 +1475,11 @@ impl CalendarApp {
                 today >= week_start && today <= week_end
             }
             ViewType::WorkWeek => {
-                let week_start =
-                    WorkWeekView::get_week_start(self.current_date, self.settings.first_day_of_week);
-                let work_week_dates =
-                    WorkWeekView::get_work_week_dates(week_start, &self.settings);
+                let week_start = WorkWeekView::get_week_start(
+                    self.current_date,
+                    self.settings.first_day_of_week,
+                );
+                let work_week_dates = WorkWeekView::get_work_week_dates(week_start, &self.settings);
                 work_week_dates.contains(&today)
             }
             ViewType::Month => false,
@@ -1627,4 +1526,3 @@ fn geometry_changed(a: CountdownCardGeometry, b: CountdownCardGeometry) -> bool 
         || (a.width - b.width).abs() > 1.0
         || (a.height - b.height).abs() > 1.0
 }
-

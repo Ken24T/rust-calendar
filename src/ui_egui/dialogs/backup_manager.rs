@@ -82,7 +82,7 @@ impl BackupManagerState {
 
         let backup_info = &self.backups[index];
         BackupService::restore_backup(&backup_info.path, &self.db_path)?;
-        
+
         self.success_message = Some(format!(
             "Database restored from backup: {}",
             backup_info.filename
@@ -98,7 +98,7 @@ impl BackupManagerState {
 
         let backup_info = &self.backups[index];
         BackupService::delete_backup(&backup_info.path)?;
-        
+
         self.success_message = Some(format!("Backup deleted: {}", backup_info.filename));
         self.confirm_delete_index = None;
         self.refresh_backups();
@@ -108,10 +108,7 @@ impl BackupManagerState {
 
 /// Render the backup manager dialog
 /// Returns true if the application should reload the database (after restore)
-pub fn render_backup_manager_dialog(
-    ctx: &egui::Context,
-    state: &mut BackupManagerState,
-) -> bool {
+pub fn render_backup_manager_dialog(ctx: &egui::Context, state: &mut BackupManagerState) -> bool {
     let mut should_reload_db = false;
 
     if !state.show_dialog {
@@ -140,7 +137,8 @@ pub fn render_backup_manager_dialog(
                         if ui.button("➕ Create Backup").clicked() {
                             state.clear_messages();
                             if let Err(e) = state.create_backup() {
-                                state.error_message = Some(format!("Failed to create backup: {}", e));
+                                state.error_message =
+                                    Some(format!("Failed to create backup: {}", e));
                             }
                         }
                     });
@@ -175,7 +173,11 @@ pub fn render_backup_manager_dialog(
                 if state.backups.is_empty() {
                     ui.vertical_centered(|ui| {
                         ui.add_space(50.0);
-                        ui.label(RichText::new("No backups found").size(16.0).color(Color32::GRAY));
+                        ui.label(
+                            RichText::new("No backups found")
+                                .size(16.0)
+                                .color(Color32::GRAY),
+                        );
                         ui.label("Create a backup to get started");
                     });
                 } else {
@@ -183,7 +185,7 @@ pub fn render_backup_manager_dialog(
                     let backups_clone = state.backups.clone();
                     let confirm_restore = state.confirm_restore_index;
                     let confirm_delete = state.confirm_delete_index;
-                    
+
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, true])
                         .show(ui, |ui| {
@@ -207,7 +209,9 @@ pub fn render_backup_manager_dialog(
                 // Footer with info
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("Total backups: {}", state.backups.len())).weak());
+                    ui.label(
+                        RichText::new(format!("Total backups: {}", state.backups.len())).weak(),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.button("Close").clicked() {
                             state.close();
@@ -250,13 +254,13 @@ fn render_backup_item(
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(&backup.filename).strong());
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Created:").weak());
                         ui.label(backup.created_at.format("%Y-%m-%d %H:%M:%S").to_string());
-                        
+
                         ui.add_space(16.0);
-                        
+
                         ui.label(RichText::new("Size:").weak());
                         ui.label(BackupService::format_size(backup.size_bytes));
                     });
@@ -278,7 +282,8 @@ fn render_backup_item(
                             match state.restore_backup(index) {
                                 Ok(()) => {
                                     state.success_message = Some(
-                                        "Restore successful! Application will reload...".to_string(),
+                                        "Restore successful! Application will reload..."
+                                            .to_string(),
                                     );
                                     *should_reload_db = true;
                                 }
@@ -287,7 +292,10 @@ fn render_backup_item(
                                 }
                             }
                         }
-                        ui.label(RichText::new("⚠ This will overwrite the current database!").color(Color32::from_rgb(255, 165, 0)));
+                        ui.label(
+                            RichText::new("⚠ This will overwrite the current database!")
+                                .color(Color32::from_rgb(255, 165, 0)),
+                        );
                     } else if is_delete_confirm {
                         // Confirmation buttons for delete
                         if ui.button("❌ Cancel").clicked() {

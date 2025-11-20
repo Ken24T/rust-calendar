@@ -130,11 +130,7 @@ pub fn render_theme_creator(ctx: &Context, state: &mut ThemeCreatorState) -> The
 
                         ui.label(RichText::new("Backgrounds").strong());
                         ui.add_space(4.0);
-                        render_color_picker(
-                            ui,
-                            "App Background",
-                            &mut state.theme.app_background,
-                        );
+                        render_color_picker(ui, "App Background", &mut state.theme.app_background);
                         render_color_picker(
                             ui,
                             "Calendar Background",
