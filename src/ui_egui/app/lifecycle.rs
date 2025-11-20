@@ -8,8 +8,7 @@ use crate::services::countdown::CountdownService;
 use crate::services::database::Database;
 use crate::services::notification::NotificationService;
 use crate::services::settings::SettingsService;
-use crate::ui_egui::dialogs::backup_manager::{render_backup_manager_dialog, BackupManagerState};
-use crate::ui_egui::event_dialog::EventDialogState;
+use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
 use chrono::Local;
@@ -113,71 +112,7 @@ impl CalendarApp {
         self.handle_file_drops(ctx);
 
         // Handle keyboard shortcuts
-        ctx.input(|i| {
-            // Escape - Close dialogs in priority order
-            if i.key_pressed(egui::Key::Escape) {
-                if self.show_event_dialog {
-                    self.show_event_dialog = false;
-                    self.event_dialog_state = None;
-                    self.event_dialog_date = None;
-                    self.event_dialog_time = None;
-                    self.event_dialog_recurrence = None;
-                    self.event_to_edit = None;
-                } else if self.show_settings_dialog {
-                    self.show_settings_dialog = false;
-                } else if self.state.theme_dialog_state.is_open {
-                    self.state.theme_dialog_state.close();
-                }
-            }
-
-            // Ctrl+N - New Event
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::N) && !self.show_event_dialog {
-                self.show_event_dialog = true;
-                self.event_dialog_date = Some(self.current_date);
-                self.event_dialog_time = None;
-                self.event_dialog_recurrence = None;
-                self.event_to_edit = None;
-            }
-
-            // Ctrl+T - Today (navigate to current date)
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::T) {
-                self.jump_to_today();
-            }
-
-            // Ctrl+S - Settings
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
-                self.show_settings_dialog = true;
-            }
-
-            // Ctrl+B - Backup Database
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
-                if let Err(e) = self.state.backup_manager_state.create_backup() {
-                    log::error!("Failed to create backup: {}", e);
-                }
-            }
-
-            // Arrow keys for navigation (only when dialogs are closed)
-            if !self.show_event_dialog
-                && !self.show_settings_dialog
-                && !self.state.theme_dialog_state.is_open
-            {
-                // Left/Right - Navigate backwards/forwards
-                if i.key_pressed(egui::Key::ArrowLeft) {
-                    self.navigate_previous();
-                }
-                if i.key_pressed(egui::Key::ArrowRight) {
-                    self.navigate_next();
-                }
-
-                // Up/Down - Navigate up/down (weeks in week view, months in month view)
-                if i.key_pressed(egui::Key::ArrowUp) {
-                    self.navigate_up();
-                }
-                if i.key_pressed(egui::Key::ArrowDown) {
-                    self.navigate_down();
-                }
-            }
-        });
+        self.handle_keyboard_shortcuts(ctx);
 
         self.apply_pending_root_geometry(ctx);
 
@@ -195,62 +130,7 @@ impl CalendarApp {
         self.countdown_ui
             .render_settings_dialogs(ctx, self.context.countdown_service_mut());
         self.flush_pending_event_bodies();
-
-        // Dialogs (to be implemented)
-        self.capture_root_geometry(ctx);
-        if self.show_event_dialog {
-            // Create dialog state if not already present
-            if self.event_dialog_state.is_none() {
-                // Check if we're editing an existing event
-                if let Some(event_id) = self.event_to_edit {
-                    // Load event from database
-                    let service = self.context.event_service();
-                    if let Ok(Some(event)) = service.get(event_id) {
-                        self.event_dialog_state =
-                            Some(EventDialogState::from_event(&event, &self.settings));
-                    } else {
-                        // Event not found, create new one instead
-                        self.event_dialog_state = Some(EventDialogState::new_event(
-                            self.event_dialog_date.unwrap_or(self.current_date),
-                            &self.settings,
-                        ));
-                    }
-                } else {
-                    // Creating a new event
-                    self.event_dialog_state = Some(EventDialogState::new_event_with_time(
-                        self.event_dialog_date.unwrap_or(self.current_date),
-                        self.event_dialog_time,
-                        &self.settings,
-                    ));
-                    // Apply any recurrence rule from click
-                    if let (Some(ref mut state), Some(ref rrule)) =
-                        (&mut self.event_dialog_state, &self.event_dialog_recurrence)
-                    {
-                        // Parse and set recurrence from the click handler
-                        state.is_recurring = true;
-                        if rrule.contains("WEEKLY") {
-                            state.frequency =
-                                crate::ui_egui::event_dialog::RecurrenceFrequency::Weekly;
-                        } else if rrule.contains("MONTHLY") {
-                            state.frequency =
-                                crate::ui_egui::event_dialog::RecurrenceFrequency::Monthly;
-                        } else if rrule.contains("YEARLY") {
-                            state.frequency =
-                                crate::ui_egui::event_dialog::RecurrenceFrequency::Yearly;
-                        } else {
-                            state.frequency =
-                                crate::ui_egui::event_dialog::RecurrenceFrequency::Daily;
-                        }
-                    }
-                }
-            }
-
-            self.render_event_dialog(ctx);
-        }
-
-        if self.show_settings_dialog {
-            self.render_settings_dialog(ctx);
-        }
+        self.handle_dialogs(ctx);
 
         // Periodically refresh countdown cards even before their UI arrives.
         let changed_counts = self
@@ -325,20 +205,6 @@ impl CalendarApp {
         }
 
         self.persist_countdowns_if_needed();
-
-        // Render unified theme dialog and creator
-        self.render_theme_dialog(ctx);
-        self.render_theme_creator(ctx);
-
-        // Render backup manager dialog
-        let should_reload_db =
-            render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
-        if should_reload_db {
-            // Note: Database restoration requires app restart
-            // Show message and close app
-            log::info!("Database restored. Application should be restarted.");
-            // TODO: Implement graceful restart or reload mechanism
-        }
     }
 
     pub(super) fn handle_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

@@ -8,6 +8,7 @@ mod lifecycle;
 mod menu;
 mod navigation;
 mod notifications;
+mod shortcuts;
 mod state;
 mod views;
 

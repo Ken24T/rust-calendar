@@ -1,4 +1,5 @@
 use super::CalendarApp;
+use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
 use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
 use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogResult};
@@ -7,6 +8,69 @@ use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
 
 impl CalendarApp {
+    pub(super) fn handle_dialogs(&mut self, ctx: &egui::Context) {
+        self.capture_root_geometry(ctx);
+
+        if self.show_event_dialog {
+            self.ensure_event_dialog_state();
+            self.render_event_dialog(ctx);
+        }
+
+        if self.show_settings_dialog {
+            self.render_settings_dialog(ctx);
+        }
+
+        self.render_theme_dialog(ctx);
+        self.render_theme_creator(ctx);
+
+        let should_reload_db =
+            render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
+        if should_reload_db {
+            log::info!("Database restored. Application should be restarted.");
+            // TODO: Implement graceful restart or reload mechanism
+        }
+    }
+
+    fn ensure_event_dialog_state(&mut self) {
+        if self.event_dialog_state.is_some() {
+            return;
+        }
+
+        if let Some(event_id) = self.event_to_edit {
+            let service = self.context.event_service();
+            if let Ok(Some(event)) = service.get(event_id) {
+                self.event_dialog_state =
+                    Some(EventDialogState::from_event(&event, &self.settings));
+            } else {
+                self.event_dialog_state = Some(EventDialogState::new_event(
+                    self.event_dialog_date.unwrap_or(self.current_date),
+                    &self.settings,
+                ));
+            }
+        } else {
+            self.event_dialog_state = Some(EventDialogState::new_event_with_time(
+                self.event_dialog_date.unwrap_or(self.current_date),
+                self.event_dialog_time,
+                &self.settings,
+            ));
+
+            if let (Some(ref mut state), Some(ref rrule)) =
+                (&mut self.event_dialog_state, &self.event_dialog_recurrence)
+            {
+                state.is_recurring = true;
+                if rrule.contains("WEEKLY") {
+                    state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Weekly;
+                } else if rrule.contains("MONTHLY") {
+                    state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Monthly;
+                } else if rrule.contains("YEARLY") {
+                    state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Yearly;
+                } else {
+                    state.frequency = crate::ui_egui::event_dialog::RecurrenceFrequency::Daily;
+                }
+            }
+        }
+    }
+
     pub(super) fn render_event_dialog(&mut self, ctx: &egui::Context) {
         if self.event_dialog_state.is_none() {
             self.show_event_dialog = false;
