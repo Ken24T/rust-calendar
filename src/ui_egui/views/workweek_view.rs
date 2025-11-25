@@ -68,12 +68,32 @@ impl WorkWeekView {
 
         let mut clicked_event = None;
 
+        let show_week_numbers = settings.show_week_numbers;
+
         let header_response = header_frame.show(ui, |strip_ui| {
             strip_ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
 
-                // Fixed width for time label area
-                ui.add_space(TIME_LABEL_WIDTH);
+                // Time label placeholder - show week number if enabled
+                ui.allocate_ui_with_layout(
+                    Vec2::new(TIME_LABEL_WIDTH, 48.0),
+                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                    |ui| {
+                        if show_week_numbers {
+                            // Use the first work day to get the week number
+                            if let Some(first_date) = work_week_dates.first() {
+                                let week_num = first_date.iso_week().week();
+                                ui.label(
+                                    egui::RichText::new(format!("W{}", week_num))
+                                        .size(12.0)
+                                        .color(day_strip_palette.text)
+                                        .strong(),
+                                );
+                            }
+                        }
+                    },
+                );
+
                 ui.add_space(COLUMN_SPACING);
 
                 for (i, date) in work_week_dates.iter().enumerate() {

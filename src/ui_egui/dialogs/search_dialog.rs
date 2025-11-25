@@ -172,9 +172,12 @@ pub fn render_search_dialog(
                             })
                             .response;
 
-                        // Handle clicks
+                        // Handle clicks - single click navigates to date
                         if response.clicked() {
                             state.selected_event = event.id;
+                            action = SearchDialogAction::NavigateToDate(
+                                event.start.date_naive(),
+                            );
                         }
 
                         if response.double_clicked() {
