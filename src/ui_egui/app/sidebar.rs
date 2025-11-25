@@ -14,8 +14,8 @@ impl CalendarApp {
 
         let panel_id = "sidebar";
         
-        // Mini calendar needs: 7 cols × 22px + 6 gaps × 2px + padding ≈ 180px
-        const SIDEBAR_MIN_WIDTH: f32 = 180.0;
+        // Mini calendar needs: 7 cols × 20px + 6 gaps × 2px + padding ≈ 160px
+        const SIDEBAR_MIN_WIDTH: f32 = 160.0;
         const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
         const SIDEBAR_MAX_WIDTH: f32 = 300.0;
         
@@ -90,7 +90,7 @@ impl CalendarApp {
         egui::Grid::new("sidebar_mini_calendar")
             .num_columns(7)
             .spacing([2.0, 2.0])
-            .min_col_width(22.0)
+            .min_col_width(18.0)
             .show(ui, |ui| {
                 // Header row
                 for name in &day_names {
