@@ -306,11 +306,12 @@ pub fn draw_current_time_indicator(
     let now_time = now.time();
 
     if let Some(day_index) = dates.iter().position(|d| *d == now_date) {
+        // Calculate Y position based on time
+        // Each hour has 4 slots (15 minutes each), each slot is SLOT_HEIGHT pixels
+        const SLOTS_PER_HOUR: f32 = 4.0;
+        
         let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
-        let slots_since_midnight = (hours_since_midnight * 4.0).floor() as usize;
-        let slot_offset = (hours_since_midnight * 4.0) - slots_since_midnight as f32;
-
-        let relative_y = (slots_since_midnight as f32 * SLOT_HEIGHT) + (slot_offset * SLOT_HEIGHT);
+        let relative_y = hours_since_midnight * SLOTS_PER_HOUR * SLOT_HEIGHT;
 
         let ui_top = ui.min_rect().top();
         let y_position = ui_top + relative_y;
@@ -703,6 +704,9 @@ pub fn render_time_grid(
     config: &TimeCellConfig,
 ) -> Option<Event> {
     let mut clicked_event: Option<Event> = None;
+
+    // Remove vertical spacing between slots so time calculations are accurate
+    ui.spacing_mut().item_spacing.y = 0.0;
 
     // Draw 24 hours with 4 slots each
     for hour in 0..24 {
