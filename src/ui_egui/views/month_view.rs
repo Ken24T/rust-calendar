@@ -314,15 +314,18 @@ impl MonthView {
             palette.text
         };
         
-        // Create a clickable area for the day number
+        // Define clickable area for the day number (don't allocate, just check pointer)
         let day_number_rect = Rect::from_min_size(
             Pos2::new(rect.left() + 2.0, rect.top() + 2.0),
             Vec2::new(30.0, 20.0),
         );
-        let day_response = ui.allocate_rect(day_number_rect, Sense::click());
+        
+        let pointer_pos = ui.input(|i| i.pointer.hover_pos());
+        let day_number_hovered = pointer_pos.map_or(false, |pos| day_number_rect.contains(pos));
+        let day_number_clicked = response.clicked() && day_number_hovered;
         
         // Underline on hover to indicate clickability
-        if day_response.hovered() {
+        if day_number_hovered {
             ui.painter().line_segment(
                 [
                     Pos2::new(rect.left() + 5.0, rect.top() + 18.0),
@@ -341,7 +344,7 @@ impl MonthView {
         );
         
         // Return action if day number clicked
-        if day_response.clicked() {
+        if day_number_clicked {
             return (MonthViewAction::SwitchToDayView(date), None);
         }
 
@@ -438,8 +441,9 @@ impl MonthView {
                 Vec2::new(rect.width() - 6.0, 14.0),
             );
             
-            let more_response = ui.allocate_rect(more_rect, egui::Sense::click());
-            let is_hovered = more_response.hovered();
+            // Check hover/click via pointer position (don't use allocate_rect as it breaks Grid)
+            let pointer_pos = ui.input(|i| i.pointer.hover_pos());
+            let is_hovered = pointer_pos.map_or(false, |pos| more_rect.contains(pos));
             
             // Highlight on hover
             if is_hovered {
@@ -478,15 +482,10 @@ impl MonthView {
                     ],
                     egui::Stroke::new(1.0, text_color),
                 );
-            }
-            
-            if more_response.clicked() {
-                more_clicked = true;
-            }
-            
-            // Show tooltip with hidden events
-            if is_hovered {
-                more_response.on_hover_ui_at_pointer(|ui| {
+                
+                // Show tooltip with hidden events using egui's popup system
+                let tooltip_id = egui::Id::new("more_events_tooltip").with(date);
+                egui::containers::popup::show_tooltip(ui.ctx(), egui::LayerId::new(egui::Order::Tooltip, tooltip_id), tooltip_id, |ui| {
                     ui.label(egui::RichText::new("Hidden events:").strong());
                     for event in events.iter().skip(3) {
                         let time_str = if event.all_day {
@@ -498,6 +497,11 @@ impl MonthView {
                     }
                     ui.label(egui::RichText::new("\nClick to view day").small().weak());
                 });
+            }
+            
+            // Check if clicked on "+X more"
+            if response.clicked() && is_hovered {
+                more_clicked = true;
             }
         }
 
