@@ -11,6 +11,16 @@ use crate::ui_egui::theme::CalendarTheme;
 /// Width of the week number column
 const WEEK_NUMBER_WIDTH: f32 = 35.0;
 
+/// Blend header color for weekend columns (slightly darker/lighter)
+fn blend_header_weekend(header_bg: Color32, is_dark: bool) -> Color32 {
+    let factor = if is_dark { 1.15 } else { 0.92 };
+    Color32::from_rgb(
+        ((header_bg.r() as f32 * factor).min(255.0)) as u8,
+        ((header_bg.g() as f32 * factor).min(255.0)) as u8,
+        ((header_bg.b() as f32 * factor).min(255.0)) as u8,
+    )
+}
+
 pub struct MonthView;
 
 impl MonthView {
@@ -49,12 +59,19 @@ impl MonthView {
                         Vec2::new(WEEK_NUMBER_WIDTH, 30.0),
                         egui::Layout::centered_and_justified(egui::Direction::TopDown),
                         |ui| {
-                            ui.label(
-                                egui::RichText::new("Wk")
-                                    .size(12.0)
-                                    .color(day_strip_palette.text)
-                                    .strong(),
-                            );
+                            egui::Frame::none()
+                                .fill(day_strip_palette.header_bg)
+                                .rounding(egui::Rounding::same(6.0))
+                                .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
+                                .inner_margin(Margin::symmetric(4.0, 6.0))
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new("Wk")
+                                            .size(12.0)
+                                            .color(day_strip_palette.header_text)
+                                            .strong(),
+                                    );
+                                });
                         },
                     );
                 }
@@ -63,11 +80,12 @@ impl MonthView {
                     let weekday = (settings.first_day_of_week as usize + idx) % 7;
                     let is_weekend = weekday == 0 || weekday == 6;
                     let header_bg = if is_weekend {
-                        day_strip_palette.weekend_cell_bg
+                        // Slightly darker/lighter for weekend headers
+                        blend_header_weekend(day_strip_palette.header_bg, theme.is_dark)
                     } else {
-                        day_strip_palette.cell_bg
+                        day_strip_palette.header_bg
                     };
-                    let text_color = day_strip_palette.text;
+                    let text_color = day_strip_palette.header_text;
 
                     ui.allocate_ui_with_layout(
                         Vec2::new(col_width, 30.0),

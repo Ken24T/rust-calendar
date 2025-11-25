@@ -42,7 +42,7 @@ impl DayView {
         let day_name = current_date.format("%A").to_string();
         let date_label = current_date.format("%B %d, %Y").to_string();
         let header_frame = egui::Frame::none()
-            .fill(day_strip_palette.strip_bg)
+            .fill(day_strip_palette.header_bg)
             .rounding(egui::Rounding::same(12.0))
             .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
             .inner_margin(Margin::symmetric(16.0, 12.0));
@@ -53,12 +53,12 @@ impl DayView {
                     let heading_color = if is_today {
                         day_strip_palette.today_text
                     } else {
-                        day_strip_palette.text
+                        day_strip_palette.header_text
                     };
                     let date_color = if is_today {
                         day_strip_palette.today_date_text
                     } else {
-                        day_strip_palette.date_text
+                        day_strip_palette.header_text
                     };
 
                     text_ui.label(

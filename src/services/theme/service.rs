@@ -63,7 +63,7 @@ impl<'a> ThemeService<'a> {
         let theme = conn.query_row(
             "SELECT name, is_dark, app_background, calendar_background, weekend_background,
                     today_background, today_border, day_background, day_border,
-                    text_primary, text_secondary
+                    text_primary, text_secondary, header_background, header_text
              FROM custom_themes WHERE name = ?1",
             [name],
             |row| Ok(row_to_theme(row)?),
@@ -87,8 +87,8 @@ impl<'a> ThemeService<'a> {
             "INSERT OR REPLACE INTO custom_themes \
              (name, is_dark, app_background, calendar_background, weekend_background,\
               today_background, today_border, day_background, day_border,\
-              text_primary, text_secondary, updated_at)\
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, CURRENT_TIMESTAMP)",
+              text_primary, text_secondary, header_background, header_text, updated_at)\
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, CURRENT_TIMESTAMP)",
             (
                 name,
                 is_dark as i32,
@@ -101,6 +101,8 @@ impl<'a> ThemeService<'a> {
                 CalendarTheme::color_to_string(theme.day_border),
                 CalendarTheme::color_to_string(theme.text_primary),
                 CalendarTheme::color_to_string(theme.text_secondary),
+                CalendarTheme::color_to_string(theme.header_background),
+                CalendarTheme::color_to_string(theme.header_text),
             ),
         )?;
 

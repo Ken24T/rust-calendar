@@ -77,9 +77,25 @@ pub struct CalendarTheme {
     /// Secondary text color (secondary info)
     pub text_secondary: Color32,
 
+    /// Header/strip background color (day name headers)
+    #[serde(default = "default_header_background")]
+    pub header_background: Color32,
+
+    /// Header text color
+    #[serde(default = "default_header_text")]
+    pub header_text: Color32,
+
     /// Event category colors
     #[serde(default)]
     pub event_colors: EventColors,
+}
+
+fn default_header_background() -> Color32 {
+    Color32::from_rgb(235, 235, 240)
+}
+
+fn default_header_text() -> Color32 {
+    Color32::from_rgb(60, 60, 60)
 }
 
 /// Built-in theme presets
@@ -183,6 +199,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(220, 220, 220),
             text_primary: Color32::from_rgb(40, 40, 40),
             text_secondary: Color32::from_rgb(100, 100, 100),
+            header_background: Color32::from_rgb(230, 232, 238),
+            header_text: Color32::from_rgb(50, 55, 70),
             event_colors: EventColors::default(),
         }
     }
@@ -201,6 +219,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(60, 60, 60),
             text_primary: Color32::from_rgb(240, 240, 240),
             text_secondary: Color32::from_rgb(170, 170, 170),
+            header_background: Color32::from_rgb(50, 52, 58),
+            header_text: Color32::from_rgb(220, 220, 225),
             event_colors: EventColors::dark(),
         }
     }
@@ -219,6 +239,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(147, 161, 161),        // Base1
             text_primary: Color32::from_rgb(101, 123, 131),      // Base00
             text_secondary: Color32::from_rgb(147, 161, 161),    // Base1
+            header_background: Color32::from_rgb(238, 232, 213), // Base2
+            header_text: Color32::from_rgb(88, 110, 117),        // Base01
             event_colors: EventColors {
                 default: Color32::from_rgb(38, 139, 210),        // Blue
                 work: Color32::from_rgb(42, 161, 152),           // Cyan
@@ -243,6 +265,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(88, 110, 117),         // Base01
             text_primary: Color32::from_rgb(147, 161, 161),      // Base1
             text_secondary: Color32::from_rgb(88, 110, 117),     // Base01
+            header_background: Color32::from_rgb(7, 54, 66),     // Base02
+            header_text: Color32::from_rgb(131, 148, 150),       // Base0
             event_colors: EventColors {
                 default: Color32::from_rgb(38, 139, 210),        // Blue
                 work: Color32::from_rgb(42, 161, 152),           // Cyan
@@ -267,6 +291,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(76, 86, 106),          // Nord3
             text_primary: Color32::from_rgb(236, 239, 244),      // Nord6
             text_secondary: Color32::from_rgb(216, 222, 233),    // Nord4
+            header_background: Color32::from_rgb(67, 76, 94),    // Nord2
+            header_text: Color32::from_rgb(229, 233, 240),       // Nord5
             event_colors: EventColors {
                 default: Color32::from_rgb(129, 161, 193),       // Nord9
                 work: Color32::from_rgb(136, 192, 208),          // Nord8
@@ -291,6 +317,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(98, 114, 164),
             text_primary: Color32::from_rgb(248, 248, 242),      // Foreground
             text_secondary: Color32::from_rgb(189, 147, 249),    // Purple
+            header_background: Color32::from_rgb(68, 71, 90),    // Current line
+            header_text: Color32::from_rgb(248, 248, 242),       // Foreground
             event_colors: EventColors {
                 default: Color32::from_rgb(189, 147, 249),       // Purple
                 work: Color32::from_rgb(139, 233, 253),          // Cyan
@@ -315,6 +343,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(255, 255, 255),
             text_primary: Color32::from_rgb(255, 255, 255),
             text_secondary: Color32::from_rgb(255, 255, 0),
+            header_background: Color32::from_rgb(40, 40, 40),
+            header_text: Color32::from_rgb(255, 255, 255),
             event_colors: EventColors {
                 default: Color32::from_rgb(0, 200, 255),
                 work: Color32::from_rgb(0, 255, 0),
@@ -339,6 +369,8 @@ impl CalendarTheme {
             day_border: Color32::from_rgb(200, 180, 150),
             text_primary: Color32::from_rgb(90, 70, 50),
             text_secondary: Color32::from_rgb(139, 110, 80),
+            header_background: Color32::from_rgb(235, 220, 190),
+            header_text: Color32::from_rgb(80, 60, 40),
             event_colors: EventColors {
                 default: Color32::from_rgb(139, 90, 43),
                 work: Color32::from_rgb(70, 100, 130),
@@ -449,6 +481,8 @@ day_background = "{}"
 day_border = "{}"
 text_primary = "{}"
 text_secondary = "{}"
+header_background = "{}"
+header_text = "{}"
 
 [event_colors]
 default = "{}"
@@ -468,6 +502,8 @@ birthday = "{}"
             Self::color_to_hex(self.day_border),
             Self::color_to_hex(self.text_primary),
             Self::color_to_hex(self.text_secondary),
+            Self::color_to_hex(self.header_background),
+            Self::color_to_hex(self.header_text),
             Self::color_to_hex(self.event_colors.default),
             Self::color_to_hex(self.event_colors.work),
             Self::color_to_hex(self.event_colors.personal),
@@ -526,6 +562,8 @@ birthday = "{}"
             day_border: get_color(colors, "day_border", base.day_border),
             text_primary: get_color(colors, "text_primary", base.text_primary),
             text_secondary: get_color(colors, "text_secondary", base.text_secondary),
+            header_background: get_color(colors, "header_background", base.header_background),
+            header_text: get_color(colors, "header_text", base.header_text),
             event_colors,
         })
     }

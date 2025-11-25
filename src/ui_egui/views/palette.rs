@@ -54,6 +54,8 @@ pub(crate) struct DayStripPalette {
     pub today_date_text: Color32,
     pub badge_bg: Color32,
     pub badge_text: Color32,
+    pub header_bg: Color32,
+    pub header_text: Color32,
 }
 
 impl DayStripPalette {
@@ -75,6 +77,8 @@ impl DayStripPalette {
             } else {
                 Color32::from_rgb(245, 245, 245)
             },
+            header_bg: theme.header_background,
+            header_text: theme.header_text,
         }
     }
 }

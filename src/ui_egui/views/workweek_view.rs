@@ -1,5 +1,5 @@
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, TimeZone, Weekday};
-use egui::{Margin, Stroke, Vec2};
+use egui::{Color32, Margin, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::DayStripPalette;
@@ -14,6 +14,16 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::DragView;
 use crate::ui_egui::theme::CalendarTheme;
+
+/// Blend header color for weekend columns (slightly darker/lighter)
+fn blend_header_weekend(header_bg: Color32, is_dark: bool) -> Color32 {
+    let factor = if is_dark { 1.15 } else { 0.92 };
+    Color32::from_rgb(
+        ((header_bg.r() as f32 * factor).min(255.0)) as u8,
+        ((header_bg.g() as f32 * factor).min(255.0)) as u8,
+        ((header_bg.b() as f32 * factor).min(255.0)) as u8,
+    )
+}
 
 pub struct WorkWeekView;
 
@@ -56,7 +66,7 @@ impl WorkWeekView {
 
         // Work week header with day names
         let header_frame = egui::Frame::none()
-            .fill(day_strip_palette.strip_bg)
+            .fill(day_strip_palette.header_bg)
             .rounding(egui::Rounding::same(10.0))
             .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
             .inner_margin(Margin {
@@ -86,7 +96,7 @@ impl WorkWeekView {
                                 ui.label(
                                     egui::RichText::new(format!("W{}", week_num))
                                         .size(12.0)
-                                        .color(day_strip_palette.text)
+                                        .color(day_strip_palette.header_text)
                                         .strong(),
                                 );
                             }
@@ -101,12 +111,15 @@ impl WorkWeekView {
                     let weekday_idx = date.weekday().num_days_from_sunday();
                     let is_weekend = weekday_idx == 0 || weekday_idx == 6;
                     let day_name = date.format("%A").to_string();
+                    
+                    // Use header colors for day header cells
                     let cell_bg = if is_today {
                         day_strip_palette.today_cell_bg
                     } else if is_weekend {
-                        day_strip_palette.weekend_cell_bg
+                        // Slightly different shade for weekend headers
+                        blend_header_weekend(day_strip_palette.header_bg, theme.is_dark)
                     } else {
-                        day_strip_palette.cell_bg
+                        day_strip_palette.header_bg
                     };
                     let border_color = if is_today {
                         day_strip_palette.accent_line
@@ -116,12 +129,12 @@ impl WorkWeekView {
                     let name_color = if is_today {
                         day_strip_palette.today_text
                     } else {
-                        day_strip_palette.text
+                        day_strip_palette.header_text
                     };
                     let date_color = if is_today {
                         day_strip_palette.today_date_text
                     } else {
-                        day_strip_palette.date_text
+                        day_strip_palette.header_text
                     };
 
                     ui.allocate_ui_with_layout(

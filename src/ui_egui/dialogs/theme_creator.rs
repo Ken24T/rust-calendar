@@ -149,6 +149,16 @@ pub fn render_theme_creator(ctx: &Context, state: &mut ThemeCreatorState) -> The
                         render_color_picker(ui, "Day Background", &mut state.theme.day_background);
 
                         ui.add_space(10.0);
+                        ui.label(RichText::new("Headers").strong());
+                        ui.add_space(4.0);
+                        render_color_picker(
+                            ui,
+                            "Header Background",
+                            &mut state.theme.header_background,
+                        );
+                        render_color_picker(ui, "Header Text", &mut state.theme.header_text);
+
+                        ui.add_space(10.0);
                         ui.label(RichText::new("Borders & Text").strong());
                         ui.add_space(4.0);
                         render_color_picker(ui, "Today Border", &mut state.theme.today_border);
@@ -259,6 +269,37 @@ fn render_theme_preview(ui: &mut Ui, theme: &CalendarTheme) {
             .inner_margin(10.0)
             .show(ui, |ui| {
                 ui.label(RichText::new("App Background").color(theme.text_primary));
+
+                ui.add_space(5.0);
+
+                // Header preview
+                egui::Frame::none()
+                    .fill(theme.header_background)
+                    .stroke(egui::Stroke::new(1.0, theme.day_border))
+                    .rounding(egui::Rounding::same(4.0))
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new("Mon")
+                                    .color(theme.header_text)
+                                    .strong()
+                                    .size(12.0),
+                            );
+                            ui.label(
+                                RichText::new("Tue")
+                                    .color(theme.header_text)
+                                    .strong()
+                                    .size(12.0),
+                            );
+                            ui.label(
+                                RichText::new("Wed")
+                                    .color(theme.header_text)
+                                    .strong()
+                                    .size(12.0),
+                            );
+                        });
+                    });
 
                 ui.add_space(5.0);
 

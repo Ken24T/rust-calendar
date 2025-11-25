@@ -6,6 +6,17 @@ pub fn row_to_theme(row: &Row) -> Result<CalendarTheme, rusqlite::Error> {
     let name: String = row.get(0)?;
     let is_dark: i32 = row.get(1)?;
 
+    // Get base theme to use for fallback colors
+    let base = if is_dark != 0 {
+        CalendarTheme::dark()
+    } else {
+        CalendarTheme::light()
+    };
+
+    // Header colors may be NULL in older databases, so use Option and fallback to base theme
+    let header_background: Option<String> = row.get(11).ok();
+    let header_text: Option<String> = row.get(12).ok();
+
     Ok(CalendarTheme {
         name,
         is_dark: is_dark != 0,
@@ -27,6 +38,12 @@ pub fn row_to_theme(row: &Row) -> Result<CalendarTheme, rusqlite::Error> {
             .unwrap_or(Color32::BLACK),
         text_secondary: CalendarTheme::string_to_color(&row.get::<_, String>(10)?)
             .unwrap_or(Color32::GRAY),
+        header_background: header_background
+            .and_then(|s| CalendarTheme::string_to_color(&s).ok())
+            .unwrap_or(base.header_background),
+        header_text: header_text
+            .and_then(|s| CalendarTheme::string_to_color(&s).ok())
+            .unwrap_or(base.header_text),
         event_colors: EventColors::default(), // TODO: Load from DB when schema supports it
     })
 }

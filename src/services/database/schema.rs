@@ -163,12 +163,28 @@ fn create_custom_themes_table(conn: &Connection) -> Result<()> {
             day_border TEXT NOT NULL,
             text_primary TEXT NOT NULL,
             text_secondary TEXT NOT NULL,
+            header_background TEXT,
+            header_text TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",
         [],
     )
     .context("Failed to create custom_themes table")?;
+
+    // Migration for header colors
+    migrations::ensure_column(
+        conn,
+        "custom_themes",
+        "header_background",
+        "ALTER TABLE custom_themes ADD COLUMN header_background TEXT",
+    )?;
+    migrations::ensure_column(
+        conn,
+        "custom_themes",
+        "header_text",
+        "ALTER TABLE custom_themes ADD COLUMN header_text TEXT",
+    )?;
 
     Ok(())
 }
