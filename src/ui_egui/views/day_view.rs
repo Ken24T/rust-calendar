@@ -154,6 +154,9 @@ impl DayView {
 
         let mut clicked_event: Option<Event> = None;
 
+        // Remove vertical spacing between slots so time calculations are accurate
+        ui.spacing_mut().item_spacing.y = 0.0;
+
         // Draw 24 hours with 4 slots each
         for hour in 0..24 {
             for slot in 0..4 {
