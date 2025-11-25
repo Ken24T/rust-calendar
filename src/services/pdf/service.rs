@@ -161,7 +161,7 @@ impl PdfExportService {
             let x = start_x + (i as f32 * col_width);
 
             // Day header
-            let header_text = format!("{}\n{}", day_names[i as usize], day_date.format("%d"));
+            let _header_text = format!("{}\n{}", day_names[i as usize], day_date.format("%d"));
             Self::draw_text(&layer, &font_bold, 10.0, x + col_width / 2.0, header_y, &day_names[i as usize], true);
             Self::draw_text(&layer, &font, 9.0, x + col_width / 2.0, header_y - 6.0, &day_date.format("%d").to_string(), true);
 

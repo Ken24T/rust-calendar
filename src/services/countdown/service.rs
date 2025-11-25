@@ -89,6 +89,7 @@ impl CountdownService {
     }
 
     /// Get a set of all event IDs that have associated countdown cards
+    #[allow(dead_code)]
     pub fn event_ids_with_cards(&self) -> std::collections::HashSet<i64> {
         self.cards.iter().filter_map(|card| card.event_id).collect()
     }

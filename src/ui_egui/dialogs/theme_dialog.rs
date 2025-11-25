@@ -56,6 +56,7 @@ pub enum ThemeDialogAction {
     None,
     ApplyTheme(String),
     PreviewTheme(String),
+    #[allow(dead_code)]
     RevertPreview,
     CreateTheme,
     EditTheme(String),

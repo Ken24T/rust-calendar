@@ -39,6 +39,7 @@ impl<'a> ThemeService<'a> {
     }
 
     /// Get only custom theme names (excluding presets)
+    #[allow(dead_code)]
     pub fn list_custom_themes(&self) -> Result<Vec<String>> {
         let conn = self.db.connection();
         let mut stmt = conn.prepare("SELECT name FROM custom_themes ORDER BY name")?;
@@ -72,6 +73,7 @@ impl<'a> ThemeService<'a> {
     }
 
     /// Get a theme with its preview colors for display in dialogs
+    #[allow(dead_code)]
     pub fn get_theme_with_preview(&self, name: &str) -> Result<(CalendarTheme, [egui::Color32; 4])> {
         let theme = self.get_theme(name)?;
         let preview = theme.preview_colors();

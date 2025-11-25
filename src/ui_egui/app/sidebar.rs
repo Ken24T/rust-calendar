@@ -14,16 +14,15 @@ impl CalendarApp {
 
         let panel_id = "sidebar";
         
-        // Mini calendar needs: 7 cols × 20px + 6 gaps × 2px + padding ≈ 160px
-        const SIDEBAR_MIN_WIDTH: f32 = 160.0;
+        // Mini calendar needs: 7 cols × 18px + 6 gaps × 2px + padding ≈ 150px
+        const SIDEBAR_MIN_WIDTH: f32 = 150.0;
         const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
         const SIDEBAR_MAX_WIDTH: f32 = 300.0;
         
         if self.settings.my_day_position_right {
             egui::SidePanel::right(panel_id)
                 .default_width(SIDEBAR_DEFAULT_WIDTH)
-                .min_width(SIDEBAR_MIN_WIDTH)
-                .max_width(SIDEBAR_MAX_WIDTH)
+                .width_range(SIDEBAR_MIN_WIDTH..=SIDEBAR_MAX_WIDTH)
                 .resizable(true)
                 .show(ctx, |ui| {
                     self.render_sidebar_content(ui);
@@ -31,8 +30,7 @@ impl CalendarApp {
         } else {
             egui::SidePanel::left(panel_id)
                 .default_width(SIDEBAR_DEFAULT_WIDTH)
-                .min_width(SIDEBAR_MIN_WIDTH)
-                .max_width(SIDEBAR_MAX_WIDTH)
+                .width_range(SIDEBAR_MIN_WIDTH..=SIDEBAR_MAX_WIDTH)
                 .resizable(true)
                 .show(ctx, |ui| {
                     self.render_sidebar_content(ui);
@@ -42,17 +40,22 @@ impl CalendarApp {
 
     /// Render the sidebar content
     fn render_sidebar_content(&mut self, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            self.render_sidebar_mini_calendar(ui);
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-            self.render_sidebar_today_agenda(ui);
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-            self.render_sidebar_upcoming_events(ui);
-        });
+        // Clip content to panel width to prevent content from forcing panel wider
+        ui.set_clip_rect(ui.available_rect_before_wrap());
+        
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                self.render_sidebar_mini_calendar(ui);
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+                self.render_sidebar_today_agenda(ui);
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+                self.render_sidebar_upcoming_events(ui);
+            });
     }
 
     /// Render the mini calendar in the sidebar
@@ -86,11 +89,14 @@ impl CalendarApp {
 
         // Day of week headers and calendar grid
         let day_names = ["S", "M", "T", "W", "T", "F", "S"];
+        
+        let available = ui.available_width();
 
         egui::Grid::new("sidebar_mini_calendar")
             .num_columns(7)
-            .spacing([2.0, 2.0])
-            .min_col_width(18.0)
+            .spacing([1.0, 1.0])
+            .min_col_width(0.0)  // Let columns be as small as needed
+            .max_col_width(available / 7.0)  // Distribute available width
             .show(ui, |ui| {
                 // Header row
                 for name in &day_names {
@@ -206,23 +212,30 @@ impl CalendarApp {
             .and_then(parse_hex_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
 
+        let available_width = ui.available_width();
+        
         ui.horizontal(|ui| {
+            ui.set_max_width(available_width);
+            
             // Color indicator
             let (rect, _) = ui.allocate_exact_size(egui::vec2(4.0, 16.0), egui::Sense::hover());
             ui.painter().rect_filled(rect, 2.0, event_color);
 
             ui.vertical(|ui| {
-                // Event title (clickable)
+                ui.set_max_width(available_width - 10.0);
+                
+                // Event title (clickable) - truncate to fit
                 let title_response = ui.add(
                     egui::Label::new(RichText::new(&event.title).small())
                         .sense(egui::Sense::click())
+                        .truncate()
                 );
                 if title_response.clicked() {
                     // Navigate to the event date
                     self.current_date = event.start.date_naive();
                     self.focus_on_event(event);
                 }
-                title_response.on_hover_text("Click to go to event");
+                title_response.on_hover_text(&event.title);
 
                 // Time/date info
                 let time_str = if event.all_day {
@@ -236,7 +249,7 @@ impl CalendarApp {
                 } else {
                     event.start.format("%H:%M").to_string()
                 };
-                ui.label(RichText::new(&time_str).weak().small());
+                ui.add(egui::Label::new(RichText::new(&time_str).weak().small()).truncate());
             });
         });
         ui.add_space(2.0);

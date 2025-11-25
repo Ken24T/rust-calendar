@@ -42,13 +42,18 @@ impl CalendarCellPalette {
 
 #[derive(Clone, Copy)]
 pub(crate) struct DayStripPalette {
+    #[allow(dead_code)]
     pub strip_bg: Color32,
     pub strip_border: Color32,
     pub accent_line: Color32,
+    #[allow(dead_code)]
     pub cell_bg: Color32,
+    #[allow(dead_code)]
     pub weekend_cell_bg: Color32,
     pub today_cell_bg: Color32,
+    #[allow(dead_code)]
     pub text: Color32,
+    #[allow(dead_code)]
     pub date_text: Color32,
     pub today_text: Color32,
     pub today_date_text: Color32,
