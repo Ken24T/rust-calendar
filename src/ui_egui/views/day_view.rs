@@ -107,16 +107,6 @@ impl DayView {
 
         ui.add_space(8.0);
 
-        // Show empty state hint if no events
-        if events.is_empty() {
-            let date_desc = current_date.format("on %B %d").to_string();
-            if super::render_empty_state(ui, "Day", &date_desc) {
-                *show_event_dialog = true;
-                *event_dialog_date = Some(*current_date);
-                *event_dialog_time = Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap());
-            }
-        }
-
         // Scrollable time slots
         let mut clicked_event = None;
         egui::ScrollArea::vertical()
