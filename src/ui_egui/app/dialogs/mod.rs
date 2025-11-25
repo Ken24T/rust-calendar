@@ -99,7 +99,9 @@ impl CalendarApp {
                 &mut self.show_event_dialog,
             );
 
-            let auto_create_card = state.create_countdown && state.event_id.is_none();
+            let auto_create_card = state.create_countdown 
+                && state.event_id.is_none()
+                && state.date > Local::now().date_naive();
             let was_new_event = state.event_id.is_none();
             let event_saved = saved_event.is_some();
             (

@@ -128,12 +128,26 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
 
     if state.event_id.is_none() {
         ui.add_space(8.0);
+        let today = Local::now().date_naive();
+        let is_future_event = state.date > today;
+        
         indented_row(ui, |ui| {
-            ui.checkbox(
-                &mut state.create_countdown,
-                "Create countdown card after saving",
-            )
-            .on_hover_text("Also spawns a countdown using this event's color once you save.");
+            ui.add_enabled_ui(is_future_event, |ui| {
+                ui.checkbox(
+                    &mut state.create_countdown,
+                    "Create countdown card after saving",
+                )
+                .on_hover_text(if is_future_event {
+                    "Also spawns a countdown using this event's color once you save."
+                } else {
+                    "Countdown cards can only be created for future events."
+                });
+            });
+            
+            if !is_future_event && state.create_countdown {
+                // Auto-uncheck if date changed to today or past
+                state.create_countdown = false;
+            }
         });
     }
 
