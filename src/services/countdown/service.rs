@@ -83,6 +83,16 @@ impl CountdownService {
         &self.cards
     }
 
+    /// Find a countdown card by its associated event ID
+    pub fn find_card_by_event_id(&self, event_id: i64) -> Option<&CountdownCardState> {
+        self.cards.iter().find(|card| card.event_id == Some(event_id))
+    }
+
+    /// Get a set of all event IDs that have associated countdown cards
+    pub fn event_ids_with_cards(&self) -> std::collections::HashSet<i64> {
+        self.cards.iter().filter_map(|card| card.event_id).collect()
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }

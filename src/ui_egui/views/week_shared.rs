@@ -61,6 +61,19 @@ pub fn render_ribbon_event(
         .show(ui, |ui| {
             ui.set_min_width(available_width - 8.0);
             ui.horizontal(|ui| {
+                // Show countdown indicator if this event has a card
+                let has_countdown = event
+                    .id
+                    .map(|id| active_countdown_events.contains(&id))
+                    .unwrap_or(false);
+                if has_countdown {
+                    ui.label(
+                        egui::RichText::new("⏱")
+                            .color(Color32::WHITE)
+                            .size(11.0),
+                    );
+                }
+                
                 ui.label(
                     egui::RichText::new(&event.title)
                         .color(Color32::WHITE)
@@ -82,7 +95,21 @@ pub fn render_ribbon_event(
         })
         .response;
 
-    let interactive_response = response.interact(Sense::click());
+    // Add tooltip with days-until info for future events
+    let now = Local::now();
+    let interactive_response = if event.start > now {
+        let days_until = (event.start.date_naive() - now.date_naive()).num_days();
+        let tooltip = if days_until == 0 {
+            format!("{}\nToday", event.title)
+        } else if days_until == 1 {
+            format!("{}\nTomorrow", event.title)
+        } else {
+            format!("{}\n{} days from now", event.title, days_until)
+        };
+        response.interact(Sense::click()).on_hover_text(tooltip)
+    } else {
+        response.interact(Sense::click())
+    };
     let mut clicked_event = None;
 
     interactive_response.context_menu(|ui| {
@@ -93,6 +120,26 @@ pub fn render_ribbon_event(
         if ui.button("✏ Edit").clicked() {
             clicked_event = Some(event.clone());
             ui.close_menu();
+        }
+
+        // Show countdown option prominently for future events
+        if event.start > Local::now() {
+            let timer_exists = event
+                .id
+                .map(|id| active_countdown_events.contains(&id))
+                .unwrap_or(false);
+            if timer_exists {
+                ui.label(
+                    egui::RichText::new("⏱ Countdown active")
+                        .italics()
+                        .color(Color32::from_rgb(100, 200, 100))
+                        .size(11.0),
+                );
+            } else if ui.button("⏱ Create Countdown").clicked() {
+                countdown_requests.push(CountdownRequest::from_event(event));
+                ui.close_menu();
+            }
+            ui.separator();
         }
 
         if event.recurrence_rule.is_some() {
@@ -140,31 +187,18 @@ pub fn render_ribbon_event(
             }
             ui.close_menu();
         }
-
-        if event.start > Local::now() {
-            let timer_exists = event
-                .id
-                .map(|id| active_countdown_events.contains(&id))
-                .unwrap_or(false);
-            if timer_exists {
-                ui.label(
-                    egui::RichText::new("Countdown already exists")
-                        .italics()
-                        .color(Color32::from_gray(150))
-                        .size(11.0),
-                );
-            } else if ui.button("⏱ Create Countdown").clicked() {
-                countdown_requests.push(CountdownRequest::from_event(event));
-                ui.close_menu();
-            }
-        }
     });
 
     clicked_event
 }
 
 /// Render an event bar inside a time cell (for events starting in this slot).
-pub fn render_event_in_cell(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -> Rect {
+pub fn render_event_in_cell(
+    ui: &mut egui::Ui, 
+    cell_rect: Rect, 
+    event: &Event,
+    has_countdown: bool,
+) -> Rect {
     let event_color = event
         .color
         .as_deref()
@@ -180,8 +214,15 @@ pub fn render_event_in_cell(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -
     let font_id = egui::FontId::proportional(10.0);
     let available_width = cell_rect.width() - 10.0;
 
+    // Build title with countdown indicator if applicable
+    let title_text = if has_countdown {
+        format!("⏱ {}", event.title)
+    } else {
+        event.title.clone()
+    };
+
     let layout_job = egui::text::LayoutJob::simple(
-        event.title.clone(),
+        title_text,
         font_id,
         Color32::WHITE,
         available_width,
@@ -382,7 +423,11 @@ pub fn render_time_cell(
 
     // Draw starting events
     for event in starting_events {
-        let event_rect = render_event_in_cell(ui, rect, event);
+        let has_countdown = event
+            .id
+            .map(|id| active_countdown_events.contains(&id))
+            .unwrap_or(false);
+        let event_rect = render_event_in_cell(ui, rect, event, has_countdown);
         event_hitboxes.push((event_rect, (*event).clone()));
     }
 
@@ -470,6 +515,26 @@ pub fn render_time_cell(
                     ui.memory_mut(|mem| mem.close_popup());
                 }
 
+                // Show countdown option prominently for future events
+                if event.start > Local::now() {
+                    let timer_exists = event
+                        .id
+                        .map(|id| active_countdown_events.contains(&id))
+                        .unwrap_or(false);
+                    if timer_exists {
+                        ui.label(
+                            egui::RichText::new("⏱ Countdown active")
+                                .italics()
+                                .color(Color32::from_rgb(100, 200, 100))
+                                .size(11.0),
+                        );
+                    } else if ui.button("⏱ Create Countdown").clicked() {
+                        countdown_requests.push(CountdownRequest::from_event(&event));
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    ui.separator();
+                }
+
                 if event.recurrence_rule.is_some() {
                     if ui.button("🗑 Delete This Occurrence").clicked() {
                         if let Some(id) = event.id {
@@ -514,24 +579,6 @@ pub fn render_time_cell(
                         }
                     }
                     ui.memory_mut(|mem| mem.close_popup());
-                }
-
-                if event.start > Local::now() {
-                    let timer_exists = event
-                        .id
-                        .map(|id| active_countdown_events.contains(&id))
-                        .unwrap_or(false);
-                    if timer_exists {
-                        ui.label(
-                            egui::RichText::new("Countdown already exists")
-                                .italics()
-                                .color(Color32::from_gray(150))
-                                .size(11.0),
-                        );
-                    } else if ui.button("⏱ Create Countdown").clicked() {
-                        countdown_requests.push(CountdownRequest::from_event(&event));
-                        ui.memory_mut(|mem| mem.close_popup());
-                    }
                 }
             } else {
                 ui.label("Create event");

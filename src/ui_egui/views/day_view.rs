@@ -443,6 +443,26 @@ impl DayView {
                             ui.memory_mut(|mem| mem.close_popup());
                         }
 
+                        // Show countdown option prominently for future events
+                        if event.start > Local::now() {
+                            let timer_exists = event
+                                .id
+                                .map(|id| active_countdown_events.contains(&id))
+                                .unwrap_or(false);
+                            if timer_exists {
+                                ui.label(
+                                    egui::RichText::new("⏱ Countdown active")
+                                        .italics()
+                                        .color(Color32::from_rgb(100, 200, 100))
+                                        .size(11.0),
+                                );
+                            } else if ui.button("⏱ Create Countdown").clicked() {
+                                countdown_requests.push(CountdownRequest::from_event(&event));
+                                ui.memory_mut(|mem| mem.close_popup());
+                            }
+                            ui.separator();
+                        }
+
                         // Delete options - different for recurring events
                         if event.recurrence_rule.is_some() {
                             if ui.button("🗑 Delete This Occurrence").clicked() {
@@ -491,24 +511,6 @@ impl DayView {
                                 }
                             }
                             ui.memory_mut(|mem| mem.close_popup());
-                        }
-
-                        if event.start > Local::now() {
-                            let timer_exists = event
-                                .id
-                                .map(|id| active_countdown_events.contains(&id))
-                                .unwrap_or(false);
-                            if timer_exists {
-                                ui.label(
-                                    egui::RichText::new("Countdown already exists")
-                                        .italics()
-                                        .color(Color32::from_gray(150))
-                                        .size(11.0),
-                                );
-                            } else if ui.button("⏱ Create Countdown").clicked() {
-                                countdown_requests.push(CountdownRequest::from_event(&event));
-                                ui.memory_mut(|mem| mem.close_popup());
-                            }
                         }
                     } else {
                         ui.label("Create event");

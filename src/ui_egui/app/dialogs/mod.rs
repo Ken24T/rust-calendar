@@ -45,8 +45,14 @@ impl CalendarApp {
         if let Some(event_id) = self.event_to_edit {
             let service = self.context.event_service();
             if let Ok(Some(event)) = service.get(event_id) {
-                self.event_dialog_state =
-                    Some(EventDialogState::from_event(&event, &self.settings));
+                let mut state = EventDialogState::from_event(&event, &self.settings);
+                
+                // Auto-link countdown card if one exists for this event
+                if let Some(card) = self.context.countdown_service().find_card_by_event_id(event_id) {
+                    state.link_countdown_card(card.id, card.visuals.clone());
+                }
+                
+                self.event_dialog_state = Some(state);
             } else {
                 self.event_dialog_state = Some(EventDialogState::new_event(
                     self.event_dialog_date.unwrap_or(self.current_date),

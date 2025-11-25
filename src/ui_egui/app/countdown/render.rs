@@ -26,6 +26,7 @@ pub(super) enum CountdownCardUiAction {
     None,
     OpenSettings,
     OpenEventDialog,
+    GoToDate,
     GeometrySettled,
     Delete,
     Refresh,
@@ -296,21 +297,25 @@ pub(super) fn render_countdown_card_ui(
 
         inner.response.context_menu(|ui| {
             if card.event_id.is_some() {
-                if ui.button("Edit event...").clicked() {
+                if ui.button("📝 Edit event...").clicked() {
                     action = CountdownCardUiAction::OpenEventDialog;
                     ui.close_menu();
                 }
             }
-            if ui.button("Card settings...").clicked() {
+            if ui.button("⚙ Card settings...").clicked() {
                 action = CountdownCardUiAction::OpenSettings;
                 ui.close_menu();
             }
-            if ui.button("Refresh countdown").clicked() {
+            if ui.button("📅 Go to date").clicked() {
+                action = CountdownCardUiAction::GoToDate;
+                ui.close_menu();
+            }
+            if ui.button("🔄 Refresh countdown").clicked() {
                 action = CountdownCardUiAction::Refresh;
                 ui.close_menu();
             }
             ui.separator();
-            if ui.button("Delete card").clicked() {
+            if ui.button("🗑 Delete card").clicked() {
                 action = CountdownCardUiAction::Delete;
                 ui.close_menu();
             }

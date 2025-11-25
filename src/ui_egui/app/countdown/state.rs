@@ -22,6 +22,12 @@ pub struct OpenEventDialogRequest {
     pub visuals: CountdownCardVisuals,
 }
 
+/// A request to navigate to a specific date in the calendar
+#[derive(Debug, Clone)]
+pub struct GoToDateRequest {
+    pub date: chrono::NaiveDate,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct CountdownRenderSnapshot {
     waiting_on_geometry: bool,
@@ -41,6 +47,13 @@ pub(in super::super) struct CountdownUiState {
 
 const MAX_PENDING_GEOMETRY_FRAMES: u32 = 120;
 const GEOMETRY_STABILITY_FRAMES: u32 = 4;
+
+/// Result of rendering countdown cards, containing various navigation requests
+#[derive(Default)]
+pub struct CountdownRenderResult {
+    pub event_dialog_requests: Vec<OpenEventDialogRequest>,
+    pub go_to_date_requests: Vec<GoToDateRequest>,
+}
 
 impl CountdownUiState {
     pub(in super::super) fn new(service: &CountdownService) -> Self {
@@ -95,15 +108,16 @@ impl CountdownUiState {
         &mut self,
         ctx: &Context,
         service: &mut CountdownService,
-    ) -> Vec<OpenEventDialogRequest> {
+    ) -> CountdownRenderResult {
         let cards = service.cards().to_vec();
         if cards.is_empty() {
-            return Vec::new();
+            return CountdownRenderResult::default();
         }
 
         let now = Local::now();
         let mut removals = Vec::new();
         let mut event_dialog_requests = Vec::new();
+        let mut go_to_date_requests = Vec::new();
 
         for card in cards {
             let viewport_id = egui::ViewportId::from_hash_of(("countdown_card", card.id.0));
@@ -195,6 +209,11 @@ impl CountdownUiState {
                     ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Focus);
                 }
+                CountdownCardUiAction::GoToDate => {
+                    go_to_date_requests.push(GoToDateRequest {
+                        date: card.start_at.date_naive(),
+                    });
+                }
                 CountdownCardUiAction::Refresh => {
                     log::info!("Refresh action triggered for card {:?}", card.id);
                     ctx.request_repaint();
@@ -243,7 +262,10 @@ impl CountdownUiState {
 
         service.flush_geometry_updates();
 
-        event_dialog_requests
+        CountdownRenderResult {
+            event_dialog_requests,
+            go_to_date_requests,
+        }
     }
 
     pub(in super::super) fn render_settings_dialogs(

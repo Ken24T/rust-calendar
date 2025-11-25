@@ -4,7 +4,7 @@ mod settings;
 mod state;
 mod sync;
 
-pub(super) use state::{CountdownUiState, OpenEventDialogRequest};
+pub(super) use state::{CountdownRenderResult, CountdownUiState, GoToDateRequest, OpenEventDialogRequest};
 
 use super::CalendarApp;
 use crate::services::countdown::{CountdownCardGeometry, RgbaColor};

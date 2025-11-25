@@ -125,13 +125,18 @@ impl CalendarApp {
             self.consume_countdown_requests(countdown_requests);
         }
 
-        let event_dialog_requests = self
+        let render_result = self
             .countdown_ui
             .render_cards(ctx, self.context.countdown_service_mut());
 
         // Handle requests to open event dialog from countdown cards
-        for request in event_dialog_requests {
+        for request in render_result.event_dialog_requests {
             self.open_event_dialog_for_card(request);
+        }
+
+        // Handle requests to navigate to a date
+        for request in render_result.go_to_date_requests {
+            self.current_date = request.date;
         }
 
         self.countdown_ui
