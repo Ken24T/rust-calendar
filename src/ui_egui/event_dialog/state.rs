@@ -4,7 +4,7 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use chrono::{self, Local, LocalResult, NaiveDate, NaiveDateTime, NaiveTime};
 
-use super::recurrence::{parse_until_date, RecurrenceFrequency, RecurrencePattern, Weekday};
+use super::recurrence::{ParsedRRule, RRuleBuilder, RecurrenceFrequency, RecurrencePattern};
 
 /// State for the event editing dialog
 pub struct EventDialogState {
@@ -106,20 +106,11 @@ impl EventDialogState {
         let start_time = event.start.time();
         let end_time = event.end.time();
 
-        let (is_recurring, frequency, interval, count, until_date, pattern, byday_flags) =
-            if let Some(ref rrule) = event.recurrence_rule {
-                Self::parse_rrule(rrule)
-            } else {
-                (
-                    false,
-                    RecurrenceFrequency::Daily,
-                    1,
-                    None,
-                    None,
-                    RecurrencePattern::None,
-                    [false; 7],
-                )
-            };
+        let parsed = event
+            .recurrence_rule
+            .as_ref()
+            .map(|rrule| ParsedRRule::parse(rrule))
+            .unwrap_or_default();
 
         Self {
             event_id: event.id,
@@ -133,20 +124,20 @@ impl EventDialogState {
             all_day: event.all_day,
             color: event.color.clone().unwrap_or_else(|| "#3B82F6".to_string()),
             category: event.category.clone().unwrap_or_default(),
-            is_recurring,
-            frequency,
-            interval,
-            count,
-            until_date,
-            pattern,
-            byday_enabled: byday_flags.iter().any(|&b| b),
-            byday_sunday: byday_flags[0],
-            byday_monday: byday_flags[1],
-            byday_tuesday: byday_flags[2],
-            byday_wednesday: byday_flags[3],
-            byday_thursday: byday_flags[4],
-            byday_friday: byday_flags[5],
-            byday_saturday: byday_flags[6],
+            is_recurring: parsed.is_recurring,
+            frequency: parsed.frequency,
+            interval: parsed.interval,
+            count: parsed.count,
+            until_date: parsed.until_date,
+            pattern: parsed.pattern,
+            byday_enabled: parsed.byday_flags.iter().any(|&b| b),
+            byday_sunday: parsed.byday_flags[0],
+            byday_monday: parsed.byday_flags[1],
+            byday_tuesday: parsed.byday_flags[2],
+            byday_wednesday: parsed.byday_flags[3],
+            byday_thursday: parsed.byday_flags[4],
+            byday_friday: parsed.byday_flags[5],
+            byday_saturday: parsed.byday_flags[6],
             error_message: None,
             show_advanced: false,
             create_countdown: false,
@@ -195,172 +186,26 @@ impl EventDialogState {
         Ok((start, end))
     }
 
-    fn parse_rrule(
-        rrule: &str,
-    ) -> (
-        bool,
-        RecurrenceFrequency,
-        u32,
-        Option<u32>,
-        Option<NaiveDate>,
-        RecurrencePattern,
-        [bool; 7],
-    ) {
-        let mut frequency = RecurrenceFrequency::Daily;
-        let mut interval = 1u32;
-        let mut count = None;
-        let mut until_date = None;
-        let mut pattern = RecurrencePattern::None;
-        let mut byday_flags = [false; 7];
-
-        for part in rrule.split(';') {
-            if let Some((key, value)) = part.split_once('=') {
-                match key {
-                    "FREQ" => {
-                        frequency = match value {
-                            "DAILY" => RecurrenceFrequency::Daily,
-                            "WEEKLY" => RecurrenceFrequency::Weekly,
-                            "MONTHLY" => RecurrenceFrequency::Monthly,
-                            "YEARLY" => RecurrenceFrequency::Yearly,
-                            _ => RecurrenceFrequency::Daily,
-                        };
-                    }
-                    "INTERVAL" => {
-                        if let Ok(val) = value.parse::<u32>() {
-                            interval = val;
-                        }
-                    }
-                    "COUNT" => {
-                        if let Ok(val) = value.parse::<u32>() {
-                            count = Some(val);
-                        }
-                    }
-                    "UNTIL" => {
-                        until_date = parse_until_date(value);
-                    }
-                    "BYMONTHDAY" => {
-                        if value == "1" {
-                            pattern = RecurrencePattern::FirstDayOfPeriod;
-                        } else if value == "-1" {
-                            pattern = RecurrencePattern::LastDayOfPeriod;
-                        }
-                    }
-                    "BYDAY" => {
-                        for day in value.split(',') {
-                            if day.len() > 2 {
-                                if day.starts_with('1') && day.len() == 3 {
-                                    if let Some(weekday) = Weekday::from_rrule_day(&day[1..]) {
-                                        pattern = RecurrencePattern::FirstWeekdayOfPeriod(weekday);
-                                    }
-                                } else if day.starts_with("-1") && day.len() == 4 {
-                                    if let Some(weekday) = Weekday::from_rrule_day(&day[2..]) {
-                                        pattern = RecurrencePattern::LastWeekdayOfPeriod(weekday);
-                                    }
-                                }
-                            } else {
-                                match day {
-                                    "SU" => byday_flags[0] = true,
-                                    "MO" => byday_flags[1] = true,
-                                    "TU" => byday_flags[2] = true,
-                                    "WE" => byday_flags[3] = true,
-                                    "TH" => byday_flags[4] = true,
-                                    "FR" => byday_flags[5] = true,
-                                    "SA" => byday_flags[6] = true,
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        (
-            true,
-            frequency,
-            interval,
-            count,
-            until_date,
-            pattern,
-            byday_flags,
-        )
-    }
-
     fn build_rrule(&self) -> Option<String> {
-        if !self.is_recurring {
-            return None;
+        RRuleBuilder {
+            is_recurring: self.is_recurring,
+            frequency: self.frequency,
+            interval: self.interval,
+            pattern: self.pattern,
+            byday_enabled: self.byday_enabled,
+            byday_flags: [
+                self.byday_sunday,
+                self.byday_monday,
+                self.byday_tuesday,
+                self.byday_wednesday,
+                self.byday_thursday,
+                self.byday_friday,
+                self.byday_saturday,
+            ],
+            count: self.count,
+            until_date: self.until_date,
         }
-
-        let mut parts = vec![format!("FREQ={}", self.frequency.to_rrule_freq())];
-
-        if self.interval > 1 {
-            parts.push(format!("INTERVAL={}", self.interval));
-        }
-
-        if matches!(
-            self.frequency,
-            RecurrenceFrequency::Monthly | RecurrenceFrequency::Yearly
-        ) {
-            match self.pattern {
-                RecurrencePattern::FirstDayOfPeriod => {
-                    parts.push("BYMONTHDAY=1".to_string());
-                }
-                RecurrencePattern::LastDayOfPeriod => {
-                    parts.push("BYMONTHDAY=-1".to_string());
-                }
-                RecurrencePattern::FirstWeekdayOfPeriod(weekday) => {
-                    parts.push(format!("BYDAY=1{}", weekday.to_rrule_day()));
-                }
-                RecurrencePattern::LastWeekdayOfPeriod(weekday) => {
-                    parts.push(format!("BYDAY=-1{}", weekday.to_rrule_day()));
-                }
-                RecurrencePattern::None => self.append_standard_byday(&mut parts),
-            }
-        } else if self.frequency == RecurrenceFrequency::Weekly {
-            self.append_standard_byday(&mut parts);
-        }
-
-        if let Some(count) = self.count {
-            parts.push(format!("COUNT={}", count));
-        } else if let Some(until) = self.until_date {
-            parts.push(format!("UNTIL={}", until.format("%Y%m%d")));
-        }
-
-        Some(parts.join(";"))
-    }
-
-    fn append_standard_byday(&self, parts: &mut Vec<String>) {
-        if !self.byday_enabled {
-            return;
-        }
-
-        let mut days = Vec::new();
-        if self.byday_sunday {
-            days.push("SU");
-        }
-        if self.byday_monday {
-            days.push("MO");
-        }
-        if self.byday_tuesday {
-            days.push("TU");
-        }
-        if self.byday_wednesday {
-            days.push("WE");
-        }
-        if self.byday_thursday {
-            days.push("TH");
-        }
-        if self.byday_friday {
-            days.push("FR");
-        }
-        if self.byday_saturday {
-            days.push("SA");
-        }
-
-        if !days.is_empty() {
-            parts.push(format!("BYDAY={}", days.join(",")));
-        }
+        .build()
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -492,6 +337,7 @@ impl EventDialogState {
 mod tests {
     use super::*;
     use crate::models::settings::Settings;
+    use crate::ui_egui::event_dialog::recurrence::{ParsedRRule, Weekday};
     use chrono::{NaiveDate, NaiveTime};
 
     fn sample_date() -> NaiveDate {
@@ -536,7 +382,9 @@ mod tests {
         let mut state = base_state();
         state.is_recurring = true;
         state.frequency = RecurrenceFrequency::Monthly;
-        state.pattern = RecurrencePattern::FirstWeekdayOfPeriod(Weekday::Tuesday);
+        state.pattern = RecurrencePattern::FirstWeekdayOfPeriod(
+            crate::ui_egui::event_dialog::recurrence::Weekday::Tuesday,
+        );
 
         assert_eq!(
             state.build_rrule(),
@@ -546,28 +394,26 @@ mod tests {
 
     #[test]
     fn parse_rrule_handles_byday_and_interval() {
-        let (is_recurring, frequency, interval, _count, _until, pattern, byday_flags) =
-            EventDialogState::parse_rrule("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE");
+        let parsed = ParsedRRule::parse("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE");
 
-        assert!(is_recurring);
-        assert_eq!(frequency, RecurrenceFrequency::Weekly);
-        assert_eq!(interval, 2);
-        assert_eq!(pattern, RecurrencePattern::None);
-        assert!(byday_flags[1]); // Monday (index 1)
-        assert!(byday_flags[3]); // Wednesday (index 3)
+        assert!(parsed.is_recurring);
+        assert_eq!(parsed.frequency, RecurrenceFrequency::Weekly);
+        assert_eq!(parsed.interval, 2);
+        assert_eq!(parsed.pattern, RecurrencePattern::None);
+        assert!(parsed.byday_flags[1]); // Monday (index 1)
+        assert!(parsed.byday_flags[3]); // Wednesday (index 3)
     }
 
     #[test]
     fn parse_rrule_detects_positional_weekday() {
-        let (_, frequency, _, _, _, pattern, byday_flags) =
-            EventDialogState::parse_rrule("FREQ=MONTHLY;BYDAY=1TH");
+        let parsed = ParsedRRule::parse("FREQ=MONTHLY;BYDAY=1TH");
 
-        assert_eq!(frequency, RecurrenceFrequency::Monthly);
+        assert_eq!(parsed.frequency, RecurrenceFrequency::Monthly);
         assert!(matches!(
-            pattern,
+            parsed.pattern,
             RecurrencePattern::FirstWeekdayOfPeriod(Weekday::Thursday)
         ));
-        assert!(byday_flags.iter().all(|flag| !flag));
+        assert!(parsed.byday_flags.iter().all(|flag| !flag));
     }
 
     #[test]
