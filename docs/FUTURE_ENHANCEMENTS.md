@@ -166,10 +166,79 @@ impl CountdownContainerService {
 
 ---
 
+## 3. Countdown Card Tooltip - Show Date Range
+
+**Priority:** Low  
+**Complexity:** Simple  
+**Status:** Planned
+
+### Current Behavior
+- Countdown card tooltips/flyovers show basic event info
+- Date range of the event is not displayed
+
+### Desired Behavior
+- Tooltip should include the event's start and end date/time
+- Format examples:
+  - Single day timed: "Nov 27, 2025 • 2:00 PM - 4:00 PM"
+  - Single day all-day: "Nov 27, 2025 • All Day"
+  - Multi-day: "Nov 24 - Nov 27, 2025"
+  - Multi-day with times: "Nov 24, 2:00 PM - Nov 27, 6:00 PM"
+
+### Implementation Notes
+
+#### Files to Modify
+- `src/ui_egui/app/countdown/mod.rs` - Card rendering with tooltip
+
+#### Display Logic
+```rust
+fn format_date_range(start: DateTime<Local>, end: DateTime<Local>, all_day: bool) -> String {
+    let start_date = start.date_naive();
+    let end_date = end.date_naive();
+    
+    if start_date == end_date {
+        // Same day
+        if all_day {
+            format!("{} • All Day", start.format("%b %d, %Y"))
+        } else {
+            format!("{} • {} - {}", 
+                start.format("%b %d, %Y"),
+                start.format("%I:%M %p"),
+                end.format("%I:%M %p"))
+        }
+    } else {
+        // Multi-day
+        if all_day {
+            format!("{} - {}", 
+                start.format("%b %d"),
+                end.format("%b %d, %Y"))
+        } else {
+            format!("{}, {} - {}, {}",
+                start.format("%b %d"),
+                start.format("%I:%M %p"),
+                end.format("%b %d"),
+                end.format("%I:%M %p"))
+        }
+    }
+}
+```
+
+#### Tooltip Content
+```
+┌─────────────────────────────────┐
+│ 🎄 Christmas Cruise             │
+│ Dec 18 - Dec 25, 2025           │  <- NEW: Date range
+│ 23 days remaining               │
+│ Location: Sydney Harbour        │  <- If available
+└─────────────────────────────────┘
+```
+
+---
+
 ## Implementation Order
 
 1. **Dim Past All-Day Events** - Quick win, 1-2 hours
-2. **Countdown Card Container** - Larger feature, 4-8 hours
+2. **Countdown Card Tooltip Date Range** - Quick win, 30 mins
+3. **Countdown Card Container** - Larger feature, 4-8 hours
    - Phase 1: Database schema & migrations
    - Phase 2: Container service layer
    - Phase 3: Container UI component
