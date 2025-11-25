@@ -106,6 +106,13 @@ fn run_settings_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE settings ADD COLUMN show_sidebar INTEGER NOT NULL DEFAULT 1",
     )?;
 
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "use_system_theme",
+        "ALTER TABLE settings ADD COLUMN use_system_theme INTEGER NOT NULL DEFAULT 0",
+    )?;
+
     let had_time_slot = migrations::column_exists(conn, "settings", "time_slot_interval")?;
     let has_default_duration =
         migrations::column_exists(conn, "settings", "default_event_duration")?;

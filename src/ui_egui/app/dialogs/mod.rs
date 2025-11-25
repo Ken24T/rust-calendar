@@ -234,6 +234,17 @@ impl CalendarApp {
         let theme_service = self.context.theme_service();
         let available_themes = theme_service.list_themes().unwrap_or_default();
 
+        // Cache custom theme colors for preview swatches
+        for theme_name in &available_themes {
+            if !CalendarTheme::is_builtin(theme_name) 
+                && !self.state.theme_dialog_state.custom_theme_colors.contains_key(theme_name) 
+            {
+                if let Ok(theme) = theme_service.get_theme(theme_name) {
+                    self.state.theme_dialog_state.cache_theme_colors(theme_name, theme.preview_colors());
+                }
+            }
+        }
+
         let action = render_theme_dialog(
             ctx,
             &mut self.state.theme_dialog_state,
@@ -258,11 +269,23 @@ impl CalendarApp {
                 if let Err(e) = theme_service.delete_theme(&name) {
                     eprintln!("Failed to delete theme: {}", e);
                 } else {
-                    eprintln!("Successfully deleted theme: {}", name);
+                    log::info!("Successfully deleted theme: {}", name);
+                    // Clear cached colors
+                    self.state.theme_dialog_state.custom_theme_colors.remove(&name);
+                    // If we deleted the current theme, switch to Light
+                    if self.settings.theme.eq_ignore_ascii_case(&name) {
+                        self.settings.theme = "Light".to_string();
+                        let theme = CalendarTheme::light();
+                        theme.apply_to_context(ctx);
+                        self.active_theme = theme;
+                        let settings_service = self.context.settings_service();
+                        let _ = settings_service.update(&self.settings);
+                    }
                 }
             }
             ThemeDialogAction::ApplyTheme(name) => {
                 self.settings.theme = name.clone();
+                self.state.theme_dialog_state.preview_theme = None;
 
                 if let Ok(theme) = theme_service.get_theme(&name) {
                     theme.apply_to_context(ctx);
@@ -276,6 +299,69 @@ impl CalendarApp {
                 let settings_service = self.context.settings_service();
                 if let Err(e) = settings_service.update(&self.settings) {
                     eprintln!("Failed to save theme setting: {}", e);
+                }
+            }
+            ThemeDialogAction::PreviewTheme(name) => {
+                // Temporarily apply theme for preview (don't save)
+                if let Ok(theme) = theme_service.get_theme(&name) {
+                    theme.apply_to_context(ctx);
+                    self.state.theme_dialog_state.preview_theme = Some(name);
+                }
+            }
+            ThemeDialogAction::RevertPreview => {
+                // Revert to the original theme
+                if let Some(original) = &self.state.theme_dialog_state.original_theme {
+                    if let Ok(theme) = theme_service.get_theme(original) {
+                        theme.apply_to_context(ctx);
+                    }
+                }
+                self.state.theme_dialog_state.preview_theme = None;
+            }
+            ThemeDialogAction::DuplicateTheme { source, new_name } => {
+                if let Err(e) = theme_service.duplicate_theme(&source, &new_name) {
+                    eprintln!("Failed to duplicate theme: {}", e);
+                } else {
+                    log::info!("Successfully duplicated theme '{}' to '{}'", source, new_name);
+                    // Cache colors for the new theme
+                    if let Ok(theme) = theme_service.get_theme(&new_name) {
+                        self.state.theme_dialog_state.cache_theme_colors(&new_name, theme.preview_colors());
+                    }
+                }
+            }
+            ThemeDialogAction::ExportTheme(name) => {
+                // Use native file dialog to save
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_title("Export Theme")
+                    .set_file_name(&format!("{}.toml", name))
+                    .add_filter("TOML files", &["toml"])
+                    .save_file()
+                {
+                    if let Err(e) = theme_service.export_theme(&name, &path) {
+                        eprintln!("Failed to export theme: {}", e);
+                    } else {
+                        log::info!("Successfully exported theme to {:?}", path);
+                    }
+                }
+            }
+            ThemeDialogAction::ImportTheme => {
+                // Use native file dialog to open
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_title("Import Theme")
+                    .add_filter("TOML files", &["toml"])
+                    .pick_file()
+                {
+                    match theme_service.import_theme(&path) {
+                        Ok(name) => {
+                            log::info!("Successfully imported theme: {}", name);
+                            // Cache colors for the imported theme
+                            if let Ok(theme) = theme_service.get_theme(&name) {
+                                self.state.theme_dialog_state.cache_theme_colors(&name, theme.preview_colors());
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to import theme: {}", e);
+                        }
+                    }
                 }
             }
             ThemeDialogAction::Close => {

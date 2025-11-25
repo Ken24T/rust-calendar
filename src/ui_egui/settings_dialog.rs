@@ -331,6 +331,12 @@ pub fn render_settings_dialog(
                     });
                 }
 
+                ui.horizontal(|ui| {
+                    ui.add_space(label_width);
+                    ui.checkbox(&mut settings.use_system_theme, "Use system theme")
+                        .on_hover_text("Automatically switch between Light and Dark based on your system settings");
+                });
+
                 let ribbon_response = ui
                     .horizontal(|ui| {
                         ui.add_space(label_width);

@@ -155,6 +155,15 @@ pub fn render_theme_creator(ctx: &Context, state: &mut ThemeCreatorState) -> The
                         render_color_picker(ui, "Day Border", &mut state.theme.day_border);
                         render_color_picker(ui, "Primary Text", &mut state.theme.text_primary);
                         render_color_picker(ui, "Secondary Text", &mut state.theme.text_secondary);
+
+                        ui.add_space(10.0);
+                        ui.label(RichText::new("Event Colors").strong());
+                        ui.add_space(4.0);
+                        render_color_picker(ui, "Default", &mut state.theme.event_colors.default);
+                        render_color_picker(ui, "Work", &mut state.theme.event_colors.work);
+                        render_color_picker(ui, "Personal", &mut state.theme.event_colors.personal);
+                        render_color_picker(ui, "Holiday", &mut state.theme.event_colors.holiday);
+                        render_color_picker(ui, "Birthday", &mut state.theme.event_colors.birthday);
                     });
 
                     columns[1].vertical(|ui| {

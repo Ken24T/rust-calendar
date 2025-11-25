@@ -20,7 +20,7 @@ impl<'a> SettingsService<'a> {
 
         let settings = conn
             .query_row(
-                "SELECT id, theme, first_day_of_week, time_format, date_format,
+                "SELECT id, theme, use_system_theme, first_day_of_week, time_format, date_format,
                     show_my_day, my_day_position_right, show_ribbon, show_sidebar, current_view,
                     default_event_duration, first_day_of_work_week, last_day_of_work_week,
                     default_event_start_time, default_card_width, default_card_height,
@@ -45,26 +45,28 @@ impl<'a> SettingsService<'a> {
         conn.execute(
             "UPDATE settings \
              SET theme = ?1, \
-                 first_day_of_week = ?2, \
-                 time_format = ?3, \
-                 date_format = ?4, \
-                 show_my_day = ?5, \
-                 my_day_position_right = ?6, \
-                 show_ribbon = ?7, \
-                 show_sidebar = ?8, \
-                 current_view = ?9, \
-                 default_event_duration = ?10, \
-                 first_day_of_work_week = ?11, \
-                 last_day_of_work_week = ?12, \
-                 default_event_start_time = ?13, \
-                 default_card_width = ?14, \
-                 default_card_height = ?15, \
-                 auto_create_countdown_on_import = ?16, \
-                 edit_before_import = ?17, \
+                 use_system_theme = ?2, \
+                 first_day_of_week = ?3, \
+                 time_format = ?4, \
+                 date_format = ?5, \
+                 show_my_day = ?6, \
+                 my_day_position_right = ?7, \
+                 show_ribbon = ?8, \
+                 show_sidebar = ?9, \
+                 current_view = ?10, \
+                 default_event_duration = ?11, \
+                 first_day_of_work_week = ?12, \
+                 last_day_of_work_week = ?13, \
+                 default_event_start_time = ?14, \
+                 default_card_width = ?15, \
+                 default_card_height = ?16, \
+                 auto_create_countdown_on_import = ?17, \
+                 edit_before_import = ?18, \
                  updated_at = CURRENT_TIMESTAMP \
              WHERE id = 1",
             params![
                 &settings.theme,
+                settings.use_system_theme as i32,
                 settings.first_day_of_week,
                 &settings.time_format,
                 &settings.date_format,

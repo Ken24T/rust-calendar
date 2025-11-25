@@ -97,11 +97,22 @@ impl CalendarApp {
     pub(super) fn apply_theme_from_db(&mut self, ctx: &egui::Context) {
         let theme_service = self.context.theme_service();
 
-        if let Ok(theme) = theme_service.get_theme(&self.settings.theme) {
+        // If use_system_theme is enabled, detect and use system preference
+        let theme_name = if self.settings.use_system_theme {
+            match dark_light::detect() {
+                dark_light::Mode::Dark => "Dark".to_string(),
+                dark_light::Mode::Light => "Light".to_string(),
+                dark_light::Mode::Default => self.settings.theme.clone(),
+            }
+        } else {
+            self.settings.theme.clone()
+        };
+
+        if let Ok(theme) = theme_service.get_theme(&theme_name) {
             theme.apply_to_context(ctx);
             self.active_theme = theme;
         } else {
-            log::warn!("Theme '{}' not found, using fallback.", self.settings.theme);
+            log::warn!("Theme '{}' not found, using fallback.", theme_name);
             let fallback = Self::fallback_theme_for_settings(&self.settings);
             fallback.apply_to_context(ctx);
             self.active_theme = fallback;

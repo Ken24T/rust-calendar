@@ -68,6 +68,9 @@ anyhow = "1.0"
 thiserror = "1.0"
 rfd = "0.15.4"
 
+# System theme detection
+dark-light = "1.1"
+
 [dev-dependencies]
 # Testing frameworks
 mockall = "0.12"                 # Mocking framework

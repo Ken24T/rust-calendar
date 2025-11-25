@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     pub id: Option<i64>,
     pub theme: String,
+    pub use_system_theme: bool,
     pub first_day_of_week: u8,
     pub first_day_of_work_week: u8,
     pub last_day_of_work_week: u8,
@@ -30,6 +31,7 @@ impl Default for Settings {
         Self {
             id: Some(1),
             theme: "light".to_string(),
+            use_system_theme: false,
             first_day_of_week: 0,      // Sunday
             first_day_of_work_week: 1, // Monday
             last_day_of_work_week: 5,  // Friday

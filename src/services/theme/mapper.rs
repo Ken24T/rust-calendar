@@ -1,11 +1,13 @@
-use crate::ui_egui::theme::CalendarTheme;
+use crate::ui_egui::theme::{CalendarTheme, EventColors};
 use egui::Color32;
 use rusqlite::Row;
 
 pub fn row_to_theme(row: &Row) -> Result<CalendarTheme, rusqlite::Error> {
+    let name: String = row.get(0)?;
     let is_dark: i32 = row.get(1)?;
 
     Ok(CalendarTheme {
+        name,
         is_dark: is_dark != 0,
         app_background: CalendarTheme::string_to_color(&row.get::<_, String>(2)?)
             .unwrap_or(Color32::BLACK),
@@ -25,5 +27,6 @@ pub fn row_to_theme(row: &Row) -> Result<CalendarTheme, rusqlite::Error> {
             .unwrap_or(Color32::BLACK),
         text_secondary: CalendarTheme::string_to_color(&row.get::<_, String>(10)?)
             .unwrap_or(Color32::GRAY),
+        event_colors: EventColors::default(), // TODO: Load from DB when schema supports it
     })
 }

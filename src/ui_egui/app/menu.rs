@@ -134,7 +134,7 @@ impl CalendarApp {
     fn render_theme_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Theme", |ui| {
             if ui.button("Themes...").clicked() {
-                self.state.theme_dialog_state.open();
+                self.state.theme_dialog_state.open(&self.settings.theme);
                 ui.close_menu();
             }
         });
