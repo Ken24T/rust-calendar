@@ -118,6 +118,9 @@ impl CalendarApp {
 
         self.render_menu_bar(ctx);
 
+        // Render sidebar (before CentralPanel so it takes left space)
+        self.render_sidebar(ctx);
+
         let mut countdown_requests: Vec<CountdownRequest> = Vec::new();
         self.render_main_panel(ctx, &mut countdown_requests);
 

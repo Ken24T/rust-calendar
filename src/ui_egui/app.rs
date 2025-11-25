@@ -9,6 +9,7 @@ mod menu;
 mod navigation;
 mod notifications;
 mod shortcuts;
+mod sidebar;
 mod state;
 mod views;
 

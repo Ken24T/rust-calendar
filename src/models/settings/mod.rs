@@ -15,6 +15,7 @@ pub struct Settings {
     pub show_my_day: bool,
     pub my_day_position_right: bool,
     pub show_ribbon: bool,
+    pub show_sidebar: bool,
     pub current_view: String,
     pub default_event_duration: u32,
     pub default_event_start_time: String,
@@ -37,6 +38,7 @@ impl Default for Settings {
             show_my_day: false,
             my_day_position_right: false,
             show_ribbon: false,
+            show_sidebar: true,
             current_view: "Month".to_string(),
             default_event_duration: 60,
             default_event_start_time: "08:00".to_string(),
@@ -203,6 +205,7 @@ mod tests {
         assert_eq!(settings.date_format, "DD/MM/YYYY");
         assert_eq!(settings.show_my_day, false);
         assert_eq!(settings.show_ribbon, false);
+        assert_eq!(settings.show_sidebar, true);
         assert_eq!(settings.current_view, "Month");
     }
 

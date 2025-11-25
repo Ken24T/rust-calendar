@@ -85,8 +85,8 @@ impl CalendarApp {
                     self.current_view = ViewType::Week;
                     self.focus_on_current_time_if_visible();
                 }
-                if ui.selectable_label(self.current_view == ViewType::WorkWeek, "Work")
-                    .on_hover_text("Press K (work week)")
+                if ui.selectable_label(self.current_view == ViewType::WorkWeek, "Work Week")
+                    .on_hover_text("Press K")
                     .clicked()
                 {
                     self.current_view = ViewType::WorkWeek;
@@ -351,9 +351,10 @@ impl CalendarApp {
         egui::Window::new("📅 Go to Date")
             .collapsible(false)
             .resizable(false)
-            .default_width(240.0)
+            .auto_sized()
             .open(&mut is_open)
             .show(ctx, |ui| {
+                ui.set_max_width(220.0);
                 // Month/Year header with navigation
                 ui.horizontal(|ui| {
                     if ui.small_button("◀◀").on_hover_text("Previous year").clicked() {
@@ -384,58 +385,60 @@ impl CalendarApp {
 
                 ui.separator();
 
-                // Day of week headers
+                // Day of week headers and calendar grid using Grid for alignment
                 let day_names = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-                ui.horizontal(|ui| {
-                    ui.add_space(4.0);
-                    for name in &day_names {
-                        ui.label(egui::RichText::new(*name).small().strong());
-                        ui.add_space(8.0);
-                    }
-                });
+                
+                egui::Grid::new("date_picker_grid")
+                    .num_columns(7)
+                    .spacing([4.0, 2.0])
+                    .min_col_width(24.0)
+                    .show(ui, |ui| {
+                        // Header row
+                        for name in &day_names {
+                            ui.label(egui::RichText::new(*name).small().strong());
+                        }
+                        ui.end_row();
 
-                // Calendar grid
-                let first_of_month = viewing_date.with_day(1).unwrap();
-                let start_weekday = first_of_month.weekday().num_days_from_sunday() as i64;
+                        // Calendar grid
+                        let first_of_month = viewing_date.with_day(1).unwrap();
+                        let start_weekday = first_of_month.weekday().num_days_from_sunday() as i64;
 
-                // Start from the Sunday before the first of the month
-                let grid_start = first_of_month - chrono::Duration::days(start_weekday);
+                        // Start from the Sunday before the first of the month
+                        let grid_start = first_of_month - chrono::Duration::days(start_weekday);
 
-                let mut current = grid_start;
-                for _week in 0..6 {
-                    ui.horizontal(|ui| {
-                        for _day in 0..7 {
-                            let is_current_month = current.month() == viewing_date.month();
-                            let is_today = current == today;
-                            let is_selected = current == self.current_date;
+                        let mut current = grid_start;
+                        for _week in 0..6 {
+                            for _day in 0..7 {
+                                let is_current_month = current.month() == viewing_date.month();
+                                let is_today = current == today;
+                                let is_selected = current == self.current_date;
 
-                            let day_str = format!("{:2}", current.day());
+                                let day_str = format!("{}", current.day());
 
-                            let text = if is_today {
-                                egui::RichText::new(&day_str).strong().color(egui::Color32::from_rgb(50, 150, 50))
-                            } else if !is_current_month {
-                                egui::RichText::new(&day_str).weak()
-                            } else {
-                                egui::RichText::new(&day_str)
-                            };
+                                let text = if is_today {
+                                    egui::RichText::new(&day_str).strong().color(egui::Color32::from_rgb(50, 150, 50))
+                                } else if !is_current_month {
+                                    egui::RichText::new(&day_str).weak()
+                                } else {
+                                    egui::RichText::new(&day_str)
+                                };
 
-                            let btn = ui.selectable_label(is_selected, text);
+                                if ui.selectable_label(is_selected, text).clicked() {
+                                    self.current_date = current;
+                                    self.state.date_picker_state.close();
+                                    self.focus_on_current_time_if_visible();
+                                }
 
-                            if btn.clicked() {
-                                self.current_date = current;
-                                self.state.date_picker_state.close();
-                                self.focus_on_current_time_if_visible();
+                                current += chrono::Duration::days(1);
                             }
+                            ui.end_row();
 
-                            current += chrono::Duration::days(1);
+                            // Stop if we've gone past this month
+                            if current.month() != viewing_date.month() && current.day() > 7 {
+                                break;
+                            }
                         }
                     });
-
-                    // Stop if we've gone past this month
-                    if current.month() != viewing_date.month() && current.day() > 7 {
-                        break;
-                    }
-                }
 
                 ui.separator();
 

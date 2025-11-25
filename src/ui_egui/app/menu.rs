@@ -70,6 +70,16 @@ impl CalendarApp {
 
     fn render_view_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("View", |ui| {
+            // Sidebar toggle
+            let mut show_sidebar = self.settings.show_sidebar;
+            if ui
+                .checkbox(&mut show_sidebar, "Show Sidebar    Ctrl+\\")
+                .clicked()
+            {
+                self.toggle_sidebar();
+                ui.close_menu();
+            }
+
             if ui
                 .checkbox(&mut self.show_ribbon, "Show All-Day Events Ribbon")
                 .clicked()
@@ -81,6 +91,8 @@ impl CalendarApp {
                 }
                 ui.close_menu();
             }
+
+            ui.separator();
 
             if ui
                 .selectable_label(self.current_view == super::state::ViewType::Day, "Day")

@@ -1,6 +1,7 @@
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use anyhow::{anyhow, Context, Result};
+use rusqlite::params;
 
 use super::mapper::row_to_settings;
 
@@ -20,7 +21,7 @@ impl<'a> SettingsService<'a> {
         let settings = conn
             .query_row(
                 "SELECT id, theme, first_day_of_week, time_format, date_format,
-                    show_my_day, my_day_position_right, show_ribbon, current_view,
+                    show_my_day, my_day_position_right, show_ribbon, show_sidebar, current_view,
                     default_event_duration, first_day_of_work_week, last_day_of_work_week,
                     default_event_start_time, default_card_width, default_card_height,
                     auto_create_countdown_on_import, edit_before_import
@@ -50,18 +51,19 @@ impl<'a> SettingsService<'a> {
                  show_my_day = ?5, \
                  my_day_position_right = ?6, \
                  show_ribbon = ?7, \
-                 current_view = ?8, \
-                 default_event_duration = ?9, \
-                 first_day_of_work_week = ?10, \
-                 last_day_of_work_week = ?11, \
-                 default_event_start_time = ?12, \
-                 default_card_width = ?13, \
-                 default_card_height = ?14, \
-                 auto_create_countdown_on_import = ?15, \
-                 edit_before_import = ?16, \
+                 show_sidebar = ?8, \
+                 current_view = ?9, \
+                 default_event_duration = ?10, \
+                 first_day_of_work_week = ?11, \
+                 last_day_of_work_week = ?12, \
+                 default_event_start_time = ?13, \
+                 default_card_width = ?14, \
+                 default_card_height = ?15, \
+                 auto_create_countdown_on_import = ?16, \
+                 edit_before_import = ?17, \
                  updated_at = CURRENT_TIMESTAMP \
              WHERE id = 1",
-            (
+            params![
                 &settings.theme,
                 settings.first_day_of_week,
                 &settings.time_format,
@@ -69,6 +71,7 @@ impl<'a> SettingsService<'a> {
                 settings.show_my_day as i32,
                 settings.my_day_position_right as i32,
                 settings.show_ribbon as i32,
+                settings.show_sidebar as i32,
                 &settings.current_view,
                 settings.default_event_duration,
                 settings.first_day_of_work_week,
@@ -78,7 +81,7 @@ impl<'a> SettingsService<'a> {
                 settings.default_card_height,
                 settings.auto_create_countdown_on_import as i32,
                 settings.edit_before_import as i32,
-            ),
+            ],
         )
         .context("Failed to update settings")?;
 

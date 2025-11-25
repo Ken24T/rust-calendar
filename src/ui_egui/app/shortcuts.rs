@@ -43,6 +43,11 @@ impl CalendarApp {
                 }
             }
 
+            // Ctrl+\ to toggle sidebar
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::Backslash) {
+                self.toggle_sidebar();
+            }
+
             // View type shortcuts (only when no dialog is open)
             if !self.show_event_dialog
                 && !self.show_settings_dialog
