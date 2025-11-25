@@ -227,12 +227,12 @@ impl DayView {
 
         if date == now_date {
             // Calculate Y position based on time
+            // Each hour has 4 slots (15 minutes each), each slot is 40 pixels high
+            const SLOT_HEIGHT: f32 = 40.0;
+            const SLOTS_PER_HOUR: f32 = 4.0;
+            
             let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
-            let slots_since_midnight = (hours_since_midnight * 4.0).floor() as usize; // 4 slots per hour
-            let slot_offset = (hours_since_midnight * 4.0) - slots_since_midnight as f32;
-
-            // Each slot is 30.0 pixels high, calculate relative Y
-            let relative_y = (slots_since_midnight as f32 * 30.0) + (slot_offset * 30.0);
+            let relative_y = hours_since_midnight * SLOTS_PER_HOUR * SLOT_HEIGHT;
 
             // Get the UI's current position to calculate absolute coordinates
             let ui_top = ui.min_rect().top();
