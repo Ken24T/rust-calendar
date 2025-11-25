@@ -7,7 +7,7 @@ use crate::ui_egui::views::month_view::MonthView;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
-use chrono::{Datelike, Local};
+use chrono::{Datelike, Local, NaiveDate};
 use std::collections::HashSet;
 
 impl CalendarApp {
@@ -25,7 +25,8 @@ impl CalendarApp {
             .collect();
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading(format!(
+            // Clickable heading - double-click to go to today
+            let heading_text = format!(
                 "{} View - {}",
                 match self.current_view {
                     ViewType::Day => "Day",
@@ -34,72 +35,68 @@ impl CalendarApp {
                     ViewType::Month => "Month",
                 },
                 self.current_date.format("%B %Y")
-            ));
+            );
+            let heading_response = ui.heading(&heading_text);
+            if heading_response.double_clicked() {
+                self.jump_to_today();
+            }
+            heading_response.on_hover_text("Double-click to go to today");
 
             ui.separator();
 
             ui.horizontal(|ui| {
-                if ui.button("◀ Previous").clicked() {
+                // Navigation buttons with keyboard hint tooltips
+                if ui.button("◀ Previous").on_hover_text("← Arrow").clicked() {
                     self.navigate_previous();
                 }
-                if ui.button("Today    Ctrl+T").clicked() {
+                if ui.button("Today").on_hover_text("Ctrl+T").clicked() {
                     self.jump_to_today();
                 }
-                if ui.button("Next ▶").clicked() {
+                if ui.button("Next ▶").on_hover_text("→ Arrow").clicked() {
                     self.navigate_next();
                 }
 
                 ui.separator();
 
-                ui.label("Jump to:");
-
-                let month_names = [
-                    "January",
-                    "February",
-                    "March",
-                    "April",
-                    "May",
-                    "June",
-                    "July",
-                    "August",
-                    "September",
-                    "October",
-                    "November",
-                    "December",
-                ];
-                let current_month = self.current_date.month() as usize;
-                egui::ComboBox::from_id_source("month_picker")
-                    .selected_text(month_names[current_month - 1])
-                    .show_ui(ui, |ui| {
-                        for (idx, month_name) in month_names.iter().enumerate() {
-                            if ui
-                                .selectable_value(&mut (idx + 1), current_month, *month_name)
-                                .clicked()
-                            {
-                                let new_month = (idx + 1) as u32;
-                                if let Some(new_date) = chrono::NaiveDate::from_ymd_opt(
-                                    self.current_date.year(),
-                                    new_month,
-                                    1,
-                                ) {
-                                    self.current_date = new_date;
-                                }
-                            }
-                        }
-                    });
-
-                let mut year = self.current_date.year();
-                ui.add(
-                    egui::DragValue::new(&mut year)
-                        .range(1900..=2100)
-                        .speed(1.0),
-                );
-                if year != self.current_date.year() {
-                    if let Some(new_date) =
-                        chrono::NaiveDate::from_ymd_opt(year, self.current_date.month(), 1)
-                    {
-                        self.current_date = new_date;
+                // Date picker button with mini calendar popup
+                if ui.button("📅").on_hover_text("Go to date...").clicked() {
+                    if self.state.date_picker_state.is_open {
+                        self.state.date_picker_state.close();
+                    } else {
+                        self.state.date_picker_state.open(self.current_date);
                     }
+                }
+
+                ui.separator();
+
+                // View type buttons with keyboard shortcuts
+                ui.label("View:");
+                if ui.selectable_label(self.current_view == ViewType::Day, "Day")
+                    .on_hover_text("Press D")
+                    .clicked()
+                {
+                    self.current_view = ViewType::Day;
+                    self.focus_on_current_time_if_visible();
+                }
+                if ui.selectable_label(self.current_view == ViewType::Week, "Week")
+                    .on_hover_text("Press W")
+                    .clicked()
+                {
+                    self.current_view = ViewType::Week;
+                    self.focus_on_current_time_if_visible();
+                }
+                if ui.selectable_label(self.current_view == ViewType::WorkWeek, "Work")
+                    .on_hover_text("Press K (work week)")
+                    .clicked()
+                {
+                    self.current_view = ViewType::WorkWeek;
+                    self.focus_on_current_time_if_visible();
+                }
+                if ui.selectable_label(self.current_view == ViewType::Month, "Month")
+                    .on_hover_text("Press M")
+                    .clicked()
+                {
+                    self.current_view = ViewType::Month;
                 }
             });
 
@@ -340,4 +337,143 @@ impl CalendarApp {
             });
         }
     }
+
+    /// Render the mini calendar date picker popup as a floating window
+    pub(super) fn render_date_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.state.date_picker_state.is_open {
+            return;
+        }
+
+        let viewing_date = self.state.date_picker_state.viewing_date.unwrap_or(self.current_date);
+        let today = Local::now().date_naive();
+
+        let mut is_open = true;
+        egui::Window::new("📅 Go to Date")
+            .collapsible(false)
+            .resizable(false)
+            .default_width(240.0)
+            .open(&mut is_open)
+            .show(ctx, |ui| {
+                // Month/Year header with navigation
+                ui.horizontal(|ui| {
+                    if ui.small_button("◀◀").on_hover_text("Previous year").clicked() {
+                        if let Some(new_date) = viewing_date.with_year(viewing_date.year() - 1) {
+                            self.state.date_picker_state.viewing_date = Some(new_date);
+                        }
+                    }
+                    if ui.small_button("◀").on_hover_text("Previous month").clicked() {
+                        self.state.date_picker_state.viewing_date = Some(shift_month(viewing_date, -1));
+                    }
+
+                    ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
+                        let header = format!("{}", viewing_date.format("%B %Y"));
+                        if ui.selectable_label(false, &header).on_hover_text("Click to go to today").clicked() {
+                            self.state.date_picker_state.viewing_date = Some(today);
+                        }
+                    });
+
+                    if ui.small_button("▶").on_hover_text("Next month").clicked() {
+                        self.state.date_picker_state.viewing_date = Some(shift_month(viewing_date, 1));
+                    }
+                    if ui.small_button("▶▶").on_hover_text("Next year").clicked() {
+                        if let Some(new_date) = viewing_date.with_year(viewing_date.year() + 1) {
+                            self.state.date_picker_state.viewing_date = Some(new_date);
+                        }
+                    }
+                });
+
+                ui.separator();
+
+                // Day of week headers
+                let day_names = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+                ui.horizontal(|ui| {
+                    ui.add_space(4.0);
+                    for name in &day_names {
+                        ui.label(egui::RichText::new(*name).small().strong());
+                        ui.add_space(8.0);
+                    }
+                });
+
+                // Calendar grid
+                let first_of_month = viewing_date.with_day(1).unwrap();
+                let start_weekday = first_of_month.weekday().num_days_from_sunday() as i64;
+
+                // Start from the Sunday before the first of the month
+                let grid_start = first_of_month - chrono::Duration::days(start_weekday);
+
+                let mut current = grid_start;
+                for _week in 0..6 {
+                    ui.horizontal(|ui| {
+                        for _day in 0..7 {
+                            let is_current_month = current.month() == viewing_date.month();
+                            let is_today = current == today;
+                            let is_selected = current == self.current_date;
+
+                            let day_str = format!("{:2}", current.day());
+
+                            let text = if is_today {
+                                egui::RichText::new(&day_str).strong().color(egui::Color32::from_rgb(50, 150, 50))
+                            } else if !is_current_month {
+                                egui::RichText::new(&day_str).weak()
+                            } else {
+                                egui::RichText::new(&day_str)
+                            };
+
+                            let btn = ui.selectable_label(is_selected, text);
+
+                            if btn.clicked() {
+                                self.current_date = current;
+                                self.state.date_picker_state.close();
+                                self.focus_on_current_time_if_visible();
+                            }
+
+                            current += chrono::Duration::days(1);
+                        }
+                    });
+
+                    // Stop if we've gone past this month
+                    if current.month() != viewing_date.month() && current.day() > 7 {
+                        break;
+                    }
+                }
+
+                ui.separator();
+
+                // Quick actions
+                ui.horizontal(|ui| {
+                    if ui.button("Today").clicked() {
+                        self.current_date = today;
+                        self.state.date_picker_state.close();
+                        self.focus_on_current_time_if_visible();
+                    }
+                });
+            });
+
+        if !is_open {
+            self.state.date_picker_state.close();
+        }
+    }
+}
+
+/// Shift a date by the given number of months
+fn shift_month(date: NaiveDate, delta: i32) -> NaiveDate {
+    let total_months = (date.year() * 12) as i32 + (date.month() as i32 - 1) + delta;
+    let new_year = total_months.div_euclid(12);
+    let new_month = (total_months.rem_euclid(12) + 1) as u32;
+    let max_day = days_in_month(new_year, new_month);
+    let day = date.day().min(max_day);
+    NaiveDate::from_ymd_opt(new_year, new_month, day).unwrap_or(date)
+}
+
+/// Get the number of days in a given month
+fn days_in_month(year: i32, month: u32) -> u32 {
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
+    NaiveDate::from_ymd_opt(next_year, next_month, 1)
+        .and_then(|d| d.pred_opt())
+        .map(|d| d.day())
+        .unwrap_or(30)
 }

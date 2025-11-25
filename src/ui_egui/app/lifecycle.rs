@@ -144,6 +144,9 @@ impl CalendarApp {
         self.flush_pending_event_bodies();
         self.handle_dialogs(ctx);
 
+        // Render the date picker popup (if open)
+        self.render_date_picker_popup(ctx);
+
         // Refresh countdown timers and check for notifications
         self.refresh_countdowns(ctx);
         self.check_and_show_countdown_notifications(ctx);
