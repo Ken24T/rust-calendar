@@ -76,38 +76,44 @@ pub fn render_theme_dialog(
                 ui.separator();
                 ui.add_space(10.0);
 
-                // Custom themes section
-                ui.heading("All Themes");
+                // Custom themes section (excluding built-in themes)
+                ui.heading("Custom Themes");
                 ui.add_space(5.0);
 
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .show(ui, |ui| {
-                        for theme_name in available_themes {
-                            let is_builtin = theme_name.to_lowercase() == "light"
-                                || theme_name.to_lowercase() == "dark";
-                            let is_current =
-                                theme_name.to_lowercase() == current_theme.to_lowercase();
+                let custom_themes: Vec<_> = available_themes
+                    .iter()
+                    .filter(|name| {
+                        let lower = name.to_lowercase();
+                        lower != "light" && lower != "dark"
+                    })
+                    .collect();
 
-                            ui.horizontal(|ui| {
-                                // Theme name with indicator if current
-                                let label = if is_current {
-                                    RichText::new(format!("• {}", theme_name))
-                                        .strong()
-                                        .color(ui.visuals().hyperlink_color)
-                                } else {
-                                    RichText::new(format!("  {}", theme_name))
-                                };
+                if custom_themes.is_empty() {
+                    ui.label(RichText::new("No custom themes yet").weak().italics());
+                } else {
+                    egui::ScrollArea::vertical()
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            for theme_name in custom_themes {
+                                let is_current =
+                                    theme_name.to_lowercase() == current_theme.to_lowercase();
 
-                                if ui.button(label).clicked() && !is_current {
-                                    action =
-                                        ThemeDialogAction::ApplyTheme(theme_name.to_lowercase());
-                                }
-
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    if is_builtin {
-                                        ui.label(RichText::new("(Built-in)").weak().italics());
+                                ui.horizontal(|ui| {
+                                    // Theme name - clickable to apply
+                                    let label = if is_current {
+                                        RichText::new(format!("• {}", theme_name))
+                                            .strong()
+                                            .color(ui.visuals().hyperlink_color)
                                     } else {
+                                        RichText::new(format!("• {}", theme_name))
+                                    };
+
+                                    if ui.selectable_label(is_current, label).clicked() && !is_current {
+                                        action =
+                                            ThemeDialogAction::ApplyTheme(theme_name.clone());
+                                    }
+
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                         // Delete button for custom themes
                                         if ui.small_button("Delete").clicked() {
                                             action =
@@ -119,13 +125,13 @@ pub fn render_theme_dialog(
                                             action =
                                                 ThemeDialogAction::EditTheme(theme_name.clone());
                                         }
-                                    }
+                                    });
                                 });
-                            });
 
-                            ui.add_space(3.0);
-                        }
-                    });
+                                ui.add_space(3.0);
+                            }
+                        });
+                }
 
                 ui.add_space(10.0);
                 ui.separator();

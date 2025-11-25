@@ -6,30 +6,48 @@ use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone};
 use egui::{Color32, RichText};
 
 impl CalendarApp {
-    /// Render the left sidebar panel
+    /// Render the sidebar panel (left or right based on settings)
     pub(super) fn render_sidebar(&mut self, ctx: &egui::Context) {
         if !self.settings.show_sidebar {
             return;
         }
 
-        egui::SidePanel::left("sidebar")
-            .default_width(200.0)
-            .min_width(180.0)
-            .max_width(280.0)
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    self.render_sidebar_mini_calendar(ui);
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-                    self.render_sidebar_today_agenda(ui);
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-                    self.render_sidebar_upcoming_events(ui);
+        let panel_id = "sidebar";
+        
+        if self.settings.my_day_position_right {
+            egui::SidePanel::right(panel_id)
+                .default_width(200.0)
+                .min_width(180.0)
+                .max_width(280.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.render_sidebar_content(ui);
                 });
-            });
+        } else {
+            egui::SidePanel::left(panel_id)
+                .default_width(200.0)
+                .min_width(180.0)
+                .max_width(280.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.render_sidebar_content(ui);
+                });
+        }
+    }
+
+    /// Render the sidebar content
+    fn render_sidebar_content(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            self.render_sidebar_mini_calendar(ui);
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(8.0);
+            self.render_sidebar_today_agenda(ui);
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(8.0);
+            self.render_sidebar_upcoming_events(ui);
+        });
     }
 
     /// Render the mini calendar in the sidebar
@@ -114,23 +132,38 @@ impl CalendarApp {
             });
     }
 
-    /// Render today's agenda in the sidebar
+    /// Render the selected day's agenda in the sidebar
     fn render_sidebar_today_agenda(&mut self, ui: &mut egui::Ui) {
         let today = Local::now().date_naive();
-        let events = self.get_events_for_date(today);
+        let selected_date = self.current_date;
+        let is_today = selected_date == today;
+        
+        let events = self.get_events_for_date(selected_date);
 
-        ui.label(RichText::new("📅 Today's Agenda").strong());
+        // Show different header based on whether viewing today or another date
+        let header = if is_today {
+            "📅 Today's Agenda".to_string()
+        } else {
+            format!("📅 {}", selected_date.format("%b %d"))
+        };
+        ui.label(RichText::new(&header).strong());
         ui.add_space(4.0);
 
+        let empty_msg = if is_today {
+            "No events today"
+        } else {
+            "No events on this day"
+        };
+
         if events.is_empty() {
-            ui.label(RichText::new("No events today").weak().italics());
+            ui.label(RichText::new(empty_msg).weak().italics());
         } else {
             egui::ScrollArea::vertical()
                 .max_height(120.0)
                 .id_source("today_agenda_scroll")
                 .show(ui, |ui| {
                     for event in events.iter().take(5) {
-                        self.render_sidebar_event_item(ui, event, false);
+                        self.render_sidebar_event_item(ui, event, !is_today);
                     }
                     if events.len() > 5 {
                         ui.label(RichText::new(format!("...and {} more", events.len() - 5)).weak().small());

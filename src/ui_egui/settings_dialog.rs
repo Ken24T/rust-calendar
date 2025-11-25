@@ -318,10 +318,10 @@ pub fn render_settings_dialog(
 
                 ui.horizontal(|ui| {
                     ui.add_space(label_width);
-                    ui.checkbox(&mut settings.show_my_day, "Show My Day panel");
+                    ui.checkbox(&mut settings.show_sidebar, "Show Sidebar");
                 });
 
-                if settings.show_my_day {
+                if settings.show_sidebar {
                     ui.horizontal(|ui| {
                         ui.add_space(label_width + 20.0);
                         ui.checkbox(
