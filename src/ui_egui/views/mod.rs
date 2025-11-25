@@ -129,3 +129,61 @@ impl CountdownRequest {
         }
     }
 }
+
+/// Renders a friendly empty state message when there are no events.
+/// Returns true if the "Create Event" button was clicked.
+pub fn render_empty_state(ui: &mut egui::Ui, _view_name: &str, date_description: &str) -> bool {
+    let mut create_clicked = false;
+    
+    ui.vertical_centered(|ui| {
+        ui.add_space(60.0);
+        
+        // Calendar icon
+        ui.label(
+            egui::RichText::new("📅")
+                .size(48.0)
+        );
+        
+        ui.add_space(16.0);
+        
+        // Main message
+        ui.label(
+            egui::RichText::new(format!("No events {}", date_description))
+                .size(18.0)
+                .strong()
+        );
+        
+        ui.add_space(8.0);
+        
+        // Hint text
+        ui.label(
+            egui::RichText::new(format!(
+                "Click any time slot to create an event,\nor use the button below to get started."
+            ))
+            .size(13.0)
+            .weak()
+        );
+        
+        ui.add_space(16.0);
+        
+        // Create event button
+        if ui.button(
+            egui::RichText::new("➕ Create Event")
+                .size(14.0)
+        ).clicked() {
+            create_clicked = true;
+        }
+        
+        ui.add_space(8.0);
+        
+        // Keyboard hint
+        ui.label(
+            egui::RichText::new("💡 Tip: Press N to quickly create a new event")
+                .size(11.0)
+                .weak()
+                .italics()
+        );
+    });
+    
+    create_clicked
+}

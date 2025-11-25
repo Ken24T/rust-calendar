@@ -11,6 +11,7 @@ mod notifications;
 mod shortcuts;
 mod sidebar;
 mod state;
+mod status_bar;
 mod views;
 
 use self::context::AppContext;

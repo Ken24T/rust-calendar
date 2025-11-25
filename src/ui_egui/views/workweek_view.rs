@@ -256,6 +256,21 @@ impl WorkWeekView {
 
         ui.add_space(8.0);
 
+        // Show empty state hint if no events this work week
+        if events.is_empty() && !work_week_dates.is_empty() {
+            let first_day = work_week_dates[0];
+            let last_day = work_week_dates[work_week_dates.len() - 1];
+            let date_desc = format!("this work week ({} - {})", 
+                first_day.format("%b %d"),
+                last_day.format("%b %d")
+            );
+            if super::render_empty_state(ui, "Work Week", &date_desc) {
+                *show_event_dialog = true;
+                *event_dialog_date = Some(*current_date);
+                *event_dialog_time = Some(chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+            }
+        }
+
         // Scrollable time slots
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])

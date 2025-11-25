@@ -129,6 +129,9 @@ impl CalendarApp {
 
         self.render_menu_bar(ctx);
 
+        // Render status bar (before sidebar and CentralPanel so it takes bottom space)
+        self.render_status_bar(ctx);
+
         // Render sidebar (before CentralPanel so it takes left space)
         self.render_sidebar(ctx);
 

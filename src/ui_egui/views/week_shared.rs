@@ -199,11 +199,21 @@ pub fn render_event_in_cell(
     event: &Event,
     has_countdown: bool,
 ) -> Rect {
-    let event_color = event
+    let now = Local::now();
+    let is_past = event.end < now;
+    
+    let base_color = event
         .color
         .as_deref()
         .and_then(parse_color)
         .unwrap_or(Color32::from_rgb(100, 150, 200));
+    
+    // Dim past events by reducing opacity
+    let event_color = if is_past {
+        base_color.linear_multiply(0.5)
+    } else {
+        base_color
+    };
 
     let bar_rect = Rect::from_min_size(
         Pos2::new(cell_rect.left() + 2.0, cell_rect.top() + 2.0),
@@ -221,10 +231,17 @@ pub fn render_event_in_cell(
         event.title.clone()
     };
 
+    // Dim text for past events
+    let text_color = if is_past {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+    } else {
+        Color32::WHITE
+    };
+
     let layout_job = egui::text::LayoutJob::simple(
         title_text,
         font_id,
-        Color32::WHITE,
+        text_color,
         available_width,
     );
 
@@ -233,7 +250,7 @@ pub fn render_event_in_cell(
     ui.painter().galley(
         Pos2::new(cell_rect.left() + 5.0, cell_rect.top() + 5.0),
         galley,
-        Color32::WHITE,
+        text_color,
     );
 
     bar_rect
@@ -241,20 +258,83 @@ pub fn render_event_in_cell(
 
 /// Render a continuation block for events spanning multiple time slots.
 pub fn render_event_continuation(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -> Rect {
-    let event_color = event
+    let now = Local::now();
+    let is_past = event.end < now;
+    
+    let base_color = event
         .color
         .as_deref()
         .and_then(parse_color)
         .unwrap_or(Color32::from_rgb(100, 150, 200));
+
+    // Dim past events further
+    let event_color = if is_past {
+        base_color.linear_multiply(0.3)
+    } else {
+        base_color.linear_multiply(0.5)
+    };
 
     let bg_rect = Rect::from_min_size(
         Pos2::new(cell_rect.left() + 2.0, cell_rect.top() + 2.0),
         Vec2::new(cell_rect.width() - 4.0, cell_rect.height() - 4.0),
     );
     ui.painter()
-        .rect_filled(bg_rect, 2.0, event_color.linear_multiply(0.5));
+        .rect_filled(bg_rect, 2.0, event_color);
 
     bg_rect
+}
+
+/// Generate a rich tooltip string for an event.
+/// Shows title, time range, location, and description preview.
+pub fn format_event_tooltip(event: &Event) -> String {
+    let mut lines = Vec::new();
+    
+    // Title (bold via unicode)
+    lines.push(format!("📌 {}", event.title));
+    
+    // Time
+    if event.all_day {
+        let date_str = event.start.format("%A, %B %d, %Y").to_string();
+        lines.push(format!("🕐 All day - {}", date_str));
+    } else {
+        let start_str = event.start.format("%H:%M").to_string();
+        let end_str = event.end.format("%H:%M").to_string();
+        let date_str = event.start.format("%A, %B %d").to_string();
+        lines.push(format!("🕐 {} - {} ({})", start_str, end_str, date_str));
+    }
+    
+    // Location
+    if let Some(ref location) = event.location {
+        if !location.is_empty() {
+            lines.push(format!("📍 {}", location));
+        }
+    }
+    
+    // Category
+    if let Some(ref category) = event.category {
+        if !category.is_empty() {
+            lines.push(format!("🏷️ {}", category));
+        }
+    }
+    
+    // Recurring indicator
+    if event.recurrence_rule.is_some() {
+        lines.push("🔄 Recurring event".to_string());
+    }
+    
+    // Description preview (truncated)
+    if let Some(ref description) = event.description {
+        if !description.is_empty() {
+            let preview = if description.len() > 100 {
+                format!("{}...", &description[..100])
+            } else {
+                description.clone()
+            };
+            lines.push(format!("\n📝 {}", preview));
+        }
+    }
+    
+    lines.join("\n")
 }
 
 /// Get the start of the week containing the given date.
@@ -376,13 +456,28 @@ pub fn render_time_cell(
 
     maybe_focus_slot(ui, rect, date, time, slot_end, focus_request);
 
-    // Background color selection
-    let bg_color = if is_today {
+    // Check if this slot contains the current time (only for today)
+    let now = Local::now().time();
+    let is_current_time_slot = is_today && now >= time && now < slot_end;
+
+    // Background color selection with current time highlight
+    let base_bg = if is_today {
         palette.today_bg
     } else if is_weekend {
         palette.weekend_bg
     } else {
         palette.regular_bg
+    };
+    
+    let bg_color = if is_current_time_slot {
+        // Blend with a soft highlight color (light blue/cyan tint)
+        Color32::from_rgb(
+            ((base_bg.r() as u16 * 230 + 100 * 25) / 255) as u8,
+            ((base_bg.g() as u16 * 230 + 180 * 25) / 255) as u8,
+            ((base_bg.b() as u16 * 230 + 255 * 25) / 255) as u8,
+        )
+    } else {
+        base_bg
     };
     ui.painter().rect_filled(rect, 0.0, bg_color);
 
@@ -409,9 +504,10 @@ pub fn render_time_cell(
         Stroke::new(1.0, palette.divider),
     );
 
-    // Hover effect
+    // Hover effect with cursor change
     if response.hovered() {
         ui.painter().rect_filled(rect, 0.0, palette.hover_overlay);
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
     }
 
     let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
@@ -449,6 +545,16 @@ pub fn render_time_cell(
     } else {
         None
     };
+
+    // Show tooltip when hovering over an event
+    if let Some((hit_rect, hovered_event)) = &pointer_hit {
+        if response.hovered() && hit_rect.contains(pointer_pos.unwrap_or_default()) {
+            let tooltip_text = format_event_tooltip(hovered_event);
+            response.clone().on_hover_ui_at_pointer(|ui| {
+                ui.label(tooltip_text);
+            });
+        }
+    }
 
     // Drag hover tracking
     let pointer_for_hover = ui

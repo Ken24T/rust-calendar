@@ -3,7 +3,7 @@ use super::CalendarApp;
 use crate::models::event::Event;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::views::day_view::DayView;
-use crate::ui_egui::views::month_view::MonthView;
+use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
@@ -277,7 +277,7 @@ impl CalendarApp {
     }
 
     pub(super) fn render_month_view(&mut self, ui: &mut egui::Ui) {
-        MonthView::show(
+        let action = MonthView::show(
             ui,
             &mut self.current_date,
             self.context.database(),
@@ -288,6 +288,12 @@ impl CalendarApp {
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
         );
+        
+        // Handle month view actions
+        if let MonthViewAction::SwitchToDayView(date) = action {
+            self.current_date = date;
+            self.current_view = ViewType::Day;
+        }
     }
 
     pub(super) fn focus_on_event(&mut self, event: &Event) {

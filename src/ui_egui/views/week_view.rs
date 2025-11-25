@@ -256,6 +256,20 @@ impl WeekView {
 
         ui.add_space(8.0);
 
+        // Show empty state hint if no events this week
+        if events.is_empty() {
+            let week_end = week_start + Duration::days(6);
+            let date_desc = format!("this week ({} - {})", 
+                week_start.format("%b %d"),
+                week_end.format("%b %d")
+            );
+            if super::render_empty_state(ui, "Week", &date_desc) {
+                *show_event_dialog = true;
+                *event_dialog_date = Some(*current_date);
+                *event_dialog_time = Some(chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+            }
+        }
+
         // Scrollable time slots
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])

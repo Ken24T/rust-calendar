@@ -107,6 +107,16 @@ impl DayView {
 
         ui.add_space(8.0);
 
+        // Show empty state hint if no events
+        if events.is_empty() {
+            let date_desc = current_date.format("on %B %d").to_string();
+            if super::render_empty_state(ui, "Day", &date_desc) {
+                *show_event_dialog = true;
+                *event_dialog_date = Some(*current_date);
+                *event_dialog_time = Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+            }
+        }
+
         // Scrollable time slots
         let mut clicked_event = None;
         egui::ScrollArea::vertical()
@@ -320,8 +330,27 @@ impl DayView {
             let slot_line_color = palette.slot_line;
             let hover_overlay = palette.hover_overlay;
 
-            // Background
-            let bg_color = if is_hour_start { hour_bg } else { regular_bg };
+            // Check if this slot contains the current time (only for today)
+            let today = Local::now().date_naive();
+            let now = Local::now().time();
+            let is_current_time_slot = date == today && now >= time && now < slot_end;
+            
+            // Background - highlight current time slot with a subtle tint
+            let bg_color = if is_current_time_slot {
+                // Blend with a soft highlight color (light blue/cyan tint)
+                let highlight = Color32::from_rgba_unmultiplied(100, 180, 255, 25);
+                let base = if is_hour_start { hour_bg } else { regular_bg };
+                // Simple alpha blend
+                Color32::from_rgb(
+                    ((base.r() as u16 * 230 + highlight.r() as u16 * 25) / 255) as u8,
+                    ((base.g() as u16 * 230 + highlight.g() as u16 * 25) / 255) as u8,
+                    ((base.b() as u16 * 230 + highlight.b() as u16 * 25) / 255) as u8,
+                )
+            } else if is_hour_start {
+                hour_bg
+            } else {
+                regular_bg
+            };
             ui.painter().rect_filled(rect, 0.0, bg_color);
 
             // Horizontal grid line
@@ -338,9 +367,10 @@ impl DayView {
                 Stroke::new(1.0, line_color),
             );
 
-            // Hover effect
+            // Hover effect with cursor change
             if response.hovered() {
                 ui.painter().rect_filled(rect, 0.0, hover_overlay);
+                ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
 
             let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
@@ -374,6 +404,16 @@ impl DayView {
             } else {
                 None
             };
+
+            // Show tooltip when hovering over an event
+            if let Some((hit_rect, hovered_event)) = &pointer_hit {
+                if response.hovered() && hit_rect.contains(pointer_pos.unwrap_or_default()) {
+                    let tooltip_text = super::week_shared::format_event_tooltip(hovered_event);
+                    response.clone().on_hover_ui_at_pointer(|ui| {
+                        ui.label(tooltip_text);
+                    });
+                }
+            }
 
             let pointer_for_hover = ui
                 .ctx()
@@ -620,11 +660,21 @@ impl DayView {
     }
 
     fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
-        let event_color = event
+        let now = Local::now();
+        let is_past = event.end < now;
+        
+        let base_color = event
             .color
             .as_deref()
             .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
+        
+        // Dim past events
+        let event_color = if is_past {
+            base_color.linear_multiply(0.5)
+        } else {
+            base_color
+        };
 
         // Event background - fill the slot area (after the time label)
         let bg_rect = Rect::from_min_size(
@@ -650,11 +700,18 @@ impl DayView {
         // Use egui's layout system to properly truncate text
         let font_id = egui::FontId::proportional(13.0);
         let available_width = text_rect.width();
+        
+        // Dim text for past events
+        let text_color = if is_past {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+        } else {
+            Color32::WHITE
+        };
 
         let layout_job = egui::text::LayoutJob::simple(
             event.title.clone(),
             font_id.clone(),
-            Color32::WHITE,
+            text_color,
             available_width,
         );
 
@@ -666,7 +723,7 @@ impl DayView {
                 text_rect.center().y - galley.size().y / 2.0,
             ),
             galley,
-            Color32::WHITE,
+            text_color,
         );
 
         // Time range
@@ -680,18 +737,28 @@ impl DayView {
             egui::Align2::LEFT_TOP,
             time_str,
             egui::FontId::proportional(10.0),
-            Color32::WHITE,
+            text_color,
         );
 
         bg_rect
     }
 
     fn render_event_continuation(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
-        let event_color = event
+        let now = Local::now();
+        let is_past = event.end < now;
+        
+        let base_color = event
             .color
             .as_deref()
             .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
+        
+        // Dim past events further
+        let event_color = if is_past {
+            base_color.linear_multiply(0.3)
+        } else {
+            base_color
+        };
 
         // Just render a colored bar to show the event continues through this slot
         let bar_rect = Rect::from_min_size(

@@ -111,7 +111,7 @@ impl TimeGridPalette {
             hour_line: theme.day_border,
             slot_line: with_alpha(theme.day_border, 170),
             divider,
-            hover_overlay: with_alpha(theme.today_border, if theme.is_dark { 60 } else { 30 }),
+            hover_overlay: with_alpha(theme.today_border, if theme.is_dark { 80 } else { 50 }),
         }
     }
 }
