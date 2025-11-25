@@ -1,11 +1,11 @@
 [package]
 name = "rust-calendar"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Ken24T"]
 description = "A modern Windows desktop calendar application with theming and event management"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/rust-calendar"
+repository = "https://github.com/Ken24T/rust-calendar"
 keywords = ["calendar", "gui", "desktop", "events", "windows"]
 categories = ["gui", "date-and-time"]
 
