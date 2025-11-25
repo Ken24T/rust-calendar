@@ -1,15 +1,16 @@
-use chrono::{Local, NaiveDate, NaiveTime, Timelike};
-use egui::{Align, Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
+use chrono::{Local, NaiveDate, NaiveTime, TimeZone, Timelike};
+use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
+use super::week_shared::{maybe_focus_slot, parse_color};
+use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::theme::CalendarTheme;
-use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
 
 pub struct DayView;
 
@@ -308,7 +309,7 @@ impl DayView {
             let drag_sense = Sense::click_and_drag().union(Sense::hover());
             let (rect, response) = ui.allocate_exact_size(desired_size, drag_sense);
 
-            Self::maybe_focus_slot(ui, rect, date, time, slot_end, focus_request);
+            maybe_focus_slot(ui, rect, date, time, slot_end, focus_request);
 
             let hour_bg = palette.hour_bg;
             let regular_bg = palette.regular_bg;
@@ -617,7 +618,7 @@ impl DayView {
         let event_color = event
             .color
             .as_deref()
-            .and_then(Self::parse_color)
+            .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
 
         // Event background - fill the slot area (after the time label)
@@ -684,7 +685,7 @@ impl DayView {
         let event_color = event
             .color
             .as_deref()
-            .and_then(Self::parse_color)
+            .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
 
         // Just render a colored bar to show the event continues through this slot
@@ -706,8 +707,6 @@ impl DayView {
     }
 
     fn get_events_for_day(event_service: &EventService, date: NaiveDate) -> Vec<Event> {
-        use chrono::{Local, TimeZone};
-
         let start = Local
             .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
             .single()
@@ -723,38 +722,5 @@ impl DayView {
             .into_iter()
             .filter(|e| !e.all_day)
             .collect()
-    }
-
-    fn parse_color(hex: &str) -> Option<Color32> {
-        if hex.is_empty() {
-            return None;
-        }
-
-        let hex = hex.trim_start_matches('#');
-        if hex.len() != 6 {
-            return None;
-        }
-
-        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-
-        Some(Color32::from_rgb(r, g, b))
-    }
-
-    fn maybe_focus_slot(
-        ui: &mut egui::Ui,
-        rect: Rect,
-        date: NaiveDate,
-        slot_start: NaiveTime,
-        slot_end: NaiveTime,
-        focus_request: &mut Option<AutoFocusRequest>,
-    ) {
-        if let Some(target) = focus_request.as_ref() {
-            if target.matches_slot(date, slot_start, slot_end) {
-                ui.scroll_to_rect(rect.expand2(Vec2::new(0.0, 20.0)), Some(Align::Center));
-                *focus_request = None;
-            }
-        }
     }
 }
