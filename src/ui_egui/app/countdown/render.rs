@@ -25,6 +25,7 @@ fn resolve_dimension(value: f32, fallback: f32, min: f32) -> f32 {
 pub(super) enum CountdownCardUiAction {
     None,
     OpenSettings,
+    OpenEventDialog,
     GeometrySettled,
     Delete,
     Refresh,
@@ -294,6 +295,12 @@ pub(super) fn render_countdown_card_ui(
         });
 
         inner.response.context_menu(|ui| {
+            if card.event_id.is_some() {
+                if ui.button("Edit event...").clicked() {
+                    action = CountdownCardUiAction::OpenEventDialog;
+                    ui.close_menu();
+                }
+            }
             if ui.button("Card settings...").clicked() {
                 action = CountdownCardUiAction::OpenSettings;
                 ui.close_menu();

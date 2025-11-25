@@ -4,6 +4,7 @@ use egui_extras::DatePickerButton;
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::services::countdown::CountdownCardId;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 
@@ -11,9 +12,24 @@ use super::recurrence::{RecurrenceFrequency, RecurrencePattern, Weekday};
 use super::state::EventDialogState;
 use super::widgets::{parse_hex_color, render_time_picker};
 
+/// Changes to apply to a linked countdown card
+#[derive(Debug, Clone)]
+pub struct CountdownCardChanges {
+    pub card_id: CountdownCardId,
+    pub description: Option<String>,
+    pub color: Option<String>,
+    pub start_date: chrono::NaiveDate,
+    pub start_time: chrono::NaiveTime,
+    pub always_on_top: bool,
+    pub compact_mode: bool,
+    pub title_font_size: f32,
+    pub days_font_size: f32,
+}
+
 #[derive(Default)]
 pub struct EventDialogResult {
     pub saved_event: Option<Event>,
+    pub card_changes: Option<CountdownCardChanges>,
 }
 
 impl EventDialogResult {}
@@ -49,6 +65,7 @@ pub fn render_event_dialog(
             render_date_time_section(ui, state);
             render_appearance_section(ui, state);
             render_recurrence_section(ui, state, settings);
+            render_countdown_card_section(ui, state);
             let action = render_action_buttons(ui, state, database, show_dialog);
             if action.saved_event.is_some() {
                 result = action;
@@ -441,6 +458,70 @@ fn render_recurrence_end_section(ui: &mut egui::Ui, state: &mut EventDialogState
     });
 }
 
+fn render_countdown_card_section(ui: &mut egui::Ui, state: &mut EventDialogState) {
+    // Only show this section if a countdown card is linked to the event
+    let Some(ref mut linked_card) = state.linked_card else {
+        return;
+    };
+
+    ui.heading("Countdown Card");
+    ui.add_space(4.0);
+
+    // Collapsible header
+    egui::CollapsingHeader::new("Card Display Settings")
+        .default_open(state.show_card_settings)
+        .show(ui, |ui| {
+            ui.add_space(4.0);
+
+            // Layout options
+            indented_row(ui, |ui| {
+                if ui
+                    .checkbox(&mut linked_card.always_on_top, "Always on top")
+                    .changed()
+                {
+                    linked_card.visuals.always_on_top = linked_card.always_on_top;
+                }
+            });
+
+            indented_row(ui, |ui| {
+                if ui
+                    .checkbox(&mut linked_card.compact_mode, "Compact mode")
+                    .changed()
+                {
+                    linked_card.visuals.compact_mode = linked_card.compact_mode;
+                }
+            });
+
+            ui.add_space(8.0);
+
+            // Font sizes
+            labeled_row(ui, "Title font size:", |ui| {
+                ui.add(egui::Slider::new(
+                    &mut linked_card.visuals.title_font_size,
+                    12.0..=48.0,
+                ));
+            });
+
+            labeled_row(ui, "Countdown font size:", |ui| {
+                ui.add(egui::Slider::new(
+                    &mut linked_card.visuals.days_font_size,
+                    32.0..=220.0,
+                ));
+            });
+
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("Note: Color changes are synced with the event color above.")
+                    .small()
+                    .weak(),
+            );
+        });
+
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+}
+
 fn render_action_buttons(
     ui: &mut egui::Ui,
     state: &mut EventDialogState,
@@ -501,7 +582,35 @@ fn render_action_buttons(
         }
     });
 
-    EventDialogResult { saved_event }
+    // Build card changes if there's a linked card and we saved successfully
+    let card_changes = if saved_event.is_some() {
+        state.linked_card.as_ref().map(|card| CountdownCardChanges {
+            card_id: card.card_id,
+            description: if state.description.is_empty() {
+                None
+            } else {
+                Some(state.description.clone())
+            },
+            color: if state.color.is_empty() {
+                None
+            } else {
+                Some(state.color.clone())
+            },
+            start_date: state.date,
+            start_time: state.start_time,
+            always_on_top: card.always_on_top,
+            compact_mode: card.compact_mode,
+            title_font_size: card.visuals.title_font_size,
+            days_font_size: card.visuals.days_font_size,
+        })
+    } else {
+        None
+    };
+
+    EventDialogResult {
+        saved_event,
+        card_changes,
+    }
 }
 
 fn labeled_row<F>(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>, add_contents: F)

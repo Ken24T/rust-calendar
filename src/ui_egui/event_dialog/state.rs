@@ -1,10 +1,20 @@
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::services::countdown::{CountdownCardId, CountdownCardVisuals};
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use chrono::{self, Local, LocalResult, NaiveDate, NaiveDateTime, NaiveTime};
 
 use super::recurrence::{ParsedRRule, RRuleBuilder, RecurrenceFrequency, RecurrencePattern};
+
+/// Optional countdown card state linked to the event
+#[derive(Clone)]
+pub struct LinkedCountdownCard {
+    pub card_id: CountdownCardId,
+    pub visuals: CountdownCardVisuals,
+    pub always_on_top: bool,
+    pub compact_mode: bool,
+}
 
 /// State for the event editing dialog
 pub struct EventDialogState {
@@ -37,6 +47,10 @@ pub struct EventDialogState {
     #[allow(dead_code)]
     pub show_advanced: bool,
     pub create_countdown: bool,
+    /// Linked countdown card (if any)
+    pub linked_card: Option<LinkedCountdownCard>,
+    /// Whether the card settings section is expanded
+    pub show_card_settings: bool,
 }
 
 impl EventDialogState {
@@ -98,6 +112,8 @@ impl EventDialogState {
             error_message: None,
             show_advanced: false,
             create_countdown: false,
+            linked_card: None,
+            show_card_settings: false,
         }
     }
 
@@ -141,7 +157,20 @@ impl EventDialogState {
             error_message: None,
             show_advanced: false,
             create_countdown: false,
+            linked_card: None,
+            show_card_settings: false,
         }
+    }
+
+    /// Link a countdown card to this event dialog state
+    pub fn link_countdown_card(&mut self, card_id: CountdownCardId, visuals: CountdownCardVisuals) {
+        self.linked_card = Some(LinkedCountdownCard {
+            card_id,
+            always_on_top: visuals.always_on_top,
+            compact_mode: visuals.compact_mode,
+            visuals,
+        });
+        self.show_card_settings = true;
     }
 
     pub fn save(&self, database: &Database) -> Result<Event, String> {

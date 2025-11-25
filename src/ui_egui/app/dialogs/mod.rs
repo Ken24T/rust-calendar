@@ -1,11 +1,17 @@
+use super::countdown::OpenEventDialogRequest;
 use super::CalendarApp;
+use crate::services::countdown::RgbaColor;
+use crate::services::event::EventService;
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
 use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
-use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogResult, EventDialogState};
+use crate::ui_egui::event_dialog::{
+    render_event_dialog, CountdownCardChanges, EventDialogResult, EventDialogState,
+};
 use crate::ui_egui::settings_dialog::render_settings_dialog;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
+use chrono::{Local, NaiveDateTime, TimeZone};
 
 impl CalendarApp {
     pub(super) fn handle_dialogs(&mut self, ctx: &egui::Context) {
@@ -77,12 +83,15 @@ impl CalendarApp {
             return;
         }
 
-        let (saved_event, auto_create_card, was_new_event, event_saved) = {
+        let (saved_event, card_changes, auto_create_card, was_new_event, event_saved) = {
             let state = self
                 .event_dialog_state
                 .as_mut()
                 .expect("dialog state just checked");
-            let EventDialogResult { saved_event } = render_event_dialog(
+            let EventDialogResult {
+                saved_event,
+                card_changes,
+            } = render_event_dialog(
                 ctx,
                 state,
                 self.context.database(),
@@ -93,8 +102,19 @@ impl CalendarApp {
             let auto_create_card = state.create_countdown && state.event_id.is_none();
             let was_new_event = state.event_id.is_none();
             let event_saved = saved_event.is_some();
-            (saved_event, auto_create_card, was_new_event, event_saved)
+            (
+                saved_event,
+                card_changes,
+                auto_create_card,
+                was_new_event,
+                event_saved,
+            )
         };
+
+        // Apply card changes if any
+        if let Some(changes) = card_changes {
+            self.apply_countdown_card_changes(changes);
+        }
 
         if let Some(event) = saved_event {
             if auto_create_card {
@@ -111,6 +131,78 @@ impl CalendarApp {
             self.event_dialog_state = None;
             self.event_dialog_time = None;
         }
+    }
+
+    /// Apply changes from the unified event dialog to the linked countdown card
+    fn apply_countdown_card_changes(&mut self, changes: CountdownCardChanges) {
+        let service = self.context.countdown_service_mut();
+
+        // Update title override if different from event title
+        service.set_title_override(changes.card_id, None); // Clear override, use event title
+
+        // Update comment (synced with event description)
+        service.set_comment(changes.card_id, changes.description);
+
+        // Update start_at from date + time
+        let naive_dt = NaiveDateTime::new(changes.start_date, changes.start_time);
+        if let Some(start_at) = Local.from_local_datetime(&naive_dt).single() {
+            service.set_start_at(changes.card_id, start_at);
+        }
+
+        // Update color if provided
+        if let Some(color_hex) = changes.color {
+            if let Some(rgba) = RgbaColor::from_hex_str(&color_hex) {
+                service.set_title_bg_color(changes.card_id, rgba);
+            }
+        }
+
+        // Update card-specific visuals
+        service.set_always_on_top(changes.card_id, changes.always_on_top);
+        service.set_compact_mode(changes.card_id, changes.compact_mode);
+        service.set_title_font_size(changes.card_id, changes.title_font_size);
+        service.set_days_font_size(changes.card_id, changes.days_font_size);
+
+        log::info!(
+            "Applied countdown card changes from event dialog for card {:?}",
+            changes.card_id
+        );
+    }
+
+    /// Open the event dialog for a countdown card, linking the card for bidirectional updates
+    pub(super) fn open_event_dialog_for_card(&mut self, request: OpenEventDialogRequest) {
+        // Load the event from the database
+        let service = EventService::new(self.context.database().connection());
+        let event = match service.get(request.event_id) {
+            Ok(Some(event)) => event,
+            Ok(None) => {
+                log::warn!(
+                    "Event {} not found for countdown card {:?}",
+                    request.event_id,
+                    request.card_id
+                );
+                return;
+            }
+            Err(e) => {
+                log::error!("Failed to load event {}: {}", request.event_id, e);
+                return;
+            }
+        };
+
+        // Create event dialog state from the event
+        let mut state = EventDialogState::from_event(&event, &self.settings);
+
+        // Link the countdown card
+        state.link_countdown_card(request.card_id, request.visuals);
+
+        // Open the dialog
+        self.event_dialog_state = Some(state);
+        self.show_event_dialog = true;
+
+        log::info!(
+            "Opened event dialog for card {:?} (event {})",
+            request.card_id,
+            request.event_id
+        );
     }
 
     pub(super) fn render_settings_dialog(&mut self, ctx: &egui::Context) {

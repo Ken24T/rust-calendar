@@ -4,7 +4,8 @@ use super::render::{
 };
 use super::settings::{render_countdown_settings_ui, CountdownSettingsCommand};
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownService,
+    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
+    CountdownService,
 };
 use chrono::Local;
 use egui::{self, Context};
@@ -12,6 +13,14 @@ use log;
 use std::collections::{HashMap, HashSet};
 
 use super::super::geometry::{geometry_changed, geometry_from_viewport_info, viewport_info};
+
+/// A request to open the event dialog for a countdown card
+#[derive(Debug, Clone)]
+pub struct OpenEventDialogRequest {
+    pub event_id: i64,
+    pub card_id: CountdownCardId,
+    pub visuals: CountdownCardVisuals,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct CountdownRenderSnapshot {
@@ -82,14 +91,19 @@ impl CountdownUiState {
         }
     }
 
-    pub(in super::super) fn render_cards(&mut self, ctx: &Context, service: &mut CountdownService) {
+    pub(in super::super) fn render_cards(
+        &mut self,
+        ctx: &Context,
+        service: &mut CountdownService,
+    ) -> Vec<OpenEventDialogRequest> {
         let cards = service.cards().to_vec();
         if cards.is_empty() {
-            return;
+            return Vec::new();
         }
 
         let now = Local::now();
         let mut removals = Vec::new();
+        let mut event_dialog_requests = Vec::new();
 
         for card in cards {
             let viewport_id = egui::ViewportId::from_hash_of(("countdown_card", card.id.0));
@@ -158,6 +172,23 @@ impl CountdownUiState {
                         .or_insert(default_geometry);
                     self.settings_needs_layout.insert(card.id);
                 }
+                CountdownCardUiAction::OpenEventDialog => {
+                    if let Some(event_id) = card.event_id {
+                        event_dialog_requests.push(OpenEventDialogRequest {
+                            event_id,
+                            card_id: card.id,
+                            visuals: card.visuals.clone(),
+                        });
+                    } else {
+                        // Fall back to card settings if no event
+                        self.open_settings.insert(card.id);
+                        let default_geometry = default_settings_geometry_for(&card);
+                        self.settings_geometry
+                            .entry(card.id)
+                            .or_insert(default_geometry);
+                        self.settings_needs_layout.insert(card.id);
+                    }
+                }
                 CountdownCardUiAction::GeometrySettled => {
                     self.clear_geometry_wait_state(&card.id);
                     log::debug!("card {:?} geometry settled", card.id);
@@ -211,6 +242,8 @@ impl CountdownUiState {
         }
 
         service.flush_geometry_updates();
+
+        event_dialog_requests
     }
 
     pub(in super::super) fn render_settings_dialogs(

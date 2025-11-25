@@ -125,8 +125,15 @@ impl CalendarApp {
             self.consume_countdown_requests(countdown_requests);
         }
 
-        self.countdown_ui
+        let event_dialog_requests = self
+            .countdown_ui
             .render_cards(ctx, self.context.countdown_service_mut());
+
+        // Handle requests to open event dialog from countdown cards
+        for request in event_dialog_requests {
+            self.open_event_dialog_for_card(request);
+        }
+
         self.countdown_ui
             .render_settings_dialogs(ctx, self.context.countdown_service_mut());
         self.flush_pending_event_bodies();
