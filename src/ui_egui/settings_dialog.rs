@@ -337,6 +337,12 @@ pub fn render_settings_dialog(
                         .on_hover_text("Automatically switch between Light and Dark based on your system settings");
                 });
 
+                ui.horizontal(|ui| {
+                    ui.add_space(label_width);
+                    ui.checkbox(&mut settings.show_week_numbers, "Show week numbers")
+                        .on_hover_text("Display ISO week numbers on calendar views");
+                });
+
                 let ribbon_response = ui
                     .horizontal(|ui| {
                         ui.add_space(label_width);

@@ -1,5 +1,8 @@
 use super::CalendarApp;
+use chrono::Datelike;
 use crate::ui_egui::event_dialog::EventDialogState;
+use crate::services::pdf::{PdfExportService, service::PdfExportOptions};
+use crate::services::event::EventService;
 use egui::Context;
 
 impl CalendarApp {
@@ -17,6 +20,21 @@ impl CalendarApp {
 
     fn render_file_menu(&mut self, ui: &mut egui::Ui, ctx: &Context) {
         ui.menu_button("File", |ui| {
+            ui.menu_button("📄 Export to PDF", |ui| {
+                if ui.button("Export Month View...").clicked() {
+                    self.export_month_to_pdf();
+                    ui.close_menu();
+                }
+                if ui.button("Export Week View...").clicked() {
+                    self.export_week_to_pdf();
+                    ui.close_menu();
+                }
+                if ui.button("Export All Events...").clicked() {
+                    self.export_events_to_pdf();
+                    ui.close_menu();
+                }
+            });
+            ui.separator();
             if ui.button("💾 Backup Database...    Ctrl+B").clicked() {
                 if let Err(e) = self.state.backup_manager_state.create_backup() {
                     log::error!("Failed to create backup: {}", e);
@@ -34,14 +52,101 @@ impl CalendarApp {
         });
     }
 
+    fn export_month_to_pdf(&self) {
+        let date = self.current_date;
+        let month_name = date.format("%B_%Y").to_string();
+        
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Month View to PDF")
+            .set_file_name(&format!("calendar_{}.pdf", month_name))
+            .add_filter("PDF files", &["pdf"])
+            .save_file()
+        {
+            let event_service = EventService::new(self.context.database().connection());
+            let options = PdfExportOptions {
+                title: format!("Calendar - {}", date.format("%B %Y")),
+                ..Default::default()
+            };
+            
+            if let Err(e) = PdfExportService::export_month(
+                &event_service,
+                date,
+                &path,
+                &options,
+                self.settings.first_day_of_week,
+            ) {
+                log::error!("Failed to export PDF: {}", e);
+            } else {
+                log::info!("Successfully exported month view to {:?}", path);
+            }
+        }
+    }
+
+    fn export_week_to_pdf(&self) {
+        let date = self.current_date;
+        let week_num = date.iso_week().week();
+        
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Week View to PDF")
+            .set_file_name(&format!("calendar_week_{}.pdf", week_num))
+            .add_filter("PDF files", &["pdf"])
+            .save_file()
+        {
+            let event_service = EventService::new(self.context.database().connection());
+            let options = PdfExportOptions {
+                title: format!("Calendar - Week {}", week_num),
+                ..Default::default()
+            };
+            
+            if let Err(e) = PdfExportService::export_week(
+                &event_service,
+                date,
+                &path,
+                &options,
+                self.settings.first_day_of_week,
+            ) {
+                log::error!("Failed to export PDF: {}", e);
+            } else {
+                log::info!("Successfully exported week view to {:?}", path);
+            }
+        }
+    }
+
+    fn export_events_to_pdf(&self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export All Events to PDF")
+            .set_file_name("calendar_events.pdf")
+            .add_filter("PDF files", &["pdf"])
+            .save_file()
+        {
+            let event_service = EventService::new(self.context.database().connection());
+            let events = event_service.list_all().unwrap_or_default();
+            let options = PdfExportOptions {
+                title: "Calendar Events".to_string(),
+                ..Default::default()
+            };
+            
+            if let Err(e) = PdfExportService::export_event_list(&events, &path, &options) {
+                log::error!("Failed to export PDF: {}", e);
+            } else {
+                log::info!("Successfully exported {} events to {:?}", events.len(), path);
+            }
+        }
+    }
+
     fn render_edit_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Edit", |ui| {
-            if ui.button("Settings    Ctrl+S").clicked() {
+            if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
+                self.state.show_search_dialog = true;
+                ui.close_menu();
+            }
+            ui.separator();
+            if ui.button("⚙ Settings    Ctrl+S").clicked() {
                 self.show_settings_dialog = true;
                 ui.close_menu();
             }
             ui.separator();
-            if ui.button("Import Event...").clicked() {
+            if ui.button("📥 Import Event...").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("iCalendar", &["ics"])
                     .pick_file()

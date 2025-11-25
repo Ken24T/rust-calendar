@@ -8,6 +8,9 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::theme::CalendarTheme;
 
+/// Width of the week number column
+const WEEK_NUMBER_WIDTH: f32 = 35.0;
+
 pub struct MonthView;
 
 impl MonthView {
@@ -31,14 +34,31 @@ impl MonthView {
         // Day of week headers - use Grid to match column widths below
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let spacing = 2.0;
+        let show_week_numbers = settings.show_week_numbers;
+        let week_col_extra = if show_week_numbers { WEEK_NUMBER_WIDTH + spacing } else { 0.0 };
         let total_spacing = spacing * 6.0; // 6 gaps between 7 columns
-        let col_width = (ui.available_width() - total_spacing) / 7.0;
+        let col_width = (ui.available_width() - total_spacing - week_col_extra) / 7.0;
 
         let day_strip_palette = DayStripPalette::from_theme(theme);
         egui::Grid::new("month_header_grid")
             .spacing([spacing, spacing])
-            .min_col_width(col_width)
             .show(ui, |ui| {
+                // Week number header (empty)
+                if show_week_numbers {
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(WEEK_NUMBER_WIDTH, 30.0),
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            ui.label(
+                                egui::RichText::new("Wk")
+                                    .size(12.0)
+                                    .color(day_strip_palette.text)
+                                    .strong(),
+                            );
+                        },
+                    );
+                }
+                
                 for (idx, day) in day_names.iter().enumerate() {
                     let weekday = (settings.first_day_of_week as usize + idx) % 7;
                     let is_weekend = weekday == 0 || weekday == 6;
@@ -49,23 +69,27 @@ impl MonthView {
                     };
                     let text_color = day_strip_palette.text;
 
-                    ui.vertical_centered(|ui| {
-                        egui::Frame::none()
-                            .fill(header_bg)
-                            .rounding(egui::Rounding::same(6.0))
-                            .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
-                            .inner_margin(Margin::symmetric(8.0, 6.0))
-                            .show(ui, |cell_ui| {
-                                cell_ui.centered_and_justified(|label_ui| {
-                                    label_ui.label(
-                                        egui::RichText::new(*day)
-                                            .size(14.0)
-                                            .color(text_color)
-                                            .strong(),
-                                    );
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(col_width, 30.0),
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            egui::Frame::none()
+                                .fill(header_bg)
+                                .rounding(egui::Rounding::same(6.0))
+                                .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
+                                .inner_margin(Margin::symmetric(8.0, 6.0))
+                                .show(ui, |cell_ui| {
+                                    cell_ui.centered_and_justified(|label_ui| {
+                                        label_ui.label(
+                                            egui::RichText::new(*day)
+                                                .size(14.0)
+                                                .color(text_color)
+                                                .strong(),
+                                        );
+                                    });
                                 });
-                            });
-                    });
+                        },
+                    );
                 }
             });
 
@@ -88,14 +112,61 @@ impl MonthView {
 
         egui::Grid::new("month_grid")
             .spacing([spacing, spacing])
-            .min_col_width(col_width)
             .show(ui, |ui| {
-                for _week in 0..6 {
+                for _week_row in 0..6 {
+                    // Week number column
+                    if show_week_numbers {
+                        // Calculate the date for this row (use middle of week for reliability)
+                        let row_day = day_counter + 3; // Middle of week
+                        let week_date = if row_day >= 1 && row_day <= days_in_month {
+                            NaiveDate::from_ymd_opt(
+                                current_date.year(),
+                                current_date.month(),
+                                row_day as u32,
+                            )
+                        } else if row_day < 1 {
+                            // Previous month - use day 1
+                            NaiveDate::from_ymd_opt(
+                                current_date.year(),
+                                current_date.month(),
+                                1,
+                            )
+                        } else {
+                            // Next month - use last day
+                            NaiveDate::from_ymd_opt(
+                                current_date.year(),
+                                current_date.month(),
+                                days_in_month as u32,
+                            )
+                        };
+                        
+                        if let Some(date) = week_date {
+                            let week_num = date.iso_week().week();
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(WEEK_NUMBER_WIDTH, 80.0),
+                                egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                                |ui| {
+                                    egui::Frame::none()
+                                        .fill(palette.empty_bg)
+                                        .rounding(egui::Rounding::same(4.0))
+                                        .inner_margin(Margin::symmetric(2.0, 4.0))
+                                        .show(ui, |ui| {
+                                            ui.label(
+                                                egui::RichText::new(format!("{}", week_num))
+                                                    .size(11.0)
+                                                    .color(palette.text.gamma_multiply(0.7)),
+                                            );
+                                        });
+                                },
+                            );
+                        }
+                    }
+
                     for _day_of_week in 0..7 {
                         if day_counter < 1 || day_counter > days_in_month {
                             // Empty cell for days outside current month
                             let (rect, _response) = ui.allocate_exact_size(
-                                Vec2::new(ui.available_width(), 80.0),
+                                Vec2::new(col_width, 80.0),
                                 Sense::hover(),
                             );
                             ui.painter().rect_filled(rect, 2.0, palette.empty_bg);

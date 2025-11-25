@@ -71,6 +71,9 @@ rfd = "0.15.4"
 # System theme detection
 dark-light = "1.1"
 
+# PDF generation
+printpdf = "0.7"
+
 [dev-dependencies]
 # Testing frameworks
 mockall = "0.12"                 # Mocking framework

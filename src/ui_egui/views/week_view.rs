@@ -48,6 +48,7 @@ impl WeekView {
 
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
+        let show_week_numbers = settings.show_week_numbers;
 
         let mut clicked_event = None;
 
@@ -70,15 +71,25 @@ impl WeekView {
                 frame_available_width - TIME_LABEL_WIDTH - total_spacing;
             let col_width = frame_available_for_cols / 7.0;
 
-            // Header row with day names
+            // Header row with day names (and optional week number)
             strip_ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
 
-                // Time label placeholder
+                // Time label placeholder - show week number if enabled
                 ui.allocate_ui_with_layout(
                     Vec2::new(TIME_LABEL_WIDTH, 48.0),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |_ui| {},
+                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                    |ui| {
+                        if show_week_numbers {
+                            let week_num = week_start.iso_week().week();
+                            ui.label(
+                                egui::RichText::new(format!("W{}", week_num))
+                                    .size(12.0)
+                                    .color(day_strip_palette.text)
+                                    .strong(),
+                            );
+                        }
+                    },
                 );
 
                 ui.add_space(COLUMN_SPACING);

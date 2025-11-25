@@ -21,8 +21,8 @@ impl<'a> SettingsService<'a> {
         let settings = conn
             .query_row(
                 "SELECT id, theme, use_system_theme, first_day_of_week, time_format, date_format,
-                    show_my_day, my_day_position_right, show_ribbon, show_sidebar, current_view,
-                    default_event_duration, first_day_of_work_week, last_day_of_work_week,
+                    show_my_day, my_day_position_right, show_ribbon, show_sidebar, show_week_numbers,
+                    current_view, default_event_duration, first_day_of_work_week, last_day_of_work_week,
                     default_event_start_time, default_card_width, default_card_height,
                     auto_create_countdown_on_import, edit_before_import
              FROM settings WHERE id = 1",
@@ -53,15 +53,16 @@ impl<'a> SettingsService<'a> {
                  my_day_position_right = ?7, \
                  show_ribbon = ?8, \
                  show_sidebar = ?9, \
-                 current_view = ?10, \
-                 default_event_duration = ?11, \
-                 first_day_of_work_week = ?12, \
-                 last_day_of_work_week = ?13, \
-                 default_event_start_time = ?14, \
-                 default_card_width = ?15, \
-                 default_card_height = ?16, \
-                 auto_create_countdown_on_import = ?17, \
-                 edit_before_import = ?18, \
+                 show_week_numbers = ?10, \
+                 current_view = ?11, \
+                 default_event_duration = ?12, \
+                 first_day_of_work_week = ?13, \
+                 last_day_of_work_week = ?14, \
+                 default_event_start_time = ?15, \
+                 default_card_width = ?16, \
+                 default_card_height = ?17, \
+                 auto_create_countdown_on_import = ?18, \
+                 edit_before_import = ?19, \
                  updated_at = CURRENT_TIMESTAMP \
              WHERE id = 1",
             params![
@@ -74,6 +75,7 @@ impl<'a> SettingsService<'a> {
                 settings.my_day_position_right as i32,
                 settings.show_ribbon as i32,
                 settings.show_sidebar as i32,
+                settings.show_week_numbers as i32,
                 &settings.current_view,
                 settings.default_event_duration,
                 settings.first_day_of_work_week,

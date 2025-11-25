@@ -24,6 +24,32 @@ impl<'a> EventService<'a> {
         Ok(events)
     }
 
+    /// Search events by title, description, location, or category.
+    pub fn search(&self, query: &str) -> Result<Vec<Event>> {
+        if query.trim().is_empty() {
+            return Ok(vec![]);
+        }
+        
+        let search_pattern = format!("%{}%", query.to_lowercase());
+        let mut stmt = self.conn.prepare(
+            "SELECT id, title, description, location, start_datetime, end_datetime,
+                    is_all_day, category, color, recurrence_rule, recurrence_exceptions,
+                    created_at, updated_at
+             FROM events
+             WHERE LOWER(title) LIKE ?1
+                OR LOWER(COALESCE(description, '')) LIKE ?1
+                OR LOWER(COALESCE(location, '')) LIKE ?1
+                OR LOWER(COALESCE(category, '')) LIKE ?1
+             ORDER BY start_datetime ASC",
+        )?;
+
+        let events = stmt
+            .query_map([&search_pattern], |row| map_event_row(row))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        Ok(events)
+    }
+
     /// Find events, expanding the window slightly when recurrence is present.
     pub fn find_by_date_range(
         &self,

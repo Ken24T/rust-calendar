@@ -3,6 +3,7 @@ use super::CalendarApp;
 use crate::services::countdown::RgbaColor;
 use crate::services::event::EventService;
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
+use crate::ui_egui::dialogs::search_dialog::{render_search_dialog, SearchDialogAction};
 use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
 use crate::ui_egui::event_dialog::{
@@ -24,6 +25,10 @@ impl CalendarApp {
 
         if self.show_settings_dialog {
             self.render_settings_dialog(ctx);
+        }
+
+        if self.state.show_search_dialog {
+            self.render_search_dialog(ctx);
         }
 
         self.render_theme_dialog(ctx);
@@ -227,6 +232,32 @@ impl CalendarApp {
 
         if response.saved {
             self.apply_theme_from_db(ctx);
+        }
+    }
+
+    pub(super) fn render_search_dialog(&mut self, ctx: &egui::Context) {
+        let action = render_search_dialog(
+            ctx,
+            &mut self.state.search_dialog_state,
+            self.context.database(),
+            &self.active_theme,
+            &mut self.state.show_search_dialog,
+        );
+
+        match action {
+            SearchDialogAction::None => {}
+            SearchDialogAction::NavigateToDate(date) => {
+                self.current_date = date;
+                self.state.show_search_dialog = false;
+            }
+            SearchDialogAction::EditEvent(event_id) => {
+                self.event_to_edit = Some(event_id);
+                self.show_event_dialog = true;
+                self.state.show_search_dialog = false;
+            }
+            SearchDialogAction::Close => {
+                self.state.show_search_dialog = false;
+            }
         }
     }
 

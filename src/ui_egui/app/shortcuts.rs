@@ -14,6 +14,8 @@ impl CalendarApp {
                     self.event_to_edit = None;
                 } else if self.show_settings_dialog {
                     self.show_settings_dialog = false;
+                } else if self.state.show_search_dialog {
+                    self.state.show_search_dialog = false;
                 } else if self.state.theme_dialog_state.is_open {
                     self.state.theme_dialog_state.close();
                 } else if self.state.date_picker_state.is_open {
@@ -27,6 +29,10 @@ impl CalendarApp {
                 self.event_dialog_time = None;
                 self.event_dialog_recurrence = None;
                 self.event_to_edit = None;
+            }
+
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::F) && !self.state.show_search_dialog {
+                self.state.show_search_dialog = true;
             }
 
             if i.modifiers.ctrl && i.key_pressed(egui::Key::T) {
@@ -51,6 +57,7 @@ impl CalendarApp {
             // View type shortcuts (only when no dialog is open)
             if !self.show_event_dialog
                 && !self.show_settings_dialog
+                && !self.state.show_search_dialog
                 && !self.state.theme_dialog_state.is_open
                 && !self.state.date_picker_state.is_open
             {

@@ -7,6 +7,7 @@ pub mod database;
 pub mod event;
 pub mod icalendar;
 pub mod notification;
+pub mod pdf;
 pub mod reminder;
 pub mod settings;
 pub mod theme; // Theme service - adapted for egui
