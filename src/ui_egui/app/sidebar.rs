@@ -14,20 +14,25 @@ impl CalendarApp {
 
         let panel_id = "sidebar";
         
+        // Mini calendar needs: 7 cols × 22px + 6 gaps × 2px + padding ≈ 180px
+        const SIDEBAR_MIN_WIDTH: f32 = 180.0;
+        const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
+        const SIDEBAR_MAX_WIDTH: f32 = 300.0;
+        
         if self.settings.my_day_position_right {
             egui::SidePanel::right(panel_id)
-                .default_width(200.0)
-                .min_width(180.0)
-                .max_width(280.0)
+                .default_width(SIDEBAR_DEFAULT_WIDTH)
+                .min_width(SIDEBAR_MIN_WIDTH)
+                .max_width(SIDEBAR_MAX_WIDTH)
                 .resizable(true)
                 .show(ctx, |ui| {
                     self.render_sidebar_content(ui);
                 });
         } else {
             egui::SidePanel::left(panel_id)
-                .default_width(200.0)
-                .min_width(180.0)
-                .max_width(280.0)
+                .default_width(SIDEBAR_DEFAULT_WIDTH)
+                .min_width(SIDEBAR_MIN_WIDTH)
+                .max_width(SIDEBAR_MAX_WIDTH)
                 .resizable(true)
                 .show(ctx, |ui| {
                     self.render_sidebar_content(ui);
