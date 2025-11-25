@@ -1,3 +1,4 @@
+mod refresh;
 mod render;
 mod settings;
 mod state;

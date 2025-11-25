@@ -2,7 +2,7 @@ use super::CalendarApp;
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
 use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
-use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogResult};
+use crate::ui_egui::event_dialog::{render_event_dialog, EventDialogResult, EventDialogState};
 use crate::ui_egui::settings_dialog::render_settings_dialog;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;

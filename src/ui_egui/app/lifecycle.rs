@@ -132,77 +132,9 @@ impl CalendarApp {
         self.flush_pending_event_bodies();
         self.handle_dialogs(ctx);
 
-        // Periodically refresh countdown cards even before their UI arrives.
-        let changed_counts = self
-            .context
-            .countdown_service_mut()
-            .refresh_days_remaining(Local::now());
-        if !changed_counts.is_empty() {
-            ctx.request_repaint();
-        }
-
-        // Check for notification triggers (warning state transitions)
-        let now = Local::now();
-        let notification_triggers = self
-            .context
-            .countdown_service_mut()
-            .check_notification_triggers(now);
-
-        if !notification_triggers.is_empty() {
-            // Get notification config to check if system notifications are enabled
-            let notification_config = self.context.countdown_service().notification_config();
-
-            if notification_config.use_system_notifications {
-                for (card_id, _old_state, new_state) in &notification_triggers {
-                    let card_info = self
-                        .context
-                        .countdown_service()
-                        .cards()
-                        .iter()
-                        .find(|c| c.id == *card_id)
-                        .map(|card| (card.effective_title().to_owned(), card.start_at));
-
-                    if let Some((title, start_at)) = card_info {
-                        let (message, urgency) =
-                            Self::notification_message_for_state(*new_state, start_at, now);
-
-                        if let Err(e) = self
-                            .context
-                            .notification_service_mut()
-                            .show_countdown_alert(&title, &message, urgency)
-                        {
-                            log::warn!("Failed to show system notification: {}", e);
-                        } else {
-                            log::info!(
-                                "Showed system notification for card {:?} ({}) - state: {:?}",
-                                card_id,
-                                title,
-                                new_state
-                            );
-                        }
-                    }
-                }
-            }
-
-            // Log all transitions
-            for (card_id, old_state, new_state) in notification_triggers {
-                log::info!(
-                    "Countdown notification trigger: card {:?} transitioned from {:?} to {:?}",
-                    card_id,
-                    old_state,
-                    new_state
-                );
-            }
-
-            ctx.request_repaint();
-        }
-
-        // Check for auto-dismiss
-        let dismissed_cards = self.context.countdown_service_mut().check_auto_dismiss(now);
-        if !dismissed_cards.is_empty() {
-            log::info!("Auto-dismissed {} countdown card(s)", dismissed_cards.len());
-            ctx.request_repaint();
-        }
+        // Refresh countdown timers and check for notifications
+        self.refresh_countdowns(ctx);
+        self.check_and_show_countdown_notifications(ctx);
 
         self.persist_countdowns_if_needed();
     }
