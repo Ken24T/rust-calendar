@@ -63,8 +63,9 @@ impl WeekView {
         let mut clicked_event = None;
 
         // Week header with day names
-        // Set explicit width to match what ScrollArea will have (accounting for scrollbar)
-        let header_width = ui.available_width() - 16.0; // Reserve for scrollbar
+        // Get the scrollbar width from egui's style to match ScrollArea exactly
+        let scrollbar_width = ui.spacing().scroll.bar_width + ui.spacing().scroll.bar_inner_margin + ui.spacing().scroll.bar_outer_margin;
+        let header_width = ui.available_width() - scrollbar_width;
         
         let header_frame = egui::Frame::none()
             .fill(day_strip_palette.header_bg)
@@ -253,7 +254,7 @@ impl WeekView {
             col_width
         });
 
-        let col_width = header_response.inner;
+        let _col_width = header_response.inner; // Used in header closure
         let header_rect = header_response.response.rect;
         ui.painter().hline(
             header_rect.x_range(),
@@ -267,7 +268,9 @@ impl WeekView {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |scroll_ui| {
-                // Use the same pre-calculated column width
+                // Calculate column width from actual ScrollArea inner width
+                let scroll_width = scroll_ui.available_width();
+                let scroll_col_width = (scroll_width - TIME_LABEL_WIDTH - total_spacing) / 7.0;
 
                 let config = TimeCellConfig {
                     drag_view: DragView::Week,
@@ -276,7 +279,7 @@ impl WeekView {
 
                 if let Some(event) = render_time_grid(
                     scroll_ui,
-                    col_width,
+                    scroll_col_width,
                     &week_dates,
                     &events,
                     database,
