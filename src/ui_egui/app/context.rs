@@ -10,6 +10,8 @@ use crate::services::theme::ThemeService;
 /// Shared access point for services and resources that multiple app modules need.
 pub struct AppContext {
     database: &'static Database,
+    /// Path for legacy JSON countdown storage. Kept for migration from JSON to database.
+    #[allow(dead_code)]
     countdown_storage_path: PathBuf,
     countdown_service: CountdownService,
     notification_service: NotificationService,
@@ -42,6 +44,8 @@ impl AppContext {
         &mut self.countdown_service
     }
 
+    /// Path for legacy JSON countdown storage. Kept for potential future use.
+    #[allow(dead_code)]
     pub fn countdown_storage_path(&self) -> &Path {
         &self.countdown_storage_path
     }

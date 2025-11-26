@@ -30,13 +30,10 @@ impl CalendarApp {
             return;
         }
 
-        let storage_path = self.context.countdown_storage_path().to_path_buf();
-        if let Err(err) = self
-            .context
-            .countdown_service_mut()
-            .save_to_disk(&storage_path)
-        {
-            log::error!("Failed to persist countdown cards: {err:?}");
+        // Get connection first, then save to database
+        let conn = self.context.database().connection();
+        if let Err(err) = self.context.countdown_service_mut().save_to_database(conn) {
+            log::error!("Failed to persist countdown cards to database: {err:?}");
         } else {
             self.context.countdown_service_mut().mark_clean();
         }

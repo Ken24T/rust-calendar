@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Result;
 use chrono::{DateTime, Local};
+use rusqlite::Connection;
 
 use super::models::{
     default_body_bg_color, default_days_fg_color, default_days_font_size, default_title_bg_color,
@@ -14,6 +15,7 @@ use super::models::{
     MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
 };
 use super::persistence::{load_snapshot, save_snapshot};
+use super::repository::{CountdownGlobalSettings, CountdownRepository};
 
 /// Manages active countdown cards while the calendar app is running.
 pub struct CountdownService {
@@ -58,6 +60,9 @@ impl CountdownService {
         }
     }
 
+    /// Returns a snapshot of the current state for JSON serialization.
+    /// Note: This is the legacy method. New code should use save_to_database.
+    #[allow(dead_code)]
     pub fn snapshot(&self) -> CountdownPersistedState {
         CountdownPersistedState {
             next_id: self.next_id,
@@ -74,9 +79,162 @@ impl CountdownService {
         Ok(Self::from_snapshot(snapshot))
     }
 
+    /// Saves countdown state to a JSON file.
+    /// Note: This is the legacy method. New code should use save_to_database.
+    #[allow(dead_code)]
     pub fn save_to_disk(&self, path: &Path) -> Result<()> {
         let snapshot = self.snapshot();
         save_snapshot(path, &snapshot)
+    }
+
+    /// Load countdown cards and settings from the database.
+    /// This is the preferred method for loading data.
+    pub fn load_from_database(conn: &Connection) -> Result<Self> {
+        let repo = CountdownRepository::new(conn);
+
+        // Load global settings
+        let settings = repo.get_global_settings()?;
+
+        // Load all cards
+        let mut cards = repo.get_all_cards()?;
+
+        // Clamp font sizes
+        for card in &mut cards {
+            card.visuals.days_font_size = card
+                .visuals
+                .days_font_size
+                .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
+        }
+
+        let mut visual_defaults = settings.visual_defaults;
+        visual_defaults.days_font_size = visual_defaults
+            .days_font_size
+            .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
+
+        Ok(Self {
+            cards,
+            next_id: settings.next_card_id.max(1),
+            dirty: false,
+            pending_geometry: Vec::new(),
+            last_geometry_update: None,
+            visual_defaults,
+            app_window_geometry: settings.app_window_geometry,
+            notification_config: settings.notification_config,
+            auto_dismiss_defaults: settings.auto_dismiss_defaults,
+        })
+    }
+
+    /// Save all countdown cards and settings to the database.
+    /// This method syncs the in-memory state with the database.
+    pub fn save_to_database(&mut self, conn: &Connection) -> Result<()> {
+        let repo = CountdownRepository::new(conn);
+
+        // Update global settings
+        let settings = CountdownGlobalSettings {
+            next_card_id: self.next_id,
+            app_window_geometry: self.app_window_geometry,
+            visual_defaults: self.visual_defaults.clone(),
+            notification_config: self.notification_config.clone(),
+            auto_dismiss_defaults: self.auto_dismiss_defaults.clone(),
+        };
+        repo.update_global_settings(&settings)?;
+
+        // Get existing card IDs from database
+        let existing_cards = repo.get_all_cards()?;
+        let existing_ids: std::collections::HashSet<u64> =
+            existing_cards.iter().map(|c| c.id.0).collect();
+
+        // Get current card IDs
+        let current_ids: std::collections::HashSet<u64> =
+            self.cards.iter().map(|c| c.id.0).collect();
+
+        // Delete cards that no longer exist
+        for id in existing_ids.difference(&current_ids) {
+            repo.delete_card(CountdownCardId(*id))?;
+        }
+
+        // Insert or update current cards
+        for card in &self.cards {
+            if existing_ids.contains(&card.id.0) {
+                repo.update_card(card)?;
+            } else {
+                repo.insert_card(card)?;
+            }
+        }
+
+        self.dirty = false;
+        Ok(())
+    }
+
+    /// Save a single card to the database (for incremental updates).
+    #[allow(dead_code)]
+    pub fn save_card_to_database(&self, conn: &Connection, id: CountdownCardId) -> Result<bool> {
+        if let Some(card) = self.cards.iter().find(|c| c.id == id) {
+            let repo = CountdownRepository::new(conn);
+            // Try update first, if it fails (row doesn't exist), insert
+            if !repo.update_card(card)? {
+                repo.insert_card(card)?;
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Delete a card from the database.
+    #[allow(dead_code)]
+    pub fn delete_card_from_database(&self, conn: &Connection, id: CountdownCardId) -> Result<bool> {
+        let repo = CountdownRepository::new(conn);
+        repo.delete_card(id)
+    }
+
+    /// Migrate data from JSON file to database.
+    /// Call this once during app startup if JSON file exists.
+    pub fn migrate_json_to_database(json_path: &Path, conn: &Connection) -> Result<bool> {
+        if !json_path.exists() {
+            log::info!("No JSON countdown file to migrate");
+            return Ok(false);
+        }
+
+        log::info!("Migrating countdown cards from JSON to database...");
+
+        // Load from JSON
+        let snapshot = load_snapshot(json_path)?;
+
+        let repo = CountdownRepository::new(conn);
+
+        // Update global settings
+        let settings = CountdownGlobalSettings {
+            next_card_id: snapshot.next_id.max(1),
+            app_window_geometry: snapshot.app_window_geometry,
+            visual_defaults: snapshot.visual_defaults,
+            notification_config: snapshot.notification_config,
+            auto_dismiss_defaults: snapshot.auto_dismiss_defaults,
+        };
+        repo.update_global_settings(&settings)?;
+
+        // Insert all cards
+        for card in &snapshot.cards {
+            repo.insert_card(card)?;
+        }
+
+        log::info!(
+            "Migrated {} countdown cards from JSON to database",
+            snapshot.cards.len()
+        );
+
+        // Rename the JSON file to indicate migration completed
+        let backup_path = json_path.with_extension("json.migrated");
+        if let Err(e) = std::fs::rename(json_path, &backup_path) {
+            log::warn!(
+                "Failed to rename migrated JSON file: {}. Please delete {} manually.",
+                e,
+                json_path.display()
+            );
+        } else {
+            log::info!("Renamed migrated JSON file to {}", backup_path.display());
+        }
+
+        Ok(true)
     }
 
     pub fn cards(&self) -> &[CountdownCardState] {

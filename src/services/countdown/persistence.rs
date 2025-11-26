@@ -17,6 +17,9 @@ pub fn load_snapshot(path: &Path) -> Result<CountdownPersistedState> {
     Ok(snapshot)
 }
 
+/// Saves countdown snapshot to disk as JSON.
+/// Note: This is the legacy persistence method. New code should use the database repository.
+#[allow(dead_code)]
 pub fn save_snapshot(path: &Path, snapshot: &CountdownPersistedState) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)

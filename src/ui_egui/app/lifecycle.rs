@@ -34,7 +34,7 @@ impl CalendarApp {
         let countdown_storage_path = Self::resolve_countdown_storage_path();
         cc.egui_ctx.set_embed_viewports(false);
 
-        let mut countdown_service = load_countdown_service(&countdown_storage_path);
+        let mut countdown_service = load_countdown_service(&countdown_storage_path, database);
         Self::hydrate_countdown_titles_from_events(&mut countdown_service, database);
 
         let pending_root_geometry = countdown_service.app_window_geometry();
@@ -214,14 +214,38 @@ fn load_settings_or_default(settings_service: &SettingsService) -> Settings {
     }
 }
 
-fn load_countdown_service(path: &PathBuf) -> CountdownService {
-    match CountdownService::load_from_disk(path) {
+fn load_countdown_service(path: &PathBuf, database: &Database) -> CountdownService {
+    // First, try to migrate from JSON to database if JSON file exists
+    if path.exists() {
+        match CountdownService::migrate_json_to_database(path, database.connection()) {
+            Ok(true) => {
+                log::info!("Successfully migrated countdown cards from JSON to database");
+            }
+            Ok(false) => {
+                // No migration needed (JSON file didn't exist)
+            }
+            Err(e) => {
+                log::error!("Failed to migrate countdown cards from JSON: {e:?}");
+                // Fall back to loading from JSON
+                return match CountdownService::load_from_disk(path) {
+                    Ok(service) => service,
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to load countdown cards from {}: {err:?}",
+                            path.display()
+                        );
+                        CountdownService::new()
+                    }
+                };
+            }
+        }
+    }
+
+    // Load from database
+    match CountdownService::load_from_database(database.connection()) {
         Ok(service) => service,
         Err(err) => {
-            log::warn!(
-                "Failed to load countdown cards from {}: {err:?}",
-                path.display()
-            );
+            log::warn!("Failed to load countdown cards from database: {err:?}");
             CountdownService::new()
         }
     }

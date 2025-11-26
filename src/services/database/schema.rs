@@ -10,6 +10,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     seed_custom_themes(conn)?;
     insert_default_settings(conn)?;
     create_events_table(conn)?;
+    create_countdown_tables(conn)?;
     Ok(())
 }
 
@@ -251,6 +252,137 @@ fn create_events_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create events table")?;
+
+    Ok(())
+}
+
+fn create_countdown_tables(conn: &Connection) -> Result<()> {
+    // Main countdown cards table
+    // event_id can be NULL for standalone countdowns (not linked to an event)
+    // ON DELETE CASCADE ensures cards are automatically deleted when their event is deleted
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS countdown_cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER,
+            event_title TEXT NOT NULL,
+            start_at TEXT NOT NULL,
+            title_override TEXT,
+            auto_title_override INTEGER NOT NULL DEFAULT 0,
+            comment TEXT,
+            event_color TEXT,
+            
+            -- Geometry
+            geometry_x REAL NOT NULL DEFAULT 50.0,
+            geometry_y REAL NOT NULL DEFAULT 50.0,
+            geometry_width REAL NOT NULL DEFAULT 138.0,
+            geometry_height REAL NOT NULL DEFAULT 128.0,
+            
+            -- Visual settings
+            accent_color TEXT,
+            always_on_top INTEGER NOT NULL DEFAULT 0,
+            compact_mode INTEGER NOT NULL DEFAULT 0,
+            use_default_title_bg INTEGER NOT NULL DEFAULT 1,
+            title_bg_r INTEGER NOT NULL DEFAULT 10,
+            title_bg_g INTEGER NOT NULL DEFAULT 34,
+            title_bg_b INTEGER NOT NULL DEFAULT 145,
+            title_bg_a INTEGER NOT NULL DEFAULT 255,
+            use_default_title_fg INTEGER NOT NULL DEFAULT 1,
+            title_fg_r INTEGER NOT NULL DEFAULT 255,
+            title_fg_g INTEGER NOT NULL DEFAULT 255,
+            title_fg_b INTEGER NOT NULL DEFAULT 255,
+            title_fg_a INTEGER NOT NULL DEFAULT 255,
+            title_font_size REAL NOT NULL DEFAULT 20.0,
+            use_default_body_bg INTEGER NOT NULL DEFAULT 1,
+            body_bg_r INTEGER NOT NULL DEFAULT 103,
+            body_bg_g INTEGER NOT NULL DEFAULT 176,
+            body_bg_b INTEGER NOT NULL DEFAULT 255,
+            body_bg_a INTEGER NOT NULL DEFAULT 255,
+            use_default_days_fg INTEGER NOT NULL DEFAULT 1,
+            days_fg_r INTEGER NOT NULL DEFAULT 15,
+            days_fg_g INTEGER NOT NULL DEFAULT 32,
+            days_fg_b INTEGER NOT NULL DEFAULT 70,
+            days_fg_a INTEGER NOT NULL DEFAULT 255,
+            days_font_size REAL NOT NULL DEFAULT 80.0,
+            
+            -- Auto-dismiss settings
+            auto_dismiss_enabled INTEGER NOT NULL DEFAULT 0,
+            auto_dismiss_on_event_start INTEGER NOT NULL DEFAULT 1,
+            auto_dismiss_on_event_end INTEGER NOT NULL DEFAULT 0,
+            auto_dismiss_delay_seconds INTEGER NOT NULL DEFAULT 10,
+            
+            -- Runtime state (not critical but useful to persist)
+            last_computed_days INTEGER,
+            last_warning_state TEXT,
+            last_notification_time TEXT,
+            
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .context("Failed to create countdown_cards table")?;
+
+    // Global countdown settings (single row, similar to settings table)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS countdown_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            next_card_id INTEGER NOT NULL DEFAULT 1,
+            
+            -- App window geometry
+            app_window_x REAL,
+            app_window_y REAL,
+            app_window_width REAL,
+            app_window_height REAL,
+            
+            -- Visual defaults
+            default_title_bg_r INTEGER NOT NULL DEFAULT 10,
+            default_title_bg_g INTEGER NOT NULL DEFAULT 34,
+            default_title_bg_b INTEGER NOT NULL DEFAULT 145,
+            default_title_bg_a INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_r INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_g INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_b INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_a INTEGER NOT NULL DEFAULT 255,
+            default_title_font_size REAL NOT NULL DEFAULT 20.0,
+            default_body_bg_r INTEGER NOT NULL DEFAULT 103,
+            default_body_bg_g INTEGER NOT NULL DEFAULT 176,
+            default_body_bg_b INTEGER NOT NULL DEFAULT 255,
+            default_body_bg_a INTEGER NOT NULL DEFAULT 255,
+            default_days_fg_r INTEGER NOT NULL DEFAULT 15,
+            default_days_fg_g INTEGER NOT NULL DEFAULT 32,
+            default_days_fg_b INTEGER NOT NULL DEFAULT 70,
+            default_days_fg_a INTEGER NOT NULL DEFAULT 255,
+            default_days_font_size REAL NOT NULL DEFAULT 80.0,
+            
+            -- Notification config
+            notifications_enabled INTEGER NOT NULL DEFAULT 1,
+            use_visual_warnings INTEGER NOT NULL DEFAULT 1,
+            use_system_notifications INTEGER NOT NULL DEFAULT 1,
+            approaching_hours INTEGER NOT NULL DEFAULT 24,
+            imminent_hours INTEGER NOT NULL DEFAULT 1,
+            critical_minutes INTEGER NOT NULL DEFAULT 5,
+            
+            -- Auto-dismiss defaults
+            auto_dismiss_enabled INTEGER NOT NULL DEFAULT 0,
+            auto_dismiss_on_event_start INTEGER NOT NULL DEFAULT 1,
+            auto_dismiss_on_event_end INTEGER NOT NULL DEFAULT 0,
+            auto_dismiss_delay_seconds INTEGER NOT NULL DEFAULT 10,
+            
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create countdown_settings table")?;
+
+    // Insert default countdown settings
+    conn.execute(
+        "INSERT OR IGNORE INTO countdown_settings (id) VALUES (1)",
+        [],
+    )
+    .context("Failed to insert default countdown settings")?;
 
     Ok(())
 }
