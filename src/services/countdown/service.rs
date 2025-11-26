@@ -28,6 +28,9 @@ pub struct CountdownService {
     app_window_geometry: Option<CountdownCardGeometry>,
     notification_config: CountdownNotificationConfig,
     auto_dismiss_defaults: CountdownAutoDismissConfig,
+    display_mode: CountdownDisplayMode,
+    container_geometry: Option<CountdownCardGeometry>,
+    card_order: Vec<CountdownCardId>,
 }
 
 impl CountdownService {
@@ -57,6 +60,9 @@ impl CountdownService {
             app_window_geometry: snapshot.app_window_geometry,
             notification_config: snapshot.notification_config,
             auto_dismiss_defaults: snapshot.auto_dismiss_defaults,
+            display_mode: snapshot.display_mode,
+            container_geometry: snapshot.container_geometry,
+            card_order: snapshot.card_order,
         }
     }
 
@@ -71,9 +77,9 @@ impl CountdownService {
             app_window_geometry: self.app_window_geometry,
             notification_config: self.notification_config.clone(),
             auto_dismiss_defaults: self.auto_dismiss_defaults.clone(),
-            display_mode: CountdownDisplayMode::default(),
-            container_geometry: None,
-            card_order: Vec::new(),
+            display_mode: self.display_mode,
+            container_geometry: self.container_geometry,
+            card_order: self.card_order.clone(),
         }
     }
 
@@ -124,6 +130,9 @@ impl CountdownService {
             app_window_geometry: settings.app_window_geometry,
             notification_config: settings.notification_config,
             auto_dismiss_defaults: settings.auto_dismiss_defaults,
+            display_mode: CountdownDisplayMode::default(),
+            container_geometry: None,
+            card_order: Vec::new(),
         })
     }
 
@@ -733,6 +742,40 @@ impl CountdownService {
         }
     }
 
+    // Display mode and container methods
+    pub fn display_mode(&self) -> CountdownDisplayMode {
+        self.display_mode
+    }
+
+    pub fn set_display_mode(&mut self, mode: CountdownDisplayMode) {
+        if self.display_mode != mode {
+            self.display_mode = mode;
+            self.dirty = true;
+        }
+    }
+
+    pub fn container_geometry(&self) -> Option<CountdownCardGeometry> {
+        self.container_geometry
+    }
+
+    pub fn update_container_geometry(&mut self, geometry: CountdownCardGeometry) {
+        if self.container_geometry != Some(geometry) {
+            self.container_geometry = Some(geometry);
+            self.dirty = true;
+        }
+    }
+
+    pub fn card_order(&self) -> &[CountdownCardId] {
+        &self.card_order
+    }
+
+    pub fn reorder_cards(&mut self, new_order: Vec<CountdownCardId>) {
+        if self.card_order != new_order {
+            self.card_order = new_order;
+            self.dirty = true;
+        }
+    }
+
     pub fn set_default_title_bg_color(&mut self, color: RgbaColor) {
         self.visual_defaults.title_bg_color = color;
         self.dirty = true;
@@ -1147,5 +1190,89 @@ mod tests {
             second_card.visuals.body_bg_color,
             service.defaults().body_bg_color
         );
+    }
+
+    #[test]
+    fn test_display_mode_defaults_to_individual_windows() {
+        let service = CountdownService::new();
+        assert_eq!(service.display_mode(), CountdownDisplayMode::IndividualWindows);
+    }
+
+    #[test]
+    fn test_set_display_mode_updates_and_marks_dirty() {
+        let mut service = CountdownService::new();
+        service.mark_clean();
+        assert!(!service.is_dirty());
+
+        service.set_display_mode(CountdownDisplayMode::Container);
+        assert_eq!(service.display_mode(), CountdownDisplayMode::Container);
+        assert!(service.is_dirty());
+    }
+
+    #[test]
+    fn test_set_same_display_mode_does_not_mark_dirty() {
+        let mut service = CountdownService::new();
+        service.mark_clean();
+        assert!(!service.is_dirty());
+
+        service.set_display_mode(CountdownDisplayMode::IndividualWindows);
+        assert!(!service.is_dirty());
+    }
+
+    #[test]
+    fn test_container_geometry_defaults_to_none() {
+        let service = CountdownService::new();
+        assert_eq!(service.container_geometry(), None);
+    }
+
+    #[test]
+    fn test_update_container_geometry() {
+        let mut service = CountdownService::new();
+        let geom = CountdownCardGeometry {
+            x: 100.0,
+            y: 200.0,
+            width: 800.0,
+            height: 600.0,
+        };
+
+        service.mark_clean();
+        service.update_container_geometry(geom);
+        
+        assert_eq!(service.container_geometry(), Some(geom));
+        assert!(service.is_dirty());
+    }
+
+    #[test]
+    fn test_card_order_defaults_to_empty() {
+        let service = CountdownService::new();
+        assert!(service.card_order().is_empty());
+    }
+
+    #[test]
+    fn test_reorder_cards() {
+        let mut service = CountdownService::new();
+        let new_order = vec![
+            CountdownCardId(3),
+            CountdownCardId(1),
+            CountdownCardId(2),
+        ];
+
+        service.mark_clean();
+        service.reorder_cards(new_order.clone());
+
+        assert_eq!(service.card_order(), &new_order);
+        assert!(service.is_dirty());
+    }
+
+    #[test]
+    fn test_reorder_same_order_does_not_mark_dirty() {
+        let mut service = CountdownService::new();
+        let order = vec![CountdownCardId(1)];
+        
+        service.reorder_cards(order.clone());
+        service.mark_clean();
+
+        service.reorder_cards(order);
+        assert!(!service.is_dirty());
     }
 }
