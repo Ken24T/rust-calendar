@@ -349,6 +349,12 @@ pub struct CountdownPersistedState {
     /// Display mode for countdown cards (Individual Windows or Container)
     #[serde(default)]
     pub display_mode: CountdownDisplayMode,
+    /// Container window geometry (position and size)
+    #[serde(default)]
+    pub container_geometry: Option<CountdownCardGeometry>,
+    /// Manual card ordering for container mode (list of card IDs)
+    #[serde(default)]
+    pub card_order: Vec<CountdownCardId>,
 }
 
 pub(crate) fn default_visuals() -> CountdownCardVisuals {
@@ -406,5 +412,60 @@ mod tests {
         // Test that default() provides IndividualWindows
         let state = CountdownPersistedState::default();
         assert_eq!(state.display_mode, CountdownDisplayMode::IndividualWindows);
+    }
+
+    #[test]
+    fn test_container_geometry_defaults_to_none() {
+        let state = CountdownPersistedState::default();
+        assert_eq!(state.container_geometry, None);
+    }
+
+    #[test]
+    fn test_card_order_defaults_to_empty() {
+        let state = CountdownPersistedState::default();
+        assert!(state.card_order.is_empty());
+    }
+
+    #[test]
+    fn test_container_geometry_serialization() {
+        let mut state = CountdownPersistedState::default();
+        state.container_geometry = Some(CountdownCardGeometry {
+            x: 100.0,
+            y: 200.0,
+            width: 800.0,
+            height: 600.0,
+        });
+
+        // Serialize
+        let json = serde_json::to_string(&state).unwrap();
+
+        // Deserialize
+        let deserialized: CountdownPersistedState = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.container_geometry.is_some());
+        let geom = deserialized.container_geometry.unwrap();
+        assert_eq!(geom.x, 100.0);
+        assert_eq!(geom.y, 200.0);
+        assert_eq!(geom.width, 800.0);
+        assert_eq!(geom.height, 600.0);
+    }
+
+    #[test]
+    fn test_card_order_serialization() {
+        let mut state = CountdownPersistedState::default();
+        state.card_order = vec![
+            CountdownCardId(1),
+            CountdownCardId(3),
+            CountdownCardId(2),
+        ];
+
+        // Serialize
+        let json = serde_json::to_string(&state).unwrap();
+
+        // Deserialize
+        let deserialized: CountdownPersistedState = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.card_order.len(), 3);
+        assert_eq!(deserialized.card_order[0], CountdownCardId(1));
+        assert_eq!(deserialized.card_order[1], CountdownCardId(3));
+        assert_eq!(deserialized.card_order[2], CountdownCardId(2));
     }
 }

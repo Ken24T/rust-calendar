@@ -72,6 +72,8 @@ impl CountdownService {
             notification_config: self.notification_config.clone(),
             auto_dismiss_defaults: self.auto_dismiss_defaults.clone(),
             display_mode: CountdownDisplayMode::default(),
+            container_geometry: None,
+            card_order: Vec::new(),
         }
     }
 
