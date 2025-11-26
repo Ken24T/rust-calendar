@@ -60,6 +60,13 @@ impl WeekView {
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
         let show_week_numbers = settings.show_week_numbers;
 
+        // Calculate column width once at the outer UI level to ensure header and grid alignment
+        // Account for scrollbar width (typically 16px) to match the ScrollArea's actual available width
+        let scrollbar_width = 16.0;
+        let outer_available_width = ui.available_width();
+        let available_for_cols = outer_available_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_width;
+        let col_width = available_for_cols / 7.0;
+
         let mut clicked_event = None;
 
         // Week header with day names
@@ -75,11 +82,7 @@ impl WeekView {
             });
 
         let header_response = header_frame.show(ui, |strip_ui| {
-            // Calculate column width based on actual available width in this context
-            let frame_available_width = strip_ui.available_width();
-            let frame_available_for_cols =
-                frame_available_width - TIME_LABEL_WIDTH - total_spacing;
-            let col_width = frame_available_for_cols / 7.0;
+            // Use the pre-calculated column width for consistent alignment
 
             // Header row with day names (and optional week number)
             strip_ui.horizontal(|ui| {
@@ -260,9 +263,7 @@ impl WeekView {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |scroll_ui| {
-                let available_width = scroll_ui.available_width();
-                let available_for_cols = available_width - TIME_LABEL_WIDTH - total_spacing;
-                let col_width = available_for_cols / 7.0;
+                // Use the same pre-calculated column width for perfect alignment with header
 
                 let config = TimeCellConfig {
                     drag_view: DragView::Week,
