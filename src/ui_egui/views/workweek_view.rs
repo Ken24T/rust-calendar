@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use super::palette::DayStripPalette;
 use super::week_shared::{
-    format_short_date, get_week_start, render_ribbon_event, render_time_grid, TimeCellConfig,
-    COLUMN_SPACING, TIME_LABEL_WIDTH,
+    format_short_date, get_week_start, render_ribbon_event, render_time_grid,
+    EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
@@ -43,7 +43,8 @@ impl WorkWeekView {
         show_ribbon: bool,
         all_day_events: &[Event],
         focus_request: &mut Option<AutoFocusRequest>,
-    ) -> Option<Event> {
+    ) -> EventInteractionResult {
+        let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
         let day_strip_palette = DayStripPalette::from_theme(theme);
         let grid_palette = super::palette::TimeGridPalette::from_theme(theme);
@@ -75,8 +76,6 @@ impl WorkWeekView {
                 top: 10.0,
                 bottom: 10.0,
             });
-
-        let mut clicked_event = None;
 
         let show_week_numbers = settings.show_week_numbers;
 
@@ -205,27 +204,25 @@ impl WorkWeekView {
                                 !multi_day_events.is_empty() || !single_day_events.is_empty();
 
                             for event in multi_day_events {
-                                if let Some(ev) = render_ribbon_event(
+                                let ribbon_result = render_ribbon_event(
                                     day_ui,
                                     event,
                                     countdown_requests,
                                     active_countdown_events,
                                     database,
-                                ) {
-                                    clicked_event = Some(ev);
-                                }
+                                );
+                                result.merge(ribbon_result);
                             }
 
                             for event in single_day_events {
-                                if let Some(ev) = render_ribbon_event(
+                                let ribbon_result = render_ribbon_event(
                                     day_ui,
                                     event,
                                     countdown_requests,
                                     active_countdown_events,
                                     database,
-                                ) {
-                                    clicked_event = Some(ev);
-                                }
+                                );
+                                result.merge(ribbon_result);
                             }
 
                             if !found_event {
@@ -259,7 +256,7 @@ impl WorkWeekView {
                     check_weekend: false, // WorkWeek doesn't highlight weekends differently
                 };
 
-                if let Some(event) = render_time_grid(
+                let grid_result = render_time_grid(
                     scroll_ui,
                     col_width,
                     &work_week_dates,
@@ -274,12 +271,11 @@ impl WorkWeekView {
                     &grid_palette,
                     focus_request,
                     &config,
-                ) {
-                    clicked_event = Some(event);
-                }
+                );
+                result.merge(grid_result);
             });
 
-        clicked_event
+        result
     }
 
     pub(crate) fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {

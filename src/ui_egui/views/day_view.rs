@@ -3,7 +3,7 @@ use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
-use super::week_shared::{maybe_focus_slot, parse_color};
+use super::week_shared::{maybe_focus_slot, parse_color, EventInteractionResult};
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
@@ -28,7 +28,8 @@ impl DayView {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         focus_request: &mut Option<AutoFocusRequest>,
-    ) -> Option<Event> {
+    ) -> EventInteractionResult {
+        let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
         let is_today = *current_date == today;
         let day_strip_palette = DayStripPalette::from_theme(theme);
@@ -108,11 +109,10 @@ impl DayView {
         ui.add_space(8.0);
 
         // Scrollable time slots
-        let mut clicked_event = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                if let Some(event) = Self::render_time_slots(
+                let slot_result = Self::render_time_slots(
                     ui,
                     *current_date,
                     &events,
@@ -126,12 +126,11 @@ impl DayView {
                     active_countdown_events,
                     &time_palette,
                     focus_request,
-                ) {
-                    clicked_event = Some(event);
-                }
+                );
+                result.merge(slot_result);
             });
 
-        clicked_event
+        result
     }
 
     fn render_time_slots(
@@ -148,11 +147,10 @@ impl DayView {
         active_countdown_events: &HashSet<i64>,
         palette: &TimeGridPalette,
         focus_request: &mut Option<AutoFocusRequest>,
-    ) -> Option<Event> {
+    ) -> EventInteractionResult {
+        let mut result = EventInteractionResult::default();
         // Always render 15-minute intervals (4 slots per hour)
         const SLOT_INTERVAL: i64 = 15;
-
-        let mut clicked_event: Option<Event> = None;
 
         // Remove vertical spacing between slots so time calculations are accurate
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -199,7 +197,7 @@ impl DayView {
                     }
                 }
 
-                if let Some(event) = Self::render_time_slot(
+                let slot_result = Self::render_time_slot(
                     ui,
                     date,
                     time,
@@ -217,9 +215,8 @@ impl DayView {
                     active_countdown_events,
                     palette,
                     focus_request,
-                ) {
-                    clicked_event = Some(event);
-                }
+                );
+                result.merge(slot_result);
             }
         }
 
@@ -265,7 +262,7 @@ impl DayView {
             );
         }
 
-        clicked_event
+        result
     }
 
     fn render_time_slot(
@@ -286,8 +283,8 @@ impl DayView {
         active_countdown_events: &HashSet<i64>,
         palette: &TimeGridPalette,
         focus_request: &mut Option<AutoFocusRequest>,
-    ) -> Option<Event> {
-        let mut clicked_event: Option<Event> = None;
+    ) -> EventInteractionResult {
+        let mut result = EventInteractionResult::default();
 
         ui.horizontal(|ui| {
             // Time label with fixed width (only on hour starts)
@@ -502,6 +499,8 @@ impl DayView {
                                 if let Some(id) = event.id {
                                     let service = EventService::new(database.connection());
                                     let _ = service.delete_occurrence(id, event.start);
+                                    // Note: occurrence deletion doesn't delete the whole event,
+                                    // so countdown card stays (it's for the event series)
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
@@ -509,6 +508,7 @@ impl DayView {
                                 if let Some(id) = event.id {
                                     let service = EventService::new(database.connection());
                                     let _ = service.delete(id);
+                                    result.deleted_event_ids.push(id);
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
@@ -517,6 +517,7 @@ impl DayView {
                                 if let Some(id) = event.id {
                                     let service = EventService::new(database.connection());
                                     let _ = service.delete(id);
+                                    result.deleted_event_ids.push(id);
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
@@ -568,7 +569,10 @@ impl DayView {
                 },
             );
 
-            let mut clicked_from_ui: Option<Event> = context_clicked_event;
+            // Store context menu edit request to result
+            if let Some(event) = context_clicked_event {
+                result.event_to_edit = Some(event);
+            }
 
             // Check drag_started BEFORE clicked to ensure drag detection works
             if response.drag_started() {
@@ -596,12 +600,12 @@ impl DayView {
                 } else {
                     eprintln!("[day_view] drag_started but no event under pointer");
                 }
-            } else if clicked_from_ui.is_none() && response.clicked() {
+            } else if result.event_to_edit.is_none() && response.clicked() {
                 if let Some(event) = pointer_event.clone() {
-                    clicked_from_ui = Some(event);
+                    result.event_to_edit = Some(event);
                 }
 
-                if clicked_from_ui.is_none() {
+                if result.event_to_edit.is_none() {
                     *show_event_dialog = true;
                     *event_dialog_date = Some(date);
                     *event_dialog_time = Some(time); // Use the clicked time slot
@@ -642,11 +646,9 @@ impl DayView {
                     }
                 }
             }
-
-            clicked_event = clicked_from_ui;
         });
 
-        clicked_event
+        result
     }
 
     fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {

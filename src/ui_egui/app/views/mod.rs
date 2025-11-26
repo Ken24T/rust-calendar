@@ -136,7 +136,7 @@ impl CalendarApp {
         active_countdown_events: &HashSet<i64>,
         focus_request: &mut Option<AutoFocusRequest>,
     ) {
-        if let Some(clicked_event) = DayView::show(
+        let view_result = DayView::show(
             ui,
             &mut self.current_date,
             self.context.database(),
@@ -149,10 +149,18 @@ impl CalendarApp {
             countdown_requests,
             active_countdown_events,
             focus_request,
-        ) {
+        );
+        
+        // Handle clicked event - open edit dialog
+        if let Some(clicked_event) = view_result.event_to_edit {
             self.event_dialog_state =
                 Some(EventDialogState::from_event(&clicked_event, &self.settings));
             self.show_event_dialog = true;
+        }
+        
+        // Handle deleted events - remove countdown cards
+        for event_id in view_result.deleted_event_ids {
+            self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
     }
 
@@ -192,7 +200,7 @@ impl CalendarApp {
             Vec::new()
         };
 
-        if let Some(clicked_event) = WeekView::show(
+        let view_result = WeekView::show(
             ui,
             &mut self.current_date,
             self.context.database(),
@@ -207,10 +215,18 @@ impl CalendarApp {
             show_ribbon,
             &all_day_events,
             focus_request,
-        ) {
+        );
+        
+        // Handle clicked event - open edit dialog
+        if let Some(clicked_event) = view_result.event_to_edit {
             self.event_dialog_state =
                 Some(EventDialogState::from_event(&clicked_event, &self.settings));
             self.show_event_dialog = true;
+        }
+        
+        // Handle deleted events - remove countdown cards
+        for event_id in view_result.deleted_event_ids {
+            self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
     }
 
@@ -254,7 +270,7 @@ impl CalendarApp {
             Vec::new()
         };
 
-        if let Some(clicked_event) = WorkWeekView::show(
+        let view_result = WorkWeekView::show(
             ui,
             &mut self.current_date,
             self.context.database(),
@@ -269,14 +285,23 @@ impl CalendarApp {
             self.show_ribbon,
             &all_day_events,
             focus_request,
-        ) {
+        );
+        
+        // Handle clicked event - open edit dialog
+        if let Some(clicked_event) = view_result.event_to_edit {
             self.event_dialog_state =
                 Some(EventDialogState::from_event(&clicked_event, &self.settings));
             self.show_event_dialog = true;
         }
+        
+        // Handle deleted events - remove countdown cards
+        for event_id in view_result.deleted_event_ids {
+            self.context.countdown_service_mut().remove_cards_for_event(event_id);
+        }
     }
 
     pub(super) fn render_month_view(&mut self, ui: &mut egui::Ui) {
+        let mut deleted_event_ids = Vec::new();
         let action = MonthView::show(
             ui,
             &mut self.current_date,
@@ -287,12 +312,18 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
+            &mut deleted_event_ids,
         );
         
         // Handle month view actions
         if let MonthViewAction::SwitchToDayView(date) = action {
             self.current_date = date;
             self.current_view = ViewType::Day;
+        }
+        
+        // Handle deleted events - remove countdown cards
+        for event_id in deleted_event_ids {
+            self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
     }
 

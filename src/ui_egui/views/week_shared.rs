@@ -19,6 +19,24 @@ pub const TIME_LABEL_WIDTH: f32 = 50.0;
 pub const COLUMN_SPACING: f32 = 2.0;
 pub const SLOT_HEIGHT: f32 = 30.0;
 
+/// Result of event interactions in views (context menus, clicks, etc.)
+#[derive(Default)]
+pub struct EventInteractionResult {
+    /// Event that was clicked for editing
+    pub event_to_edit: Option<Event>,
+    /// IDs of events that were deleted (need countdown card cleanup)
+    pub deleted_event_ids: Vec<i64>,
+}
+
+impl EventInteractionResult {
+    pub fn merge(&mut self, other: EventInteractionResult) {
+        if other.event_to_edit.is_some() {
+            self.event_to_edit = other.event_to_edit;
+        }
+        self.deleted_event_ids.extend(other.deleted_event_ids);
+    }
+}
+
 /// Scroll to focus a specific time slot if it matches the focus request.
 pub fn maybe_focus_slot(
     ui: &mut egui::Ui,
@@ -43,7 +61,9 @@ pub fn render_ribbon_event(
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
     database: &'static Database,
-) -> Option<Event> {
+) -> EventInteractionResult {
+    let mut result = EventInteractionResult::default();
+    
     let event_color = event
         .color
         .as_deref()
@@ -110,7 +130,6 @@ pub fn render_ribbon_event(
     } else {
         response.interact(Sense::click())
     };
-    let mut clicked_event = None;
 
     interactive_response.context_menu(|ui| {
         ui.set_min_width(150.0);
@@ -118,7 +137,7 @@ pub fn render_ribbon_event(
         ui.separator();
 
         if ui.button("✏ Edit").clicked() {
-            clicked_event = Some(event.clone());
+            result.event_to_edit = Some(event.clone());
             ui.close_menu();
         }
 
@@ -147,6 +166,8 @@ pub fn render_ribbon_event(
                 if let Some(id) = event.id {
                     let service = EventService::new(database.connection());
                     let _ = service.delete_occurrence(id, event.start);
+                    // Note: occurrence deletion doesn't delete the whole event,
+                    // so countdown card stays (it's for the event series)
                 }
                 ui.close_menu();
             }
@@ -154,6 +175,7 @@ pub fn render_ribbon_event(
                 if let Some(id) = event.id {
                     let service = EventService::new(database.connection());
                     let _ = service.delete(id);
+                    result.deleted_event_ids.push(id);
                 }
                 ui.close_menu();
             }
@@ -161,6 +183,7 @@ pub fn render_ribbon_event(
             if let Some(id) = event.id {
                 let service = EventService::new(database.connection());
                 let _ = service.delete(id);
+                result.deleted_event_ids.push(id);
             }
             ui.close_menu();
         }
@@ -189,7 +212,12 @@ pub fn render_ribbon_event(
         }
     });
 
-    clicked_event
+    // Handle click to edit
+    if interactive_response.clicked() {
+        result.event_to_edit = Some(event.clone());
+    }
+
+    result
 }
 
 /// Render an event bar inside a time cell (for events starting in this slot).
@@ -443,7 +471,8 @@ pub fn render_time_cell(
     palette: &TimeGridPalette,
     focus_request: &mut Option<AutoFocusRequest>,
     config: &TimeCellConfig,
-) -> Option<Event> {
+) -> EventInteractionResult {
+    let mut result = EventInteractionResult::default();
     let today = Local::now().date_naive();
     let is_today = date == today;
     let is_weekend = config.check_weekend
@@ -647,6 +676,8 @@ pub fn render_time_cell(
                         if let Some(id) = event.id {
                             let service = EventService::new(database.connection());
                             let _ = service.delete_occurrence(id, event.start);
+                            // Note: occurrence deletion doesn't delete the whole event,
+                            // so countdown card stays (it's for the event series)
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
@@ -654,6 +685,7 @@ pub fn render_time_cell(
                         if let Some(id) = event.id {
                             let service = EventService::new(database.connection());
                             let _ = service.delete(id);
+                            result.deleted_event_ids.push(id);
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
@@ -661,6 +693,7 @@ pub fn render_time_cell(
                     if let Some(id) = event.id {
                         let service = EventService::new(database.connection());
                         let _ = service.delete(id);
+                        result.deleted_event_ids.push(id);
                     }
                     ui.memory_mut(|mem| mem.close_popup());
                 }
@@ -710,7 +743,10 @@ pub fn render_time_cell(
         },
     );
 
-    let mut clicked_event: Option<Event> = context_clicked_event;
+    // Copy context menu edit request to result
+    if let Some(event) = context_clicked_event {
+        result.event_to_edit = Some(event);
+    }
 
     // Drag handling
     if response.drag_started() {
@@ -747,9 +783,9 @@ pub fn render_time_cell(
         } else {
             eprintln!("[{}] drag_started but no event under pointer", view_name);
         }
-    } else if clicked_event.is_none() && response.clicked() {
+    } else if result.event_to_edit.is_none() && response.clicked() {
         if let Some(event) = pointer_event {
-            clicked_event = Some(event);
+            result.event_to_edit = Some(event);
         } else {
             *show_event_dialog = true;
             *event_dialog_date = Some(date);
@@ -788,7 +824,7 @@ pub fn render_time_cell(
         }
     }
 
-    clicked_event
+    result
 }
 
 /// Render the full time grid for a set of dates.
@@ -808,8 +844,8 @@ pub fn render_time_grid(
     palette: &TimeGridPalette,
     focus_request: &mut Option<AutoFocusRequest>,
     config: &TimeCellConfig,
-) -> Option<Event> {
-    let mut clicked_event: Option<Event> = None;
+) -> EventInteractionResult {
+    let mut result = EventInteractionResult::default();
 
     // Remove vertical spacing between slots so time calculations are accurate
     ui.spacing_mut().item_spacing.y = 0.0;
@@ -882,7 +918,7 @@ pub fn render_time_grid(
                         }
                     }
 
-                    if let Some(event) = render_time_cell(
+                    let cell_result = render_time_cell(
                         ui,
                         col_width,
                         *date,
@@ -901,9 +937,8 @@ pub fn render_time_grid(
                         palette,
                         focus_request,
                         config,
-                    ) {
-                        clicked_event = Some(event);
-                    }
+                    );
+                    result.merge(cell_result);
 
                     if day_idx < dates.len() - 1 {
                         ui.add_space(COLUMN_SPACING);
@@ -916,5 +951,5 @@ pub fn render_time_grid(
     // Draw current time indicator
     draw_current_time_indicator(ui, dates, col_width, TIME_LABEL_WIDTH, COLUMN_SPACING);
 
-    clicked_event
+    result
 }

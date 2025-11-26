@@ -42,6 +42,7 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
+        deleted_event_ids: &mut Vec<i64>,
     ) -> MonthViewAction {
         let today = Local::now().date_naive();
         let mut action = MonthViewAction::None;
@@ -243,6 +244,7 @@ impl MonthView {
                                 event_dialog_date,
                                 event_dialog_recurrence,
                                 event_to_edit,
+                                deleted_event_ids,
                                 palette,
                             );
                             
@@ -272,6 +274,7 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
+        deleted_event_ids: &mut Vec<i64>,
         palette: CalendarCellPalette,
     ) -> (MonthViewAction, Option<Event>) {
         let desired_size = Vec2::new(ui.available_width(), 80.0);
@@ -549,6 +552,7 @@ impl MonthView {
                         if let Some(id) = event.id {
                             let service = EventService::new(database.connection());
                             let _ = service.delete(id);
+                            deleted_event_ids.push(id);
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
