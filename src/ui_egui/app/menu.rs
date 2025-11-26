@@ -12,7 +12,6 @@ impl CalendarApp {
                 self.render_file_menu(ui, ctx);
                 self.render_edit_menu(ui);
                 self.render_view_menu(ui);
-                self.render_theme_menu(ui);
                 self.render_events_menu(ui);
             });
         });
@@ -136,38 +135,12 @@ impl CalendarApp {
 
     fn render_edit_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Edit", |ui| {
-            if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
-                self.state.show_search_dialog = true;
-                ui.close_menu();
-            }
-            ui.separator();
             if ui.button("⚙ Settings    Ctrl+S").clicked() {
                 self.show_settings_dialog = true;
                 ui.close_menu();
             }
-            ui.separator();
-            if ui.button("📥 Import Event...").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("iCalendar", &["ics"])
-                    .pick_file()
-                {
-                    match std::fs::read_to_string(&path) {
-                        Ok(ics_content) => {
-                            use crate::services::icalendar::import;
-                            match import::from_str(&ics_content) {
-                                Ok(events) => {
-                                    self.handle_ics_import(events, "file import dialog");
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to parse ICS file: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Failed to read ICS file: {}", e);
-                        }
-                    }
-                }
+            if ui.button("Themes...").clicked() {
+                self.state.theme_dialog_state.open(&self.settings.theme);
                 ui.close_menu();
             }
         });
@@ -236,14 +209,7 @@ impl CalendarApp {
         });
     }
 
-    fn render_theme_menu(&mut self, ui: &mut egui::Ui) {
-        ui.menu_button("Theme", |ui| {
-            if ui.button("Themes...").clicked() {
-                self.state.theme_dialog_state.open(&self.settings.theme);
-                ui.close_menu();
-            }
-        });
-    }
+
 
     fn render_events_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Events", |ui| {
@@ -253,6 +219,35 @@ impl CalendarApp {
                     self.current_date,
                     &self.settings,
                 ));
+                ui.close_menu();
+            }
+            ui.separator();
+            if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
+                self.state.show_search_dialog = true;
+                ui.close_menu();
+            }
+            if ui.button("📥 Import Event...").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("iCalendar", &["ics"])
+                    .pick_file()
+                {
+                    match std::fs::read_to_string(&path) {
+                        Ok(ics_content) => {
+                            use crate::services::icalendar::import;
+                            match import::from_str(&ics_content) {
+                                Ok(events) => {
+                                    self.handle_ics_import(events, "file import dialog");
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to parse ICS file: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to read ICS file: {}", e);
+                        }
+                    }
+                }
                 ui.close_menu();
             }
         });
