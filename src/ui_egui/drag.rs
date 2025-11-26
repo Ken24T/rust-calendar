@@ -13,6 +13,7 @@ pub enum DragView {
 #[derive(Clone, Debug)]
 pub struct DragContext {
     pub event_id: i64,
+    #[allow(dead_code)]
     pub original_start: DateTime<Local>,
     #[allow(dead_code)]
     pub original_end: DateTime<Local>,
