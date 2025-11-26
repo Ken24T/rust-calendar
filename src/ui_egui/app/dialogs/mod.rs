@@ -308,7 +308,7 @@ impl CalendarApp {
             }
             ThemeDialogAction::DeleteTheme(name) => {
                 if let Err(e) = theme_service.delete_theme(&name) {
-                    eprintln!("Failed to delete theme: {}", e);
+                    log::error!("Failed to delete theme: {}", e);
                 } else {
                     log::info!("Successfully deleted theme: {}", name);
                     // Clear cached colors
@@ -339,7 +339,7 @@ impl CalendarApp {
 
                 let settings_service = self.context.settings_service();
                 if let Err(e) = settings_service.update(&self.settings) {
-                    eprintln!("Failed to save theme setting: {}", e);
+                    log::error!("Failed to save theme setting: {}", e);
                 }
             }
             ThemeDialogAction::PreviewTheme(name) => {
@@ -360,7 +360,7 @@ impl CalendarApp {
             }
             ThemeDialogAction::DuplicateTheme { source, new_name } => {
                 if let Err(e) = theme_service.duplicate_theme(&source, &new_name) {
-                    eprintln!("Failed to duplicate theme: {}", e);
+                    log::error!("Failed to duplicate theme: {}", e);
                 } else {
                     log::info!("Successfully duplicated theme '{}' to '{}'", source, new_name);
                     // Cache colors for the new theme
@@ -378,7 +378,7 @@ impl CalendarApp {
                     .save_file()
                 {
                     if let Err(e) = theme_service.export_theme(&name, &path) {
-                        eprintln!("Failed to export theme: {}", e);
+                        log::error!("Failed to export theme: {}", e);
                     } else {
                         log::info!("Successfully exported theme to {:?}", path);
                     }
@@ -400,7 +400,7 @@ impl CalendarApp {
                             }
                         }
                         Err(e) => {
-                            eprintln!("Failed to import theme: {}", e);
+                            log::error!("Failed to import theme: {}", e);
                         }
                     }
                 }
@@ -419,12 +419,12 @@ impl CalendarApp {
             ThemeCreatorAction::Save(name, theme) => {
                 let theme_service = self.context.theme_service();
                 if let Err(e) = theme_service.save_theme(&theme, &name) {
-                    eprintln!("Failed to save theme: {}", e);
+                    log::error!("Failed to save theme: {}", e);
                     self.state.theme_creator_state.validation_error =
                         Some(format!("Failed to save: {}", e));
                     self.state.theme_creator_state.is_open = true;
                 } else {
-                    eprintln!("Successfully saved theme: {}", name);
+                    log::info!("Successfully saved theme: {}", name);
 
                     self.settings.theme = name.clone();
                     theme.apply_to_context(ctx);
@@ -432,7 +432,7 @@ impl CalendarApp {
 
                     let settings_service = self.context.settings_service();
                     if let Err(e) = settings_service.update(&self.settings) {
-                        eprintln!("Failed to save settings: {}", e);
+                        log::error!("Failed to save settings: {}", e);
                     }
 
                     self.state.theme_creator_state.close();

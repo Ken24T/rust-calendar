@@ -750,18 +750,7 @@ pub fn render_time_cell(
 
     // Drag handling
     if response.drag_started() {
-        let view_name = match config.drag_view {
-            DragView::Week => "week_view",
-            DragView::WorkWeek => "workweek_view",
-            _ => "view",
-        };
-        eprintln!(
-            "[{}] drag_started detected, pointer_hit: {:?}",
-            view_name,
-            pointer_hit.as_ref().map(|(_, e)| &e.title)
-        );
         if let Some((hit_rect, event)) = pointer_hit.clone() {
-            eprintln!("[{}] event under pointer: {}", view_name, event.title);
             if event.recurrence_rule.is_none() {
                 if let Some(drag_context) = DragContext::from_event(
                     &event,
@@ -770,18 +759,10 @@ pub fn render_time_cell(
                         .unwrap_or(Vec2::ZERO),
                     config.drag_view,
                 ) {
-                    eprintln!("[{}] starting drag for event: {}", view_name, event.title);
                     DragManager::begin(ui.ctx(), drag_context);
                     ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
                 }
-            } else {
-                eprintln!(
-                    "[{}] cannot drag recurring event: {}",
-                    view_name, event.title
-                );
             }
-        } else {
-            eprintln!("[{}] drag_started but no event under pointer", view_name);
         }
     } else if result.event_to_edit.is_none() && response.clicked() {
         if let Some(event) = pointer_event {
@@ -817,7 +798,7 @@ pub fn render_time_cell(
                     event.start = target_start;
                     event.end = new_end;
                     if let Err(err) = event_service.update(&event) {
-                        eprintln!("Failed to move event {}: {}", drag_context.event_id, err);
+                        log::error!("Failed to move event {}: {}", drag_context.event_id, err);
                     }
                 }
             }

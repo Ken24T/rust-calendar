@@ -102,10 +102,17 @@ impl CalendarApp {
                 .filter(|loc| !loc.is_empty())
                 .map(|loc| loc.to_string());
 
+            // Parse the event color from hex string
+            let event_color = event.color.as_ref().and_then(|hex| {
+                crate::services::countdown::RgbaColor::from_hex_str(hex)
+            });
+
             let countdown_service = self.context.countdown_service_mut();
             countdown_service.sync_title_for_event(event_id, event.title.clone());
             countdown_service.sync_title_override_for_event(event_id, location_label);
             countdown_service.sync_comment_for_event(event_id, event.description.clone());
+            countdown_service.sync_event_color_for_event(event_id, event_color);
+            countdown_service.sync_start_at_for_event(event_id, event.start);
         }
     }
 }

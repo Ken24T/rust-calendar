@@ -14,13 +14,7 @@ impl CalendarApp {
             return;
         }
         
-        eprintln!("[COUNTDOWN DEBUG] handle_file_drops: {} files dropped, self ptr={:p}", dropped_files.len(), self);
-        log::info!("[COUNTDOWN DEBUG] handle_file_drops: {} files dropped", dropped_files.len());
-        
         for path in dropped_files {
-
-            eprintln!("[COUNTDOWN DEBUG] Processing dropped file: {:?}", path);
-            log::info!("[COUNTDOWN DEBUG] Processing dropped file: {:?}", path);
 
             match std::fs::read_to_string(&path) {
                 Ok(ics_content) => {
@@ -38,13 +32,7 @@ impl CalendarApp {
 
                     match import::from_str(&ics_content) {
                         Ok(events) => {
-                            eprintln!("[COUNTDOWN DEBUG] Parsed {} events from ICS file", events.len());
-                            log::info!("[COUNTDOWN DEBUG] Parsed {} events from ICS file", events.len());
-                            eprintln!("[COUNTDOWN DEBUG] Cards in service BEFORE import: {}", self.context.countdown_service().cards().len());
-                            log::info!("[COUNTDOWN DEBUG] Cards in service BEFORE import: {}", self.context.countdown_service().cards().len());
                             self.handle_ics_import(events, "drag-and-drop");
-                            eprintln!("[COUNTDOWN DEBUG] Cards in service AFTER import: {}", self.context.countdown_service().cards().len());
-                            log::info!("[COUNTDOWN DEBUG] Cards in service AFTER import: {}", self.context.countdown_service().cards().len());
                         }
                         Err(e) => {
                             log::error!("Failed to parse dropped ICS file {:?}: {}", path, e);
@@ -59,19 +47,6 @@ impl CalendarApp {
     }
 
     pub(super) fn handle_ics_import(&mut self, events: Vec<Event>, source_label: &str) {
-        eprintln!(
-            "[COUNTDOWN DEBUG] handle_ics_import START: {} events, edit_before_import={}, auto_create={}",
-            events.len(),
-            self.settings.edit_before_import,
-            self.settings.auto_create_countdown_on_import
-        );
-        log::info!(
-            "[COUNTDOWN DEBUG] handle_ics_import START: {} events from {}, edit_before_import={}, auto_create_countdown_on_import={}",
-            events.len(),
-            source_label,
-            self.settings.edit_before_import,
-            self.settings.auto_create_countdown_on_import
-        );
 
         if events.is_empty() {
             log::info!("No events found in {} import", source_label);
@@ -235,20 +210,7 @@ impl CalendarApp {
 
     /// Creates a countdown card for the given event and marks it for display.
     fn create_countdown_card_for_event(&mut self, event: &Event) {
-        eprintln!(
-            "[COUNTDOWN DEBUG] create_countdown_card_for_event ENTER: event_id={:?}, title='{}'",
-            event.id,
-            event.title
-        );
-        log::info!(
-            "[COUNTDOWN DEBUG] create_countdown_card_for_event ENTER: event_id={:?}, title='{}', start={}",
-            event.id,
-            event.title,
-            event.start
-        );
-        
         let Some(event_id) = event.id else {
-            log::warn!("[COUNTDOWN DEBUG] Cannot create countdown card: event has no ID");
             return;
         };
 
@@ -272,12 +234,6 @@ impl CalendarApp {
             .filter(|loc| !loc.is_empty())
             .map(|loc| loc.to_string());
 
-        log::info!(
-            "[COUNTDOWN DEBUG] About to call countdown_service_mut().create_card with width={}, height={}",
-            self.settings.default_card_width,
-            self.settings.default_card_height
-        );
-        
         let card_id = self.context.countdown_service_mut().create_card(
             Some(event_id),
             event.title.clone(),
@@ -286,19 +242,6 @@ impl CalendarApp {
             event.description.clone(),
             self.settings.default_card_width,
             self.settings.default_card_height,
-        );
-
-        eprintln!(
-            "[COUNTDOWN DEBUG] create_card returned: card_id={:?}, total cards: {}, self ptr={:p}, service ptr={:p}",
-            card_id,
-            self.context.countdown_service().cards().len(),
-            self,
-            self.context.countdown_service() as *const _
-        );
-        log::info!(
-            "[COUNTDOWN DEBUG] create_card returned: card_id={:?}, total cards in service now: {}",
-            card_id,
-            self.context.countdown_service().cards().len()
         );
 
         if let Some(label) = location_label {

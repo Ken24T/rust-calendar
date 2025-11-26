@@ -1,6 +1,5 @@
 use chrono::{Duration, Local};
 use egui::{Color32, RichText};
-use egui_extras::DatePickerButton;
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
@@ -9,8 +8,8 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 
 use super::recurrence::{RecurrenceFrequency, RecurrencePattern, Weekday};
-use super::state::EventDialogState;
-use super::widgets::{parse_hex_color, render_time_picker};
+use super::state::{DatePickerTarget, EventDialogState};
+use super::widgets::{parse_hex_color, render_inline_date_picker, render_time_picker, DatePickerAction};
 
 /// Changes to apply to a linked countdown card
 #[derive(Debug, Clone)]
@@ -160,62 +159,111 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
 }
 
 fn render_date_time_section(ui: &mut egui::Ui, state: &mut EventDialogState) {
+    let today = Local::now().date_naive();
+    
     ui.heading("Date and Time");
     ui.add_space(4.0);
 
+    // Start date section
     labeled_row(ui, "Start date:", |ui| {
-        let mut start_date = state.date;
-        if ui
-            .add(DatePickerButton::new(&mut start_date).id_source("event_start_date"))
-            .changed()
+        let is_start_picker_open = state.active_date_picker == Some(DatePickerTarget::StartDate);
+        let btn_text = state.date.format("%B %d, %Y").to_string();
+        
+        if ui.selectable_label(is_start_picker_open, format!("📅 {}", btn_text))
+            .on_hover_text("Click to select date")
+            .clicked() 
         {
-            state.date = start_date;
-            if state.end_date < state.date {
-                state.end_date = state.date;
+            if is_start_picker_open {
+                state.active_date_picker = None;
+            } else {
+                state.active_date_picker = Some(DatePickerTarget::StartDate);
+                state.date_picker_viewing = state.date;
             }
         }
     });
 
-    indented_row(ui, |ui| {
-        if ui.button("< Previous Day").clicked() {
-            state.date = state.date.pred_opt().unwrap_or(state.date);
-            if state.end_date < state.date {
-                state.end_date = state.date;
+    // Show inline calendar for start date
+    if state.active_date_picker == Some(DatePickerTarget::StartDate) {
+        indented_row(ui, |ui| {
+            let action = render_inline_date_picker(
+                ui,
+                DatePickerTarget::StartDate,
+                state.date,
+                &mut state.date_picker_viewing,
+                None, // No constraint for start date
+                today,
+            );
+            
+            match action {
+                DatePickerAction::Selected(date) => {
+                    state.date = date;
+                    // Ensure end date is not before start date
+                    if state.end_date < state.date {
+                        state.end_date = state.date;
+                    }
+                    state.active_date_picker = None;
+                }
+                DatePickerAction::Close => {
+                    state.active_date_picker = None;
+                }
+                DatePickerAction::None => {}
             }
-        }
-        if ui.button("Today").clicked() {
-            state.date = Local::now().date_naive();
-            if state.end_date < state.date {
-                state.end_date = state.date;
-            }
-        }
-        if ui.button("Next Day >").clicked() {
-            state.date = state.date.succ_opt().unwrap_or(state.date);
-            if state.end_date < state.date {
-                state.end_date = state.date;
-            }
-        }
-    });
+        });
+    }
 
+    // End date section
     labeled_row(ui, "End date:", |ui| {
-        let mut end_date = state.end_date;
-        if ui
-            .add(DatePickerButton::new(&mut end_date).id_source("event_end_date"))
-            .changed()
+        let is_end_picker_open = state.active_date_picker == Some(DatePickerTarget::EndDate);
+        let btn_text = state.end_date.format("%B %d, %Y").to_string();
+        
+        if ui.selectable_label(is_end_picker_open, format!("📅 {}", btn_text))
+            .on_hover_text("Click to select date")
+            .clicked() 
         {
-            if end_date < state.date {
-                end_date = state.date;
+            if is_end_picker_open {
+                state.active_date_picker = None;
+            } else {
+                state.active_date_picker = Some(DatePickerTarget::EndDate);
+                state.date_picker_viewing = state.end_date;
             }
-            state.end_date = end_date;
         }
     });
 
+    // Show inline calendar for end date  
+    if state.active_date_picker == Some(DatePickerTarget::EndDate) {
+        indented_row(ui, |ui| {
+            let action = render_inline_date_picker(
+                ui,
+                DatePickerTarget::EndDate,
+                state.end_date,
+                &mut state.date_picker_viewing,
+                Some(state.date), // Constrain: end date cannot be before start date
+                today,
+            );
+            
+            match action {
+                DatePickerAction::Selected(date) => {
+                    state.end_date = date;
+                    state.active_date_picker = None;
+                }
+                DatePickerAction::Close => {
+                    state.active_date_picker = None;
+                }
+                DatePickerAction::None => {}
+            }
+        });
+    }
+
+    // Quick date buttons
     indented_row(ui, |ui| {
-        if ui.button("Same as start").clicked() {
+        if ui.button("Same day").clicked() {
             state.end_date = state.date;
         }
-        if ui.button("Add day").clicked() {
+        if ui.button("+1 day").clicked() {
             state.end_date = state.end_date.succ_opt().unwrap_or(state.end_date);
+        }
+        if ui.button("+1 week").clicked() {
+            state.end_date = state.end_date + chrono::Duration::days(7);
         }
     });
 
@@ -232,7 +280,21 @@ fn render_date_time_section(ui: &mut egui::Ui, state: &mut EventDialogState) {
 
         labeled_row(ui, "End time:", |ui| {
             render_time_picker(ui, &mut state.end_time);
+            
+            // Show warning if end time is before start time on the same day
+            if state.date == state.end_date && state.end_time <= state.start_time {
+                ui.label(RichText::new("⚠").color(Color32::from_rgb(200, 150, 0)));
+            }
         });
+        
+        // Show validation message if times are invalid
+        if state.date == state.end_date && state.end_time <= state.start_time {
+            indented_row(ui, |ui| {
+                ui.label(RichText::new("Note: End time should be after start time")
+                    .color(Color32::from_rgb(200, 150, 0))
+                    .small());
+            });
+        }
     }
 
     ui.add_space(12.0);

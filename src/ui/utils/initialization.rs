@@ -35,12 +35,12 @@ pub fn initialize_app(db_path: &str) -> AppInitData {
     let db = match Database::new(db_path) {
         Ok(db) => {
             if let Err(e) = db.initialize_schema() {
-                eprintln!("Warning: Failed to initialize database schema: {}", e);
+                log::warn!("Failed to initialize database schema: {}", e);
             }
             db
         }
         Err(e) => {
-            eprintln!("Warning: Failed to open database, using defaults: {}", e);
+            log::warn!("Failed to open database, using defaults: {}", e);
             // Create in-memory database as fallback
             Database::new(":memory:").expect("Failed to create fallback in-memory database")
         }
@@ -49,14 +49,14 @@ pub fn initialize_app(db_path: &str) -> AppInitData {
     // Load settings from database
     let settings_service = SettingsService::new(&db);
     let settings = settings_service.get().unwrap_or_else(|e| {
-        eprintln!("Warning: Failed to load settings, using defaults: {}", e);
+        log::warn!("Failed to load settings, using defaults: {}", e);
         crate::models::settings::Settings::default()
     });
 
     // Load available themes
     let theme_service = ThemeService::new(&db);
     let available_themes = theme_service.list_themes().unwrap_or_else(|e| {
-        eprintln!("Warning: Failed to load themes: {}", e);
+        log::warn!("Failed to load themes: {}", e);
         vec!["Light".to_string(), "Dark".to_string()]
     });
     

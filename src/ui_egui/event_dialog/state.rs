@@ -7,6 +7,13 @@ use chrono::{self, Local, LocalResult, NaiveDate, NaiveDateTime, NaiveTime};
 
 use super::recurrence::{ParsedRRule, RRuleBuilder, RecurrenceFrequency, RecurrencePattern};
 
+/// Which date field is being edited by the inline calendar
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DatePickerTarget {
+    StartDate,
+    EndDate,
+}
+
 /// Optional countdown card state linked to the event
 #[derive(Clone)]
 pub struct LinkedCountdownCard {
@@ -51,6 +58,10 @@ pub struct EventDialogState {
     pub linked_card: Option<LinkedCountdownCard>,
     /// Whether the card settings section is expanded
     pub show_card_settings: bool,
+    /// Which date picker is currently shown (None = neither)
+    pub active_date_picker: Option<DatePickerTarget>,
+    /// The month/year currently being viewed in the date picker
+    pub date_picker_viewing: NaiveDate,
 }
 
 impl EventDialogState {
@@ -114,6 +125,8 @@ impl EventDialogState {
             create_countdown: false,
             linked_card: None,
             show_card_settings: false,
+            active_date_picker: None,
+            date_picker_viewing: date,
         }
     }
 
@@ -159,6 +172,8 @@ impl EventDialogState {
             create_countdown: false,
             linked_card: None,
             show_card_settings: false,
+            active_date_picker: None,
+            date_picker_viewing: date,
         }
     }
 

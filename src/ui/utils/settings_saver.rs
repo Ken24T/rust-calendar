@@ -22,7 +22,7 @@ pub fn save_settings(
     let db = match db.lock() {
         Ok(db) => db,
         Err(e) => {
-            eprintln!("Error: Failed to acquire database lock: {}", e);
+            log::error!("Failed to acquire database lock: {}", e);
             return;
         }
     };
@@ -41,7 +41,7 @@ pub fn save_settings(
     let mut settings = match settings_service.get() {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Warning: Failed to load settings for update: {}", e);
+            log::warn!("Failed to load settings for update: {}", e);
             crate::models::settings::Settings::default()
         }
     };
@@ -62,6 +62,6 @@ pub fn save_settings(
 
     // Save to database
     if let Err(e) = settings_service.update(&settings) {
-        eprintln!("Error: Failed to save settings: {}", e);
+        log::error!("Failed to save settings: {}", e);
     }
 }

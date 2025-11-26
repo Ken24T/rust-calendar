@@ -576,12 +576,7 @@ impl DayView {
 
             // Check drag_started BEFORE clicked to ensure drag detection works
             if response.drag_started() {
-                eprintln!(
-                    "[day_view] drag_started detected, pointer_hit: {:?}",
-                    pointer_hit.as_ref().map(|(_, e)| &e.title)
-                );
                 if let Some((hit_rect, event)) = pointer_hit.clone() {
-                    eprintln!("[day_view] event under pointer: {}", event.title);
                     if event.recurrence_rule.is_none() {
                         if let Some(drag_context) = DragContext::from_event(
                             &event,
@@ -590,15 +585,10 @@ impl DayView {
                                 .unwrap_or(Vec2::ZERO),
                             DragView::Day,
                         ) {
-                            eprintln!("[day_view] starting drag for event: {}", event.title);
                             DragManager::begin(ui.ctx(), drag_context);
                             ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
                         }
-                    } else {
-                        eprintln!("[day_view] cannot drag recurring event: {}", event.title);
                     }
-                } else {
-                    eprintln!("[day_view] drag_started but no event under pointer");
                 }
             } else if result.event_to_edit.is_none() && response.clicked() {
                 if let Some(event) = pointer_event.clone() {
@@ -637,7 +627,7 @@ impl DayView {
                             event.start = target_start;
                             event.end = new_end;
                             if let Err(err) = event_service.update(&event) {
-                                eprintln!(
+                                log::error!(
                                     "Failed to move event {}: {}",
                                     drag_context.event_id, err
                                 );

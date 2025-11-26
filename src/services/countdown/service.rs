@@ -650,6 +650,51 @@ impl CountdownService {
         }
     }
 
+    /// Synchronize the event color for all countdown cards linked to an event.
+    /// This updates the stored event_color which is used when "Use default color" is enabled.
+    pub fn sync_event_color_for_event(&mut self, event_id: i64, event_color: Option<RgbaColor>) {
+        let mut changed = false;
+        for card in self
+            .cards
+            .iter_mut()
+            .filter(|card| card.event_id == Some(event_id))
+        {
+            if card.event_color != event_color {
+                card.event_color = event_color;
+                // Re-apply the palette if the card is using default colors
+                apply_event_palette_if_needed(card);
+                changed = true;
+            }
+        }
+
+        if changed {
+            self.dirty = true;
+        }
+    }
+
+    /// Synchronize the start time for all countdown cards linked to an event.
+    /// This updates the countdown target date when the event date changes.
+    pub fn sync_start_at_for_event(&mut self, event_id: i64, start_at: DateTime<Local>) {
+        let mut changed = false;
+        let now = Local::now();
+        for card in self
+            .cards
+            .iter_mut()
+            .filter(|card| card.event_id == Some(event_id))
+        {
+            if card.start_at != start_at {
+                card.start_at = start_at;
+                let days = card.compute_days_remaining(now);
+                card.record_days_remaining(days);
+                changed = true;
+            }
+        }
+
+        if changed {
+            self.dirty = true;
+        }
+    }
+
     pub fn set_start_at(&mut self, id: CountdownCardId, start_at: DateTime<Local>) -> bool {
         if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
             card.start_at = start_at;

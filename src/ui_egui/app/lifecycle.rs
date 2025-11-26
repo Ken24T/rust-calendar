@@ -208,7 +208,7 @@ fn load_settings_or_default(settings_service: &SettingsService) -> Settings {
     match settings_service.get() {
         Ok(settings) => settings,
         Err(e) => {
-            eprintln!("Failed to load settings: {}, using defaults", e);
+            log::warn!("Failed to load settings: {}, using defaults", e);
             Settings::default()
         }
     }
