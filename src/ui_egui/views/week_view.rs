@@ -57,210 +57,176 @@ impl WeekView {
         let events = Self::get_events_for_week(&event_service, week_start);
 
         let day_names = Self::get_day_names(settings.first_day_of_week);
-        let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
         let show_week_numbers = settings.show_week_numbers;
 
         let mut clicked_event = None;
 
         // Week header with day names
-        // Get the scrollbar width from egui's style to match ScrollArea exactly
-        let scrollbar_width = ui.spacing().scroll.bar_width + ui.spacing().scroll.bar_inner_margin + ui.spacing().scroll.bar_outer_margin;
-        let header_width = ui.available_width() - scrollbar_width;
+        // Calculate column width based on available width
+        // Grid layout: TIME_LABEL_WIDTH + COLUMN_SPACING + (7 * col_width) + (6 * COLUMN_SPACING)
+        let content_width = ui.available_width();
+        let total_spacing = COLUMN_SPACING * 6.0; // spacing between 7 columns
+        let col_width = (content_width - TIME_LABEL_WIDTH - COLUMN_SPACING - total_spacing) / 7.0;
         
-        let header_frame = egui::Frame::none()
-            .fill(day_strip_palette.header_bg)
-            .rounding(egui::Rounding::same(10.0))
-            .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
-            .inner_margin(Margin {
-                left: 0.0,
-                right: 0.0,
-                top: 10.0,
-                bottom: 10.0,
-            });
+        // Header row - direct layout to match grid exactly
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
 
-        let header_response = header_frame.show(ui, |strip_ui| {
-            // Calculate column width based on the constrained header width
-            strip_ui.set_max_width(header_width);
-            let frame_inner_width = strip_ui.available_width();
-            let available_for_cols = frame_inner_width - TIME_LABEL_WIDTH - total_spacing;
-            let col_width = available_for_cols / 7.0;
-            
-            // Header row with day names (and optional week number)
-            strip_ui.horizontal(|ui| {
+            // Week number / time label placeholder - always same width as time labels in grid
+            // Use allocate_exact_size to guarantee the width regardless of content
+            let (rect, _response) = ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, 48.0), egui::Sense::hover());
+            if show_week_numbers {
+                let week_num = week_start.iso_week().week();
+                ui.put(rect, egui::Label::new(
+                    egui::RichText::new(format!("W{}", week_num))
+                        .size(12.0)
+                        .color(day_strip_palette.header_text)
+                        .strong(),
+                ));
+            }
+
+            ui.add_space(COLUMN_SPACING);
+
+            for (i, day_name) in day_names.iter().enumerate() {
+                let date = week_dates[i];
+                let is_today = date == today;
+                let weekday_idx = date.weekday().num_days_from_sunday();
+                let is_weekend = weekday_idx == 0 || weekday_idx == 6;
+
+                // Use header colors for the day header cells
+                let cell_bg = if is_today {
+                    day_strip_palette.today_cell_bg
+                } else if is_weekend {
+                    blend_header_weekend(day_strip_palette.header_bg, theme.is_dark)
+                } else {
+                    day_strip_palette.header_bg
+                };
+                let border_color = if is_today {
+                    day_strip_palette.accent_line
+                } else {
+                    day_strip_palette.strip_border
+                };
+                let name_color = if is_today {
+                    day_strip_palette.today_text
+                } else {
+                    day_strip_palette.header_text
+                };
+                let date_color = if is_today {
+                    day_strip_palette.today_date_text
+                } else {
+                    day_strip_palette.header_text
+                };
+
+                ui.allocate_ui_with_layout(
+                    Vec2::new(col_width, 48.0),
+                    egui::Layout::top_down(egui::Align::Center),
+                    |cell_ui| {
+                        egui::Frame::none()
+                            .fill(cell_bg)
+                            .rounding(egui::Rounding::same(6.0))
+                            .stroke(Stroke::new(1.0, border_color))
+                            .inner_margin(Margin::symmetric(6.0, 4.0))
+                            .show(cell_ui, |content_ui| {
+                                content_ui.vertical_centered(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(*day_name)
+                                            .size(12.0)
+                                            .color(name_color)
+                                            .strong(),
+                                    );
+
+                                    ui.label(
+                                        egui::RichText::new(format_short_date(
+                                            date,
+                                            &settings.date_format,
+                                        ))
+                                        .size(11.0)
+                                        .color(date_color),
+                                    );
+                                });
+                            });
+                    },
+                );
+
+                if i < day_names.len() - 1 {
+                    ui.add_space(COLUMN_SPACING);
+                }
+            }
+        });
+
+        // Ribbon row with all-day events (if enabled)
+        if show_ribbon && !all_day_events.is_empty() {
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
 
-                // Time label placeholder - show week number if enabled
                 ui.allocate_ui_with_layout(
-                    Vec2::new(TIME_LABEL_WIDTH, 48.0),
-                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                    |ui| {
-                        if show_week_numbers {
-                            let week_num = week_start.iso_week().week();
-                            ui.label(
-                                egui::RichText::new(format!("W{}", week_num))
-                                    .size(12.0)
-                                    .color(day_strip_palette.header_text)
-                                    .strong(),
-                            );
-                        }
-                    },
+                    Vec2::new(TIME_LABEL_WIDTH, 0.0),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |_ui| {},
                 );
 
                 ui.add_space(COLUMN_SPACING);
 
-                for (i, day_name) in day_names.iter().enumerate() {
-                    let date = week_dates[i];
-                    let is_today = date == today;
-                    let weekday_idx = date.weekday().num_days_from_sunday();
-                    let is_weekend = weekday_idx == 0 || weekday_idx == 6;
-                    
-                    // Use header colors for the day header cells
-                    let cell_bg = if is_today {
-                        day_strip_palette.today_cell_bg
-                    } else if is_weekend {
-                        // Slightly different shade for weekend headers
-                        blend_header_weekend(day_strip_palette.header_bg, theme.is_dark)
-                    } else {
-                        day_strip_palette.header_bg
-                    };
-                    let border_color = if is_today {
-                        day_strip_palette.accent_line
-                    } else {
-                        day_strip_palette.strip_border
-                    };
-                    let name_color = if is_today {
-                        day_strip_palette.today_text
-                    } else {
-                        day_strip_palette.header_text
-                    };
-                    let date_color = if is_today {
-                        day_strip_palette.today_date_text
-                    } else {
-                        day_strip_palette.header_text
-                    };
+                for (i, date) in week_dates.iter().enumerate() {
+                    ui.vertical(|day_ui| {
+                        day_ui.set_width(col_width);
 
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(col_width, 48.0),
-                        egui::Layout::top_down(egui::Align::Center),
-                        |cell_ui| {
-                            egui::Frame::none()
-                                .fill(cell_bg)
-                                .rounding(egui::Rounding::same(6.0))
-                                .stroke(Stroke::new(1.0, border_color))
-                                .inner_margin(Margin::symmetric(6.0, 4.0))
-                                .show(cell_ui, |content_ui| {
-                                    content_ui.vertical_centered(|ui| {
-                                        ui.label(
-                                            egui::RichText::new(*day_name)
-                                                .size(12.0)
-                                                .color(name_color)
-                                                .strong(),
-                                        );
+                        let mut multi_day_events = Vec::new();
+                        let mut single_day_events = Vec::new();
 
-                                        ui.label(
-                                            egui::RichText::new(format_short_date(
-                                                date,
-                                                &settings.date_format,
-                                            ))
-                                            .size(11.0)
-                                            .color(date_color),
-                                        );
-                                    });
-                                });
-                        },
-                    );
+                        for event in all_day_events {
+                            let event_start_date = event.start.date_naive();
+                            let event_end_date = event.end.date_naive();
 
-                    if i < day_names.len() - 1 {
+                            if event_start_date != event_end_date {
+                                if event_start_date <= *date && event_end_date >= *date {
+                                    multi_day_events.push(event);
+                                }
+                            } else if event_start_date == *date {
+                                single_day_events.push(event);
+                            }
+                        }
+
+                        let found_event =
+                            !multi_day_events.is_empty() || !single_day_events.is_empty();
+
+                        for event in multi_day_events {
+                            if let Some(ev) = render_ribbon_event(
+                                day_ui,
+                                event,
+                                countdown_requests,
+                                active_countdown_events,
+                                database,
+                            ) {
+                                clicked_event = Some(ev);
+                            }
+                        }
+
+                        for event in single_day_events {
+                            if let Some(ev) = render_ribbon_event(
+                                day_ui,
+                                event,
+                                countdown_requests,
+                                active_countdown_events,
+                                database,
+                            ) {
+                                clicked_event = Some(ev);
+                            }
+                        }
+
+                        if !found_event {
+                            day_ui.allocate_space(Vec2::new(col_width, 24.0));
+                        }
+                    });
+
+                    if i < week_dates.len() - 1 {
                         ui.add_space(COLUMN_SPACING);
                     }
                 }
             });
-
-            // Ribbon row with all-day events
-            if show_ribbon && !all_day_events.is_empty() {
-                strip_ui.add_space(4.0);
-
-                strip_ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(TIME_LABEL_WIDTH, 0.0),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |_ui| {},
-                    );
-
-                    ui.add_space(COLUMN_SPACING);
-
-                    for (i, date) in week_dates.iter().enumerate() {
-                        ui.vertical(|day_ui| {
-                            day_ui.set_width(col_width);
-
-                            let mut multi_day_events = Vec::new();
-                            let mut single_day_events = Vec::new();
-
-                            for event in all_day_events {
-                                let event_start_date = event.start.date_naive();
-                                let event_end_date = event.end.date_naive();
-
-                                if event_start_date != event_end_date {
-                                    if event_start_date <= *date && event_end_date >= *date {
-                                        multi_day_events.push(event);
-                                    }
-                                } else if event_start_date == *date {
-                                    single_day_events.push(event);
-                                }
-                            }
-
-                            let found_event =
-                                !multi_day_events.is_empty() || !single_day_events.is_empty();
-
-                            for event in multi_day_events {
-                                if let Some(ev) = render_ribbon_event(
-                                    day_ui,
-                                    event,
-                                    countdown_requests,
-                                    active_countdown_events,
-                                    database,
-                                ) {
-                                    clicked_event = Some(ev);
-                                }
-                            }
-
-                            for event in single_day_events {
-                                if let Some(ev) = render_ribbon_event(
-                                    day_ui,
-                                    event,
-                                    countdown_requests,
-                                    active_countdown_events,
-                                    database,
-                                ) {
-                                    clicked_event = Some(ev);
-                                }
-                            }
-
-                            if !found_event {
-                                day_ui.allocate_space(Vec2::new(col_width, 24.0));
-                            }
-                        });
-
-                        if i < week_dates.len() - 1 {
-                            ui.add_space(COLUMN_SPACING);
-                        }
-                    }
-                });
-            }
-            
-            // Return col_width for use in time grid
-            col_width
-        });
-
-        let _col_width = header_response.inner; // Used in header closure
-        let header_rect = header_response.response.rect;
-        ui.painter().hline(
-            header_rect.x_range(),
-            header_rect.bottom(),
-            Stroke::new(1.0, day_strip_palette.accent_line),
-        );
+        }
 
         ui.add_space(8.0);
 
@@ -268,10 +234,6 @@ impl WeekView {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |scroll_ui| {
-                // Calculate column width from actual ScrollArea inner width
-                let scroll_width = scroll_ui.available_width();
-                let scroll_col_width = (scroll_width - TIME_LABEL_WIDTH - total_spacing) / 7.0;
-
                 let config = TimeCellConfig {
                     drag_view: DragView::Week,
                     check_weekend: true,
@@ -279,7 +241,7 @@ impl WeekView {
 
                 if let Some(event) = render_time_grid(
                     scroll_ui,
-                    scroll_col_width,
+                    col_width,
                     &week_dates,
                     &events,
                     database,

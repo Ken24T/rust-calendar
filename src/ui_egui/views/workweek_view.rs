@@ -59,57 +59,36 @@ impl WorkWeekView {
         let num_days = work_week_dates.len();
         let total_spacing = COLUMN_SPACING * (num_days - 1) as f32;
         
-        // Get the scrollbar width from egui's style to match ScrollArea exactly
-        let scrollbar_width = ui.spacing().scroll.bar_width + ui.spacing().scroll.bar_inner_margin + ui.spacing().scroll.bar_outer_margin;
-        let header_width = ui.available_width() - scrollbar_width;
+        // Calculate column width based on available width
+        // Note: ScrollArea doesn't reduce available width for scrollbar - it overlays
+        let content_width = ui.available_width();
+        let available_for_cols = content_width - TIME_LABEL_WIDTH - total_spacing;
+        let col_width = available_for_cols / num_days as f32;
 
         // Work week header with day names
-        let header_frame = egui::Frame::none()
-            .fill(day_strip_palette.header_bg)
-            .rounding(egui::Rounding::same(10.0))
-            .stroke(Stroke::new(1.0, day_strip_palette.strip_border))
-            .inner_margin(Margin {
-                left: 0.0,
-                right: 0.0,
-                top: 10.0,
-                bottom: 10.0,
-            });
-
         let mut clicked_event = None;
-
         let show_week_numbers = settings.show_week_numbers;
 
-        let header_response = header_frame.show(ui, |strip_ui| {
-            // Calculate column width based on constrained header width
-            strip_ui.set_max_width(header_width);
-            let frame_inner_width = strip_ui.available_width();
-            let available_for_cols = frame_inner_width - TIME_LABEL_WIDTH - total_spacing;
-            let col_width = available_for_cols / num_days as f32;
-            
-            strip_ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
+        // Header row - direct layout to match grid exactly
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
 
-                // Time label placeholder - show week number if enabled
-                ui.allocate_ui_with_layout(
-                    Vec2::new(TIME_LABEL_WIDTH, 48.0),
-                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                    |ui| {
-                        if show_week_numbers {
-                            // Use the first work day to get the week number
-                            if let Some(first_date) = work_week_dates.first() {
-                                let week_num = first_date.iso_week().week();
-                                ui.label(
-                                    egui::RichText::new(format!("W{}", week_num))
-                                        .size(12.0)
-                                        .color(day_strip_palette.header_text)
-                                        .strong(),
-                                );
-                            }
-                        }
-                    },
-                );
+            // Week number / time label placeholder - always same width as time labels in grid
+            // Use allocate_exact_size to guarantee the width regardless of content
+            let (rect, _response) = ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, 48.0), egui::Sense::hover());
+            if show_week_numbers {
+                if let Some(first_date) = work_week_dates.first() {
+                    let week_num = first_date.iso_week().week();
+                    ui.put(rect, egui::Label::new(
+                        egui::RichText::new(format!("W{}", week_num))
+                            .size(12.0)
+                            .color(day_strip_palette.header_text)
+                            .strong(),
+                    ));
+                }
+            }
 
-                ui.add_space(COLUMN_SPACING);
+            ui.add_space(COLUMN_SPACING);
 
                 for (i, date) in work_week_dates.iter().enumerate() {
                     let is_today = *date == today;
@@ -178,10 +157,11 @@ impl WorkWeekView {
                 }
             });
 
-            if show_ribbon && !all_day_events.is_empty() {
-                strip_ui.add_space(4.0);
+        // Ribbon row with all-day events (if enabled)
+        if show_ribbon && !all_day_events.is_empty() {
+            ui.add_space(4.0);
 
-                strip_ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
 
                     ui.allocate_ui_with_layout(
@@ -244,24 +224,12 @@ impl WorkWeekView {
                             }
                         });
 
-                        if i < work_week_dates.len() - 1 {
-                            ui.add_space(COLUMN_SPACING);
-                        }
+                    if i < work_week_dates.len() - 1 {
+                        ui.add_space(COLUMN_SPACING);
                     }
-                });
-            }
-            
-            // Return col_width for use in time grid
-            col_width
-        });
-
-        let _col_width = header_response.inner; // Used in header closure
-        let header_rect = header_response.response.rect;
-        ui.painter().hline(
-            header_rect.x_range(),
-            header_rect.bottom(),
-            Stroke::new(1.0, day_strip_palette.accent_line),
-        );
+                }
+            });
+        }
 
         ui.add_space(8.0);
 
@@ -269,10 +237,7 @@ impl WorkWeekView {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |scroll_ui| {
-                // Calculate column width from actual ScrollArea inner width
-                let scroll_width = scroll_ui.available_width();
-                let scroll_col_width = (scroll_width - TIME_LABEL_WIDTH - total_spacing) / num_days as f32;
-                
+                // Use same column width as header for alignment
                 let config = TimeCellConfig {
                     drag_view: DragView::WorkWeek,
                     check_weekend: false, // WorkWeek doesn't highlight weekends differently
@@ -280,7 +245,7 @@ impl WorkWeekView {
 
                 if let Some(event) = render_time_grid(
                     scroll_ui,
-                    scroll_col_width,
+                    col_width,
                     &work_week_dates,
                     &events,
                     database,
