@@ -11,8 +11,8 @@ use super::models::{
     default_body_bg_color, default_days_fg_color, default_days_font_size, default_title_bg_color,
     default_title_fg_color, default_title_font_size, CountdownAutoDismissConfig,
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownNotificationConfig, CountdownPersistedState, CountdownWarningState, RgbaColor,
-    MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
+    CountdownDisplayMode, CountdownNotificationConfig, CountdownPersistedState,
+    CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
 };
 use super::persistence::{load_snapshot, save_snapshot};
 use super::repository::{CountdownGlobalSettings, CountdownRepository};
@@ -71,6 +71,7 @@ impl CountdownService {
             app_window_geometry: self.app_window_geometry,
             notification_config: self.notification_config.clone(),
             auto_dismiss_defaults: self.auto_dismiss_defaults.clone(),
+            display_mode: CountdownDisplayMode::default(),
         }
     }
 

@@ -316,6 +316,21 @@ impl CountdownCardState {
     }
 }
 
+/// Display mode for countdown cards
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CountdownDisplayMode {
+    /// Each card in its own separate window
+    IndividualWindows,
+    /// All cards in a single container window
+    Container,
+}
+
+impl Default for CountdownDisplayMode {
+    fn default() -> Self {
+        Self::IndividualWindows
+    }
+}
+
 /// Serializable container for persisting card state between sessions.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CountdownPersistedState {
@@ -331,8 +346,65 @@ pub struct CountdownPersistedState {
     /// Default auto-dismiss configuration for new cards
     #[serde(default)]
     pub auto_dismiss_defaults: CountdownAutoDismissConfig,
+    /// Display mode for countdown cards (Individual Windows or Container)
+    #[serde(default)]
+    pub display_mode: CountdownDisplayMode,
 }
 
 pub(crate) fn default_visuals() -> CountdownCardVisuals {
     CountdownCardVisuals::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_countdown_display_mode_default() {
+        let mode = CountdownDisplayMode::default();
+        assert_eq!(mode, CountdownDisplayMode::IndividualWindows);
+    }
+
+    #[test]
+    fn test_countdown_display_mode_serialization() {
+        // Test IndividualWindows serialization
+        let individual = CountdownDisplayMode::IndividualWindows;
+        let json = serde_json::to_string(&individual).unwrap();
+        let deserialized: CountdownDisplayMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, CountdownDisplayMode::IndividualWindows);
+
+        // Test Container serialization
+        let container = CountdownDisplayMode::Container;
+        let json = serde_json::to_string(&container).unwrap();
+        let deserialized: CountdownDisplayMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, CountdownDisplayMode::Container);
+    }
+
+    #[test]
+    fn test_persisted_state_defaults_to_individual_windows() {
+        let state = CountdownPersistedState::default();
+        assert_eq!(state.display_mode, CountdownDisplayMode::IndividualWindows);
+    }
+
+    #[test]
+    fn test_persisted_state_serialization_with_display_mode() {
+        let mut state = CountdownPersistedState::default();
+        state.display_mode = CountdownDisplayMode::Container;
+        state.next_id = 42;
+
+        // Serialize
+        let json = serde_json::to_string(&state).unwrap();
+
+        // Deserialize
+        let deserialized: CountdownPersistedState = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.display_mode, CountdownDisplayMode::Container);
+        assert_eq!(deserialized.next_id, 42);
+    }
+
+    #[test]
+    fn test_persisted_state_backward_compatibility() {
+        // Test that default() provides IndividualWindows
+        let state = CountdownPersistedState::default();
+        assert_eq!(state.display_mode, CountdownDisplayMode::IndividualWindows);
+    }
 }
