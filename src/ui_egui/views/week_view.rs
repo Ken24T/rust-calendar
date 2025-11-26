@@ -60,13 +60,6 @@ impl WeekView {
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
         let show_week_numbers = settings.show_week_numbers;
 
-        // Calculate column width once at the outer UI level to ensure header and grid alignment
-        // Account for scrollbar width (typically 16px) to match the ScrollArea's actual available width
-        let scrollbar_width = 16.0;
-        let outer_available_width = ui.available_width();
-        let available_for_cols = outer_available_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_width;
-        let col_width = available_for_cols / 7.0;
-
         let mut clicked_event = None;
 
         // Week header with day names
@@ -82,7 +75,11 @@ impl WeekView {
             });
 
         let header_response = header_frame.show(ui, |strip_ui| {
-            // Use the pre-calculated column width for consistent alignment
+            // Calculate column width based on this context to match time grid
+            // The time grid scroll area will have similar available width
+            let frame_width = strip_ui.available_width();
+            let available_for_cols = frame_width - TIME_LABEL_WIDTH - total_spacing;
+            let col_width = available_for_cols / 7.0;
 
             // Header row with day names (and optional week number)
             strip_ui.horizontal(|ui| {
@@ -248,8 +245,12 @@ impl WeekView {
                     }
                 });
             }
+            
+            // Return col_width so it can be used for the time grid
+            col_width
         });
 
+        let col_width = header_response.inner;
         let header_rect = header_response.response.rect;
         ui.painter().hline(
             header_rect.x_range(),

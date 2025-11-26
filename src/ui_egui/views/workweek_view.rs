@@ -56,14 +56,8 @@ impl WorkWeekView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_dates(&event_service, &work_week_dates);
 
-        // Calculate column width once at outer UI level accounting for scrollbar (16px typical)
-        let scrollbar_width = 16.0;
         let num_days = work_week_dates.len();
         let total_spacing = COLUMN_SPACING * (num_days - 1) as f32;
-        let outer_available_width = ui.available_width();
-        let available_for_cols =
-            outer_available_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_width;
-        let col_width = available_for_cols / num_days as f32;
 
         // Work week header with day names
         let header_frame = egui::Frame::none()
@@ -82,6 +76,11 @@ impl WorkWeekView {
         let show_week_numbers = settings.show_week_numbers;
 
         let header_response = header_frame.show(ui, |strip_ui| {
+            // Calculate column width in the same context as time grid for alignment
+            let frame_width = strip_ui.available_width();
+            let available_for_cols = frame_width - TIME_LABEL_WIDTH - total_spacing;
+            let col_width = available_for_cols / num_days as f32;
+            
             strip_ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
 
@@ -246,8 +245,12 @@ impl WorkWeekView {
                     }
                 });
             }
+            
+            // Return col_width so it can be used for the time grid
+            col_width
         });
 
+        let col_width = header_response.inner;
         let header_rect = header_response.response.rect;
         ui.painter().hline(
             header_rect.x_range(),
