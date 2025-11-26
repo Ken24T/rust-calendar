@@ -232,6 +232,30 @@ impl CountdownService {
         false
     }
 
+    /// Remove all countdown cards that reference the given event IDs.
+    /// Used to clean up orphaned cards when their events are deleted.
+    pub fn remove_cards_for_events(&mut self, event_ids: &[i64]) -> usize {
+        let initial_count = self.cards.len();
+        self.cards.retain(|card| {
+            if let Some(event_id) = card.event_id {
+                if event_ids.contains(&event_id) {
+                    log::info!(
+                        "Removing orphaned countdown card {:?} for deleted event {}",
+                        card.id,
+                        event_id
+                    );
+                    return false;
+                }
+            }
+            true
+        });
+        let removed = initial_count - self.cards.len();
+        if removed > 0 {
+            self.dirty = true;
+        }
+        removed
+    }
+
     pub fn update_geometry(
         &mut self,
         id: CountdownCardId,

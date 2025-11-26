@@ -6,6 +6,8 @@ use crate::services::event::EventService;
 use std::collections::HashSet;
 
 impl CalendarApp {
+    /// Synchronize countdown card titles with their associated events from the database.
+    /// Also removes orphaned cards whose events no longer exist.
     pub(crate) fn hydrate_countdown_titles_from_events(
         countdown_service: &mut CountdownService,
         database: &'static Database,
@@ -26,6 +28,8 @@ impl CalendarApp {
         }
 
         let event_service = EventService::new(database.connection());
+        let mut orphaned_event_ids = Vec::new();
+        
         for event_id in event_ids {
             match event_service.get(event_id) {
                 Ok(Some(event)) => {
@@ -41,9 +45,10 @@ impl CalendarApp {
                 }
                 Ok(None) => {
                     log::warn!(
-                        "Countdown card references missing event id {} while syncing titles",
+                        "Countdown card references missing event id {}; will remove orphaned card(s)",
                         event_id
                     );
+                    orphaned_event_ids.push(event_id);
                 }
                 Err(err) => {
                     log::error!(
@@ -53,6 +58,15 @@ impl CalendarApp {
                     );
                 }
             }
+        }
+        
+        // Remove orphaned cards (those referencing deleted events)
+        if !orphaned_event_ids.is_empty() {
+            countdown_service.remove_cards_for_events(&orphaned_event_ids);
+            log::info!(
+                "Removed {} orphaned countdown card(s) for deleted events",
+                orphaned_event_ids.len()
+            );
         }
     }
 
