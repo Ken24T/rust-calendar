@@ -60,6 +60,13 @@ impl WeekView {
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
         let show_week_numbers = settings.show_week_numbers;
 
+        // Calculate column width accounting for what ScrollArea will have available
+        // ScrollArea reduces available width by scrollbar (typically 16px when visible)
+        let ui_width = ui.available_width();
+        let scrollbar_reserve = 16.0; // Reserve space for scrollbar
+        let available_for_cols = ui_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_reserve;
+        let col_width = available_for_cols / 7.0;
+
         let mut clicked_event = None;
 
         // Week header with day names
@@ -75,12 +82,8 @@ impl WeekView {
             });
 
         let header_response = header_frame.show(ui, |strip_ui| {
-            // Calculate column width based on this context to match time grid
-            // The time grid scroll area will have similar available width
-            let frame_width = strip_ui.available_width();
-            let available_for_cols = frame_width - TIME_LABEL_WIDTH - total_spacing;
-            let col_width = available_for_cols / 7.0;
-
+            // Use the pre-calculated column width that accounts for scrollbar
+            
             // Header row with day names (and optional week number)
             strip_ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -245,12 +248,8 @@ impl WeekView {
                     }
                 });
             }
-            
-            // Return col_width so it can be used for the time grid
-            col_width
         });
 
-        let col_width = header_response.inner;
         let header_rect = header_response.response.rect;
         ui.painter().hline(
             header_rect.x_range(),
@@ -264,7 +263,7 @@ impl WeekView {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |scroll_ui| {
-                // Use the same pre-calculated column width for perfect alignment with header
+                // Use the same pre-calculated column width
 
                 let config = TimeCellConfig {
                     drag_view: DragView::Week,
