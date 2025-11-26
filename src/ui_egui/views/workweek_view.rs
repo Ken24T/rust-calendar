@@ -59,11 +59,8 @@ impl WorkWeekView {
         let num_days = work_week_dates.len();
         let total_spacing = COLUMN_SPACING * (num_days - 1) as f32;
         
-        // Calculate column width accounting for what ScrollArea will have available
-        let ui_width = ui.available_width();
-        let scrollbar_reserve = 16.0; // Reserve space for scrollbar
-        let available_for_cols = ui_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_reserve;
-        let col_width = available_for_cols / num_days as f32;
+        // Set explicit width for header to match what ScrollArea will have
+        let header_width = ui.available_width() - 16.0; // Reserve for scrollbar
 
         // Work week header with day names
         let header_frame = egui::Frame::none()
@@ -82,7 +79,11 @@ impl WorkWeekView {
         let show_week_numbers = settings.show_week_numbers;
 
         let header_response = header_frame.show(ui, |strip_ui| {
-            // Use the pre-calculated column width that accounts for scrollbar
+            // Calculate column width based on constrained header width
+            strip_ui.set_max_width(header_width);
+            let frame_inner_width = strip_ui.available_width();
+            let available_for_cols = frame_inner_width - TIME_LABEL_WIDTH - total_spacing;
+            let col_width = available_for_cols / num_days as f32;
             
             strip_ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -248,8 +249,12 @@ impl WorkWeekView {
                     }
                 });
             }
+            
+            // Return col_width for use in time grid
+            col_width
         });
 
+        let col_width = header_response.inner;
         let header_rect = header_response.response.rect;
         ui.painter().hline(
             header_rect.x_range(),

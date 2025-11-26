@@ -60,16 +60,12 @@ impl WeekView {
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
         let show_week_numbers = settings.show_week_numbers;
 
-        // Calculate column width accounting for what ScrollArea will have available
-        // ScrollArea reduces available width by scrollbar (typically 16px when visible)
-        let ui_width = ui.available_width();
-        let scrollbar_reserve = 16.0; // Reserve space for scrollbar
-        let available_for_cols = ui_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_reserve;
-        let col_width = available_for_cols / 7.0;
-
         let mut clicked_event = None;
 
         // Week header with day names
+        // Set explicit width to match what ScrollArea will have (accounting for scrollbar)
+        let header_width = ui.available_width() - 16.0; // Reserve for scrollbar
+        
         let header_frame = egui::Frame::none()
             .fill(day_strip_palette.header_bg)
             .rounding(egui::Rounding::same(10.0))
@@ -82,7 +78,11 @@ impl WeekView {
             });
 
         let header_response = header_frame.show(ui, |strip_ui| {
-            // Use the pre-calculated column width that accounts for scrollbar
+            // Calculate column width based on the constrained header width
+            strip_ui.set_max_width(header_width);
+            let frame_inner_width = strip_ui.available_width();
+            let available_for_cols = frame_inner_width - TIME_LABEL_WIDTH - total_spacing;
+            let col_width = available_for_cols / 7.0;
             
             // Header row with day names (and optional week number)
             strip_ui.horizontal(|ui| {
@@ -248,8 +248,12 @@ impl WeekView {
                     }
                 });
             }
+            
+            // Return col_width for use in time grid
+            col_width
         });
 
+        let col_width = header_response.inner;
         let header_rect = header_response.response.rect;
         ui.painter().hline(
             header_rect.x_range(),
