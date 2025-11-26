@@ -94,7 +94,7 @@ impl CalendarApp {
             return;
         }
 
-        let (saved_event, card_changes, auto_create_card, was_new_event, event_saved) = {
+        let (saved_event, card_changes, auto_create_card, was_new_event, event_saved, deleted_event_id) = {
             let state = self
                 .event_dialog_state
                 .as_mut()
@@ -102,6 +102,7 @@ impl CalendarApp {
             let EventDialogResult {
                 saved_event,
                 card_changes,
+                deleted_event_id,
             } = render_event_dialog(
                 ctx,
                 state,
@@ -121,8 +122,17 @@ impl CalendarApp {
                 auto_create_card,
                 was_new_event,
                 event_saved,
+                deleted_event_id,
             )
         };
+
+        // If an event was deleted, also remove associated countdown cards
+        if let Some(event_id) = deleted_event_id {
+            let removed = self.context.countdown_service_mut().remove_cards_for_event(event_id);
+            if removed > 0 {
+                log::info!("Removed {} countdown card(s) for deleted event {}", removed, event_id);
+            }
+        }
 
         // Apply card changes if any
         if let Some(changes) = card_changes {

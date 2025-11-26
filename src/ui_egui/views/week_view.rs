@@ -86,21 +86,19 @@ impl WeekView {
                 ui.spacing_mut().item_spacing.x = 0.0;
 
                 // Time label placeholder - show week number if enabled
-                ui.allocate_ui_with_layout(
-                    Vec2::new(TIME_LABEL_WIDTH, 48.0),
-                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                    |ui| {
-                        if show_week_numbers {
-                            let week_num = week_start.iso_week().week();
-                            ui.label(
-                                egui::RichText::new(format!("W{}", week_num))
-                                    .size(12.0)
-                                    .color(day_strip_palette.header_text)
-                                    .strong(),
-                            );
-                        }
-                    },
-                );
+                // Use allocate_exact_size to ensure the space is reserved even when empty
+                let (rect, _response) =
+                    ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, 48.0), egui::Sense::hover());
+                if show_week_numbers {
+                    let week_num = week_start.iso_week().week();
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        format!("W{}", week_num),
+                        egui::FontId::proportional(12.0),
+                        day_strip_palette.header_text,
+                    );
+                }
 
                 ui.add_space(COLUMN_SPACING);
 
@@ -179,11 +177,8 @@ impl WeekView {
                 strip_ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
 
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(TIME_LABEL_WIDTH, 0.0),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |_ui| {},
-                    );
+                    // Use allocate_exact_size for consistent spacing
+                    ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, 0.0), egui::Sense::hover());
 
                     ui.add_space(COLUMN_SPACING);
 

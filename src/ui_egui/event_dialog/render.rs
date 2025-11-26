@@ -30,6 +30,9 @@ pub struct CountdownCardChanges {
 pub struct EventDialogResult {
     pub saved_event: Option<Event>,
     pub card_changes: Option<CountdownCardChanges>,
+    /// ID of the event that was deleted, if any.
+    /// The caller should use this to remove associated countdown cards.
+    pub deleted_event_id: Option<i64>,
 }
 
 impl EventDialogResult {}
@@ -543,6 +546,7 @@ fn render_action_buttons(
     show_dialog: &mut bool,
 ) -> EventDialogResult {
     let mut saved_event = None;
+    let mut deleted_event_id = None;
 
     indented_row(ui, |ui| {
         let can_save = !state.title.trim().is_empty();
@@ -589,6 +593,7 @@ fn render_action_buttons(
                     if let Err(e) = service.delete(id) {
                         state.error_message = Some(format!("Failed to delete: {}", e));
                     } else {
+                        deleted_event_id = Some(id);
                         *show_dialog = false;
                     }
                 }
@@ -624,6 +629,7 @@ fn render_action_buttons(
     EventDialogResult {
         saved_event,
         card_changes,
+        deleted_event_id,
     }
 }
 

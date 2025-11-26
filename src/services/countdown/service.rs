@@ -148,18 +148,33 @@ impl CountdownService {
         let current_ids: std::collections::HashSet<u64> =
             self.cards.iter().map(|c| c.id.0).collect();
 
-        // Delete cards that no longer exist
+        // Delete cards that no longer exist in memory
         for id in existing_ids.difference(&current_ids) {
             repo.delete_card(CountdownCardId(*id))?;
         }
 
         // Insert or update current cards
+        let mut failed_inserts = Vec::new();
         for card in &self.cards {
             if existing_ids.contains(&card.id.0) {
                 repo.update_card(card)?;
             } else {
-                repo.insert_card(card)?;
+                // Try to insert - may fail if event was deleted (FK constraint)
+                if let Err(e) = repo.insert_card(card) {
+                    log::warn!(
+                        "Failed to insert card {:?} (event_id={:?}): {}. Card will be removed.",
+                        card.id,
+                        card.event_id,
+                        e
+                    );
+                    failed_inserts.push(card.id);
+                }
             }
+        }
+
+        // Remove cards that failed to insert (likely due to deleted events)
+        for id in failed_inserts {
+            self.cards.retain(|c| c.id != id);
         }
 
         self.dirty = false;
@@ -388,6 +403,29 @@ impl CountdownService {
         }
         log::warn!("remove_card: card {:?} not found", id);
         false
+    }
+
+    /// Remove all countdown cards associated with a given event ID.
+    /// Call this when deleting an event to keep the in-memory state in sync.
+    pub fn remove_cards_for_event(&mut self, event_id: i64) -> usize {
+        let initial_count = self.cards.len();
+        self.cards.retain(|card| {
+            if card.event_id == Some(event_id) {
+                log::info!(
+                    "remove_cards_for_event: removing card {:?} for deleted event {}",
+                    card.id,
+                    event_id
+                );
+                false
+            } else {
+                true
+            }
+        });
+        let removed = initial_count - self.cards.len();
+        if removed > 0 {
+            self.dirty = true;
+        }
+        removed
     }
 
     pub fn update_geometry(

@@ -71,8 +71,23 @@ impl CountdownUiState {
         card_id: CountdownCardId,
         geometry: CountdownCardGeometry,
     ) {
+        eprintln!(
+            "[COUNTDOWN DEBUG] mark_card_pending: card_id={:?}, pending_count_before={}",
+            card_id,
+            self.pending_geometry.len()
+        );
+        log::info!(
+            "[COUNTDOWN DEBUG] mark_card_pending called: card_id={:?}, geometry={:?}, pending_geometry_count_before={}",
+            card_id,
+            geometry,
+            self.pending_geometry.len()
+        );
         self.pending_geometry
             .insert(card_id, PendingGeometryState::new(geometry));
+        log::info!(
+            "[COUNTDOWN DEBUG] mark_card_pending done: pending_geometry_count_after={}",
+            self.pending_geometry.len()
+        );
     }
 
     fn pending_geometry_target(&self, card_id: CountdownCardId) -> Option<CountdownCardGeometry> {
@@ -110,6 +125,20 @@ impl CountdownUiState {
         service: &mut CountdownService,
     ) -> CountdownRenderResult {
         let cards = service.cards().to_vec();
+        
+        // Log every few frames to avoid spam but still see state
+        static FRAME_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let frame = FRAME_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if frame % 60 == 0 || (!cards.is_empty() && frame % 30 == 0) {
+            eprintln!(
+                "[COUNTDOWN DEBUG] render_cards: frame={}, cards_count={}, pending_geometry_count={}, service_ptr={:p}",
+                frame,
+                cards.len(),
+                self.pending_geometry.len(),
+                service as *const _
+            );
+        }
+        
         if cards.is_empty() {
             return CountdownRenderResult::default();
         }
