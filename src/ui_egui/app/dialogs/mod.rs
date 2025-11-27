@@ -33,6 +33,7 @@ impl CalendarApp {
 
         self.render_theme_dialog(ctx);
         self.render_theme_creator(ctx);
+        self.render_about_dialog(ctx);
 
         let should_reload_db =
             render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);

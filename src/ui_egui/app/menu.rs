@@ -14,6 +14,7 @@ impl CalendarApp {
                 self.render_edit_menu(ui);
                 self.render_view_menu(ui);
                 self.render_events_menu(ui);
+                self.render_help_menu(ui);
             });
         });
     }
@@ -289,5 +290,97 @@ impl CalendarApp {
                 ui.close_menu();
             }
         });
+    }
+
+    fn render_help_menu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("Help", |ui| {
+            if ui.button("ℹ About...").clicked() {
+                self.state.show_about_dialog = true;
+                ui.close_menu();
+            }
+        });
+    }
+
+    pub(super) fn render_about_dialog(&mut self, ctx: &Context) {
+        if !self.state.show_about_dialog {
+            return;
+        }
+
+        egui::Window::new("About Rust Calendar")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(10.0);
+                    
+                    // App icon/title
+                    ui.heading("📅 Rust Calendar");
+                    ui.add_space(5.0);
+                    
+                    // Version
+                    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                    ui.add_space(10.0);
+                    
+                    ui.separator();
+                    ui.add_space(10.0);
+                    
+                    // Description
+                    ui.label(env!("CARGO_PKG_DESCRIPTION"));
+                    ui.add_space(10.0);
+                    
+                    // Author
+                    ui.label(format!("Author: {}", env!("CARGO_PKG_AUTHORS")));
+                    ui.add_space(5.0);
+                    
+                    // License
+                    ui.label(format!("License: {}", env!("CARGO_PKG_LICENSE")));
+                    ui.add_space(10.0);
+                    
+                    ui.separator();
+                    ui.add_space(10.0);
+                    
+                    // System info
+                    ui.label(egui::RichText::new("System Information").strong());
+                    ui.add_space(5.0);
+                    
+                    egui::Grid::new("about_system_info")
+                        .num_columns(2)
+                        .spacing([20.0, 4.0])
+                        .show(ui, |ui| {
+                            ui.label("Rust Version:");
+                            ui.label(env!("CARGO_PKG_RUST_VERSION", "stable"));
+                            ui.end_row();
+                            
+                            ui.label("Target:");
+                            ui.label(std::env::consts::ARCH);
+                            ui.end_row();
+                            
+                            ui.label("OS:");
+                            ui.label(std::env::consts::OS);
+                            ui.end_row();
+                            
+                            ui.label("GUI Framework:");
+                            ui.label("egui/eframe 0.28");
+                            ui.end_row();
+                        });
+                    
+                    ui.add_space(15.0);
+                    
+                    // Repository link
+                    ui.hyperlink_to(
+                        "🔗 GitHub Repository",
+                        env!("CARGO_PKG_REPOSITORY"),
+                    );
+                    
+                    ui.add_space(15.0);
+                    
+                    if ui.button("Close").clicked() {
+                        self.state.show_about_dialog = false;
+                    }
+                    
+                    ui.add_space(10.0);
+                });
+            });
     }
 }
