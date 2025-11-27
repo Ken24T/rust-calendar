@@ -130,6 +130,11 @@ impl CountdownService {
             .days_font_size
             .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
 
+        log::info!(
+            "Loaded countdown service from database: container_geometry={:?}, display_mode={:?}",
+            settings.container_geometry, settings.display_mode
+        );
+        
         Ok(Self {
             cards,
             next_id: settings.next_card_id.max(1),
@@ -795,6 +800,10 @@ impl CountdownService {
 
     pub fn update_container_geometry(&mut self, geometry: CountdownCardGeometry) {
         if self.container_geometry != Some(geometry) {
+            log::debug!(
+                "Container geometry updated: {:?} -> {:?}",
+                self.container_geometry, geometry
+            );
             self.container_geometry = Some(geometry);
             self.dirty = true;
         }

@@ -110,13 +110,10 @@ impl CountdownCardGeometry {
         self.x.abs() < 10000.0 && self.y.abs() < 10000.0
     }
     
-    /// Sanitize this geometry to ensure it's visible within the given screen bounds.
-    /// If position is outside all monitors, move it to a default visible position.
-    /// The monitors parameter is a list of (x, y, width, height) tuples representing
-    /// the virtual desktop bounds (can be a single large region for multi-monitor).
-    pub fn sanitize_for_monitors(&self, monitors: &[(f32, f32, f32, f32)], default_pos: (f32, f32)) -> Self {
-        // If the geometry is plausible (valid finite values, reasonable range),
-        // trust it - the user may have multiple monitors we don't know about
+    /// Sanitize this geometry to ensure it's visible.
+    /// If position seems invalid, reset to default.
+    pub fn sanitize_for_monitors(&self, _monitors: &[(f32, f32, f32, f32)], default_pos: (f32, f32)) -> Self {
+        // If the geometry is plausible (valid finite values, reasonable range), trust it
         if self.is_plausible() {
             return *self;
         }
@@ -127,14 +124,9 @@ impl CountdownCardGeometry {
             self, default_pos
         );
         
-        // Use the first monitor bounds or fallback
-        let (mx, my, _mw, _mh) = monitors.first()
-            .copied()
-            .unwrap_or((0.0, 0.0, 1920.0, 1080.0));
-        
         Self {
-            x: default_pos.0.max(mx),
-            y: default_pos.1.max(my),
+            x: default_pos.0.max(0.0),
+            y: default_pos.1.max(0.0),
             width: self.width.max(100.0).min(800.0),
             height: self.height.max(100.0).min(600.0),
         }

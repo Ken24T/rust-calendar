@@ -35,6 +35,9 @@ const CARD_ROUNDING: f32 = 8.0;
 const CARD_MIN_COUNTDOWN_HEIGHT: f32 = 36.0;
 const CARD_SPACING: f32 = 4.0;
 
+/// Number of frames to wait before checking if window position is valid
+const VISIBILITY_CHECK_FRAMES: u32 = 10;
+
 /// Layout calculator for arranging cards within the container
 #[derive(Debug, Clone)]
 pub struct ContainerLayout {
@@ -52,6 +55,10 @@ pub struct ContainerLayout {
     pub initialized: bool,
     /// Track the last known card count to detect additions/removals
     pub last_card_count: usize,
+    /// Frame counter for visibility check
+    pub visibility_check_frames: u32,
+    /// Whether the position has been verified as working
+    pub position_verified: bool,
 }
 
 impl Default for ContainerLayout {
@@ -64,6 +71,8 @@ impl Default for ContainerLayout {
             padding: CARD_PADDING,
             initialized: false,
             last_card_count: 0,
+            visibility_check_frames: 0,
+            position_verified: false,
         }
     }
 }
@@ -641,7 +650,8 @@ pub fn render_container_window(
     // Log the geometry being used
     if !layout.initialized {
         log::info!(
-            "Container first render - using geometry: x={}, y={}, w={}, h={}",
+            "Container first render - stored geometry: {:?}, using initial_geometry: x={}, y={}, w={}, h={}",
+            container_geometry,
             initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
         );
     }
@@ -649,13 +659,18 @@ pub fn render_container_window(
     let mut builder = egui::ViewportBuilder::default()
         .with_title("Countdown Cards")
         .with_resizable(true)
-        .with_min_inner_size(egui::vec2(container_min_width, container_min_height));
+        .with_visible(true)  // Ensure window is visible
+        .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
+        // Always set position and size from stored geometry (like individual cards do)
+        .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
+        .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
 
-    // Always set position on first render to ensure container appears where expected
+    // Log on first render or when card count changes
     if needs_resize {
-        builder = builder
-            .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
-            .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
+        log::info!(
+            "Container setting position to ({}, {}) size ({}, {})",
+            initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
+        );
         
         // Push geometry change when resizing due to card count change
         if card_count_changed {
@@ -665,6 +680,23 @@ pub fn render_container_window(
 
     // Render the container viewport
     ctx.show_viewport_immediate(viewport_id, builder, |child_ctx, _class| {
+        // On first render, explicitly set position and ensure window is visible
+        if !layout.initialized {
+            // Force the window position using viewport commands (more reliable than builder)
+            child_ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
+                egui::pos2(initial_geometry.x, initial_geometry.y)
+            ));
+            child_ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                egui::vec2(initial_geometry.width, initial_geometry.height)
+            ));
+            child_ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            
+            log::info!(
+                "Container: sent viewport commands for position ({}, {}) size ({}, {})",
+                initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
+            );
+        }
+        
         // Check for close request
         let close_requested = child_ctx.input(|i| {
             i.viewport().close_requested()
@@ -675,7 +707,7 @@ pub fn render_container_window(
             return;
         }
 
-        // Track geometry changes
+        // Track geometry changes and check for visibility issues
         let current_geometry = child_ctx.input(|i| {
             let info = i.viewport();
             if let (Some(pos), Some(size)) = (info.outer_rect, info.inner_rect) {
@@ -689,14 +721,88 @@ pub fn render_container_window(
                 None
             }
         });
+        
+        // Check if window has focus (indicates it's actually visible and usable)
+        let has_focus = child_ctx.input(|i| i.viewport().focused.unwrap_or(false));
 
         if let Some(new_geom) = current_geometry {
-            if container_geometry.map(|g| {
+            // Log the actual geometry reported by the viewport
+            if !layout.initialized {
+                log::info!(
+                    "Container actual viewport geometry after first render: x={}, y={}, w={}, h={}",
+                    new_geom.x, new_geom.y, new_geom.width, new_geom.height
+                );
+            }
+            
+            // Visibility check: if the window position doesn't match what we requested
+            // after several frames, the window might be stuck off-screen on a secondary monitor
+            if !layout.position_verified {
+                layout.visibility_check_frames += 1;
+                
+                if layout.visibility_check_frames >= VISIBILITY_CHECK_FRAMES {
+                    // Check if position is way off from what we stored (indicating OS moved it)
+                    // or if position is on a secondary monitor (x > 1920 or x < 0 typically)
+                    let position_seems_stuck = if let Some(stored) = container_geometry {
+                        // Window reports being at stored position but we can't see/interact with it
+                        // This happens when the position is on a monitor that's no longer available
+                        // or when egui/winit fails to properly position on secondary monitors
+                        let on_secondary = stored.x > 1920.0 || stored.x < 0.0 || stored.y < 0.0;
+                        let position_matches = (new_geom.x - stored.x).abs() < 50.0 
+                            && (new_geom.y - stored.y).abs() < 50.0;
+                        
+                        // If on secondary monitor and focus request didn't work, assume stuck
+                        on_secondary && position_matches && !has_focus
+                    } else {
+                        false
+                    };
+                    
+                    if position_seems_stuck {
+                        log::warn!(
+                            "Container appears stuck at off-screen position ({}, {}), moving to primary monitor",
+                            new_geom.x, new_geom.y
+                        );
+                        // Force move to primary monitor
+                        let safe_geom = CountdownCardGeometry {
+                            x: 100.0,
+                            y: 100.0,
+                            width: new_geom.width,
+                            height: new_geom.height,
+                        };
+                        child_ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
+                            egui::pos2(safe_geom.x, safe_geom.y)
+                        ));
+                        child_ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                        actions.push(ContainerAction::GeometryChanged(safe_geom));
+                    }
+                    
+                    layout.position_verified = true;
+                }
+            }
+            
+            // Save geometry for any reasonable position
+            // We previously tried to restrict to "primary monitor" but monitor layouts vary
+            // Just save if the values are finite and not extremely off-screen
+            let should_save_geometry = new_geom.x.is_finite() 
+                && new_geom.y.is_finite() 
+                && new_geom.x.abs() < 10000.0 
+                && new_geom.y.abs() < 10000.0;
+            
+            let geometry_changed = container_geometry.map(|g| {
                 (g.x - new_geom.x).abs() > 1.0
                     || (g.y - new_geom.y).abs() > 1.0
                     || (g.width - new_geom.width).abs() > 1.0
                     || (g.height - new_geom.height).abs() > 1.0
-            }).unwrap_or(true) {
+            }).unwrap_or(true);
+            
+            // Log geometry tracking for debugging
+            if geometry_changed {
+                log::debug!(
+                    "Container geometry changed: stored={:?} -> current=({}, {}, {}, {}), should_save={}",
+                    container_geometry, new_geom.x, new_geom.y, new_geom.width, new_geom.height, should_save_geometry
+                );
+            }
+            
+            if should_save_geometry && geometry_changed {
                 actions.push(ContainerAction::GeometryChanged(new_geom));
             }
         }
