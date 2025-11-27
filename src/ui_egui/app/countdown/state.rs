@@ -142,6 +142,12 @@ impl CountdownUiState {
         default_card_height: f32,
     ) -> CountdownRenderResult {
         let cards = service.cards().to_vec();
+        
+        // Don't show empty container - wait until there are cards to display
+        if cards.is_empty() {
+            return CountdownRenderResult::default();
+        }
+        
         let now = Local::now();
         let notification_config = service.notification_config().clone();
         let visual_defaults = service.visual_defaults().clone();

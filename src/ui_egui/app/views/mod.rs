@@ -61,13 +61,13 @@ impl CalendarApp {
 
             ui.horizontal(|ui| {
                 // Navigation buttons with keyboard hint tooltips
-                if ui.button("◀ Previous").on_hover_text("← Arrow").clicked() {
+                if ui.button("◀").on_hover_text("Previous (← Arrow)").clicked() {
                     self.navigate_previous();
                 }
                 if ui.button("Today").on_hover_text("Ctrl+T").clicked() {
                     self.jump_to_today();
                 }
-                if ui.button("Next ▶").on_hover_text("→ Arrow").clicked() {
+                if ui.button("▶").on_hover_text("Next (→ Arrow)").clicked() {
                     self.navigate_next();
                 }
 

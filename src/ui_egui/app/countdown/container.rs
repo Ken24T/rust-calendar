@@ -83,7 +83,19 @@ const CARD_MIN_COUNTDOWN_HEIGHT: f32 = 36.0;
 const CARD_SPACING: f32 = 4.0;
 
 /// Number of frames to wait before checking if window position is valid
-const VISIBILITY_CHECK_FRAMES: u32 = 10;
+const VISIBILITY_CHECK_FRAMES: u32 = 15;
+
+/// Get the primary monitor width from context, with fallback to 1920
+fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
+    ctx.input(|input| {
+        input.raw.viewports
+            .values()
+            .filter_map(|info| info.monitor_size)
+            .next()
+            .map(|s| s.x)
+            .unwrap_or(1920.0)
+    })
+}
 
 /// Layout calculator for arranging cards within the container
 #[derive(Debug, Clone)]
@@ -106,6 +118,8 @@ pub struct ContainerLayout {
     pub visibility_check_frames: u32,
     /// Whether the position has been verified as working
     pub position_verified: bool,
+    /// Whether the window has ever gained focus this session
+    pub has_ever_had_focus: bool,
 }
 
 impl Default for ContainerLayout {
@@ -120,6 +134,7 @@ impl Default for ContainerLayout {
             last_card_count: 0,
             visibility_check_frames: 0,
             position_verified: false,
+            has_ever_had_focus: false,
         }
     }
 }
@@ -764,6 +779,11 @@ pub fn render_container_window(
         
         // Check if window has focus (indicates it's actually visible and usable)
         let has_focus = child_ctx.input(|i| i.viewport().focused.unwrap_or(false));
+        
+        // Track if window has ever gained focus this session
+        if has_focus {
+            layout.has_ever_had_focus = true;
+        }
 
         if let Some(new_geom) = current_geometry {
             // Log the actual geometry reported by the viewport
@@ -780,18 +800,34 @@ pub fn render_container_window(
                 layout.visibility_check_frames += 1;
                 
                 if layout.visibility_check_frames >= VISIBILITY_CHECK_FRAMES {
+                    // Get actual primary monitor width for multi-monitor detection
+                    let primary_width = get_primary_monitor_width(child_ctx);
+                    
                     // Check if position is way off from what we stored (indicating OS moved it)
-                    // or if position is on a secondary monitor (x > 1920 or x < 0 typically)
+                    // We're more lenient now - only consider "stuck" if:
+                    // 1. Position is on a secondary monitor area AND
+                    // 2. We've been trying to show for multiple frames AND  
+                    // 3. Window has NEVER gained focus this session (not just currently unfocused)
                     let position_seems_stuck = if let Some(stored) = container_geometry {
                         // Window reports being at stored position but we can't see/interact with it
                         // This happens when the position is on a monitor that's no longer available
-                        // or when egui/winit fails to properly position on secondary monitors
-                        let on_secondary = stored.x > 1920.0 || stored.x < 0.0 || stored.y < 0.0;
+                        // Use dynamic primary monitor width instead of hardcoded 1920
+                        let possibly_on_secondary = stored.x > primary_width || stored.x < 0.0 || stored.y < 0.0;
                         let position_matches = (new_geom.x - stored.x).abs() < 50.0 
                             && (new_geom.y - stored.y).abs() < 50.0;
                         
-                        // If on secondary monitor and focus request didn't work, assume stuck
-                        on_secondary && position_matches && !has_focus
+                        // Log diagnostic info for multi-monitor debugging
+                        if possibly_on_secondary {
+                            log::debug!(
+                                "Container position check: stored=({}, {}), current=({}, {}), primary_width={}, has_focus={}, ever_focused={}",
+                                stored.x, stored.y, new_geom.x, new_geom.y, primary_width, has_focus, layout.has_ever_had_focus
+                            );
+                        }
+                        
+                        // Only consider stuck if on secondary area, position matches stored,
+                        // AND window has NEVER gained focus (if it did once, user can see it)
+                        // This prevents false positives when user just clicked elsewhere
+                        possibly_on_secondary && position_matches && !layout.has_ever_had_focus
                     } else {
                         false
                     };
