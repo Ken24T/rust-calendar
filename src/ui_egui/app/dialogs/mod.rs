@@ -357,9 +357,11 @@ impl CalendarApp {
                 }
             }
             ThemeDialogAction::PreviewTheme(name) => {
-                // Temporarily apply theme for preview (don't save)
+                // Temporarily apply theme for preview (don't save to settings)
                 if let Ok(theme) = theme_service.get_theme(&name) {
                     theme.apply_to_context(ctx);
+                    // Also update active_theme so all UI components use preview colors
+                    self.active_theme = theme;
                     self.state.theme_dialog_state.preview_theme = Some(name);
                 }
             }
@@ -368,6 +370,8 @@ impl CalendarApp {
                 if let Some(original) = &self.state.theme_dialog_state.original_theme {
                     if let Ok(theme) = theme_service.get_theme(original) {
                         theme.apply_to_context(ctx);
+                        // Restore active_theme to original
+                        self.active_theme = theme;
                     }
                 }
                 self.state.theme_dialog_state.preview_theme = None;
