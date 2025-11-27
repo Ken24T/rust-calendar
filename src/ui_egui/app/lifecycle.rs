@@ -1,6 +1,8 @@
 use super::context::AppContext;
 use super::countdown::CountdownUiState;
 use super::state::{AppState, ViewType};
+use super::toast::ToastManager;
+use super::confirm::ConfirmDialogState;
 use super::CalendarApp;
 use crate::models::settings::Settings;
 use crate::services::backup::BackupService;
@@ -68,6 +70,8 @@ impl CalendarApp {
             pending_focus: None,
             countdown_ui,
             state: AppState::new(backup_manager_state, pending_root_geometry),
+            toast_manager: ToastManager::new(),
+            confirm_dialog: ConfirmDialogState::new(),
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);
@@ -178,6 +182,13 @@ impl CalendarApp {
         self.check_and_show_countdown_notifications(ctx);
 
         self.persist_countdowns_if_needed();
+
+        // Handle confirmation dialogs
+        self.handle_confirm_dialog(ctx);
+
+        // Render toast notifications (last, so they appear on top)
+        let is_dark = self.active_theme.is_dark;
+        self.toast_manager.render(ctx, is_dark);
     }
 
     pub(super) fn handle_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

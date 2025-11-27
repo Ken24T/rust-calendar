@@ -133,12 +133,13 @@ impl CalendarApp {
             )
         };
 
-        // If an event was deleted, also remove associated countdown cards
+        // If an event was deleted, also remove associated countdown cards and show toast
         if let Some(event_id) = deleted_event_id {
             let removed = self.context.countdown_service_mut().remove_cards_for_event(event_id);
             if removed > 0 {
                 log::info!("Removed {} countdown card(s) for deleted event {}", removed, event_id);
             }
+            self.toast_manager.success("Event deleted");
         }
 
         // Apply card changes if any
@@ -146,14 +147,17 @@ impl CalendarApp {
             self.apply_countdown_card_changes(changes);
         }
 
-        if let Some(event) = saved_event {
+        if let Some(ref event) = saved_event {
             if auto_create_card {
-                self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
+                self.consume_countdown_requests(vec![CountdownRequest::from_event(event)]);
             }
-            self.sync_cards_from_event(&event);
+            self.sync_cards_from_event(event);
 
             if was_new_event {
-                self.focus_on_event(&event);
+                self.focus_on_event(event);
+                self.toast_manager.success(format!("Created \"{}\"", event.title));
+            } else {
+                self.toast_manager.success("Event saved");
             }
         }
 
@@ -316,8 +320,10 @@ impl CalendarApp {
             ThemeDialogAction::DeleteTheme(name) => {
                 if let Err(e) = theme_service.delete_theme(&name) {
                     log::error!("Failed to delete theme: {}", e);
+                    self.toast_manager.error(format!("Failed to delete theme: {}", e));
                 } else {
                     log::info!("Successfully deleted theme: {}", name);
+                    self.toast_manager.success(format!("Deleted theme \"{}\"", name));
                     // Clear cached colors
                     self.state.theme_dialog_state.custom_theme_colors.remove(&name);
                     // If we deleted the current theme, switch to Light
@@ -337,7 +343,8 @@ impl CalendarApp {
 
                 if let Ok(theme) = theme_service.get_theme(&name) {
                     theme.apply_to_context(ctx);
-                    self.active_theme = theme;
+                    self.active_theme = theme.clone();
+                    self.toast_manager.success(format!("Applied theme \"{}\"", name));
                 } else {
                     let fallback = Self::fallback_theme_for_settings(&self.settings);
                     fallback.apply_to_context(ctx);
@@ -368,8 +375,10 @@ impl CalendarApp {
             ThemeDialogAction::DuplicateTheme { source, new_name } => {
                 if let Err(e) = theme_service.duplicate_theme(&source, &new_name) {
                     log::error!("Failed to duplicate theme: {}", e);
+                    self.toast_manager.error(format!("Failed to duplicate: {}", e));
                 } else {
                     log::info!("Successfully duplicated theme '{}' to '{}'", source, new_name);
+                    self.toast_manager.success(format!("Created \"{}\"", new_name));
                     // Cache colors for the new theme
                     if let Ok(theme) = theme_service.get_theme(&new_name) {
                         self.state.theme_dialog_state.cache_theme_colors(&new_name, theme.preview_colors());
@@ -386,8 +395,10 @@ impl CalendarApp {
                 {
                     if let Err(e) = theme_service.export_theme(&name, &path) {
                         log::error!("Failed to export theme: {}", e);
+                        self.toast_manager.error(format!("Export failed: {}", e));
                     } else {
                         log::info!("Successfully exported theme to {:?}", path);
+                        self.toast_manager.success("Theme exported");
                     }
                 }
             }
@@ -401,6 +412,7 @@ impl CalendarApp {
                     match theme_service.import_theme(&path) {
                         Ok(name) => {
                             log::info!("Successfully imported theme: {}", name);
+                            self.toast_manager.success(format!("Imported \"{}\"", name));
                             // Cache colors for the imported theme
                             if let Ok(theme) = theme_service.get_theme(&name) {
                                 self.state.theme_dialog_state.cache_theme_colors(&name, theme.preview_colors());
@@ -408,6 +420,7 @@ impl CalendarApp {
                         }
                         Err(e) => {
                             log::error!("Failed to import theme: {}", e);
+                            self.toast_manager.error(format!("Import failed: {}", e));
                         }
                     }
                 }

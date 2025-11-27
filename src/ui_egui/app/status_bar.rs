@@ -15,27 +15,59 @@ use egui::{Color32, RichText, Sense};
 /// Status bar section separator
 const SEPARATOR_WIDTH: f32 = 8.0;
 
+/// Get theme-aware secondary text color
+fn secondary_text_color(is_dark: bool) -> Color32 {
+    if is_dark {
+        Color32::from_gray(160)
+    } else {
+        Color32::from_gray(100)
+    }
+}
+
+/// Get theme-aware hint text color
+fn hint_text_color(is_dark: bool) -> Color32 {
+    if is_dark {
+        Color32::from_gray(140)
+    } else {
+        Color32::from_gray(110)
+    }
+}
+
+/// Get theme-aware separator color
+fn separator_color(is_dark: bool) -> Color32 {
+    if is_dark {
+        Color32::from_gray(80)
+    } else {
+        Color32::from_gray(180)
+    }
+}
+
 impl CalendarApp {
     /// Render the status bar at the bottom of the window
     pub(super) fn render_status_bar(&mut self, ctx: &egui::Context) {
+        let is_dark = self.active_theme.is_dark;
+        
         egui::TopBottomPanel::bottom("status_bar")
             .exact_height(24.0)
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     // Left side: View info, date, event counts
-                    self.render_status_left(ui);
+                    self.render_status_left(ui, is_dark);
                     
                     // Spacer
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Right side: Hints, save status, next event (rendered right-to-left)
-                        self.render_status_right(ui);
+                        self.render_status_right(ui, is_dark);
                     });
                 });
             });
     }
     
     /// Render left side of status bar: view indicator, date, event counts
-    fn render_status_left(&mut self, ui: &mut egui::Ui) {
+    fn render_status_left(&mut self, ui: &mut egui::Ui, is_dark: bool) {
+        let secondary_color = secondary_text_color(is_dark);
+        let sep_color = separator_color(is_dark);
+        
         // View indicator
         let view_name = match self.current_view {
             ViewType::Day => "📅 Day",
@@ -69,7 +101,7 @@ impl CalendarApp {
         
         // Week number
         let week_num = self.current_date.iso_week().week();
-        ui.label(RichText::new(format!("W{}", week_num)).small().color(Color32::from_gray(160)));
+        ui.label(RichText::new(format!("W{}", week_num)).small().color(secondary_color));
         
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
@@ -98,7 +130,7 @@ impl CalendarApp {
         
         // Visible period events (if different from today)
         if self.current_view != ViewType::Day {
-            ui.label(RichText::new(" · ").small().color(Color32::from_gray(120)));
+            ui.label(RichText::new(" · ").small().color(sep_color));
             let visible_text = if visible_count == 1 {
                 "1 in view".to_string()
             } else {
@@ -109,35 +141,37 @@ impl CalendarApp {
     }
     
     /// Render right side of status bar: save status, next event, keyboard hints
-    fn render_status_right(&mut self, ui: &mut egui::Ui) {
-        let hint_color = Color32::from_gray(140);
+    fn render_status_right(&mut self, ui: &mut egui::Ui, is_dark: bool) {
+        let hint_color = hint_text_color(is_dark);
+        let sep_color = separator_color(is_dark);
         
         // Keyboard hints (contextual)
-        self.render_contextual_hints(ui, hint_color);
+        self.render_contextual_hints(ui, hint_color, sep_color);
         
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
         
         // Save/sync status
-        self.render_save_status(ui);
+        self.render_save_status(ui, is_dark);
         
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
         
         // Next upcoming event
-        self.render_next_event(ui);
+        self.render_next_event(ui, is_dark);
     }
     
     /// Render contextual keyboard hints based on current app state
-    fn render_contextual_hints(&self, ui: &mut egui::Ui, hint_color: Color32) {
+    fn render_contextual_hints(&self, ui: &mut egui::Ui, hint_color: Color32, sep_color: Color32) {
         let any_dialog_open = self.show_event_dialog
             || self.show_settings_dialog
             || self.state.show_search_dialog
             || self.state.theme_dialog_state.is_open
             || self.state.date_picker_state.is_open
-            || self.state.show_about_dialog;
+            || self.state.show_about_dialog
+            || self.confirm_dialog.is_open();
         
         if any_dialog_open {
             // Dialog is open - show Esc hint
@@ -146,33 +180,48 @@ impl CalendarApp {
             // No dialog - show navigation hints
             ui.label(RichText::new("Ctrl+N: New").small().color(hint_color));
             ui.add_space(4.0);
-            ui.label(RichText::new("·").small().color(Color32::from_gray(100)));
+            ui.label(RichText::new("·").small().color(sep_color));
             ui.add_space(4.0);
             ui.label(RichText::new("D/W/M: View").small().color(hint_color));
             ui.add_space(4.0);
-            ui.label(RichText::new("·").small().color(Color32::from_gray(100)));
+            ui.label(RichText::new("·").small().color(sep_color));
             ui.add_space(4.0);
             ui.label(RichText::new("Arrows: Navigate").small().color(hint_color));
         }
     }
     
     /// Render save/sync status indicator
-    fn render_save_status(&self, ui: &mut egui::Ui) {
+    fn render_save_status(&self, ui: &mut egui::Ui, is_dark: bool) {
         let countdown_dirty = self.context.countdown_service().is_dirty();
+        
+        // Colors that work in both light and dark themes
+        let (unsaved_color, saved_color) = if is_dark {
+            (Color32::from_rgb(255, 180, 80), Color32::from_rgb(100, 200, 120))
+        } else {
+            (Color32::from_rgb(200, 120, 0), Color32::from_rgb(60, 140, 60))
+        };
         
         if countdown_dirty {
             // Unsaved changes
-            let response = ui.label(RichText::new("● Unsaved").small().color(Color32::from_rgb(255, 180, 0)));
+            let response = ui.label(RichText::new("● Unsaved").small().color(unsaved_color));
             response.on_hover_text("There are unsaved changes");
         } else {
             // All saved
-            let response = ui.label(RichText::new("✓ Saved").small().color(Color32::from_rgb(100, 180, 100)));
+            let response = ui.label(RichText::new("✓ Saved").small().color(saved_color));
             response.on_hover_text("All changes saved");
         }
     }
     
     /// Render next upcoming event with countdown
-    fn render_next_event(&self, ui: &mut egui::Ui) {
+    fn render_next_event(&self, ui: &mut egui::Ui, is_dark: bool) {
+        // Theme-aware accent color for next event
+        let accent_color = if is_dark {
+            Color32::from_rgb(100, 180, 255)
+        } else {
+            Color32::from_rgb(40, 100, 180)
+        };
+        let muted_color = secondary_text_color(is_dark);
+        
         if let Some((title, countdown)) = self.get_next_upcoming_event() {
             let truncated_title = if title.len() > 25 {
                 format!("{}…", &title[..24])
@@ -181,10 +230,10 @@ impl CalendarApp {
             };
             
             let next_text = format!("Next: {} in {}", truncated_title, countdown);
-            let response = ui.label(RichText::new(&next_text).small().color(Color32::from_rgb(100, 160, 220)));
+            let response = ui.label(RichText::new(&next_text).small().color(accent_color));
             response.on_hover_text(format!("Upcoming: {}", title));
         } else {
-            ui.label(RichText::new("No upcoming events").small().color(Color32::from_gray(120)));
+            ui.label(RichText::new("No upcoming events").small().color(muted_color));
         }
     }
     
