@@ -306,7 +306,9 @@ impl CalendarApp {
             return;
         }
 
+        let mut dialog_open = true;
         egui::Window::new("About Rust Calendar")
+            .open(&mut dialog_open)
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -373,14 +375,12 @@ impl CalendarApp {
                         env!("CARGO_PKG_REPOSITORY"),
                     );
                     
-                    ui.add_space(15.0);
-                    
-                    if ui.button("Close").clicked() {
-                        self.state.show_about_dialog = false;
-                    }
-                    
                     ui.add_space(10.0);
                 });
             });
+        
+        if !dialog_open {
+            self.state.show_about_dialog = false;
+        }
     }
 }

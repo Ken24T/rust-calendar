@@ -112,9 +112,15 @@ impl CalendarApp {
                 &mut self.show_event_dialog,
             );
 
+            // For auto-creating countdown cards, check if the event is in the future
+            // For multi-day events, check if the end date/time is in the future
+            let now = Local::now();
+            let event_end_dt = state.end_date.and_time(state.end_time);
+            let event_ends_in_future = event_end_dt > now.naive_local();
+            
             let auto_create_card = state.create_countdown 
                 && state.event_id.is_none()
-                && state.date > Local::now().date_naive();
+                && event_ends_in_future;
             let was_new_event = state.event_id.is_none();
             let event_saved = saved_event.is_some();
             (

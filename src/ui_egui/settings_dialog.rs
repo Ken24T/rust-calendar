@@ -38,8 +38,8 @@ pub fn render_settings_dialog(
         .collapsible(false)
         .resizable(true)
         .default_width(550.0)
-        .default_height(640.0)
-        .min_height(600.0)
+        .default_height(720.0)
+        .min_height(680.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {

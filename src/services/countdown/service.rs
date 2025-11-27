@@ -436,6 +436,8 @@ impl CountdownService {
         };
         apply_event_palette_if_needed(&mut card);
         self.cards.push(card);
+        self.card_order.push(id);
+        self.sort_cards_by_date();
         self.dirty = true;
         id
     }
@@ -443,6 +445,7 @@ impl CountdownService {
     pub fn remove_card(&mut self, id: CountdownCardId) -> bool {
         if let Some(idx) = self.cards.iter().position(|card| card.id == id) {
             let card = self.cards.remove(idx);
+            self.card_order.retain(|&card_id| card_id != id);
             log::info!(
                 "remove_card: removed card {:?} for event {:?} ({})",
                 id,
@@ -460,6 +463,13 @@ impl CountdownService {
     /// Call this when deleting an event to keep the in-memory state in sync.
     pub fn remove_cards_for_event(&mut self, event_id: i64) -> usize {
         let initial_count = self.cards.len();
+        // Collect IDs to remove for card_order cleanup
+        let ids_to_remove: Vec<CountdownCardId> = self.cards
+            .iter()
+            .filter(|card| card.event_id == Some(event_id))
+            .map(|card| card.id)
+            .collect();
+        
         self.cards.retain(|card| {
             if card.event_id == Some(event_id) {
                 log::info!(
@@ -472,6 +482,12 @@ impl CountdownService {
                 true
             }
         });
+        
+        // Remove from card_order
+        for id in &ids_to_remove {
+            self.card_order.retain(|&card_id| card_id != *id);
+        }
+        
         let removed = initial_count - self.cards.len();
         if removed > 0 {
             self.dirty = true;
