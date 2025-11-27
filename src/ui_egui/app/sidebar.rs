@@ -3,7 +3,7 @@
 use super::CalendarApp;
 use crate::models::event::Event;
 use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone};
-use egui::{Color32, RichText, Sense};
+use egui::{Color32, RichText};
 
 impl CalendarApp {
     /// Render the sidebar panel (left or right based on settings)
@@ -27,6 +27,18 @@ impl CalendarApp {
         };
         
         // Build the panel - use exact_width to force our size
+        // Use a frame with no outer margin and no stroke to prevent gaps between panels
+        // Inner margin provides padding for content
+        let panel_frame = egui::Frame::side_top_panel(&ctx.style())
+            .outer_margin(egui::Margin::ZERO)
+            .inner_margin(egui::Margin {
+                left: 8.0,
+                right: 0.0,  // No right margin - central panel will provide its padding
+                top: 8.0,
+                bottom: 8.0,
+            })
+            .stroke(egui::Stroke::NONE);
+        
         let panel = if self.settings.my_day_position_right {
             egui::SidePanel::right(panel_id)
         } else {
@@ -34,16 +46,29 @@ impl CalendarApp {
         };
         
         // Use exact_width which disables egui's built-in resizing
+        // Set min/max to same value to prevent any resize margin allocation
         let response = panel
-            .exact_width(width)
+            .min_width(width)
+            .max_width(width)
+            .default_width(width)
             .resizable(false) // Disable egui's resize, we'll handle it ourselves
+            .show_separator_line(false) // No separator line
+            .frame(panel_frame)
             .show(ctx, |ui| {
                 self.render_sidebar_content(ui);
             });
         
+        // DEBUG: Log panel rect info
+        let panel_rect = response.response.rect;
+        let screen_rect = ctx.screen_rect();
+        log::info!(
+            "SIDEBAR DEBUG: panel_rect={:?}, screen_rect={:?}, sidebar_position_right={}, width_setting={}",
+            panel_rect, screen_rect, self.settings.my_day_position_right, width
+        );
+        
         // Manual resize handle on the panel edge
         let panel_rect = response.response.rect;
-        let resize_grab_width = ctx.style().interaction.resize_grab_radius_side;
+        let resize_grab_width = 4.0; // Fixed grab width
         
         let resize_rect = if self.settings.my_day_position_right {
             // Resize handle on the left edge of right panel
@@ -61,56 +86,57 @@ impl CalendarApp {
         
         let resize_id = egui::Id::new(panel_id).with("__resize");
         
-        // Create an invisible area for the resize interaction
-        egui::Area::new(resize_id)
-            .fixed_pos(resize_rect.min)
-            .order(egui::Order::Foreground)
-            .interactable(true)
-            .show(ctx, |ui| {
-                let (_, resize_response) = ui.allocate_exact_size(resize_rect.size(), Sense::drag());
+        // Check for pointer interaction directly
+        let pointer_pos = ctx.input(|i| i.pointer.interact_pos());
+        let is_hovering = pointer_pos.map(|p| resize_rect.contains(p)).unwrap_or(false);
+        let is_dragging = ctx.is_being_dragged(resize_id);
+        let drag_started = is_hovering && ctx.input(|i| i.pointer.any_pressed());
+        let drag_released = ctx.input(|i| i.pointer.any_released());
+        
+        // Start drag
+        if drag_started && !is_dragging {
+            ctx.set_dragged_id(resize_id);
+        }
+        
+        // Show resize cursor when hovering or dragging
+        if is_hovering || is_dragging {
+            ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+        
+        // Handle drag to resize
+        if is_dragging {
+            if let Some(pos) = pointer_pos {
+                let screen = ctx.screen_rect();
+                let new_width = if self.settings.my_day_position_right {
+                    screen.right() - pos.x
+                } else {
+                    pos.x - screen.left()
+                };
                 
-                // Show resize cursor
-                if resize_response.hovered() || resize_response.dragged() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                let clamped_width = new_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                if (clamped_width - self.settings.sidebar_width).abs() > 0.5 {
+                    self.settings.sidebar_width = clamped_width;
                 }
-                
-                // Handle drag to resize
-                if resize_response.dragged() {
-                    if let Some(pointer_pos) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-                        let screen = ui.ctx().screen_rect();
-                        let new_width = if self.settings.my_day_position_right {
-                            // For right panel: width = screen_right - pointer_x
-                            screen.right() - pointer_pos.x
-                        } else {
-                            // For left panel: width = pointer_x - screen_left
-                            pointer_pos.x - screen.left()
-                        };
-                        
-                        let clamped_width = new_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
-                        if (clamped_width - self.settings.sidebar_width).abs() > 0.5 {
-                            self.settings.sidebar_width = clamped_width;
-                        }
-                    }
-                }
-                
-                // Save on drag release
-                if resize_response.drag_stopped() {
-                    self.save_settings();
-                }
-                
-                // Draw resize line when hovering/dragging
-                if resize_response.hovered() || resize_response.dragged() {
-                    let x = if self.settings.my_day_position_right {
-                        panel_rect.left()
-                    } else {
-                        panel_rect.right()
-                    };
-                    ui.painter().line_segment(
-                        [egui::pos2(x, panel_rect.top()), egui::pos2(x, panel_rect.bottom())],
-                        egui::Stroke::new(2.0, ui.style().visuals.selection.bg_fill),
-                    );
-                }
-            });
+            }
+            
+            // Draw resize indicator line
+            let x = if self.settings.my_day_position_right {
+                panel_rect.left()
+            } else {
+                panel_rect.right()
+            };
+            ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, resize_id))
+                .line_segment(
+                    [egui::pos2(x, panel_rect.top()), egui::pos2(x, panel_rect.bottom())],
+                    egui::Stroke::new(2.0, ctx.style().visuals.selection.bg_fill),
+                );
+        }
+        
+        // Stop dragging and save on release
+        if drag_released && is_dragging {
+            ctx.stop_dragging();
+            self.save_settings();
+        }
     }
 
     /// Render the sidebar content

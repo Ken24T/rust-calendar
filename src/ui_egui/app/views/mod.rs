@@ -24,7 +24,22 @@ impl CalendarApp {
             .filter_map(|card| card.event_id)
             .collect();
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        // Use a frame with no outer/inner margin to prevent gaps between panels
+        // The sidebar already has its own inner padding
+        let panel_frame = egui::Frame::central_panel(&ctx.style())
+            .outer_margin(egui::Margin::ZERO)
+            .inner_margin(egui::Margin::same(8.0));
+
+        let central_response = egui::CentralPanel::default()
+            .frame(panel_frame)
+            .show(ctx, |ui| {
+            // DEBUG: Log central panel rect
+            let panel_rect = ui.max_rect();
+            let available_rect = ui.available_rect_before_wrap();
+            log::info!(
+                "CENTRAL PANEL DEBUG: max_rect={:?}, available_rect={:?}",
+                panel_rect, available_rect
+            );
             // Clickable heading - double-click to go to today
             let heading_text = format!(
                 "{} View - {}",
