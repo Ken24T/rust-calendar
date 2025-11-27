@@ -53,6 +53,9 @@ pub fn render_event_dialog(
     let mut result = EventDialogResult::default();
     let mut dialog_open = *show_dialog;
 
+    // Check for warnings (overlap detection, etc.) - this updates state.warning_messages
+    state.check_warnings(database);
+
     egui::Window::new(if state.event_id.is_some() {
         "Edit Event"
     } else {
@@ -68,6 +71,7 @@ pub fn render_event_dialog(
     .show(ctx, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
             render_error_banner(ui, state);
+            render_warning_banner(ui, state);
             render_basic_information_section(ui, state);
             render_date_time_section(ui, state);
             render_appearance_section(ui, state);
@@ -92,6 +96,22 @@ fn render_error_banner(ui: &mut egui::Ui, state: &EventDialogState) {
         ui.colored_label(Color32::RED, RichText::new(error).strong());
         ui.add_space(8.0);
     }
+}
+
+fn render_warning_banner(ui: &mut egui::Ui, state: &EventDialogState) {
+    if state.warning_messages.is_empty() {
+        return;
+    }
+    
+    let warning_color = Color32::from_rgb(200, 140, 0); // Orange/amber
+    
+    for warning in &state.warning_messages {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("⚠").color(warning_color));
+            ui.colored_label(warning_color, warning);
+        });
+    }
+    ui.add_space(4.0);
 }
 
 fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogState) {

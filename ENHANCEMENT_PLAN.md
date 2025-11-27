@@ -873,13 +873,13 @@ docs: document keyboard shortcuts in README
 - [x] Database Backup System
 - [x] Keyboard Shortcuts
 - [x] Export Menu Integration
-- [ ] Event Validation Enhancements
+- [x] Event Validation Enhancements
 
 ### Phase 2 Status
-- [ ] Event Search
+- [x] Event Search
 - [ ] Category Management & Filtering
 - [ ] Event Templates
-- [ ] Week Numbers
+- [x] Week Numbers
 
 ### Phase 3 Status
 - [ ] Undo/Redo System

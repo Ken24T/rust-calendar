@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.14] - 2025-11-28
+
+### Added
+- **Event Validation Enhancements** - Non-blocking warnings in the event dialog:
+  - Overlap detection: Warns when the event overlaps with existing events
+  - Distant past warning: Warns when creating events more than 5 years in the past
+  - Warnings displayed in orange/amber (non-blocking - save still allowed)
+
+### Changed
+- Export dialog now uses calendar-style date picker matching the event dialog
+
 ## [1.0.13] - 2025-11-28
 
 ### Added

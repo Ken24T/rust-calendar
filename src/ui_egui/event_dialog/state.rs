@@ -3,7 +3,7 @@ use crate::models::settings::Settings;
 use crate::services::countdown::{CountdownCardId, CountdownCardVisuals};
 use crate::services::database::Database;
 use crate::services::event::EventService;
-use chrono::{self, Local, LocalResult, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{self, Datelike, Local, LocalResult, NaiveDate, NaiveDateTime, NaiveTime};
 
 use super::recurrence::{ParsedRRule, RRuleBuilder, RecurrenceFrequency, RecurrencePattern};
 
@@ -51,6 +51,8 @@ pub struct EventDialogState {
     pub byday_saturday: bool,
     pub byday_sunday: bool,
     pub error_message: Option<String>,
+    /// Non-blocking warning messages (displayed in yellow)
+    pub warning_messages: Vec<String>,
     #[allow(dead_code)]
     pub show_advanced: bool,
     pub create_countdown: bool,
@@ -121,6 +123,7 @@ impl EventDialogState {
             byday_saturday: false,
             byday_sunday: false,
             error_message: None,
+            warning_messages: Vec::new(),
             show_advanced: false,
             create_countdown: false,
             linked_card: None,
@@ -168,6 +171,7 @@ impl EventDialogState {
             byday_friday: parsed.byday_flags[5],
             byday_saturday: parsed.byday_flags[6],
             error_message: None,
+            warning_messages: Vec::new(),
             show_advanced: false,
             create_countdown: false,
             linked_card: None,
@@ -315,6 +319,71 @@ impl EventDialogState {
         }
 
         Ok(())
+    }
+
+    /// Check for non-blocking warnings (overlap detection, distant past, etc.)
+    /// Call this when the dialog is opened or when dates change
+    pub fn check_warnings(&mut self, database: &Database) {
+        self.warning_messages.clear();
+        
+        let today = Local::now().date_naive();
+        
+        // Warning: Event date is more than 5 years in the past
+        let five_years_ago = today.with_year(today.year() - 5).unwrap_or(today);
+        if self.date < five_years_ago {
+            self.warning_messages.push(
+                "This event is more than 5 years in the past".to_string()
+            );
+        }
+        
+        // Warning: All-day event with non-midnight times
+        if self.all_day {
+            let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+            if self.start_time != midnight || self.end_time != midnight {
+                // Don't warn - we'll just ignore the times for all-day events
+                // This is handled at save time by using date boundaries
+            }
+        }
+        
+        // Warning: Overlap detection
+        if let Ok((start_dt, end_dt)) = self.start_end_datetimes() {
+            let service = EventService::new(database.connection());
+            if let Ok(overlapping) = service.find_by_date_range(start_dt, end_dt) {
+                // Filter out the current event being edited
+                let other_overlapping: Vec<_> = overlapping
+                    .iter()
+                    .filter(|e| {
+                        // Exclude the current event
+                        if let Some(current_id) = self.event_id {
+                            e.id != Some(current_id)
+                        } else {
+                            true
+                        }
+                    })
+                    .filter(|e| {
+                        // Check for actual time overlap (not just in same date range)
+                        let event_start = e.start;
+                        let event_end = e.end;
+                        // Events overlap if one starts before the other ends
+                        start_dt < event_end && end_dt > event_start
+                    })
+                    .collect();
+                
+                if !other_overlapping.is_empty() {
+                    if other_overlapping.len() == 1 {
+                        self.warning_messages.push(format!(
+                            "Overlaps with \"{}\"",
+                            other_overlapping[0].title
+                        ));
+                    } else {
+                        self.warning_messages.push(format!(
+                            "Overlaps with {} other events",
+                            other_overlapping.len()
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     fn to_event(&self) -> Result<Event, String> {
