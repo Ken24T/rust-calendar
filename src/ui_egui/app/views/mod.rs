@@ -30,7 +30,7 @@ impl CalendarApp {
             .outer_margin(egui::Margin::ZERO)
             .inner_margin(egui::Margin::same(8.0));
 
-        let central_response = egui::CentralPanel::default()
+        egui::CentralPanel::default()
             .frame(panel_frame)
             .show(ctx, |ui| {
             // DEBUG: Log central panel rect
