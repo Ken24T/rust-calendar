@@ -1,9 +1,10 @@
 use crate::services::countdown::CountdownCardGeometry;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
+use crate::ui_egui::dialogs::export_dialog::ExportDialogState;
 use crate::ui_egui::dialogs::search_dialog::SearchDialogState;
 use crate::ui_egui::dialogs::theme_creator::ThemeCreatorState;
 use crate::ui_egui::dialogs::theme_dialog::ThemeDialogState;
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewType {
@@ -33,25 +34,6 @@ impl DatePickerState {
     }
 }
 
-/// State for the export date range dialog
-#[derive(Default)]
-pub struct ExportRangeDialogState {
-    pub start_date: Option<NaiveDate>,
-    pub end_date: Option<NaiveDate>,
-}
-
-impl ExportRangeDialogState {
-    #[allow(dead_code)]
-    pub fn reset(&mut self, current_date: NaiveDate) {
-        // Default to current month
-        let start = NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1)
-            .unwrap_or(current_date);
-        let end = (start + chrono::Months::new(1)) - chrono::Duration::days(1);
-        self.start_date = Some(start);
-        self.end_date = Some(end);
-    }
-}
-
 pub struct AppState {
     pub backup_manager_state: BackupManagerState,
     pub theme_dialog_state: ThemeDialogState,
@@ -60,7 +42,7 @@ pub struct AppState {
     pub show_search_dialog: bool,
     pub show_about_dialog: bool,
     pub show_export_range_dialog: bool,
-    pub export_range_state: ExportRangeDialogState,
+    pub export_dialog_state: ExportDialogState,
     pub pending_root_geometry: Option<CountdownCardGeometry>,
     pub date_picker_state: DatePickerState,
     /// Whether we've done the initial geometry sanitization on first frame
@@ -80,7 +62,7 @@ impl AppState {
             show_search_dialog: false,
             show_about_dialog: false,
             show_export_range_dialog: false,
-            export_range_state: ExportRangeDialogState::default(),
+            export_dialog_state: ExportDialogState::default(),
             pending_root_geometry,
             date_picker_state: DatePickerState::default(),
             geometry_sanitized: false,

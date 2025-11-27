@@ -477,23 +477,19 @@ impl CalendarApp {
 
         let result = render_export_range_dialog(
             ctx,
-            &mut self.state.export_range_state.start_date,
-            &mut self.state.export_range_state.end_date,
-            self.current_date,
+            &mut self.state.export_dialog_state,
         );
 
         match result {
             ExportDialogResult::None => {}
             ExportDialogResult::Cancelled => {
                 self.state.show_export_range_dialog = false;
-                self.state.export_range_state.start_date = None;
-                self.state.export_range_state.end_date = None;
+                self.state.export_dialog_state.reset();
             }
             ExportDialogResult::Export { start, end } => {
                 self.state.show_export_range_dialog = false;
                 self.export_events_in_range(start, end);
-                self.state.export_range_state.start_date = None;
-                self.state.export_range_state.end_date = None;
+                self.state.export_dialog_state.reset();
             }
         }
     }
