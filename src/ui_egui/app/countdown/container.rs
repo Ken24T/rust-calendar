@@ -676,39 +676,22 @@ pub fn render_container_window(
     let default_width = default_card_width + CARD_PADDING * 2.0;
     let ideal_height = default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0);
 
-    // Detect if card count changed (card added or removed)
-    let card_count_changed = layout.initialized && layout.last_card_count != current_card_count;
+    // Track card count for other purposes (but don't resize on change)
     layout.last_card_count = current_card_count;
 
-    // Use stored geometry, but adjust height if cards were added/removed
-    let initial_geometry = if card_count_changed {
-        // Calculate height adjustment based on card count change
-        let current_geom = container_geometry.unwrap_or(CountdownCardGeometry {
-            x: 100.0,
-            y: 100.0,
-            width: default_width.max(container_min_width),
-            height: ideal_height.max(container_min_height),
-        });
-        // Resize to accommodate new card count while keeping position and width
-        CountdownCardGeometry {
-            x: current_geom.x,
-            y: current_geom.y,
-            width: current_geom.width,
-            height: ideal_height.max(container_min_height).min(800.0),
-        }
-    } else {
-        container_geometry.unwrap_or(CountdownCardGeometry {
-            x: 100.0,
-            y: 100.0,
-            width: default_width.max(container_min_width),
-            height: ideal_height.max(container_min_height).min(600.0),
-        })
-    };
+    // Use stored geometry - preserve user's container size even when cards are added/removed
+    // Cards will scale to fit within the container dimensions the user has chosen
+    let initial_geometry = container_geometry.unwrap_or(CountdownCardGeometry {
+        x: 100.0,
+        y: 100.0,
+        width: default_width.max(container_min_width),
+        height: ideal_height.max(container_min_height).min(600.0),
+    });
 
     let viewport_id = egui::ViewportId::from_hash_of("countdown_container");
 
-    // Set position/size on first render OR when card count changes
-    let needs_resize = !layout.initialized || card_count_changed;
+    // Set position/size on first render only - don't resize when cards are added/removed
+    let needs_resize = !layout.initialized;
     
     // Log the geometry being used
     if !layout.initialized {
@@ -728,17 +711,12 @@ pub fn render_container_window(
         .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
         .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
 
-    // Log on first render or when card count changes
+    // Log on first render
     if needs_resize {
         log::info!(
             "Container setting position to ({}, {}) size ({}, {})",
             initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
         );
-        
-        // Push geometry change when resizing due to card count change
-        if card_count_changed {
-            actions.push(ContainerAction::GeometryChanged(initial_geometry));
-        }
     }
 
     // Render the container viewport
