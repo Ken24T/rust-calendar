@@ -170,6 +170,9 @@ impl ConfirmDialogState {
                 ui.horizontal(|ui| {
                     // Right-align buttons
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Add padding on the right side of Delete button
+                        ui.add_space(5.0);
+                        
                         // Confirm button
                         let confirm_button = if action.is_destructive() {
                             egui::Button::new(
@@ -205,7 +208,8 @@ impl ConfirmDialogState {
             should_close = true;
         }
 
-        if should_close {
+        // Only clear the action on cancel - for confirmed, we need to keep it for take_action()
+        if should_close && result == ConfirmResult::Cancelled {
             self.pending_action = None;
         }
 
