@@ -72,6 +72,11 @@ impl CountdownUiState {
         state
     }
 
+    /// Reset container state so it will re-initialize on next render
+    pub(in super::super) fn reset_container_state(&mut self) {
+        self.container_layout.initialized = false;
+    }
+
     pub(in super::super) fn mark_card_pending(
         &mut self,
         card_id: CountdownCardId,
@@ -217,6 +222,8 @@ impl CountdownUiState {
                     // User closed the container - switch back to individual windows mode
                     log::info!("Container closed, switching to individual windows mode");
                     service.set_display_mode(CountdownDisplayMode::IndividualWindows);
+                    // Reset initialized flag so next open will re-apply stored geometry
+                    self.container_layout.initialized = false;
                 }
             }
         }

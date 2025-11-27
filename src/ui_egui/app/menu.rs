@@ -224,6 +224,8 @@ impl CalendarApp {
                     self.context
                         .countdown_service_mut()
                         .set_display_mode(CountdownDisplayMode::IndividualWindows);
+                    // Reset container state so it re-initializes when switching back
+                    self.countdown_ui.reset_container_state();
                     ui.close_menu();
                 }
                 
@@ -234,6 +236,8 @@ impl CalendarApp {
                     )
                     .clicked()
                 {
+                    // Reset container state so it re-applies stored geometry
+                    self.countdown_ui.reset_container_state();
                     self.context
                         .countdown_service_mut()
                         .set_display_mode(CountdownDisplayMode::Container);
