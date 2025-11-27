@@ -24,5 +24,6 @@ pub fn row_to_settings(row: &Row) -> Result<Settings, rusqlite::Error> {
         default_card_height: row.get(17)?,
         auto_create_countdown_on_import: row.get::<_, i32>(18).unwrap_or(0) != 0,
         edit_before_import: row.get::<_, i32>(19).unwrap_or(0) != 0,
+        sidebar_width: row.get::<_, f32>(20).unwrap_or(180.0),
     })
 }

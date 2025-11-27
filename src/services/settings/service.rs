@@ -24,7 +24,7 @@ impl<'a> SettingsService<'a> {
                     show_my_day, my_day_position_right, show_ribbon, show_sidebar, show_week_numbers,
                     current_view, default_event_duration, first_day_of_work_week, last_day_of_work_week,
                     default_event_start_time, default_card_width, default_card_height,
-                    auto_create_countdown_on_import, edit_before_import
+                    auto_create_countdown_on_import, edit_before_import, sidebar_width
              FROM settings WHERE id = 1",
                 [],
                 |row| Ok(row_to_settings(row)?),
@@ -63,6 +63,7 @@ impl<'a> SettingsService<'a> {
                  default_card_height = ?17, \
                  auto_create_countdown_on_import = ?18, \
                  edit_before_import = ?19, \
+                 sidebar_width = ?20, \
                  updated_at = CURRENT_TIMESTAMP \
              WHERE id = 1",
             params![
@@ -85,6 +86,7 @@ impl<'a> SettingsService<'a> {
                 settings.default_card_height,
                 settings.auto_create_countdown_on_import as i32,
                 settings.edit_before_import as i32,
+                settings.sidebar_width,
             ],
         )
         .context("Failed to update settings")?;

@@ -25,6 +25,7 @@ pub struct Settings {
     pub default_card_height: f32,
     pub auto_create_countdown_on_import: bool,
     pub edit_before_import: bool,
+    pub sidebar_width: f32,
 }
 
 impl Default for Settings {
@@ -50,6 +51,7 @@ impl Default for Settings {
             default_card_height: 110.0,
             auto_create_countdown_on_import: false,
             edit_before_import: false,
+            sidebar_width: 180.0,
         }
     }
 }
