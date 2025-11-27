@@ -9,8 +9,10 @@ use std::collections::HashSet;
 use super::palette::TimeGridPalette;
 use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
+use crate::models::template::EventTemplate;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 
 /// Constants for time grid rendering
@@ -41,6 +43,8 @@ pub struct EventInteractionResult {
     pub moved_events: Vec<Event>,
     /// Request to show delete confirmation dialog
     pub delete_confirm_request: Option<DeleteConfirmRequest>,
+    /// Request to create event from template (template_id, date)
+    pub template_selection: Option<(i64, NaiveDate)>,
 }
 
 impl EventInteractionResult {
@@ -52,6 +56,9 @@ impl EventInteractionResult {
         self.moved_events.extend(other.moved_events);
         if other.delete_confirm_request.is_some() {
             self.delete_confirm_request = other.delete_confirm_request;
+        }
+        if other.template_selection.is_some() {
+            self.template_selection = other.template_selection;
         }
     }
 }
@@ -817,6 +824,42 @@ pub fn render_time_cell(
                     *event_dialog_time = Some(time);
                     *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
                     ui.memory_mut(|mem| mem.close_popup());
+                }
+                
+                // Template submenu
+                let templates: Vec<EventTemplate> = TemplateService::new(database.connection())
+                    .list_all()
+                    .unwrap_or_default();
+                
+                if !templates.is_empty() {
+                    ui.separator();
+                    ui.menu_button("📋 From Template", |ui| {
+                        for template in &templates {
+                            let label = format!("{}", template.name);
+                            if ui.button(&label).on_hover_text(format!(
+                                "Create '{}' event\nDuration: {}",
+                                template.title,
+                                if template.all_day {
+                                    "All day".to_string()
+                                } else {
+                                    let h = template.duration_minutes / 60;
+                                    let m = template.duration_minutes % 60;
+                                    if h > 0 && m > 0 {
+                                        format!("{}h {}m", h, m)
+                                    } else if h > 0 {
+                                        format!("{}h", h)
+                                    } else {
+                                        format!("{}m", m)
+                                    }
+                                }
+                            )).clicked() {
+                                if let Some(id) = template.id {
+                                    result.template_selection = Some((id, date));
+                                }
+                                ui.memory_mut(|mem| mem.close_popup());
+                            }
+                        }
+                    });
                 }
             }
         },

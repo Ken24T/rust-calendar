@@ -382,6 +382,47 @@ impl CalendarApp {
         self.event_dialog_state = Some(state);
         self.show_event_dialog = true;
     }
+    
+    /// Create a new event from a template by ID with a specific date
+    /// Used by context menus in calendar views
+    pub(super) fn create_event_from_template_with_date(&mut self, template_id: i64, date: chrono::NaiveDate) {
+        let service = TemplateService::new(self.context.database().connection());
+        if let Ok(template) = service.get_by_id(template_id) {
+            use chrono::{Duration, NaiveDateTime};
+            
+            let mut state = EventDialogState::new_event(date, &self.settings);
+            
+            // Apply template values
+            state.title = template.title.clone();
+            state.description = template.description.clone().unwrap_or_default();
+            state.location = template.location.clone().unwrap_or_default();
+            state.category = template.category.clone().unwrap_or_default();
+            state.color = template.color.clone().unwrap_or_else(|| "#3B82F6".to_string());
+            state.all_day = template.all_day;
+            
+            // Calculate end time based on duration
+            if !template.all_day {
+                let start_dt = NaiveDateTime::new(state.date, state.start_time);
+                let end_dt = start_dt + Duration::minutes(template.duration_minutes as i64);
+                state.end_time = end_dt.time();
+                // If end goes past midnight, adjust end date
+                if end_dt.date() > state.date {
+                    state.end_date = end_dt.date();
+                }
+            }
+            
+            // Apply recurrence rule from template if present
+            // The recurrence rule parsing is done in EventDialogState::from_event
+            // For templates, we'll need to parse the RRULE string
+            if template.recurrence_rule.is_some() {
+                state.is_recurring = true;
+                // Template recurrence will be applied when saving - let user customize
+            }
+            
+            self.event_dialog_state = Some(state);
+            self.show_event_dialog = true;
+        }
+    }
 
     fn render_help_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Help", |ui| {

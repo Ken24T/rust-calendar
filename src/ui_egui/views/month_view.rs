@@ -5,8 +5,10 @@ use super::palette::{CalendarCellPalette, DayStripPalette};
 use super::week_shared::DeleteConfirmRequest;
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::models::template::EventTemplate;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::ui_egui::theme::CalendarTheme;
 
 /// Width of the week number column
@@ -35,6 +37,8 @@ pub enum MonthViewAction {
     None,
     /// Switch to day view for a specific date
     SwitchToDayView(NaiveDate),
+    /// Create event from template (template_id, date)
+    CreateFromTemplate(i64, NaiveDate),
 }
 
 /// Blend header color for weekend columns (slightly darker/lighter)
@@ -290,7 +294,7 @@ impl MonthView {
         is_today: bool,
         is_weekend: bool,
         events: &[&Event],
-        _database: &'static Database,
+        database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
@@ -552,10 +556,20 @@ impl MonthView {
             });
         }
         
+        // Check for pending template selection from previous frame
+        let pending_template = ui.ctx().memory_mut(|mem| {
+            mem.data.remove_temp::<i64>(popup_id.with("pending_template"))
+        });
+        
         if response.secondary_clicked() {
             context_menu_event = pointer_event.clone();
             ui.memory_mut(|mem| mem.open_popup(popup_id));
         }
+        
+        // Load templates for context menu
+        let templates: Vec<EventTemplate> = TemplateService::new(database.connection())
+            .list_all()
+            .unwrap_or_default();
 
         egui::popup::popup_above_or_below_widget(
             ui,
@@ -609,9 +623,48 @@ impl MonthView {
                         *event_dialog_recurrence = Some("FREQ=MONTHLY".to_string());
                         ui.memory_mut(|mem| mem.close_popup());
                     }
+                    
+                    // Template submenu
+                    if !templates.is_empty() {
+                        ui.separator();
+                        ui.menu_button("📋 From Template", |ui| {
+                            for template in &templates {
+                                let label = format!("{}", template.name);
+                                if ui.button(&label).on_hover_text(format!(
+                                    "Create '{}' event\nDuration: {}",
+                                    template.title,
+                                    if template.all_day {
+                                        "All day".to_string()
+                                    } else {
+                                        let h = template.duration_minutes / 60;
+                                        let m = template.duration_minutes % 60;
+                                        if h > 0 && m > 0 {
+                                            format!("{}h {}m", h, m)
+                                        } else if h > 0 {
+                                            format!("{}h", h)
+                                        } else {
+                                            format!("{}m", m)
+                                        }
+                                    }
+                                )).clicked() {
+                                    if let Some(id) = template.id {
+                                        ui.ctx().memory_mut(|mem| {
+                                            mem.data.insert_temp(popup_id.with("pending_template"), id);
+                                        });
+                                    }
+                                    ui.memory_mut(|mem| mem.close_popup());
+                                }
+                            }
+                        });
+                    }
                 }
             },
         );
+        
+        // Handle pending template selection (return action)
+        if let Some(template_id) = pending_template {
+            return (MonthViewAction::CreateFromTemplate(template_id, date), None, delete_confirm_request);
+        }
 
         // Handle click to edit or create event
         if response.clicked() {

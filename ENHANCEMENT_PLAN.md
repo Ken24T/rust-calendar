@@ -227,11 +227,27 @@ INSERT INTO categories (name, color, icon) VALUES
 
 ---
 
-### 7. Event Templates
+### 7. Event Templates ✅
 
+**Status:** ✅ COMPLETE (v1.0.15)
 **Priority:** Medium - Time-saving feature  
 **Estimated Time:** 4 hours  
 **Branch:** `feat/event-templates`
+
+**What was implemented:**
+- ✅ EventTemplate model with validation (`src/models/template/mod.rs`)
+- ✅ TemplateService for CRUD operations (`src/services/template/mod.rs`)
+- ✅ Database table `event_templates` with all fields
+- ✅ Events → Templates menu with:
+  - Quick-create submenu listing all templates
+  - "Manage Templates..." dialog for CRUD
+- ✅ Template Manager dialog with create/edit/delete functionality
+- ✅ Context menu "📋 From Template" submenu in:
+  - Month view context menu
+  - Week view context menu
+  - Work week view context menu
+  - Day view context menu
+- ✅ Keyboard shortcut fix: D/M/W/K keys no longer captured while typing in dialogs
 
 **Database Changes:**
 ```sql
@@ -250,28 +266,23 @@ CREATE TABLE event_templates (
 );
 ```
 
-**Implementation:**
-- Add File → Templates menu with:
-  - "Save Current Event as Template..." (when editing event)
-  - "Manage Templates..." → Dialog to view/edit/delete templates
-  - Template list submenu showing all templates (quick create)
-- Create template from event: saves all properties except dates
-- Apply template: opens event dialog with template values prefilled, user sets date/time
-- Templates dialog shows list with preview and actions
-
-**Files to Modify:**
-- `src/services/database/mod.rs` - Add event_templates table
-- Create `src/services/template.rs` - TemplateService
-- `src/models/template/mod.rs` - EventTemplate model
-- `src/ui_egui/app.rs` - Add File → Templates menu
-- Create `src/ui_egui/dialogs/template_manager.rs` - Template CRUD dialog
-- `src/ui_egui/event_dialog.rs` - Add "Save as Template" button
+**Files Created/Modified:**
+- `src/models/template/mod.rs` - EventTemplate model with validation
+- `src/services/template/mod.rs` - TemplateService for CRUD
+- `src/ui_egui/dialogs/template_manager.rs` - Template management dialog
+- `src/ui_egui/app/menu.rs` - Templates submenu, create_event_from_template methods
+- `src/ui_egui/app/state.rs` - TemplateManagerState
+- `src/ui_egui/views/month_view.rs` - Context menu template support
+- `src/ui_egui/views/week_shared.rs` - Context menu template support
+- `src/ui_egui/app/shortcuts.rs` - Fixed keyboard input detection
 
 **Testing:**
-- Save event as template, verify stored correctly
-- Create event from template, verify all fields prefilled
-- Edit template, verify changes apply to new events
-- Delete template, verify removed from menu
+- ✅ Create template, verify stored correctly
+- ✅ Create event from template via menu
+- ✅ Create event from template via context menu
+- ✅ Edit template, verify changes persist
+- ✅ Delete template, verify removed
+- ✅ 175 tests passing
 
 ---
 

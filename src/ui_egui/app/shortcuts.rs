@@ -3,6 +3,10 @@ use super::state::ViewType;
 
 impl CalendarApp {
     pub(super) fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
+        // Check if we're interacting with a text input
+        // This prevents view shortcuts from firing while typing
+        let is_typing = ctx.wants_keyboard_input();
+        
         ctx.input(|i| {
             if i.key_pressed(egui::Key::Escape) {
                 if self.show_event_dialog {
@@ -20,7 +24,14 @@ impl CalendarApp {
                     self.state.theme_dialog_state.close();
                 } else if self.state.date_picker_state.is_open {
                     self.state.date_picker_state.close();
+                } else if self.state.template_manager_state.is_open {
+                    self.state.template_manager_state.close();
                 }
+            }
+
+            // Skip shortcuts if user is typing in a text field
+            if is_typing {
+                return;
             }
 
             if i.modifiers.ctrl && i.key_pressed(egui::Key::N) && !self.show_event_dialog {
@@ -55,12 +66,15 @@ impl CalendarApp {
             }
 
             // View type shortcuts (only when no dialog is open)
-            if !self.show_event_dialog
-                && !self.show_settings_dialog
-                && !self.state.show_search_dialog
-                && !self.state.theme_dialog_state.is_open
-                && !self.state.date_picker_state.is_open
-            {
+            let any_dialog_open = self.show_event_dialog
+                || self.show_settings_dialog
+                || self.state.show_search_dialog
+                || self.state.theme_dialog_state.is_open
+                || self.state.date_picker_state.is_open
+                || self.state.template_manager_state.is_open
+                || self.state.show_export_range_dialog;
+                
+            if !any_dialog_open {
                 // D for Day view
                 if i.key_pressed(egui::Key::D) && !i.modifiers.ctrl {
                     self.current_view = ViewType::Day;

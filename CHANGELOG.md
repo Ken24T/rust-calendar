@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.16] - 2025-11-28
+
+### Added
+- **Context Menu Template Access** - Create events from templates directly in calendar views:
+  - Right-click on empty space in Month, Week, or Day view to see "📋 From Template" submenu
+  - Templates listed with hover tooltips showing title and duration
+  - Clicking a template creates an event for that specific date/time
+
+### Fixed
+- **Keyboard Shortcuts** - View shortcuts (D, M, W, K) no longer interfere while typing:
+  - Fixed issue where pressing 'd', 'm', 'w' etc. would change views while typing in dialogs
+  - Shortcuts now properly detect when a text input has focus
+
 ## [1.0.15] - 2025-11-28
 
 ### Added

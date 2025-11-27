@@ -205,6 +205,11 @@ impl CalendarApp {
             self.handle_delete_confirm_request(request);
         }
         
+        // Handle template selection from context menu
+        if let Some((template_id, date)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date);
+        }
+        
         // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
@@ -279,6 +284,11 @@ impl CalendarApp {
         // Handle delete confirmation request
         if let Some(request) = view_result.delete_confirm_request {
             self.handle_delete_confirm_request(request);
+        }
+        
+        // Handle template selection from context menu
+        if let Some((template_id, date)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date);
         }
         
         // Handle deleted events - remove countdown cards (legacy path)
@@ -361,6 +371,11 @@ impl CalendarApp {
             self.handle_delete_confirm_request(request);
         }
         
+        // Handle template selection from context menu
+        if let Some((template_id, date)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date);
+        }
+        
         // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
@@ -386,9 +401,15 @@ impl CalendarApp {
         );
         
         // Handle month view actions
-        if let MonthViewAction::SwitchToDayView(date) = result.action {
-            self.current_date = date;
-            self.current_view = ViewType::Day;
+        match result.action {
+            MonthViewAction::SwitchToDayView(date) => {
+                self.current_date = date;
+                self.current_view = ViewType::Day;
+            }
+            MonthViewAction::CreateFromTemplate(template_id, date) => {
+                self.create_event_from_template_with_date(template_id, date);
+            }
+            MonthViewAction::None => {}
         }
         
         // Handle delete confirmation request
