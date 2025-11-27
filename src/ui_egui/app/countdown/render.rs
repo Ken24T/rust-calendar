@@ -253,22 +253,34 @@ pub(super) fn render_countdown_card_ui(
                 countdown_size,
                 egui::Layout::centered_and_justified(egui::Direction::TopDown),
                 |countdown_ui| {
-                    let days_remaining = (card.start_at.date_naive() - now.date_naive())
-                        .num_days()
-                        .max(0);
+                    let duration = card.start_at.signed_duration_since(now);
+                    let total_hours = duration.num_hours();
+                    
+                    // Show HH:MM if less than 24 hours, otherwise show days
+                    let countdown_text = if total_hours < 24 && total_hours >= 0 {
+                        let hours = total_hours;
+                        let minutes = (duration.num_minutes() % 60).max(0);
+                        format!("{:02}:{:02}", hours, minutes)
+                    } else if total_hours < 0 {
+                        // Event has passed
+                        "00:00".to_string()
+                    } else {
+                        let days_remaining = (card.start_at.date_naive() - now.date_naive())
+                            .num_days()
+                            .max(0);
+                        days_remaining.to_string()
+                    };
 
-                    let days_text = days_remaining.to_string();
-
-                    // Calculate font size based on available space and number of digits
-                    let digit_count = days_text.len();
+                    // Calculate font size based on available space and number of characters
+                    let char_count = countdown_text.len();
                     let available_width = width * 0.9; // Leave 10% margin
 
                     // Estimate width per character (roughly 0.6 of font size for monospace digits)
-                    let estimated_text_width = font_size * 0.6 * digit_count as f32;
+                    let estimated_text_width = font_size * 0.6 * char_count as f32;
 
                     let adjusted_font_size = if estimated_text_width > available_width {
                         // Scale down to fit available width
-                        (available_width / (0.6 * digit_count as f32))
+                        (available_width / (0.6 * char_count as f32))
                             .max(32.0)
                             .min(font_size)
                     } else {
@@ -276,7 +288,7 @@ pub(super) fn render_countdown_card_ui(
                     };
 
                     let countdown_response = countdown_ui.label(
-                        egui::RichText::new(days_text)
+                        egui::RichText::new(countdown_text)
                             .size(adjusted_font_size)
                             .color(days_fg),
                     );

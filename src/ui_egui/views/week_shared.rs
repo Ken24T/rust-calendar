@@ -26,6 +26,8 @@ pub struct EventInteractionResult {
     pub event_to_edit: Option<Event>,
     /// IDs of events that were deleted (need countdown card cleanup)
     pub deleted_event_ids: Vec<i64>,
+    /// Events that were moved via drag-and-drop (need countdown card sync)
+    pub moved_events: Vec<Event>,
 }
 
 impl EventInteractionResult {
@@ -34,6 +36,7 @@ impl EventInteractionResult {
             self.event_to_edit = other.event_to_edit;
         }
         self.deleted_event_ids.extend(other.deleted_event_ids);
+        self.moved_events.extend(other.moved_events);
     }
 }
 
@@ -799,6 +802,9 @@ pub fn render_time_cell(
                     event.end = new_end;
                     if let Err(err) = event_service.update(&event) {
                         log::error!("Failed to move event {}: {}", drag_context.event_id, err);
+                    } else {
+                        // Track moved event for countdown card sync
+                        result.moved_events.push(event);
                     }
                 }
             }

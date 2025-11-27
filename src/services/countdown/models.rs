@@ -97,6 +97,50 @@ pub struct CountdownCardGeometry {
     pub height: f32,
 }
 
+impl CountdownCardGeometry {
+    /// Check if this geometry is plausible (has reasonable size and position)
+    pub fn is_plausible(&self) -> bool {
+        // Check for reasonable size
+        self.width >= 20.0 && self.height >= 20.0 &&
+        // Check for valid (non-NaN, non-infinite) values
+        self.x.is_finite() && self.y.is_finite() &&
+        self.width.is_finite() && self.height.is_finite() &&
+        // Check for reasonable position (not absurdly far off-screen)
+        // Allow positions within ±10000 pixels to support multi-monitor setups
+        self.x.abs() < 10000.0 && self.y.abs() < 10000.0
+    }
+    
+    /// Sanitize this geometry to ensure it's visible within the given screen bounds.
+    /// If position is outside all monitors, move it to a default visible position.
+    /// The monitors parameter is a list of (x, y, width, height) tuples representing
+    /// the virtual desktop bounds (can be a single large region for multi-monitor).
+    pub fn sanitize_for_monitors(&self, monitors: &[(f32, f32, f32, f32)], default_pos: (f32, f32)) -> Self {
+        // If the geometry is plausible (valid finite values, reasonable range),
+        // trust it - the user may have multiple monitors we don't know about
+        if self.is_plausible() {
+            return *self;
+        }
+        
+        // Geometry is invalid (NaN, infinite, or absurdly positioned) - reset to default
+        log::warn!(
+            "Geometry {:?} is not plausible, resetting to default position {:?}",
+            self, default_pos
+        );
+        
+        // Use the first monitor bounds or fallback
+        let (mx, my, _mw, _mh) = monitors.first()
+            .copied()
+            .unwrap_or((0.0, 0.0, 1920.0, 1080.0));
+        
+        Self {
+            x: default_pos.0.max(mx),
+            y: default_pos.1.max(my),
+            width: self.width.max(100.0).min(800.0),
+            height: self.height.max(100.0).min(600.0),
+        }
+    }
+}
+
 /// Visual preferences that persist per card.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -132,14 +176,14 @@ impl Default for CountdownCardVisuals {
             accent_color: None,
             always_on_top: false,
             compact_mode: false,
-            use_default_title_bg: true,
+            use_default_title_bg: false,
             title_bg_color: default_title_bg_color(),
-            use_default_title_fg: true,
+            use_default_title_fg: false,
             title_fg_color: default_title_fg_color(),
             title_font_size: default_title_font_size(),
-            use_default_body_bg: true,
+            use_default_body_bg: false,
             body_bg_color: default_body_bg_color(),
-            use_default_days_fg: true,
+            use_default_days_fg: false,
             days_fg_color: default_days_fg_color(),
             days_font_size: default_days_font_size(),
         }

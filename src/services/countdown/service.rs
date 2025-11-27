@@ -44,11 +44,21 @@ impl CountdownService {
                 .visuals
                 .days_font_size
                 .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
+            // Reset use_default_* flags to false (unchecked by default)
+            card.visuals.use_default_title_bg = false;
+            card.visuals.use_default_title_fg = false;
+            card.visuals.use_default_body_bg = false;
+            card.visuals.use_default_days_fg = false;
         }
         snapshot.visual_defaults.days_font_size = snapshot
             .visual_defaults
             .days_font_size
             .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
+        // Reset use_default_* flags to false for defaults too
+        snapshot.visual_defaults.use_default_title_bg = false;
+        snapshot.visual_defaults.use_default_title_fg = false;
+        snapshot.visual_defaults.use_default_body_bg = false;
+        snapshot.visual_defaults.use_default_days_fg = false;
 
         Self {
             cards: snapshot.cards,
@@ -130,9 +140,9 @@ impl CountdownService {
             app_window_geometry: settings.app_window_geometry,
             notification_config: settings.notification_config,
             auto_dismiss_defaults: settings.auto_dismiss_defaults,
-            display_mode: CountdownDisplayMode::default(),
-            container_geometry: None,
-            card_order: Vec::new(),
+            display_mode: settings.display_mode,
+            container_geometry: settings.container_geometry,
+            card_order: settings.card_order,
         })
     }
 
@@ -148,6 +158,9 @@ impl CountdownService {
             visual_defaults: self.visual_defaults.clone(),
             notification_config: self.notification_config.clone(),
             auto_dismiss_defaults: self.auto_dismiss_defaults.clone(),
+            display_mode: self.display_mode,
+            container_geometry: self.container_geometry,
+            card_order: self.card_order.clone(),
         };
         repo.update_global_settings(&settings)?;
 
@@ -236,17 +249,33 @@ impl CountdownService {
             visual_defaults: snapshot.visual_defaults,
             notification_config: snapshot.notification_config,
             auto_dismiss_defaults: snapshot.auto_dismiss_defaults,
+            display_mode: snapshot.display_mode,
+            container_geometry: snapshot.container_geometry,
+            card_order: snapshot.card_order,
         };
         repo.update_global_settings(&settings)?;
 
-        // Insert all cards
+        // Insert all cards, skipping any that fail (e.g., due to deleted events)
+        let mut migrated_count = 0;
+        let mut skipped_count = 0;
         for card in &snapshot.cards {
-            repo.insert_card(card)?;
+            match repo.insert_card(card) {
+                Ok(_) => migrated_count += 1,
+                Err(e) => {
+                    log::warn!(
+                        "Skipping card {:?} during migration (event may have been deleted): {}",
+                        card.id,
+                        e
+                    );
+                    skipped_count += 1;
+                }
+            }
         }
 
         log::info!(
-            "Migrated {} countdown cards from JSON to database",
-            snapshot.cards.len()
+            "Migrated {} countdown cards from JSON to database ({} skipped)",
+            migrated_count,
+            skipped_count
         );
 
         // Rename the JSON file to indicate migration completed
@@ -708,6 +737,8 @@ impl CountdownService {
 
         if changed {
             self.dirty = true;
+            // Re-sort cards by date when an event's date changes
+            self.sort_cards_by_date();
         }
     }
 
@@ -776,6 +807,85 @@ impl CountdownService {
     pub fn reorder_cards(&mut self, new_order: Vec<CountdownCardId>) {
         if self.card_order != new_order {
             self.card_order = new_order;
+            self.dirty = true;
+        }
+    }
+
+    /// Sort cards by their target date (start_at) and update card_order
+    pub fn sort_cards_by_date(&mut self) {
+        // Get cards sorted by start_at
+        let mut sorted_ids: Vec<(CountdownCardId, chrono::DateTime<chrono::Local>)> = self
+            .cards
+            .iter()
+            .map(|c| (c.id, c.start_at))
+            .collect();
+        sorted_ids.sort_by_key(|(_, start_at)| *start_at);
+        
+        let new_order: Vec<CountdownCardId> = sorted_ids.into_iter().map(|(id, _)| id).collect();
+        self.reorder_cards(new_order);
+    }
+
+    /// Sanitize all card and container geometries to ensure they're visible on available monitors.
+    /// Call this on startup after loading from database.
+    /// 
+    /// The monitors parameter is a list of (x, y, width, height) tuples representing
+    /// available monitor bounds. If empty, a default 1920x1080 monitor at (0,0) is assumed.
+    pub fn sanitize_all_geometries(&mut self, monitors: &[(f32, f32, f32, f32)]) {
+        let default_offset = 50.0;
+        let mut card_index = 0;
+        let mut any_changed = false;
+        
+        // Sanitize individual card geometries
+        for card in &mut self.cards {
+            // Stagger default positions for multiple cards
+            let default_x = 100.0 + (card_index as f32 * default_offset);
+            let default_y = 100.0 + (card_index as f32 * default_offset);
+            let default_pos = (default_x, default_y);
+            
+            let sanitized = card.geometry.sanitize_for_monitors(monitors, default_pos);
+            if sanitized != card.geometry {
+                log::info!(
+                    "Sanitized geometry for card {:?} '{}' from {:?} to {:?}",
+                    card.id,
+                    card.effective_title(),
+                    card.geometry,
+                    sanitized
+                );
+                card.geometry = sanitized;
+                any_changed = true;
+            }
+            card_index += 1;
+        }
+        
+        // Sanitize container geometry
+        if let Some(container_geom) = self.container_geometry {
+            let sanitized = container_geom.sanitize_for_monitors(monitors, (100.0, 100.0));
+            if sanitized != container_geom {
+                log::info!(
+                    "Sanitized container geometry from {:?} to {:?}",
+                    container_geom,
+                    sanitized
+                );
+                self.container_geometry = Some(sanitized);
+                any_changed = true;
+            }
+        }
+        
+        // Sanitize app window geometry
+        if let Some(app_geom) = self.app_window_geometry {
+            let sanitized = app_geom.sanitize_for_monitors(monitors, (100.0, 100.0));
+            if sanitized != app_geom {
+                log::info!(
+                    "Sanitized app window geometry from {:?} to {:?}",
+                    app_geom,
+                    sanitized
+                );
+                self.app_window_geometry = Some(sanitized);
+                any_changed = true;
+            }
+        }
+        
+        if any_changed {
             self.dirty = true;
         }
     }

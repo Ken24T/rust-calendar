@@ -631,6 +631,9 @@ impl DayView {
                                     "Failed to move event {}: {}",
                                     drag_context.event_id, err
                                 );
+                            } else {
+                                // Track moved event for countdown card sync
+                                result.moved_events.push(event);
                             }
                         }
                     }

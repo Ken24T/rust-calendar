@@ -22,11 +22,12 @@ impl Default for LayoutOrientation {
     }
 }
 
-/// Minimum and default dimensions for container layout
-pub const CONTAINER_MIN_WIDTH: f32 = 200.0;
-pub const CONTAINER_MIN_HEIGHT: f32 = 150.0;
-pub const MIN_CARD_WIDTH: f32 = 150.0;
-pub const MIN_CARD_HEIGHT: f32 = 100.0;
+/// Minimum dimensions for container (absolute minimums for usability)
+pub const CONTAINER_MIN_WIDTH: f32 = 80.0;
+pub const CONTAINER_MIN_HEIGHT: f32 = 60.0;
+/// Minimum card dimensions within container
+pub const MIN_CARD_WIDTH: f32 = 60.0;
+pub const MIN_CARD_HEIGHT: f32 = 50.0;
 pub const CARD_PADDING: f32 = 8.0;
 
 // Card rendering constants
@@ -49,6 +50,8 @@ pub struct ContainerLayout {
     pub padding: f32,
     /// Whether the container has been initialized (first frame rendered)
     pub initialized: bool,
+    /// Track the last known card count to detect additions/removals
+    pub last_card_count: usize,
 }
 
 impl Default for ContainerLayout {
@@ -60,6 +63,7 @@ impl Default for ContainerLayout {
             min_card_height: MIN_CARD_HEIGHT,
             padding: CARD_PADDING,
             initialized: false,
+            last_card_count: 0,
         }
     }
 }
@@ -481,19 +485,31 @@ pub fn render_card_content(
             countdown_size,
             egui::Layout::centered_and_justified(egui::Direction::TopDown),
             |countdown_ui| {
-                let days_remaining = (card.start_at.date_naive() - now.date_naive())
-                    .num_days()
-                    .max(0);
+                let duration = card.start_at.signed_duration_since(now);
+                let total_hours = duration.num_hours();
+                
+                // Show HH:MM if less than 24 hours, otherwise show days
+                let countdown_text = if total_hours < 24 && total_hours >= 0 {
+                    let hours = total_hours;
+                    let minutes = (duration.num_minutes() % 60).max(0);
+                    format!("{:02}:{:02}", hours, minutes)
+                } else if total_hours < 0 {
+                    // Event has passed
+                    "00:00".to_string()
+                } else {
+                    let days_remaining = (card.start_at.date_naive() - now.date_naive())
+                        .num_days()
+                        .max(0);
+                    days_remaining.to_string()
+                };
 
-                let days_text = days_remaining.to_string();
-
-                // Calculate font size based on available space and number of digits
-                let digit_count = days_text.len();
+                // Calculate font size based on available space and number of characters
+                let char_count = countdown_text.len();
                 let available_width = width * 0.9;
-                let estimated_text_width = font_size * 0.6 * digit_count as f32;
+                let estimated_text_width = font_size * 0.6 * char_count as f32;
 
                 let adjusted_font_size = if estimated_text_width > available_width {
-                    (available_width / (0.6 * digit_count as f32))
+                    (available_width / (0.6 * char_count as f32))
                         .max(32.0)
                         .min(font_size)
                 } else {
@@ -501,7 +517,7 @@ pub fn render_card_content(
                 };
 
                 let countdown_response = countdown_ui.label(
-                    egui::RichText::new(days_text)
+                    egui::RichText::new(countdown_text)
                         .size(adjusted_font_size)
                         .color(days_fg),
                 );
@@ -568,48 +584,83 @@ pub fn render_container_window(
 ) -> Vec<ContainerAction> {
     use std::time::Duration as StdDuration;
 
-    // Update layout with settings-based minimum dimensions
-    layout.min_card_width = default_card_width.max(MIN_CARD_WIDTH);
-    layout.min_card_height = default_card_height.max(MIN_CARD_HEIGHT);
+    // Store the settings-based card dimensions for initial sizing
+    // Cards will scale to fit whatever container size the user chooses
+    layout.min_card_width = MIN_CARD_WIDTH;
+    layout.min_card_height = MIN_CARD_HEIGHT;
 
     // Request repaint for countdown updates
     ctx.request_repaint_after(StdDuration::from_secs(1));
 
     let mut actions = Vec::new();
 
-    // Calculate dynamic minimum container size based on card settings
-    let container_min_width = (default_card_width + CARD_PADDING * 2.0).max(CONTAINER_MIN_WIDTH);
-    let container_min_height = (default_card_height + CARD_PADDING * 2.0).max(CONTAINER_MIN_HEIGHT);
+    // Use absolute minimums for container - let users resize as small as they want
+    let container_min_width = CONTAINER_MIN_WIDTH;
+    let container_min_height = CONTAINER_MIN_HEIGHT;
 
-    // Calculate default container size based on number of cards and their dimensions
-    let num_cards = cards.len().max(1) as f32;
-    let default_width = (default_card_width + CARD_PADDING * 2.0).max(CONTAINER_MIN_WIDTH);
-    let default_height = (default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0))
-        .max(CONTAINER_MIN_HEIGHT)
-        .min(600.0); // Cap at reasonable max height
+    // Calculate container size based on settings card dimensions and card count
+    let current_card_count = cards.len();
+    let num_cards = current_card_count.max(1) as f32;
+    let default_width = default_card_width + CARD_PADDING * 2.0;
+    let ideal_height = default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0);
 
-    // Use stored geometry if available, otherwise use calculated defaults
-    let initial_geometry = container_geometry.unwrap_or(CountdownCardGeometry {
-        x: 100.0,
-        y: 100.0,
-        width: default_width,
-        height: default_height,
-    });
+    // Detect if card count changed (card added or removed)
+    let card_count_changed = layout.initialized && layout.last_card_count != current_card_count;
+    layout.last_card_count = current_card_count;
+
+    // Use stored geometry, but adjust height if cards were added/removed
+    let initial_geometry = if card_count_changed {
+        // Calculate height adjustment based on card count change
+        let current_geom = container_geometry.unwrap_or(CountdownCardGeometry {
+            x: 100.0,
+            y: 100.0,
+            width: default_width.max(container_min_width),
+            height: ideal_height.max(container_min_height),
+        });
+        // Resize to accommodate new card count while keeping position and width
+        CountdownCardGeometry {
+            x: current_geom.x,
+            y: current_geom.y,
+            width: current_geom.width,
+            height: ideal_height.max(container_min_height).min(800.0),
+        }
+    } else {
+        container_geometry.unwrap_or(CountdownCardGeometry {
+            x: 100.0,
+            y: 100.0,
+            width: default_width.max(container_min_width),
+            height: ideal_height.max(container_min_height).min(600.0),
+        })
+    };
 
     let viewport_id = egui::ViewportId::from_hash_of("countdown_container");
 
-    // Only set position/size on first render or if no stored geometry
-    // After that, let the user resize freely without fighting the window
-    let is_first_render = !layout.initialized;
+    // Set position/size on first render OR when card count changes
+    let needs_resize = !layout.initialized || card_count_changed;
+    
+    // Log the geometry being used
+    if !layout.initialized {
+        log::info!(
+            "Container first render - using geometry: x={}, y={}, w={}, h={}",
+            initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
+        );
+    }
+    
     let mut builder = egui::ViewportBuilder::default()
         .with_title("Countdown Cards")
         .with_resizable(true)
         .with_min_inner_size(egui::vec2(container_min_width, container_min_height));
 
-    if is_first_render {
+    // Always set position on first render to ensure container appears where expected
+    if needs_resize {
         builder = builder
             .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
             .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
+        
+        // Push geometry change when resizing due to card count change
+        if card_count_changed {
+            actions.push(ContainerAction::GeometryChanged(initial_geometry));
+        }
     }
 
     // Render the container viewport

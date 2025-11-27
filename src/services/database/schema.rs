@@ -11,6 +11,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     insert_default_settings(conn)?;
     create_events_table(conn)?;
     create_countdown_tables(conn)?;
+    run_countdown_migrations(conn)?;
     Ok(())
 }
 
@@ -281,23 +282,23 @@ fn create_countdown_tables(conn: &Connection) -> Result<()> {
             accent_color TEXT,
             always_on_top INTEGER NOT NULL DEFAULT 0,
             compact_mode INTEGER NOT NULL DEFAULT 0,
-            use_default_title_bg INTEGER NOT NULL DEFAULT 1,
+            use_default_title_bg INTEGER NOT NULL DEFAULT 0,
             title_bg_r INTEGER NOT NULL DEFAULT 10,
             title_bg_g INTEGER NOT NULL DEFAULT 34,
             title_bg_b INTEGER NOT NULL DEFAULT 145,
             title_bg_a INTEGER NOT NULL DEFAULT 255,
-            use_default_title_fg INTEGER NOT NULL DEFAULT 1,
+            use_default_title_fg INTEGER NOT NULL DEFAULT 0,
             title_fg_r INTEGER NOT NULL DEFAULT 255,
             title_fg_g INTEGER NOT NULL DEFAULT 255,
             title_fg_b INTEGER NOT NULL DEFAULT 255,
             title_fg_a INTEGER NOT NULL DEFAULT 255,
             title_font_size REAL NOT NULL DEFAULT 20.0,
-            use_default_body_bg INTEGER NOT NULL DEFAULT 1,
+            use_default_body_bg INTEGER NOT NULL DEFAULT 0,
             body_bg_r INTEGER NOT NULL DEFAULT 103,
             body_bg_g INTEGER NOT NULL DEFAULT 176,
             body_bg_b INTEGER NOT NULL DEFAULT 255,
             body_bg_a INTEGER NOT NULL DEFAULT 255,
-            use_default_days_fg INTEGER NOT NULL DEFAULT 1,
+            use_default_days_fg INTEGER NOT NULL DEFAULT 0,
             days_fg_r INTEGER NOT NULL DEFAULT 15,
             days_fg_g INTEGER NOT NULL DEFAULT 32,
             days_fg_b INTEGER NOT NULL DEFAULT 70,
@@ -370,6 +371,14 @@ fn create_countdown_tables(conn: &Connection) -> Result<()> {
             auto_dismiss_on_event_end INTEGER NOT NULL DEFAULT 0,
             auto_dismiss_delay_seconds INTEGER NOT NULL DEFAULT 10,
             
+            -- Container mode settings
+            display_mode TEXT NOT NULL DEFAULT 'individual',
+            container_x REAL,
+            container_y REAL,
+            container_width REAL,
+            container_height REAL,
+            card_order TEXT,
+            
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",
@@ -383,6 +392,99 @@ fn create_countdown_tables(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to insert default countdown settings")?;
+
+    Ok(())
+}
+
+fn run_countdown_migrations(conn: &Connection) -> Result<()> {
+    // Add container mode columns to countdown_settings
+    migrations::ensure_column(
+        conn,
+        "countdown_settings",
+        "display_mode",
+        "ALTER TABLE countdown_settings ADD COLUMN display_mode TEXT NOT NULL DEFAULT 'IndividualWindows'",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "countdown_settings",
+        "container_geometry_x",
+        "ALTER TABLE countdown_settings ADD COLUMN container_geometry_x REAL",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "countdown_settings",
+        "container_geometry_y",
+        "ALTER TABLE countdown_settings ADD COLUMN container_geometry_y REAL",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "countdown_settings",
+        "container_geometry_width",
+        "ALTER TABLE countdown_settings ADD COLUMN container_geometry_width REAL",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "countdown_settings",
+        "container_geometry_height",
+        "ALTER TABLE countdown_settings ADD COLUMN container_geometry_height REAL",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "countdown_settings",
+        "card_order",
+        "ALTER TABLE countdown_settings ADD COLUMN card_order TEXT",
+    )?;
+
+    // Reset use_default_* flags to 0 for existing cards (one-time migration)
+    // This ensures checkboxes start unchecked by default
+    migrate_use_default_flags(conn)?;
+
+    Ok(())
+}
+
+/// One-time migration to set use_default_* flags to 0 for all existing cards
+fn migrate_use_default_flags(conn: &Connection) -> Result<()> {
+    // Check if we've already run this migration by looking for a marker
+    let marker_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM countdown_settings WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !marker_exists {
+        return Ok(()); // No settings row yet, nothing to migrate
+    }
+
+    // Check if migration was already done by checking if any card has use_default_* = 1
+    // If all cards have 0, we've already migrated (or there are no cards)
+    let needs_migration: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM countdown_cards WHERE 
+             use_default_title_bg = 1 OR use_default_title_fg = 1 OR 
+             use_default_body_bg = 1 OR use_default_days_fg = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if needs_migration {
+        log::info!("Migrating countdown cards: setting use_default_* flags to 0");
+        conn.execute(
+            "UPDATE countdown_cards SET 
+             use_default_title_bg = 0, 
+             use_default_title_fg = 0, 
+             use_default_body_bg = 0, 
+             use_default_days_fg = 0",
+            [],
+        )?;
+    }
 
     Ok(())
 }

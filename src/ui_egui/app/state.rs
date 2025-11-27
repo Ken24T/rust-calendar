@@ -41,6 +41,8 @@ pub struct AppState {
     pub show_search_dialog: bool,
     pub pending_root_geometry: Option<CountdownCardGeometry>,
     pub date_picker_state: DatePickerState,
+    /// Whether we've done the initial geometry sanitization on first frame
+    pub geometry_sanitized: bool,
 }
 
 impl AppState {
@@ -56,6 +58,7 @@ impl AppState {
             show_search_dialog: false,
             pending_root_geometry,
             date_picker_state: DatePickerState::default(),
+            geometry_sanitized: false,
         }
     }
 }

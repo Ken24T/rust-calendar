@@ -162,6 +162,11 @@ impl CalendarApp {
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
+        
+        // Handle moved events - sync countdown cards
+        for event in view_result.moved_events {
+            self.sync_cards_from_event(&event);
+        }
     }
 
     pub(super) fn render_week_view(
@@ -227,6 +232,11 @@ impl CalendarApp {
         // Handle deleted events - remove countdown cards
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
+        }
+        
+        // Handle moved events - sync countdown cards
+        for event in view_result.moved_events {
+            self.sync_cards_from_event(&event);
         }
     }
 
@@ -297,6 +307,11 @@ impl CalendarApp {
         // Handle deleted events - remove countdown cards
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
+        }
+        
+        // Handle moved events - sync countdown cards
+        for event in view_result.moved_events {
+            self.sync_cards_from_event(&event);
         }
     }
 

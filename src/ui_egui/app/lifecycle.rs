@@ -125,6 +125,12 @@ impl CalendarApp {
         // Handle keyboard shortcuts
         self.handle_keyboard_shortcuts(ctx);
 
+        // Sanitize geometries on first frame when we have monitor info
+        if !self.state.geometry_sanitized {
+            self.sanitize_countdown_geometries(ctx);
+            self.state.geometry_sanitized = true;
+        }
+
         self.apply_pending_root_geometry(ctx);
 
         self.render_menu_bar(ctx);
@@ -229,22 +235,13 @@ fn load_countdown_service(path: &PathBuf, database: &Database) -> CountdownServi
             }
             Err(e) => {
                 log::error!("Failed to migrate countdown cards from JSON: {e:?}");
-                // Fall back to loading from JSON
-                return match CountdownService::load_from_disk(path) {
-                    Ok(service) => service,
-                    Err(err) => {
-                        log::warn!(
-                            "Failed to load countdown cards from {}: {err:?}",
-                            path.display()
-                        );
-                        CountdownService::new()
-                    }
-                };
+                // Migration failed, but we should still try to load from database
+                // The database may have cards from previous runs
             }
         }
     }
 
-    // Load from database
+    // Load from database (primary source of truth)
     match CountdownService::load_from_database(database.connection()) {
         Ok(service) => service,
         Err(err) => {
