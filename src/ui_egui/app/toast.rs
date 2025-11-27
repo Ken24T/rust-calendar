@@ -3,6 +3,9 @@
 //! Toasts are non-blocking notifications that appear briefly and fade away.
 //! They're used for action confirmations like "Event saved", "Backup created", etc.
 
+// Allow unused variants/methods - these are API surface for future use
+#![allow(dead_code)]
+
 use egui::{Color32, Context, Pos2, RichText};
 use std::time::{Duration, Instant};
 

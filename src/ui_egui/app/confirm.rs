@@ -3,6 +3,9 @@
 //! Shows modal dialogs asking the user to confirm actions like deleting events,
 //! discarding changes, etc.
 
+// Allow unused variants/methods - these are API surface for future use
+#![allow(dead_code)]
+
 use egui::{Context, RichText};
 
 /// Types of confirmation dialogs
