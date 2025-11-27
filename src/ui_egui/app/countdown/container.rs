@@ -656,7 +656,7 @@ pub fn render_container_window(
         );
     }
     
-    let mut builder = egui::ViewportBuilder::default()
+    let builder = egui::ViewportBuilder::default()
         .with_title("Countdown Cards")
         .with_resizable(true)
         .with_visible(true)  // Ensure window is visible

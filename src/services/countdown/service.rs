@@ -93,6 +93,7 @@ impl CountdownService {
         }
     }
 
+    #[allow(dead_code)]
     pub fn load_from_disk(path: &Path) -> Result<Self> {
         let snapshot = load_snapshot(path)?;
         Ok(Self::from_snapshot(snapshot))
