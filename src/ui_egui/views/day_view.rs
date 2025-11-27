@@ -3,7 +3,7 @@ use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
-use super::week_shared::{maybe_focus_slot, parse_color, EventInteractionResult};
+use super::week_shared::{maybe_focus_slot, parse_color, DeleteConfirmRequest, EventInteractionResult};
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
@@ -497,27 +497,35 @@ impl DayView {
                         if event.recurrence_rule.is_some() {
                             if ui.button("🗑 Delete This Occurrence").clicked() {
                                 if let Some(id) = event.id {
-                                    let service = EventService::new(database.connection());
-                                    let _ = service.delete_occurrence(id, event.start);
-                                    // Note: occurrence deletion doesn't delete the whole event,
-                                    // so countdown card stays (it's for the event series)
+                                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                        event_id: id,
+                                        event_title: event.title.clone(),
+                                        occurrence_only: true,
+                                        occurrence_date: Some(event.start),
+                                    });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
                             if ui.button("🗑 Delete All Occurrences").clicked() {
                                 if let Some(id) = event.id {
-                                    let service = EventService::new(database.connection());
-                                    let _ = service.delete(id);
-                                    result.deleted_event_ids.push(id);
+                                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                        event_id: id,
+                                        event_title: event.title.clone(),
+                                        occurrence_only: false,
+                                        occurrence_date: None,
+                                    });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
                         } else {
                             if ui.button("🗑 Delete").clicked() {
                                 if let Some(id) = event.id {
-                                    let service = EventService::new(database.connection());
-                                    let _ = service.delete(id);
-                                    result.deleted_event_ids.push(id);
+                                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                        event_id: id,
+                                        event_title: event.title.clone(),
+                                        occurrence_only: false,
+                                        occurrence_date: None,
+                                    });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }

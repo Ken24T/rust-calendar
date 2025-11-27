@@ -49,16 +49,26 @@ pub(in super::super) struct CountdownUiState {
     // Container mode fields
     container_layout: ContainerLayout,
     container_drag_state: DragState,
+    // Pending delete requests from settings dialogs
+    pending_delete_requests: Vec<DeleteCardRequest>,
 }
 
 const MAX_PENDING_GEOMETRY_FRAMES: u32 = 120;
 const GEOMETRY_STABILITY_FRAMES: u32 = 4;
+
+/// Request to confirm countdown card deletion
+#[derive(Debug, Clone)]
+pub struct DeleteCardRequest {
+    pub card_id: CountdownCardId,
+    pub card_title: String,
+}
 
 /// Result of rendering countdown cards, containing various navigation requests
 #[derive(Default)]
 pub struct CountdownRenderResult {
     pub event_dialog_requests: Vec<OpenEventDialogRequest>,
     pub go_to_date_requests: Vec<GoToDateRequest>,
+    pub delete_card_requests: Vec<DeleteCardRequest>,
 }
 
 impl CountdownUiState {
@@ -75,6 +85,11 @@ impl CountdownUiState {
     /// Reset container state so it will re-initialize on next render
     pub(in super::super) fn reset_container_state(&mut self) {
         self.container_layout.initialized = false;
+    }
+    
+    /// Drain pending delete requests from settings dialogs
+    pub(in super::super) fn drain_delete_requests(&mut self) -> Vec<DeleteCardRequest> {
+        std::mem::take(&mut self.pending_delete_requests)
     }
 
     pub(in super::super) fn mark_card_pending(
@@ -172,6 +187,9 @@ impl CountdownUiState {
             default_card_height,
         );
 
+        // Collect delete requests
+        let mut delete_card_requests = Vec::new();
+        
         // Process container actions
         for action in actions {
             match action {
@@ -180,8 +198,14 @@ impl CountdownUiState {
                     service.reorder_cards(new_order);
                 }
                 ContainerAction::DeleteCard(card_id) => {
-                    log::info!("Delete action from container for card {:?}", card_id);
-                    service.remove_card(card_id);
+                    log::info!("Delete confirmation requested for card {:?}", card_id);
+                    if let Some(card) = cards.iter().find(|c| c.id == card_id) {
+                        delete_card_requests.push(DeleteCardRequest {
+                            card_id,
+                            card_title: card.event_title.clone(),
+                        });
+                    }
+                    // Clean up UI state (will be finalized if confirmed)
                     self.open_settings.remove(&card_id);
                     self.settings_geometry.remove(&card_id);
                     self.settings_needs_layout.remove(&card_id);
@@ -237,6 +261,7 @@ impl CountdownUiState {
         CountdownRenderResult {
             event_dialog_requests,
             go_to_date_requests,
+            delete_card_requests,
         }
     }
 
@@ -256,6 +281,7 @@ impl CountdownUiState {
         let mut removals = Vec::new();
         let mut event_dialog_requests = Vec::new();
         let mut go_to_date_requests = Vec::new();
+        let mut delete_card_requests = Vec::new();
 
         for card in cards {
             let viewport_id = egui::ViewportId::from_hash_of(("countdown_card", card.id.0));
@@ -303,18 +329,20 @@ impl CountdownUiState {
                 .as_ref()
                 .map(|info| info.close_requested())
                 .unwrap_or(false);
-            let mut queued_close = close_via_window;
+            let queued_close = close_via_window;
 
             match action {
                 CountdownCardUiAction::None => {}
                 CountdownCardUiAction::Delete => {
                     log::info!(
-                        "Delete action triggered for card {:?} (event {:?})",
+                        "Delete confirmation requested for card {:?} (event {:?})",
                         card.id,
                         card.event_id
                     );
-                    queued_close = true;
-                    removals.push(card.id);
+                    delete_card_requests.push(DeleteCardRequest {
+                        card_id: card.id,
+                        card_title: card.event_title.clone(),
+                    });
                 }
                 CountdownCardUiAction::OpenSettings => {
                     self.open_settings.insert(card.id);
@@ -403,6 +431,7 @@ impl CountdownUiState {
         CountdownRenderResult {
             event_dialog_requests,
             go_to_date_requests,
+            delete_card_requests,
         }
     }
 
@@ -569,8 +598,13 @@ impl CountdownUiState {
                 service.apply_visual_defaults(id);
                 false
             }
-            CountdownSettingsCommand::DeleteCard(id) => {
-                service.remove_card(id);
+            CountdownSettingsCommand::RequestDeleteCard(id, title) => {
+                // Add to pending delete requests - will be handled by the main app
+                self.pending_delete_requests.push(DeleteCardRequest {
+                    card_id: id,
+                    card_title: title,
+                });
+                // Close settings and clean up UI state
                 self.open_settings.remove(&id);
                 self.settings_geometry.remove(&id);
                 self.settings_needs_layout.remove(&id);

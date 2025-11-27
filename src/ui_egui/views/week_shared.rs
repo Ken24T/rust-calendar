@@ -19,6 +19,17 @@ pub const TIME_LABEL_WIDTH: f32 = 50.0;
 pub const COLUMN_SPACING: f32 = 1.0;
 pub const SLOT_HEIGHT: f32 = 30.0;
 
+/// Request for delete confirmation (event_id, event_title, is_occurrence_only)
+#[derive(Clone)]
+pub struct DeleteConfirmRequest {
+    pub event_id: i64,
+    pub event_title: String,
+    /// If true, only delete this occurrence (for recurring events)
+    pub occurrence_only: bool,
+    /// The occurrence date (needed for occurrence-only deletion)
+    pub occurrence_date: Option<chrono::DateTime<chrono::Local>>,
+}
+
 /// Result of event interactions in views (context menus, clicks, etc.)
 #[derive(Default)]
 pub struct EventInteractionResult {
@@ -28,6 +39,8 @@ pub struct EventInteractionResult {
     pub deleted_event_ids: Vec<i64>,
     /// Events that were moved via drag-and-drop (need countdown card sync)
     pub moved_events: Vec<Event>,
+    /// Request to show delete confirmation dialog
+    pub delete_confirm_request: Option<DeleteConfirmRequest>,
 }
 
 impl EventInteractionResult {
@@ -37,6 +50,9 @@ impl EventInteractionResult {
         }
         self.deleted_event_ids.extend(other.deleted_event_ids);
         self.moved_events.extend(other.moved_events);
+        if other.delete_confirm_request.is_some() {
+            self.delete_confirm_request = other.delete_confirm_request;
+        }
     }
 }
 
@@ -63,7 +79,7 @@ pub fn render_ribbon_event(
     event: &Event,
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
-    database: &'static Database,
+    _database: &'static Database,
 ) -> EventInteractionResult {
     let mut result = EventInteractionResult::default();
     
@@ -167,26 +183,34 @@ pub fn render_ribbon_event(
         if event.recurrence_rule.is_some() {
             if ui.button("🗑 Delete This Occurrence").clicked() {
                 if let Some(id) = event.id {
-                    let service = EventService::new(database.connection());
-                    let _ = service.delete_occurrence(id, event.start);
-                    // Note: occurrence deletion doesn't delete the whole event,
-                    // so countdown card stays (it's for the event series)
+                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                        event_id: id,
+                        event_title: event.title.clone(),
+                        occurrence_only: true,
+                        occurrence_date: Some(event.start),
+                    });
                 }
                 ui.close_menu();
             }
             if ui.button("🗑 Delete All Occurrences").clicked() {
                 if let Some(id) = event.id {
-                    let service = EventService::new(database.connection());
-                    let _ = service.delete(id);
-                    result.deleted_event_ids.push(id);
+                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                        event_id: id,
+                        event_title: event.title.clone(),
+                        occurrence_only: false,
+                        occurrence_date: None,
+                    });
                 }
                 ui.close_menu();
             }
         } else if ui.button("🗑 Delete").clicked() {
             if let Some(id) = event.id {
-                let service = EventService::new(database.connection());
-                let _ = service.delete(id);
-                result.deleted_event_ids.push(id);
+                result.delete_confirm_request = Some(DeleteConfirmRequest {
+                    event_id: id,
+                    event_title: event.title.clone(),
+                    occurrence_only: false,
+                    occurrence_date: None,
+                });
             }
             ui.close_menu();
         }
@@ -721,26 +745,34 @@ pub fn render_time_cell(
                 if event.recurrence_rule.is_some() {
                     if ui.button("🗑 Delete This Occurrence").clicked() {
                         if let Some(id) = event.id {
-                            let service = EventService::new(database.connection());
-                            let _ = service.delete_occurrence(id, event.start);
-                            // Note: occurrence deletion doesn't delete the whole event,
-                            // so countdown card stays (it's for the event series)
+                            result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                event_id: id,
+                                event_title: event.title.clone(),
+                                occurrence_only: true,
+                                occurrence_date: Some(event.start),
+                            });
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
                     if ui.button("🗑 Delete All Occurrences").clicked() {
                         if let Some(id) = event.id {
-                            let service = EventService::new(database.connection());
-                            let _ = service.delete(id);
-                            result.deleted_event_ids.push(id);
+                            result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                event_id: id,
+                                event_title: event.title.clone(),
+                                occurrence_only: false,
+                                occurrence_date: None,
+                            });
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
                 } else if ui.button("🗑 Delete").clicked() {
                     if let Some(id) = event.id {
-                        let service = EventService::new(database.connection());
-                        let _ = service.delete(id);
-                        result.deleted_event_ids.push(id);
+                        result.delete_confirm_request = Some(DeleteConfirmRequest {
+                            event_id: id,
+                            event_title: event.title.clone(),
+                            occurrence_only: false,
+                            occurrence_date: None,
+                        });
                     }
                     ui.memory_mut(|mem| mem.close_popup());
                 }

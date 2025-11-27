@@ -1,9 +1,11 @@
+use super::confirm::ConfirmAction;
 use super::state::ViewType;
 use super::CalendarApp;
 use crate::models::event::Event;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
+use crate::ui_egui::views::week_shared::DeleteConfirmRequest;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
@@ -11,6 +13,31 @@ use chrono::{Datelike, Local, NaiveDate};
 use std::collections::HashSet;
 
 impl CalendarApp {
+    /// Handle a delete confirmation request from a view
+    fn handle_delete_confirm_request(&mut self, request: DeleteConfirmRequest) {
+        let action = if request.occurrence_only {
+            if let Some(date) = request.occurrence_date {
+                ConfirmAction::DeleteEventOccurrence {
+                    event_id: request.event_id,
+                    event_title: request.event_title,
+                    occurrence_date: date,
+                }
+            } else {
+                // Fallback to full event deletion if no date provided
+                ConfirmAction::DeleteEvent {
+                    event_id: request.event_id,
+                    event_title: request.event_title,
+                }
+            }
+        } else {
+            ConfirmAction::DeleteEvent {
+                event_id: request.event_id,
+                event_title: request.event_title,
+            }
+        };
+        self.confirm_dialog.request(action);
+    }
+    
     pub(super) fn render_main_panel(
         &mut self,
         ctx: &egui::Context,
@@ -173,7 +200,12 @@ impl CalendarApp {
             self.show_event_dialog = true;
         }
         
-        // Handle deleted events - remove countdown cards
+        // Handle delete confirmation request
+        if let Some(request) = view_result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
+        }
+        
+        // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
@@ -244,7 +276,12 @@ impl CalendarApp {
             self.show_event_dialog = true;
         }
         
-        // Handle deleted events - remove countdown cards
+        // Handle delete confirmation request
+        if let Some(request) = view_result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
+        }
+        
+        // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
@@ -319,7 +356,12 @@ impl CalendarApp {
             self.show_event_dialog = true;
         }
         
-        // Handle deleted events - remove countdown cards
+        // Handle delete confirmation request
+        if let Some(request) = view_result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
+        }
+        
+        // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
@@ -331,8 +373,7 @@ impl CalendarApp {
     }
 
     pub(super) fn render_month_view(&mut self, ui: &mut egui::Ui) {
-        let mut deleted_event_ids = Vec::new();
-        let action = MonthView::show(
+        let result = MonthView::show(
             ui,
             &mut self.current_date,
             self.context.database(),
@@ -342,18 +383,17 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
-            &mut deleted_event_ids,
         );
         
         // Handle month view actions
-        if let MonthViewAction::SwitchToDayView(date) = action {
+        if let MonthViewAction::SwitchToDayView(date) = result.action {
             self.current_date = date;
             self.current_view = ViewType::Day;
         }
         
-        // Handle deleted events - remove countdown cards
-        for event_id in deleted_event_ids {
-            self.context.countdown_service_mut().remove_cards_for_event(event_id);
+        // Handle delete confirmation request
+        if let Some(request) = result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
         }
     }
 

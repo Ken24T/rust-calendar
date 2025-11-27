@@ -168,9 +168,26 @@ impl CalendarApp {
         for request in render_result.go_to_date_requests {
             self.current_date = request.date;
         }
+        
+        // Handle delete confirmation requests for countdown cards
+        for request in render_result.delete_card_requests {
+            self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                card_id: request.card_id,
+                card_title: request.card_title,
+            });
+        }
 
         self.countdown_ui
             .render_settings_dialogs(ctx, self.context.countdown_service_mut());
+        
+        // Handle delete requests from settings dialogs
+        for request in self.countdown_ui.drain_delete_requests() {
+            self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                card_id: request.card_id,
+                card_title: request.card_title,
+            });
+        }
+        
         self.flush_pending_event_bodies();
         self.handle_dialogs(ctx);
 

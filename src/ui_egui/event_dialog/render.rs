@@ -5,7 +5,6 @@ use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::countdown::CountdownCardId;
 use crate::services::database::Database;
-use crate::services::event::EventService;
 
 use super::recurrence::{RecurrenceFrequency, RecurrencePattern, Weekday};
 use super::state::{DatePickerTarget, EventDialogState};
@@ -25,13 +24,19 @@ pub struct CountdownCardChanges {
     pub days_font_size: f32,
 }
 
+/// Request for delete confirmation from the event dialog
+#[derive(Clone)]
+pub struct EventDeleteRequest {
+    pub event_id: i64,
+    pub event_title: String,
+}
+
 #[derive(Default)]
 pub struct EventDialogResult {
     pub saved_event: Option<Event>,
     pub card_changes: Option<CountdownCardChanges>,
-    /// ID of the event that was deleted, if any.
-    /// The caller should use this to remove associated countdown cards.
-    pub deleted_event_id: Option<i64>,
+    /// Request to show delete confirmation dialog
+    pub delete_request: Option<EventDeleteRequest>,
 }
 
 impl EventDialogResult {}
@@ -608,7 +613,7 @@ fn render_action_buttons(
     show_dialog: &mut bool,
 ) -> EventDialogResult {
     let mut saved_event = None;
-    let mut deleted_event_id = None;
+    let mut delete_request = None;
 
     indented_row(ui, |ui| {
         let can_save = !state.title.trim().is_empty();
@@ -651,13 +656,11 @@ fn render_action_buttons(
                 .clicked()
             {
                 if let Some(id) = state.event_id {
-                    let service = EventService::new(database.connection());
-                    if let Err(e) = service.delete(id) {
-                        state.error_message = Some(format!("Failed to delete: {}", e));
-                    } else {
-                        deleted_event_id = Some(id);
-                        *show_dialog = false;
-                    }
+                    delete_request = Some(EventDeleteRequest {
+                        event_id: id,
+                        event_title: state.title.clone(),
+                    });
+                    *show_dialog = false;
                 }
             }
         }
@@ -691,7 +694,7 @@ fn render_action_buttons(
     EventDialogResult {
         saved_event,
         card_changes,
-        deleted_event_id,
+        delete_request,
     }
 }
 

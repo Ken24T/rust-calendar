@@ -13,6 +13,12 @@ use egui::{Context, RichText};
 pub enum ConfirmAction {
     /// Delete an event by ID
     DeleteEvent { event_id: i64, event_title: String },
+    /// Delete a single occurrence of a recurring event
+    DeleteEventOccurrence { 
+        event_id: i64, 
+        event_title: String, 
+        occurrence_date: chrono::DateTime<chrono::Local> 
+    },
     /// Delete a countdown card by ID
     DeleteCountdownCard { card_id: crate::services::countdown::CountdownCardId, card_title: String },
     /// Discard unsaved changes in a dialog
@@ -26,6 +32,7 @@ impl ConfirmAction {
     pub fn title(&self) -> &'static str {
         match self {
             ConfirmAction::DeleteEvent { .. } => "Delete Event",
+            ConfirmAction::DeleteEventOccurrence { .. } => "Delete Occurrence",
             ConfirmAction::DeleteCountdownCard { .. } => "Delete Countdown",
             ConfirmAction::DiscardChanges => "Discard Changes",
             ConfirmAction::DeleteTheme { .. } => "Delete Theme",
@@ -37,6 +44,13 @@ impl ConfirmAction {
         match self {
             ConfirmAction::DeleteEvent { event_title, .. } => {
                 format!("Are you sure you want to delete \"{}\"?\n\nThis action cannot be undone.", event_title)
+            }
+            ConfirmAction::DeleteEventOccurrence { event_title, occurrence_date, .. } => {
+                format!(
+                    "Are you sure you want to delete this occurrence of \"{}\" on {}?\n\nOther occurrences will not be affected.",
+                    event_title,
+                    occurrence_date.format("%B %d, %Y")
+                )
             }
             ConfirmAction::DeleteCountdownCard { card_title, .. } => {
                 format!("Are you sure you want to delete the countdown \"{}\"?\n\nThis action cannot be undone.", card_title)
@@ -54,6 +68,7 @@ impl ConfirmAction {
     pub fn confirm_text(&self) -> &'static str {
         match self {
             ConfirmAction::DeleteEvent { .. } => "Delete",
+            ConfirmAction::DeleteEventOccurrence { .. } => "Delete",
             ConfirmAction::DeleteCountdownCard { .. } => "Delete",
             ConfirmAction::DiscardChanges => "Discard",
             ConfirmAction::DeleteTheme { .. } => "Delete",
@@ -64,6 +79,7 @@ impl ConfirmAction {
     pub fn is_destructive(&self) -> bool {
         match self {
             ConfirmAction::DeleteEvent { .. } => true,
+            ConfirmAction::DeleteEventOccurrence { .. } => true,
             ConfirmAction::DeleteCountdownCard { .. } => true,
             ConfirmAction::DiscardChanges => false,
             ConfirmAction::DeleteTheme { .. } => true,
@@ -233,6 +249,17 @@ impl CalendarApp {
                     
                     // Also remove any linked countdown card
                     self.context.countdown_service_mut().remove_cards_for_event(event_id);
+                }
+            }
+            ConfirmAction::DeleteEventOccurrence { event_id, event_title, occurrence_date } => {
+                let event_service = self.context.event_service();
+                if let Err(e) = event_service.delete_occurrence(event_id, occurrence_date) {
+                    log::error!("Failed to delete occurrence: {}", e);
+                    self.toast_manager.error(format!("Failed to delete occurrence: {}", e));
+                } else {
+                    log::info!("Deleted occurrence of {} on {}", event_title, occurrence_date.format("%Y-%m-%d"));
+                    self.toast_manager.success(format!("Deleted occurrence of \"{}\"", event_title));
+                    // Note: Don't remove countdown card for occurrence-only deletion
                 }
             }
             ConfirmAction::DeleteCountdownCard { card_id, card_title } => {
