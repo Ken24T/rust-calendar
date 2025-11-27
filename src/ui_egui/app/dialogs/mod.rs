@@ -5,6 +5,7 @@ use crate::services::event::EventService;
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
 use crate::ui_egui::dialogs::export_dialog::{render_export_range_dialog, ExportDialogResult};
 use crate::ui_egui::dialogs::search_dialog::{render_search_dialog, SearchDialogAction};
+use crate::ui_egui::dialogs::template_manager::render_template_manager_dialog;
 use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
 use crate::ui_egui::event_dialog::{
@@ -36,6 +37,7 @@ impl CalendarApp {
         self.render_theme_creator(ctx);
         self.render_about_dialog(ctx);
         self.render_export_range_dialog(ctx);
+        self.render_template_manager_dialog(ctx);
 
         let should_reload_db =
             render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
@@ -492,5 +494,13 @@ impl CalendarApp {
                 self.state.export_dialog_state.reset();
             }
         }
+    }
+
+    fn render_template_manager_dialog(&mut self, ctx: &egui::Context) {
+        render_template_manager_dialog(
+            ctx,
+            &mut self.state.template_manager_state,
+            self.context.database(),
+        );
     }
 }

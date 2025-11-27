@@ -2,6 +2,7 @@ use crate::services::countdown::CountdownCardGeometry;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::dialogs::export_dialog::ExportDialogState;
 use crate::ui_egui::dialogs::search_dialog::SearchDialogState;
+use crate::ui_egui::dialogs::template_manager::TemplateManagerState;
 use crate::ui_egui::dialogs::theme_creator::ThemeCreatorState;
 use crate::ui_egui::dialogs::theme_dialog::ThemeDialogState;
 use chrono::NaiveDate;
@@ -39,6 +40,7 @@ pub struct AppState {
     pub theme_dialog_state: ThemeDialogState,
     pub theme_creator_state: ThemeCreatorState,
     pub search_dialog_state: SearchDialogState,
+    pub template_manager_state: TemplateManagerState,
     pub show_search_dialog: bool,
     pub show_about_dialog: bool,
     pub show_export_range_dialog: bool,
@@ -59,6 +61,7 @@ impl AppState {
             theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
             search_dialog_state: SearchDialogState::default(),
+            template_manager_state: TemplateManagerState::default(),
             show_search_dialog: false,
             show_about_dialog: false,
             show_export_range_dialog: false,

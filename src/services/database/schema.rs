@@ -12,6 +12,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_events_table(conn)?;
     create_countdown_tables(conn)?;
     run_countdown_migrations(conn)?;
+    create_event_templates_table(conn)?;
     Ok(())
 }
 
@@ -507,6 +508,28 @@ fn migrate_use_default_flags(conn: &Connection) -> Result<()> {
             [],
         )?;
     }
+
+    Ok(())
+}
+
+fn create_event_templates_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS event_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            description TEXT,
+            location TEXT,
+            duration_minutes INTEGER NOT NULL DEFAULT 60,
+            all_day INTEGER NOT NULL DEFAULT 0,
+            category TEXT,
+            color TEXT,
+            recurrence_rule TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create event_templates table")?;
 
     Ok(())
 }

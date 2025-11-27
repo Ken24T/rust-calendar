@@ -3,6 +3,7 @@ use chrono::Datelike;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::services::pdf::{PdfExportService, service::PdfExportOptions};
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::services::countdown::CountdownDisplayMode;
 use egui::Context;
 
@@ -260,6 +261,10 @@ impl CalendarApp {
                 ));
                 ui.close_menu();
             }
+            
+            // Templates submenu
+            self.render_templates_submenu(ui);
+            
             ui.separator();
             if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
                 self.state.show_search_dialog = true;
@@ -303,6 +308,79 @@ impl CalendarApp {
                 }
             });
         });
+    }
+
+    fn render_templates_submenu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("📋 Templates", |ui| {
+            // Load templates
+            let service = TemplateService::new(self.context.database().connection());
+            let templates = service.list_all().unwrap_or_default();
+
+            if templates.is_empty() {
+                ui.label(egui::RichText::new("No templates").weak().italics());
+                ui.separator();
+            } else {
+                // Show each template as a button
+                for template in &templates {
+                    let label = format!("{} → {}", template.name, template.title);
+                    if ui.button(&label).on_hover_text(format!(
+                        "Create event from template: {}\nDuration: {}",
+                        template.title,
+                        if template.all_day {
+                            "All day".to_string()
+                        } else {
+                            let h = template.duration_minutes / 60;
+                            let m = template.duration_minutes % 60;
+                            if h > 0 && m > 0 {
+                                format!("{}h {}m", h, m)
+                            } else if h > 0 {
+                                format!("{}h", h)
+                            } else {
+                                format!("{}m", m)
+                            }
+                        }
+                    )).clicked() {
+                        self.create_event_from_template(template);
+                        ui.close_menu();
+                    }
+                }
+                ui.separator();
+            }
+
+            if ui.button("Manage Templates...").clicked() {
+                self.state.template_manager_state.open(self.context.database());
+                ui.close_menu();
+            }
+        });
+    }
+
+    /// Create a new event from a template
+    fn create_event_from_template(&mut self, template: &crate::models::template::EventTemplate) {
+        use chrono::{Duration, NaiveDateTime};
+        
+        let mut state = EventDialogState::new_event(self.current_date, &self.settings);
+        
+        // Apply template values
+        state.title = template.title.clone();
+        state.description = template.description.clone().unwrap_or_default();
+        state.location = template.location.clone().unwrap_or_default();
+        state.category = template.category.clone().unwrap_or_default();
+        state.color = template.color.clone().unwrap_or_else(|| "#3B82F6".to_string());
+        state.all_day = template.all_day;
+        
+        // Calculate end time based on duration
+        if !template.all_day {
+            let start_dt = NaiveDateTime::new(state.date, state.start_time);
+            let end_dt = start_dt + Duration::minutes(template.duration_minutes as i64);
+            state.end_time = end_dt.time();
+            // If end goes past midnight, adjust end date
+            if end_dt.date() > state.date {
+                state.end_date = end_dt.date();
+            }
+        }
+        
+        self.event_dialog_state = Some(state);
+        self.show_event_dialog = true;
     }
 
     fn render_help_menu(&mut self, ui: &mut egui::Ui) {

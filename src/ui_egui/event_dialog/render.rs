@@ -65,8 +65,8 @@ pub fn render_event_dialog(
     .collapsible(false)
     .resizable(true)
     .default_width(600.0)
-    .default_height(720.0)
-    .min_height(680.0)
+    .default_height(750.0)
+    .min_height(720.0)
     .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
     .show(ctx, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -685,6 +685,9 @@ fn render_action_buttons(
             }
         }
     });
+
+    // Add padding below buttons
+    ui.add_space(16.0);
 
     // Build card changes if there's a linked card and we saved successfully
     let card_changes = if saved_event.is_some() {

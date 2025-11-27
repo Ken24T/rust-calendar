@@ -878,7 +878,7 @@ docs: document keyboard shortcuts in README
 ### Phase 2 Status
 - [x] Event Search
 - [ ] Category Management & Filtering
-- [ ] Event Templates
+- [x] Event Templates
 - [x] Week Numbers
 
 ### Phase 3 Status

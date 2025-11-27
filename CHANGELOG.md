@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.15] - 2025-11-28
+
+### Added
+- **Event Templates** - Save and reuse common event configurations:
+  - Templates submenu in Events menu with quick access to saved templates
+  - "Manage Templates..." dialog for creating, editing, and deleting templates
+  - Templates store: name, title, description, location, duration, category, and color
+  - Click a template to instantly create a new event prefilled with template values
+  - Database table `event_templates` for persistent storage
+
 ## [1.0.14] - 2025-11-28
 
 ### Added

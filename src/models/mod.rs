@@ -5,4 +5,5 @@ pub mod event;
 pub mod recurrence;
 pub mod reminder;
 pub mod settings;
+pub mod template;
 pub mod ui;

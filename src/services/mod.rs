@@ -10,4 +10,5 @@ pub mod notification;
 pub mod pdf;
 pub mod reminder;
 pub mod settings;
+pub mod template;
 pub mod theme; // Theme service - adapted for egui
