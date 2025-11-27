@@ -7,6 +7,53 @@ use crate::services::countdown::{
 use chrono::{DateTime, Local};
 use std::collections::HashMap;
 
+/// Format the detailed countdown tooltip for a card
+pub fn format_card_tooltip(card: &CountdownCardState, now: DateTime<Local>) -> String {
+    let mut lines = Vec::new();
+    
+    // Event date range if available
+    if let (Some(start), Some(end)) = (card.event_start, card.event_end) {
+        let start_str = start.format("%d %b %Y %H:%M").to_string();
+        let end_str = if start.date_naive() == end.date_naive() {
+            // Same day - just show time for end
+            end.format("%H:%M").to_string()
+        } else {
+            end.format("%d %b %Y %H:%M").to_string()
+        };
+        lines.push(format!("📅 {} → {}", start_str, end_str));
+    }
+    
+    // Detailed countdown (DD:HH:MM)
+    let duration = card.start_at.signed_duration_since(now);
+    if duration.num_seconds() > 0 {
+        let total_seconds = duration.num_seconds();
+        let days = total_seconds / 86400;
+        let hours = (total_seconds % 86400) / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        
+        if days > 0 {
+            lines.push(format!("⏱ {}d {:02}h {:02}m remaining", days, hours, minutes));
+        } else if hours > 0 {
+            lines.push(format!("⏱ {:02}h {:02}m remaining", hours, minutes));
+        } else {
+            lines.push(format!("⏱ {:02}m remaining", minutes));
+        }
+    } else {
+        lines.push("⏱ Event has started!".to_string());
+    }
+    
+    // Target time
+    lines.push(format!("🎯 Target: {}", card.start_at.format("%d %b %Y %H:%M")));
+    
+    // Comment/description if present
+    if let Some(body) = card.comment.as_ref().map(|t| t.trim()).filter(|t| !t.is_empty()) {
+        lines.push(String::new()); // blank line
+        lines.push(format!("📝 {}", body));
+    }
+    
+    lines.join("\n")
+}
+
 /// Layout orientation for cards within the container
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutOrientation {
@@ -531,17 +578,10 @@ pub fn render_card_content(
                         .color(days_fg),
                 );
 
-                // Tooltip with comment if present
-                if let Some(body) = card
-                    .comment
-                    .as_ref()
-                    .map(|text| text.trim())
-                    .filter(|text| !text.is_empty())
-                {
-                    countdown_response.on_hover_ui_at_pointer(|ui| {
-                        ui.label(body);
-                    });
-                }
+                // Enhanced tooltip with event details and countdown
+                countdown_response.on_hover_ui_at_pointer(|ui| {
+                    ui.label(format_card_tooltip(card, now));
+                });
             },
         );
     });

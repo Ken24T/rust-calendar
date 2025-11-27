@@ -440,6 +440,21 @@ fn run_countdown_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE countdown_settings ADD COLUMN card_order TEXT",
     )?;
 
+    // Add event_start and event_end columns for enhanced tooltip display
+    migrations::ensure_column(
+        conn,
+        "countdown_cards",
+        "event_start",
+        "ALTER TABLE countdown_cards ADD COLUMN event_start TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "countdown_cards",
+        "event_end",
+        "ALTER TABLE countdown_cards ADD COLUMN event_end TEXT",
+    )?;
+
     // Reset use_default_* flags to 0 for existing cards (one-time migration)
     // This ensures checkboxes start unchecked by default
     migrate_use_default_flags(conn)?;

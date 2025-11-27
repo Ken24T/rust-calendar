@@ -55,7 +55,8 @@ impl<'a> CountdownRepository<'a> {
     /// Get all countdown cards from the database
     pub fn get_all_cards(&self) -> Result<Vec<CountdownCardState>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, event_id, event_title, start_at, title_override, auto_title_override,
+            "SELECT id, event_id, event_title, start_at, event_start, event_end,
+                    title_override, auto_title_override,
                     comment, event_color,
                     geometry_x, geometry_y, geometry_width, geometry_height,
                     accent_color, always_on_top, compact_mode,
@@ -84,7 +85,8 @@ impl<'a> CountdownRepository<'a> {
     #[allow(dead_code)]
     pub fn get_card(&self, id: CountdownCardId) -> Result<Option<CountdownCardState>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, event_id, event_title, start_at, title_override, auto_title_override,
+            "SELECT id, event_id, event_title, start_at, event_start, event_end,
+                    title_override, auto_title_override,
                     comment, event_color,
                     geometry_x, geometry_y, geometry_width, geometry_height,
                     accent_color, always_on_top, compact_mode,
@@ -109,7 +111,8 @@ impl<'a> CountdownRepository<'a> {
     #[allow(dead_code)]
     pub fn get_card_by_event_id(&self, event_id: i64) -> Result<Option<CountdownCardState>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, event_id, event_title, start_at, title_override, auto_title_override,
+            "SELECT id, event_id, event_title, start_at, event_start, event_end,
+                    title_override, auto_title_override,
                     comment, event_color,
                     geometry_x, geometry_y, geometry_width, geometry_height,
                     accent_color, always_on_top, compact_mode,
@@ -133,13 +136,16 @@ impl<'a> CountdownRepository<'a> {
     /// Insert a new countdown card
     pub fn insert_card(&self, card: &CountdownCardState) -> Result<()> {
         let start_at_str = card.start_at.to_rfc3339();
+        let event_start_str = card.event_start.map(|t| t.to_rfc3339());
+        let event_end_str = card.event_end.map(|t| t.to_rfc3339());
         let event_color_str = card.event_color.map(|c| format!("{},{},{},{}", c.r, c.g, c.b, c.a));
         let last_warning_str = card.last_warning_state.map(warning_state_to_string);
         let last_notif_str = card.last_notification_time.map(|t| t.to_rfc3339());
 
         self.conn.execute(
             "INSERT INTO countdown_cards (
-                id, event_id, event_title, start_at, title_override, auto_title_override,
+                id, event_id, event_title, start_at, event_start, event_end,
+                title_override, auto_title_override,
                 comment, event_color,
                 geometry_x, geometry_y, geometry_width, geometry_height,
                 accent_color, always_on_top, compact_mode,
@@ -153,23 +159,25 @@ impl<'a> CountdownRepository<'a> {
                 auto_dismiss_delay_seconds,
                 last_computed_days, last_warning_state, last_notification_time
             ) VALUES (
-                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
-                ?9, ?10, ?11, ?12,
-                ?13, ?14, ?15,
-                ?16, ?17, ?18, ?19, ?20,
-                ?21, ?22, ?23, ?24, ?25,
-                ?26,
-                ?27, ?28, ?29, ?30, ?31,
-                ?32, ?33, ?34, ?35, ?36,
-                ?37,
-                ?38, ?39, ?40, ?41,
-                ?42, ?43, ?44
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+                ?11, ?12, ?13, ?14,
+                ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21, ?22,
+                ?23, ?24, ?25, ?26, ?27,
+                ?28,
+                ?29, ?30, ?31, ?32, ?33,
+                ?34, ?35, ?36, ?37, ?38,
+                ?39,
+                ?40, ?41, ?42, ?43,
+                ?44, ?45, ?46
             )",
             params![
                 card.id.0 as i64,
                 card.event_id,
                 card.event_title,
                 start_at_str,
+                event_start_str,
+                event_end_str,
                 card.title_override,
                 card.auto_title_override,
                 card.comment,
@@ -219,25 +227,27 @@ impl<'a> CountdownRepository<'a> {
     /// Update an existing countdown card
     pub fn update_card(&self, card: &CountdownCardState) -> Result<bool> {
         let start_at_str = card.start_at.to_rfc3339();
+        let event_start_str = card.event_start.map(|t| t.to_rfc3339());
+        let event_end_str = card.event_end.map(|t| t.to_rfc3339());
         let event_color_str = card.event_color.map(|c| format!("{},{},{},{}", c.r, c.g, c.b, c.a));
         let last_warning_str = card.last_warning_state.map(warning_state_to_string);
         let last_notif_str = card.last_notification_time.map(|t| t.to_rfc3339());
 
         let rows = self.conn.execute(
             "UPDATE countdown_cards SET
-                event_id = ?2, event_title = ?3, start_at = ?4, title_override = ?5,
-                auto_title_override = ?6, comment = ?7, event_color = ?8,
-                geometry_x = ?9, geometry_y = ?10, geometry_width = ?11, geometry_height = ?12,
-                accent_color = ?13, always_on_top = ?14, compact_mode = ?15,
-                use_default_title_bg = ?16, title_bg_r = ?17, title_bg_g = ?18, title_bg_b = ?19, title_bg_a = ?20,
-                use_default_title_fg = ?21, title_fg_r = ?22, title_fg_g = ?23, title_fg_b = ?24, title_fg_a = ?25,
-                title_font_size = ?26,
-                use_default_body_bg = ?27, body_bg_r = ?28, body_bg_g = ?29, body_bg_b = ?30, body_bg_a = ?31,
-                use_default_days_fg = ?32, days_fg_r = ?33, days_fg_g = ?34, days_fg_b = ?35, days_fg_a = ?36,
-                days_font_size = ?37,
-                auto_dismiss_enabled = ?38, auto_dismiss_on_event_start = ?39, auto_dismiss_on_event_end = ?40,
-                auto_dismiss_delay_seconds = ?41,
-                last_computed_days = ?42, last_warning_state = ?43, last_notification_time = ?44,
+                event_id = ?2, event_title = ?3, start_at = ?4, event_start = ?5, event_end = ?6,
+                title_override = ?7, auto_title_override = ?8, comment = ?9, event_color = ?10,
+                geometry_x = ?11, geometry_y = ?12, geometry_width = ?13, geometry_height = ?14,
+                accent_color = ?15, always_on_top = ?16, compact_mode = ?17,
+                use_default_title_bg = ?18, title_bg_r = ?19, title_bg_g = ?20, title_bg_b = ?21, title_bg_a = ?22,
+                use_default_title_fg = ?23, title_fg_r = ?24, title_fg_g = ?25, title_fg_b = ?26, title_fg_a = ?27,
+                title_font_size = ?28,
+                use_default_body_bg = ?29, body_bg_r = ?30, body_bg_g = ?31, body_bg_b = ?32, body_bg_a = ?33,
+                use_default_days_fg = ?34, days_fg_r = ?35, days_fg_g = ?36, days_fg_b = ?37, days_fg_a = ?38,
+                days_font_size = ?39,
+                auto_dismiss_enabled = ?40, auto_dismiss_on_event_start = ?41, auto_dismiss_on_event_end = ?42,
+                auto_dismiss_delay_seconds = ?43,
+                last_computed_days = ?44, last_warning_state = ?45, last_notification_time = ?46,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?1",
             params![
@@ -245,6 +255,8 @@ impl<'a> CountdownRepository<'a> {
                 card.event_id,
                 card.event_title,
                 start_at_str,
+                event_start_str,
+                event_end_str,
                 card.title_override,
                 card.auto_title_override,
                 card.comment,
@@ -573,14 +585,28 @@ fn row_to_card_state(row: &Row<'_>) -> rusqlite::Result<CountdownCardState> {
     let event_id: Option<i64> = row.get(1)?;
     let event_title: String = row.get(2)?;
     let start_at_str: String = row.get(3)?;
-    let title_override: Option<String> = row.get(4)?;
-    let auto_title_override: bool = row.get(5)?;
-    let comment: Option<String> = row.get(6)?;
-    let event_color_str: Option<String> = row.get(7)?;
+    let event_start_str: Option<String> = row.get(4)?;
+    let event_end_str: Option<String> = row.get(5)?;
+    let title_override: Option<String> = row.get(6)?;
+    let auto_title_override: bool = row.get(7)?;
+    let comment: Option<String> = row.get(8)?;
+    let event_color_str: Option<String> = row.get(9)?;
 
     let start_at = DateTime::parse_from_rfc3339(&start_at_str)
         .map(|dt| dt.with_timezone(&Local))
         .unwrap_or_else(|_| Local::now());
+
+    let event_start = event_start_str.and_then(|s| {
+        DateTime::parse_from_rfc3339(&s)
+            .map(|dt| dt.with_timezone(&Local))
+            .ok()
+    });
+
+    let event_end = event_end_str.and_then(|s| {
+        DateTime::parse_from_rfc3339(&s)
+            .map(|dt| dt.with_timezone(&Local))
+            .ok()
+    });
 
     let event_color = event_color_str.and_then(|s| {
         let parts: Vec<&str> = s.split(',').collect();
@@ -597,38 +623,38 @@ fn row_to_card_state(row: &Row<'_>) -> rusqlite::Result<CountdownCardState> {
     });
 
     let geometry = CountdownCardGeometry {
-        x: row.get(8)?,
-        y: row.get(9)?,
-        width: row.get(10)?,
-        height: row.get(11)?,
+        x: row.get(10)?,
+        y: row.get(11)?,
+        width: row.get(12)?,
+        height: row.get(13)?,
     };
 
     let visuals = CountdownCardVisuals {
-        accent_color: row.get(12)?,
-        always_on_top: row.get(13)?,
-        compact_mode: row.get(14)?,
-        use_default_title_bg: row.get(15)?,
-        title_bg_color: RgbaColor::new(row.get(16)?, row.get(17)?, row.get(18)?, row.get(19)?),
-        use_default_title_fg: row.get(20)?,
-        title_fg_color: RgbaColor::new(row.get(21)?, row.get(22)?, row.get(23)?, row.get(24)?),
-        title_font_size: row.get(25)?,
-        use_default_body_bg: row.get(26)?,
-        body_bg_color: RgbaColor::new(row.get(27)?, row.get(28)?, row.get(29)?, row.get(30)?),
-        use_default_days_fg: row.get(31)?,
-        days_fg_color: RgbaColor::new(row.get(32)?, row.get(33)?, row.get(34)?, row.get(35)?),
-        days_font_size: row.get(36)?,
+        accent_color: row.get(14)?,
+        always_on_top: row.get(15)?,
+        compact_mode: row.get(16)?,
+        use_default_title_bg: row.get(17)?,
+        title_bg_color: RgbaColor::new(row.get(18)?, row.get(19)?, row.get(20)?, row.get(21)?),
+        use_default_title_fg: row.get(22)?,
+        title_fg_color: RgbaColor::new(row.get(23)?, row.get(24)?, row.get(25)?, row.get(26)?),
+        title_font_size: row.get(27)?,
+        use_default_body_bg: row.get(28)?,
+        body_bg_color: RgbaColor::new(row.get(29)?, row.get(30)?, row.get(31)?, row.get(32)?),
+        use_default_days_fg: row.get(33)?,
+        days_fg_color: RgbaColor::new(row.get(34)?, row.get(35)?, row.get(36)?, row.get(37)?),
+        days_font_size: row.get(38)?,
     };
 
     let auto_dismiss = CountdownAutoDismissConfig {
-        enabled: row.get(37)?,
-        on_event_start: row.get(38)?,
-        on_event_end: row.get(39)?,
-        delay_seconds: row.get(40)?,
+        enabled: row.get(39)?,
+        on_event_start: row.get(40)?,
+        on_event_end: row.get(41)?,
+        delay_seconds: row.get(42)?,
     };
 
-    let last_computed_days: Option<i64> = row.get(41)?;
-    let last_warning_str: Option<String> = row.get(42)?;
-    let last_notification_str: Option<String> = row.get(43)?;
+    let last_computed_days: Option<i64> = row.get(43)?;
+    let last_warning_str: Option<String> = row.get(44)?;
+    let last_notification_str: Option<String> = row.get(45)?;
 
     let last_warning_state = last_warning_str.and_then(|s| string_to_warning_state(&s));
     let last_notification_time = last_notification_str.and_then(|s| {
@@ -642,6 +668,8 @@ fn row_to_card_state(row: &Row<'_>) -> rusqlite::Result<CountdownCardState> {
         event_id,
         event_title,
         start_at,
+        event_start,
+        event_end,
         title_override,
         auto_title_override,
         geometry,

@@ -238,6 +238,8 @@ impl CalendarApp {
             Some(event_id),
             event.title.clone(),
             event.start,
+            Some(event.start),
+            Some(event.end),
             event_color,
             event.description.clone(),
             self.settings.default_card_width,

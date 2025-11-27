@@ -374,6 +374,8 @@ impl CountdownService {
         event_id: Option<i64>,
         event_title: impl Into<String>,
         start_at: DateTime<Local>,
+        event_start: Option<DateTime<Local>>,
+        event_end: Option<DateTime<Local>>,
         event_color: Option<RgbaColor>,
         event_body: Option<String>,
         default_width: f32,
@@ -423,6 +425,8 @@ impl CountdownService {
             event_id,
             event_title: event_title.into(),
             start_at,
+            event_start,
+            event_end,
             title_override: None,
             auto_title_override: false,
             geometry,
@@ -1218,6 +1222,8 @@ mod tests {
             target_start,
             None,
             None,
+            None,
+            None,
             120.0,
             110.0,
         );
@@ -1241,7 +1247,7 @@ mod tests {
         let file_path = dir.path().join("countdowns.json");
         let mut service = CountdownService::new();
         let target_start = Local::now() + Duration::days(10);
-        service.create_card(None, "Persist", target_start, None, None, 120.0, 110.0);
+        service.create_card(None, "Persist", target_start, None, None, None, None, 120.0, 110.0);
         service.save_to_disk(&file_path).unwrap();
 
         let loaded = CountdownService::load_from_disk(&file_path).unwrap();
@@ -1258,6 +1264,8 @@ mod tests {
             Some(1),
             "Palette",
             target_start,
+            None,
+            None,
             Some(accent),
             None,
             120.0,
@@ -1285,9 +1293,9 @@ mod tests {
         let target_start = Local::now() + Duration::days(3);
         let accent = RgbaColor::new(10, 150, 200, 255);
         let card_a =
-            service.create_card(Some(1), "A", target_start, Some(accent), None, 120.0, 110.0);
+            service.create_card(Some(1), "A", target_start, None, None, Some(accent), None, 120.0, 110.0);
         let card_b =
-            service.create_card(Some(2), "B", target_start, Some(accent), None, 120.0, 110.0);
+            service.create_card(Some(2), "B", target_start, None, None, Some(accent), None, 120.0, 110.0);
 
         assert!(service.set_use_default_title_bg(card_a, false));
         assert!(service.set_use_default_title_bg(card_b, true));
@@ -1308,6 +1316,8 @@ mod tests {
             Some(1),
             "First",
             base_time,
+            None,
+            None,
             Some(accent),
             None,
             120.0,
@@ -1319,6 +1329,8 @@ mod tests {
             Some(2),
             "Second",
             base_time + Duration::days(3),
+            None,
+            None,
             Some(accent),
             None,
             120.0,
