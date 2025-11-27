@@ -206,8 +206,8 @@ impl CalendarApp {
         }
         
         // Handle template selection from context menu
-        if let Some((template_id, date)) = view_result.template_selection {
-            self.create_event_from_template_with_date(template_id, date);
+        if let Some((template_id, date, time)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date, time);
         }
         
         // Handle deleted events - remove countdown cards (legacy path)
@@ -287,8 +287,8 @@ impl CalendarApp {
         }
         
         // Handle template selection from context menu
-        if let Some((template_id, date)) = view_result.template_selection {
-            self.create_event_from_template_with_date(template_id, date);
+        if let Some((template_id, date, time)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date, time);
         }
         
         // Handle deleted events - remove countdown cards (legacy path)
@@ -372,8 +372,8 @@ impl CalendarApp {
         }
         
         // Handle template selection from context menu
-        if let Some((template_id, date)) = view_result.template_selection {
-            self.create_event_from_template_with_date(template_id, date);
+        if let Some((template_id, date, time)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date, time);
         }
         
         // Handle deleted events - remove countdown cards (legacy path)
@@ -407,7 +407,7 @@ impl CalendarApp {
                 self.current_view = ViewType::Day;
             }
             MonthViewAction::CreateFromTemplate(template_id, date) => {
-                self.create_event_from_template_with_date(template_id, date);
+                self.create_event_from_template_with_date(template_id, date, None);
             }
             MonthViewAction::None => {}
         }

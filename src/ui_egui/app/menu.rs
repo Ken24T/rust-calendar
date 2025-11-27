@@ -383,9 +383,14 @@ impl CalendarApp {
         self.show_event_dialog = true;
     }
     
-    /// Create a new event from a template by ID with a specific date
+    /// Create a new event from a template by ID with a specific date and optional time
     /// Used by context menus in calendar views
-    pub(super) fn create_event_from_template_with_date(&mut self, template_id: i64, date: chrono::NaiveDate) {
+    pub(super) fn create_event_from_template_with_date(
+        &mut self,
+        template_id: i64,
+        date: chrono::NaiveDate,
+        time: Option<chrono::NaiveTime>,
+    ) {
         let service = TemplateService::new(self.context.database().connection());
         if let Ok(template) = service.get_by_id(template_id) {
             use chrono::{Duration, NaiveDateTime};
@@ -399,6 +404,13 @@ impl CalendarApp {
             state.category = template.category.clone().unwrap_or_default();
             state.color = template.color.clone().unwrap_or_else(|| "#3B82F6".to_string());
             state.all_day = template.all_day;
+            
+            // Use the clicked time if provided, otherwise use the default start time
+            if let Some(start_time) = time {
+                if !template.all_day {
+                    state.start_time = start_time;
+                }
+            }
             
             // Calculate end time based on duration
             if !template.all_day {

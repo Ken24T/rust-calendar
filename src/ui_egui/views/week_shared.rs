@@ -43,8 +43,8 @@ pub struct EventInteractionResult {
     pub moved_events: Vec<Event>,
     /// Request to show delete confirmation dialog
     pub delete_confirm_request: Option<DeleteConfirmRequest>,
-    /// Request to create event from template (template_id, date)
-    pub template_selection: Option<(i64, NaiveDate)>,
+    /// Request to create event from template (template_id, date, optional time)
+    pub template_selection: Option<(i64, NaiveDate, Option<NaiveTime>)>,
 }
 
 impl EventInteractionResult {
@@ -854,7 +854,7 @@ pub fn render_time_cell(
                                 }
                             )).clicked() {
                                 if let Some(id) = template.id {
-                                    result.template_selection = Some((id, date));
+                                    result.template_selection = Some((id, date, Some(time)));
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
