@@ -268,6 +268,10 @@ impl CountdownService {
         &self.cards
     }
 
+    pub fn visual_defaults(&self) -> &CountdownCardVisuals {
+        &self.visual_defaults
+    }
+
     /// Find a countdown card by its associated event ID
     pub fn find_card_by_event_id(&self, event_id: i64) -> Option<&CountdownCardState> {
         self.cards.iter().find(|card| card.event_id == Some(event_id))

@@ -1,3 +1,6 @@
+use super::container::{
+    render_container_window, ContainerAction, ContainerLayout, DragState,
+};
 use super::render::{
     render_countdown_card_ui, viewport_builder_for_card, viewport_builder_for_settings,
     viewport_title_matches, CountdownCardUiAction, COUNTDOWN_SETTINGS_HEIGHT,
@@ -5,7 +8,7 @@ use super::render::{
 use super::settings::{render_countdown_settings_ui, CountdownSettingsCommand};
 use crate::services::countdown::{
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownService,
+    CountdownDisplayMode, CountdownService,
 };
 use chrono::Local;
 use egui::{self, Context};
@@ -43,6 +46,9 @@ pub(in super::super) struct CountdownUiState {
     render_log_state: HashMap<CountdownCardId, CountdownRenderSnapshot>,
     pending_event_body_updates: Vec<(i64, Option<String>)>,
     geometry_samples: HashMap<CountdownCardId, GeometrySampleState>,
+    // Container mode fields
+    container_layout: ContainerLayout,
+    container_drag_state: DragState,
 }
 
 const MAX_PENDING_GEOMETRY_FRAMES: u32 = 120;
@@ -105,6 +111,124 @@ impl CountdownUiState {
     }
 
     pub(in super::super) fn render_cards(
+        &mut self,
+        ctx: &Context,
+        service: &mut CountdownService,
+        default_card_width: f32,
+        default_card_height: f32,
+    ) -> CountdownRenderResult {
+        // Branch based on display mode
+        match service.display_mode() {
+            CountdownDisplayMode::IndividualWindows => {
+                self.render_individual_windows(ctx, service)
+            }
+            CountdownDisplayMode::Container => {
+                self.render_container_mode(ctx, service, default_card_width, default_card_height)
+            }
+        }
+    }
+
+    /// Render countdown cards in container mode (all cards in a single window)
+    fn render_container_mode(
+        &mut self,
+        ctx: &Context,
+        service: &mut CountdownService,
+        default_card_width: f32,
+        default_card_height: f32,
+    ) -> CountdownRenderResult {
+        let cards = service.cards().to_vec();
+        let now = Local::now();
+        let notification_config = service.notification_config().clone();
+        let visual_defaults = service.visual_defaults().clone();
+        let container_geometry = service.container_geometry();
+        let card_order = service.card_order().to_vec();
+
+        let mut event_dialog_requests = Vec::new();
+        let mut go_to_date_requests = Vec::new();
+
+        // Render the container
+        let actions = render_container_window(
+            ctx,
+            &cards,
+            &card_order,
+            &mut self.container_layout,
+            &mut self.container_drag_state,
+            now,
+            &notification_config,
+            &visual_defaults,
+            container_geometry,
+            default_card_width,
+            default_card_height,
+        );
+
+        // Process container actions
+        for action in actions {
+            match action {
+                ContainerAction::None => {}
+                ContainerAction::ReorderCards(new_order) => {
+                    service.reorder_cards(new_order);
+                }
+                ContainerAction::DeleteCard(card_id) => {
+                    log::info!("Delete action from container for card {:?}", card_id);
+                    service.remove_card(card_id);
+                    self.open_settings.remove(&card_id);
+                    self.settings_geometry.remove(&card_id);
+                    self.settings_needs_layout.remove(&card_id);
+                }
+                ContainerAction::OpenSettings(card_id) => {
+                    if let Some(card) = cards.iter().find(|c| c.id == card_id) {
+                        self.open_settings.insert(card_id);
+                        let default_geometry = default_settings_geometry_for(card);
+                        self.settings_geometry
+                            .entry(card_id)
+                            .or_insert(default_geometry);
+                        self.settings_needs_layout.insert(card_id);
+                    }
+                }
+                ContainerAction::OpenEventDialog(card_id) => {
+                    if let Some(card) = cards.iter().find(|c| c.id == card_id) {
+                        if let Some(event_id) = card.event_id {
+                            event_dialog_requests.push(OpenEventDialogRequest {
+                                event_id,
+                                card_id,
+                                visuals: card.visuals.clone(),
+                            });
+                        } else {
+                            // Fall back to card settings if no event
+                            self.open_settings.insert(card_id);
+                            let default_geometry = default_settings_geometry_for(card);
+                            self.settings_geometry
+                                .entry(card_id)
+                                .or_insert(default_geometry);
+                            self.settings_needs_layout.insert(card_id);
+                        }
+                    }
+                }
+                ContainerAction::GoToDate(date) => {
+                    go_to_date_requests.push(GoToDateRequest { date });
+                }
+                ContainerAction::RefreshCard(_card_id) => {
+                    ctx.request_repaint();
+                }
+                ContainerAction::GeometryChanged(geometry) => {
+                    service.update_container_geometry(geometry);
+                }
+                ContainerAction::Closed => {
+                    // User closed the container - switch back to individual windows mode
+                    log::info!("Container closed, switching to individual windows mode");
+                    service.set_display_mode(CountdownDisplayMode::IndividualWindows);
+                }
+            }
+        }
+
+        CountdownRenderResult {
+            event_dialog_requests,
+            go_to_date_requests,
+        }
+    }
+
+    /// Render countdown cards as individual windows (original behavior)
+    fn render_individual_windows(
         &mut self,
         ctx: &Context,
         service: &mut CountdownService,

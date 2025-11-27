@@ -3,6 +3,7 @@ use chrono::Datelike;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::services::pdf::{PdfExportService, service::PdfExportOptions};
 use crate::services::event::EventService;
+use crate::services::countdown::CountdownDisplayMode;
 use egui::Context;
 
 impl CalendarApp {
@@ -206,6 +207,39 @@ impl CalendarApp {
                 self.current_view = super::state::ViewType::Month;
                 ui.close_menu();
             }
+
+            ui.separator();
+
+            // Countdown Cards submenu
+            ui.menu_button("⏱ Countdown Cards", |ui| {
+                let current_mode = self.context.countdown_service().display_mode();
+                
+                if ui
+                    .selectable_label(
+                        current_mode == CountdownDisplayMode::IndividualWindows,
+                        "Individual Windows",
+                    )
+                    .clicked()
+                {
+                    self.context
+                        .countdown_service_mut()
+                        .set_display_mode(CountdownDisplayMode::IndividualWindows);
+                    ui.close_menu();
+                }
+                
+                if ui
+                    .selectable_label(
+                        current_mode == CountdownDisplayMode::Container,
+                        "Container (All in one window)",
+                    )
+                    .clicked()
+                {
+                    self.context
+                        .countdown_service_mut()
+                        .set_display_mode(CountdownDisplayMode::Container);
+                    ui.close_menu();
+                }
+            });
         });
     }
 
