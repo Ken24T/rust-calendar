@@ -7,8 +7,10 @@ use super::week_shared::{maybe_focus_slot, parse_color, DeleteConfirmRequest, Ev
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::models::template::EventTemplate;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::theme::CalendarTheme;
 
@@ -572,6 +574,42 @@ impl DayView {
                             *event_dialog_time = Some(time);
                             *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
                             ui.memory_mut(|mem| mem.close_popup());
+                        }
+                        
+                        // Template submenu
+                        let templates: Vec<EventTemplate> = TemplateService::new(database.connection())
+                            .list_all()
+                            .unwrap_or_default();
+                        
+                        if !templates.is_empty() {
+                            ui.separator();
+                            ui.menu_button("📋 From Template", |ui| {
+                                for template in &templates {
+                                    let label = format!("{}", template.name);
+                                    if ui.button(&label).on_hover_text(format!(
+                                        "Create '{}' event\nDuration: {}",
+                                        template.title,
+                                        if template.all_day {
+                                            "All day".to_string()
+                                        } else {
+                                            let h = template.duration_minutes / 60;
+                                            let m = template.duration_minutes % 60;
+                                            if h > 0 && m > 0 {
+                                                format!("{}h {}m", h, m)
+                                            } else if h > 0 {
+                                                format!("{}h", h)
+                                            } else {
+                                                format!("{}m", m)
+                                            }
+                                        }
+                                    )).clicked() {
+                                        if let Some(id) = template.id {
+                                            result.template_selection = Some((id, date, Some(time)));
+                                        }
+                                        ui.memory_mut(|mem| mem.close_popup());
+                                    }
+                                }
+                            });
                         }
                     }
                 },

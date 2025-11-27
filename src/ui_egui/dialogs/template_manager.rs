@@ -3,6 +3,7 @@
 
 use egui::{Color32, RichText};
 
+use crate::models::settings::Settings;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
 use crate::services::template::TemplateService;
@@ -42,6 +43,22 @@ impl TemplateEditState {
             location: String::new(),
             duration_hours: 1,
             duration_minutes: 0,
+            all_day: false,
+            category: String::new(),
+            color: "#3B82F6".to_string(),
+        }
+    }
+
+    /// Create a new template edit state with the given default duration in minutes
+    pub fn new_with_duration(default_duration_minutes: u32) -> Self {
+        Self {
+            id: None,
+            name: String::new(),
+            title: String::new(),
+            description: String::new(),
+            location: String::new(),
+            duration_hours: default_duration_minutes / 60,
+            duration_minutes: default_duration_minutes % 60,
             all_day: false,
             category: String::new(),
             color: "#3B82F6".to_string(),
@@ -134,8 +151,8 @@ impl TemplateManagerState {
         }
     }
 
-    pub fn start_new_template(&mut self) {
-        self.editing_template = Some(TemplateEditState::new());
+    pub fn start_new_template(&mut self, default_duration_minutes: u32) {
+        self.editing_template = Some(TemplateEditState::new_with_duration(default_duration_minutes));
         self.error_message = None;
     }
 
@@ -151,6 +168,7 @@ pub fn render_template_manager_dialog(
     ctx: &egui::Context,
     state: &mut TemplateManagerState,
     database: &Database,
+    settings: &Settings,
 ) {
     if !state.is_open {
         return;
@@ -161,6 +179,7 @@ pub fn render_template_manager_dialog(
     }
 
     let mut dialog_open = state.is_open;
+    let default_duration = settings.default_event_duration;
 
     egui::Window::new("📋 Manage Templates")
         .open(&mut dialog_open)
@@ -173,7 +192,7 @@ pub fn render_template_manager_dialog(
             if state.editing_template.is_some() {
                 render_edit_form(ui, state, database);
             } else {
-                render_template_list(ui, state, database);
+                render_template_list(ui, state, database, default_duration);
             }
         });
 
@@ -186,6 +205,7 @@ fn render_template_list(
     ui: &mut egui::Ui,
     state: &mut TemplateManagerState,
     database: &Database,
+    default_duration: u32,
 ) {
     // Error message
     if let Some(ref error) = state.error_message {
@@ -196,7 +216,7 @@ fn render_template_list(
     // Toolbar
     ui.horizontal(|ui| {
         if ui.button("➕ New Template").clicked() {
-            state.start_new_template();
+            state.start_new_template(default_duration);
         }
     });
 
@@ -212,7 +232,7 @@ fn render_template_list(
             ui.label("Create a template to quickly add common events.");
             ui.add_space(8.0);
             if ui.button("Create your first template").clicked() {
-                state.start_new_template();
+                state.start_new_template(default_duration);
             }
             ui.add_space(40.0);
         });

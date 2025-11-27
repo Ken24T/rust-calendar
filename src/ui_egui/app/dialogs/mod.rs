@@ -501,6 +501,7 @@ impl CalendarApp {
             ctx,
             &mut self.state.template_manager_state,
             self.context.database(),
+            &self.settings,
         );
     }
 }
