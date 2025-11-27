@@ -25,8 +25,6 @@ impl Default for LayoutOrientation {
 /// Minimum and default dimensions for container layout
 pub const CONTAINER_MIN_WIDTH: f32 = 200.0;
 pub const CONTAINER_MIN_HEIGHT: f32 = 150.0;
-pub const CONTAINER_DEFAULT_WIDTH: f32 = 400.0;
-pub const CONTAINER_DEFAULT_HEIGHT: f32 = 600.0;
 pub const MIN_CARD_WIDTH: f32 = 150.0;
 pub const MIN_CARD_HEIGHT: f32 = 100.0;
 pub const CARD_PADDING: f32 = 8.0;
@@ -49,6 +47,8 @@ pub struct ContainerLayout {
     pub min_card_height: f32,
     /// Padding between cards
     pub padding: f32,
+    /// Whether the container has been initialized (first frame rendered)
+    pub initialized: bool,
 }
 
 impl Default for ContainerLayout {
@@ -59,6 +59,7 @@ impl Default for ContainerLayout {
             min_card_width: MIN_CARD_WIDTH,
             min_card_height: MIN_CARD_HEIGHT,
             padding: CARD_PADDING,
+            initialized: false,
         }
     }
 }
@@ -580,23 +581,36 @@ pub fn render_container_window(
     let container_min_width = (default_card_width + CARD_PADDING * 2.0).max(CONTAINER_MIN_WIDTH);
     let container_min_height = (default_card_height + CARD_PADDING * 2.0).max(CONTAINER_MIN_HEIGHT);
 
-    // Get or create default container geometry
-    let geometry = container_geometry.unwrap_or(CountdownCardGeometry {
+    // Calculate default container size based on number of cards and their dimensions
+    let num_cards = cards.len().max(1) as f32;
+    let default_width = (default_card_width + CARD_PADDING * 2.0).max(CONTAINER_MIN_WIDTH);
+    let default_height = (default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0))
+        .max(CONTAINER_MIN_HEIGHT)
+        .min(600.0); // Cap at reasonable max height
+
+    // Use stored geometry if available, otherwise use calculated defaults
+    let initial_geometry = container_geometry.unwrap_or(CountdownCardGeometry {
         x: 100.0,
         y: 100.0,
-        width: CONTAINER_DEFAULT_WIDTH,
-        height: CONTAINER_DEFAULT_HEIGHT,
+        width: default_width,
+        height: default_height,
     });
 
     let viewport_id = egui::ViewportId::from_hash_of("countdown_container");
 
-    // Build the container viewport
-    let builder = egui::ViewportBuilder::default()
+    // Only set position/size on first render or if no stored geometry
+    // After that, let the user resize freely without fighting the window
+    let is_first_render = !layout.initialized;
+    let mut builder = egui::ViewportBuilder::default()
         .with_title("Countdown Cards")
         .with_resizable(true)
-        .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
-        .with_position(egui::pos2(geometry.x, geometry.y))
-        .with_inner_size(egui::vec2(geometry.width, geometry.height));
+        .with_min_inner_size(egui::vec2(container_min_width, container_min_height));
+
+    if is_first_render {
+        builder = builder
+            .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
+            .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
+    }
 
     // Render the container viewport
     ctx.show_viewport_immediate(viewport_id, builder, |child_ctx, _class| {
@@ -767,6 +781,11 @@ pub fn render_container_window(
             });
     });
 
+    // Mark as initialized after first render
+    if !layout.initialized {
+        layout.initialized = true;
+    }
+
     actions
 }
 
@@ -868,6 +887,7 @@ mod tests {
         assert_eq!(layout.min_card_width, MIN_CARD_WIDTH);
         assert_eq!(layout.min_card_height, MIN_CARD_HEIGHT);
         assert_eq!(layout.padding, CARD_PADDING);
+        assert!(!layout.initialized);
     }
 
     #[test]
