@@ -102,6 +102,8 @@ fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
 pub struct ContainerLayout {
     /// Current layout orientation
     pub orientation: LayoutOrientation,
+    /// Whether the orientation has been set (prevents auto-switching on card count changes)
+    pub orientation_set: bool,
     /// Computed rectangles for each card
     pub card_rects: HashMap<CountdownCardId, egui::Rect>,
     /// Minimum card width
@@ -126,6 +128,7 @@ impl Default for ContainerLayout {
     fn default() -> Self {
         Self {
             orientation: LayoutOrientation::Vertical,
+            orientation_set: false,
             card_rects: HashMap::new(),
             min_card_width: MIN_CARD_WIDTH,
             min_card_height: MIN_CARD_HEIGHT,
@@ -142,10 +145,11 @@ impl Default for ContainerLayout {
 impl ContainerLayout {
     /// Calculate the layout for cards within the container.
     /// 
-    /// This method determines the orientation based on the container's aspect ratio:
+    /// On first layout, this method determines the orientation based on the container's aspect ratio:
     /// - Wide containers (aspect ratio > 1.5) use horizontal layout
     /// - Tall/square containers use vertical layout
     /// 
+    /// After the first layout, orientation is preserved even when cards are added/removed.
     /// Cards are evenly distributed within the available space, respecting minimum sizes.
     pub fn calculate_layout(
         &mut self,
@@ -159,13 +163,17 @@ impl ContainerLayout {
             return;
         }
 
-        // Determine orientation based on aspect ratio
-        let aspect_ratio = available_rect.width() / available_rect.height();
-        self.orientation = if aspect_ratio > 1.5 {
-            LayoutOrientation::Horizontal
-        } else {
-            LayoutOrientation::Vertical
-        };
+        // Only auto-detect orientation on first layout
+        // After that, preserve the current orientation
+        if !self.orientation_set {
+            let aspect_ratio = available_rect.width() / available_rect.height();
+            self.orientation = if aspect_ratio > 1.5 {
+                LayoutOrientation::Horizontal
+            } else {
+                LayoutOrientation::Vertical
+            };
+            self.orientation_set = true;
+        }
 
         // Calculate card positions
         match self.orientation {
