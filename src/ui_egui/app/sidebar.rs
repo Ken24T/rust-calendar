@@ -170,20 +170,23 @@ impl CalendarApp {
                 self.current_date = shift_month(self.current_date, -1);
             }
 
-            ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                let header = viewing_date.format("%B %Y").to_string();
-                if ui.selectable_label(false, RichText::new(&header).strong())
-                    .on_hover_text("Go to today")
-                    .clicked()
-                {
-                    self.current_date = today;
-                    self.focus_on_current_time_if_visible();
+            // Center the month label between the arrows
+            let header = viewing_date.format("%B %Y").to_string();
+            let available_width = ui.available_width() - 20.0; // Reserve space for right arrow
+            ui.add_space((available_width - ui.text_style_height(&egui::TextStyle::Body) * header.len() as f32 * 0.5).max(0.0) / 2.0);
+            if ui.selectable_label(false, RichText::new(&header).strong())
+                .on_hover_text("Go to today")
+                .clicked()
+            {
+                self.current_date = today;
+                self.focus_on_current_time_if_visible();
+            }
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.small_button("▶").on_hover_text("Next month").clicked() {
+                    self.current_date = shift_month(self.current_date, 1);
                 }
             });
-
-            if ui.small_button("▶").on_hover_text("Next month").clicked() {
-                self.current_date = shift_month(self.current_date, 1);
-            }
         });
 
         ui.add_space(4.0);
