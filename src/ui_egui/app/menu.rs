@@ -289,6 +289,19 @@ impl CalendarApp {
                 }
                 ui.close_menu();
             }
+            
+            ui.separator();
+            
+            ui.menu_button("📤 Export Events", |ui| {
+                if ui.button("Export All Events...").clicked() {
+                    self.export_all_events_ics();
+                    ui.close_menu();
+                }
+                if ui.button("Export Date Range...").clicked() {
+                    self.state.show_export_range_dialog = true;
+                    ui.close_menu();
+                }
+            });
         });
     }
 
@@ -390,6 +403,99 @@ impl CalendarApp {
         
         if !dialog_open {
             self.state.show_about_dialog = false;
+        }
+    }
+
+    /// Export all events to an .ics file
+    fn export_all_events_ics(&mut self) {
+        let event_service = EventService::new(self.context.database().connection());
+        let events = match event_service.list_all() {
+            Ok(events) => events,
+            Err(e) => {
+                log::error!("Failed to load events for export: {}", e);
+                self.toast_manager.error("Failed to load events");
+                return;
+            }
+        };
+
+        if events.is_empty() {
+            self.toast_manager.warning("No events to export");
+            return;
+        }
+
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export All Events")
+            .set_file_name("calendar_events.ics")
+            .add_filter("iCalendar", &["ics"])
+            .save_file()
+        {
+            use crate::services::icalendar::ICalendarService;
+            let ics_service = ICalendarService::new();
+            
+            match ics_service.export_events_to_file(&events, &path) {
+                Ok(()) => {
+                    log::info!("Exported {} events to {:?}", events.len(), path);
+                    self.toast_manager.success(format!("Exported {} events", events.len()));
+                }
+                Err(e) => {
+                    log::error!("Failed to export events: {}", e);
+                    self.toast_manager.error("Failed to export events");
+                }
+            }
+        }
+    }
+
+    /// Export events in a date range to an .ics file
+    pub(super) fn export_events_in_range(&mut self, start: chrono::NaiveDate, end: chrono::NaiveDate) {
+        use chrono::{Local, NaiveTime, TimeZone};
+        
+        // Convert NaiveDate to DateTime for the query
+        let start_dt = Local.from_local_datetime(
+            &start.and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+        ).unwrap();
+        let end_dt = Local.from_local_datetime(
+            &end.and_time(NaiveTime::from_hms_opt(23, 59, 59).unwrap())
+        ).unwrap();
+        
+        let event_service = EventService::new(self.context.database().connection());
+        let events = match event_service.find_by_date_range(start_dt, end_dt) {
+            Ok(events) => events,
+            Err(e) => {
+                log::error!("Failed to load events for export: {}", e);
+                self.toast_manager.error("Failed to load events");
+                return;
+            }
+        };
+
+        if events.is_empty() {
+            self.toast_manager.warning("No events in selected range");
+            return;
+        }
+
+        let filename = format!("calendar_{}_{}.ics", 
+            start.format("%Y%m%d"), 
+            end.format("%Y%m%d")
+        );
+
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Events")
+            .set_file_name(&filename)
+            .add_filter("iCalendar", &["ics"])
+            .save_file()
+        {
+            use crate::services::icalendar::ICalendarService;
+            let ics_service = ICalendarService::new();
+            
+            match ics_service.export_events_to_file(&events, &path) {
+                Ok(()) => {
+                    log::info!("Exported {} events to {:?}", events.len(), path);
+                    self.toast_manager.success(format!("Exported {} events", events.len()));
+                }
+                Err(e) => {
+                    log::error!("Failed to export events: {}", e);
+                    self.toast_manager.error("Failed to export events");
+                }
+            }
         }
     }
 }

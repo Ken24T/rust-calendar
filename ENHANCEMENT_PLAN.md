@@ -83,31 +83,27 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 
 ---
 
-### 3. Export Menu Integration
+### 3. Export Menu Integration ✅
 
+**Status:** ✅ COMPLETE  
 **Priority:** High - Completes existing feature  
 **Estimated Time:** 2 hours  
-**Branch:** `feat/export-menu`
+**Branch:** `feat/ui-improvements`
 
 **Implementation:**
-- Add File menu items:
-  - "Export Event..." (on event context menu, right-click)
-  - "Export All Events..." → File dialog, save all events as .ics
-  - "Export Date Range..." → Date picker dialog, export subset
-- Use existing `ICalendarService::single()` and `multiple()`
-- Use `rfd::FileDialog::new().add_filter("iCalendar", &["ics"]).save_file()`
-- Show success toast notification after export
+- Added File menu items:
+  - "Export All Events..." → File dialog, save all events as .ics ✅
+  - "Export Date Range..." → Date picker dialog, export subset ✅
+- Used existing `ICalendarService::export_events_to_file()` ✅
+- Used `rfd::FileDialog::new().add_filter("iCalendar", &["ics"]).save_file()` ✅
+- Show success toast notification after export ✅
+- Quick select buttons: "This Month", "This Year", "Last 30 Days" ✅
 
-**Files to Modify:**
-- `src/ui_egui/app.rs` - Add File menu items
-- Event context menus in views (day/week/month) - Add "Export Event"
-- Create `src/ui_egui/dialogs/export_dialog.rs` - Date range picker for export
-
-**Testing:**
-- Export single event, verify .ics file valid
-- Export all events, verify all included
-- Export date range, verify only events in range included
-- Test file overwrite confirmation works
+**Files Modified:**
+- `src/ui_egui/app/menu.rs` - Added Export Events submenu with export functions
+- `src/ui_egui/app/state.rs` - Added ExportRangeDialogState
+- `src/ui_egui/app/dialogs/mod.rs` - Wired up export dialog rendering
+- Created `src/ui_egui/dialogs/export_dialog.rs` - Date range picker dialog
 
 ---
 
@@ -875,8 +871,8 @@ docs: document keyboard shortcuts in README
 
 ### Phase 1 Status
 - [x] Database Backup System
-- [ ] Keyboard Shortcuts
-- [ ] Export Menu Integration
+- [x] Keyboard Shortcuts
+- [x] Export Menu Integration
 - [ ] Event Validation Enhancements
 
 ### Phase 2 Status

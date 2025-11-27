@@ -3,6 +3,7 @@ use super::CalendarApp;
 use crate::services::countdown::RgbaColor;
 use crate::services::event::EventService;
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
+use crate::ui_egui::dialogs::export_dialog::{render_export_range_dialog, ExportDialogResult};
 use crate::ui_egui::dialogs::search_dialog::{render_search_dialog, SearchDialogAction};
 use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
@@ -34,6 +35,7 @@ impl CalendarApp {
         self.render_theme_dialog(ctx);
         self.render_theme_creator(ctx);
         self.render_about_dialog(ctx);
+        self.render_export_range_dialog(ctx);
 
         let should_reload_db =
             render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
@@ -464,6 +466,34 @@ impl CalendarApp {
             }
             ThemeCreatorAction::Cancel => {
                 self.state.theme_creator_state.close();
+            }
+        }
+    }
+
+    fn render_export_range_dialog(&mut self, ctx: &egui::Context) {
+        if !self.state.show_export_range_dialog {
+            return;
+        }
+
+        let result = render_export_range_dialog(
+            ctx,
+            &mut self.state.export_range_state.start_date,
+            &mut self.state.export_range_state.end_date,
+            self.current_date,
+        );
+
+        match result {
+            ExportDialogResult::None => {}
+            ExportDialogResult::Cancelled => {
+                self.state.show_export_range_dialog = false;
+                self.state.export_range_state.start_date = None;
+                self.state.export_range_state.end_date = None;
+            }
+            ExportDialogResult::Export { start, end } => {
+                self.state.show_export_range_dialog = false;
+                self.export_events_in_range(start, end);
+                self.state.export_range_state.start_date = None;
+                self.state.export_range_state.end_date = None;
             }
         }
     }

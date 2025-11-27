@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.13] - 2025-11-28
+
+### Added
+- **Export Events to iCalendar (.ics)** - Events menu now has Export submenu:
+  - "Export All Events..." - Exports all calendar events to a single .ics file
+  - "Export Date Range..." - Opens a dialog to select start/end dates for export
+  - Quick select buttons for "This Month", "This Year", and "Last 30 Days"
+  - Toast notifications for success/failure feedback
+- New `export_dialog.rs` module for the date range picker dialog
+
+### Changed
+- Reorganized Events menu to group Import and Export operations
+
 ## [Unreleased]
 
 ### Planning Phase
