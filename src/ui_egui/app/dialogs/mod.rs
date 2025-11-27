@@ -242,6 +242,8 @@ impl CalendarApp {
 
         if response.saved {
             self.apply_theme_from_db(ctx);
+            // Update system tray based on new settings
+            self.update_system_tray();
         }
     }
 

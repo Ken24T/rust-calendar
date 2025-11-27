@@ -10,11 +10,15 @@ use crate::services::notification::NotificationService;
 use crate::services::settings::SettingsService;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::theme::CalendarTheme;
+use crate::ui_egui::tray::SystemTray;
 use crate::ui_egui::views::CountdownRequest;
 use chrono::Local;
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
 use std::path::PathBuf;
+
+/// Icon bytes for system tray
+const ICON_BYTES: &[u8] = include_bytes!("../../../assets/icons/663353.png");
 
 impl CalendarApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -51,6 +55,22 @@ impl CalendarApp {
         let backup_manager_state = BackupManagerState::new(resolve_backup_db_path());
         let show_ribbon = settings.show_ribbon;
 
+        // Initialize system tray if minimize_to_tray is enabled
+        let system_tray = if settings.minimize_to_tray {
+            match SystemTray::new(ICON_BYTES) {
+                Ok(tray) => {
+                    log::info!("System tray initialized successfully");
+                    Some(tray)
+                }
+                Err(e) => {
+                    log::warn!("Failed to create system tray: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         let mut app = Self {
             context,
             settings,
@@ -69,6 +89,16 @@ impl CalendarApp {
             countdown_ui,
             state: AppState::new(backup_manager_state, pending_root_geometry),
         };
+
+        // Set system tray in state
+        app.state.system_tray = system_tray;
+
+        // Handle start_minimized setting
+        if app.settings.minimize_to_tray && app.settings.start_minimized && app.state.system_tray.is_some() {
+            app.state.minimized_to_tray = true;
+            // The window will be hidden on the first frame
+            log::info!("Starting minimized to system tray");
+        }
 
         app.apply_theme_from_db(&cc.egui_ctx);
         app.focus_on_current_time_if_visible();
@@ -120,6 +150,29 @@ impl CalendarApp {
     }
 
     pub(super) fn handle_update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Handle system tray interactions
+        self.handle_system_tray(ctx);
+
+        // Check for close request - minimize to tray if enabled
+        let close_requested = ctx.input(|i| i.viewport().close_requested());
+        if close_requested && self.settings.minimize_to_tray && self.state.system_tray.is_some() {
+            // Cancel the close and minimize to tray instead
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.state.minimized_to_tray = true;
+            log::info!("Window minimized to system tray");
+            return; // Skip rendering when minimized
+        }
+
+        // If minimized to tray (including start_minimized), hide window and skip rendering
+        if self.state.minimized_to_tray {
+            // Hide the window if it's visible
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            // Request repaint to check for restore requests
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            return;
+        }
+
         self.handle_file_drops(ctx);
 
         // Handle keyboard shortcuts
@@ -182,6 +235,62 @@ impl CalendarApp {
 
     pub(super) fn handle_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.persist_countdowns_if_needed();
+    }
+
+    /// Handle system tray events (restore window, quit)
+    fn handle_system_tray(&mut self, ctx: &egui::Context) {
+        if let Some(ref tray) = self.state.system_tray {
+            // Check for quit request
+            if tray.take_quit_request() {
+                log::info!("Quit requested from system tray");
+                self.persist_countdowns_if_needed();
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                return;
+            }
+
+            // Check for restore request
+            if tray.take_restore_request() || self.should_restore_from_tray_click() {
+                log::info!("Restore requested from system tray");
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                self.state.minimized_to_tray = false;
+            }
+        }
+    }
+
+    /// Check if tray icon was clicked (platform-specific)
+    fn should_restore_from_tray_click(&self) -> bool {
+        // This would require additional platform-specific handling
+        // For now, we rely on the menu items
+        false
+    }
+
+    /// Update system tray based on settings change
+    pub(super) fn update_system_tray(&mut self) {
+        if self.settings.minimize_to_tray {
+            // Enable tray if not already enabled
+            if self.state.system_tray.is_none() {
+                match SystemTray::new(ICON_BYTES) {
+                    Ok(tray) => {
+                        log::info!("System tray enabled");
+                        self.state.system_tray = Some(tray);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to create system tray: {}", e);
+                    }
+                }
+            }
+        } else {
+            // Disable tray
+            if self.state.system_tray.is_some() {
+                log::info!("System tray disabled");
+                self.state.system_tray = None;
+                // If currently minimized, restore the window
+                if self.state.minimized_to_tray {
+                    self.state.minimized_to_tray = false;
+                }
+            }
+        }
     }
 }
 
