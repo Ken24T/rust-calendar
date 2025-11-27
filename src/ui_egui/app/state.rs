@@ -3,7 +3,6 @@ use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::dialogs::search_dialog::SearchDialogState;
 use crate::ui_egui::dialogs::theme_creator::ThemeCreatorState;
 use crate::ui_egui::dialogs::theme_dialog::ThemeDialogState;
-use crate::ui_egui::tray::SystemTray;
 use chrono::NaiveDate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,10 +43,6 @@ pub struct AppState {
     pub date_picker_state: DatePickerState,
     /// Whether we've done the initial geometry sanitization on first frame
     pub geometry_sanitized: bool,
-    /// System tray icon (when minimize to tray is enabled)
-    pub system_tray: Option<SystemTray>,
-    /// Whether the main window is currently minimized to tray
-    pub minimized_to_tray: bool,
 }
 
 impl AppState {
@@ -64,8 +59,6 @@ impl AppState {
             pending_root_geometry,
             date_picker_state: DatePickerState::default(),
             geometry_sanitized: false,
-            system_tray: None,
-            minimized_to_tray: false,
         }
     }
 }

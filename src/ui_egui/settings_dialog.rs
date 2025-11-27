@@ -354,20 +354,6 @@ pub fn render_settings_dialog(
                     show_ribbon_changed = true;
                 }
 
-                ui.horizontal(|ui| {
-                    ui.add_space(label_width);
-                    ui.checkbox(&mut settings.minimize_to_tray, "Minimize to system tray on close")
-                        .on_hover_text("When closing the window, minimize to system tray instead of exiting");
-                });
-
-                if settings.minimize_to_tray {
-                    ui.horizontal(|ui| {
-                        ui.add_space(label_width + 20.0);
-                        ui.checkbox(&mut settings.start_minimized, "Start minimized to tray")
-                            .on_hover_text("Start the application minimized to the system tray");
-                    });
-                }
-
                 ui.add_space(16.0);
                 ui.separator();
                 ui.add_space(8.0);
