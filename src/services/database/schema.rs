@@ -13,6 +13,8 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_countdown_tables(conn)?;
     run_countdown_migrations(conn)?;
     create_event_templates_table(conn)?;
+    create_categories_table(conn)?;
+    initialize_default_categories(conn)?;
     Ok(())
 }
 
@@ -531,5 +533,31 @@ fn create_event_templates_table(conn: &Connection) -> Result<()> {
     )
     .context("Failed to create event_templates table")?;
 
+    Ok(())
+}
+
+fn create_categories_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT NOT NULL,
+            icon TEXT,
+            is_system INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create categories table")?;
+
+    Ok(())
+}
+
+fn initialize_default_categories(conn: &Connection) -> Result<()> {
+    use crate::services::category::CategoryService;
+    
+    let service = CategoryService::new(conn);
+    service.initialize_defaults()?;
+    
     Ok(())
 }
