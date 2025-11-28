@@ -265,6 +265,12 @@ impl CalendarApp {
             // Templates submenu
             self.render_templates_submenu(ui);
             
+            // Categories management
+            if ui.button("📂 Manage Categories...").clicked() {
+                self.state.category_manager_state.open();
+                ui.close_menu();
+            }
+            
             ui.separator();
             if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
                 self.state.show_search_dialog = true;
