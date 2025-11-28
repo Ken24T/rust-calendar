@@ -21,6 +21,7 @@ pub struct EventTemplate {
 
 impl EventTemplate {
     /// Create a new template with required fields
+    #[allow(dead_code)]
     pub fn new(name: impl Into<String>, title: impl Into<String>, duration_minutes: i32) -> Self {
         Self {
             id: None,
@@ -38,6 +39,7 @@ impl EventTemplate {
     }
 
     /// Create a builder for constructing templates
+    #[allow(dead_code)]
     pub fn builder() -> EventTemplateBuilder {
         EventTemplateBuilder::new()
     }
@@ -72,6 +74,7 @@ impl EventTemplate {
 }
 
 /// Builder for creating event templates
+#[allow(dead_code)]
 pub struct EventTemplateBuilder {
     name: Option<String>,
     title: Option<String>,
@@ -84,6 +87,7 @@ pub struct EventTemplateBuilder {
     recurrence_rule: Option<String>,
 }
 
+#[allow(dead_code)]
 impl EventTemplateBuilder {
     pub fn new() -> Self {
         Self {

@@ -78,6 +78,7 @@ impl<'a> CategoryService<'a> {
     }
 
     /// Get a category by name.
+    #[allow(dead_code)]
     pub fn get_by_name(&self, name: &str) -> Result<Option<Category>> {
         let result = self.conn.query_row(
             "SELECT id, name, color, icon, is_system FROM categories WHERE name = ?1",

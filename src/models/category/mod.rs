@@ -33,6 +33,7 @@ impl Category {
     }
 
     /// Create a new category with an icon.
+    #[allow(dead_code)]
     pub fn with_icon(name: impl Into<String>, color: impl Into<String>, icon: impl Into<String>) -> Self {
         Self {
             id: None,
