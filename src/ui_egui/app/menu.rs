@@ -3,6 +3,7 @@ use chrono::Datelike;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::services::pdf::{PdfExportService, service::PdfExportOptions};
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::services::countdown::CountdownDisplayMode;
 use egui::Context;
 
@@ -14,6 +15,7 @@ impl CalendarApp {
                 self.render_edit_menu(ui);
                 self.render_view_menu(ui);
                 self.render_events_menu(ui);
+                self.render_help_menu(ui);
             });
         });
     }
@@ -140,8 +142,12 @@ impl CalendarApp {
                 self.show_settings_dialog = true;
                 ui.close_menu();
             }
-            if ui.button("Themes...").clicked() {
+            if ui.button("🎨 Manage Themes...").clicked() {
                 self.state.theme_dialog_state.open(&self.settings.theme);
+                ui.close_menu();
+            }
+            if ui.button("📂 Manage Categories...").clicked() {
+                self.state.category_manager_state.open();
                 ui.close_menu();
             }
         });
@@ -210,6 +216,11 @@ impl CalendarApp {
 
             ui.separator();
 
+            // Category filter submenu
+            self.render_category_filter_submenu(ui);
+
+            ui.separator();
+
             // Countdown Cards submenu
             ui.menu_button("⏱ Countdown Cards", |ui| {
                 let current_mode = self.context.countdown_service().display_mode();
@@ -247,6 +258,37 @@ impl CalendarApp {
         });
     }
 
+    fn render_category_filter_submenu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("📂 Filter by Category", |ui| {
+            // Get all categories
+            let categories = self.context.category_service().list_all().unwrap_or_default();
+            
+            // "All Categories" option
+            let is_all_selected = self.active_category_filter.is_none();
+            if ui.selectable_label(is_all_selected, "All Categories").clicked() {
+                self.active_category_filter = None;
+                ui.close_menu();
+            }
+            
+            if !categories.is_empty() {
+                ui.separator();
+                
+                for category in &categories {
+                    let label = if let Some(icon) = &category.icon {
+                        format!("{} {}", icon, category.name)
+                    } else {
+                        category.name.clone()
+                    };
+                    
+                    let is_selected = self.active_category_filter.as_ref() == Some(&category.name);
+                    if ui.selectable_label(is_selected, label).clicked() {
+                        self.active_category_filter = Some(category.name.clone());
+                        ui.close_menu();
+                    }
+                }
+            }
+        });
+    }
 
 
     fn render_events_menu(&mut self, ui: &mut egui::Ui) {
@@ -259,6 +301,10 @@ impl CalendarApp {
                 ));
                 ui.close_menu();
             }
+            
+            // Templates submenu
+            self.render_templates_submenu(ui);
+            
             ui.separator();
             if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
                 self.state.show_search_dialog = true;
@@ -288,6 +334,407 @@ impl CalendarApp {
                 }
                 ui.close_menu();
             }
+            
+            ui.separator();
+            
+            ui.menu_button("📤 Export Events", |ui| {
+                // Show category-specific export if filter is active
+                if let Some(category) = &self.active_category_filter {
+                    let label = format!("Export '{}' Events...", category);
+                    if ui.button(&label).clicked() {
+                        self.export_filtered_events_ics();
+                        ui.close_menu();
+                    }
+                    if ui.button("Export All Events...").clicked() {
+                        self.export_all_events_ics();
+                        ui.close_menu();
+                    }
+                } else {
+                    if ui.button("Export All Events...").clicked() {
+                        self.export_all_events_ics();
+                        ui.close_menu();
+                    }
+                }
+                if ui.button("Export Date Range...").clicked() {
+                    self.state.show_export_range_dialog = true;
+                    ui.close_menu();
+                }
+            });
         });
+    }
+
+    fn render_templates_submenu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("📋 Templates", |ui| {
+            // Load templates
+            let service = TemplateService::new(self.context.database().connection());
+            let templates = service.list_all().unwrap_or_default();
+
+            if templates.is_empty() {
+                ui.label(egui::RichText::new("No templates").weak().italics());
+                ui.separator();
+            } else {
+                // Show each template as a button
+                for template in &templates {
+                    let label = format!("{} → {}", template.name, template.title);
+                    if ui.button(&label).on_hover_text(format!(
+                        "Create event from template: {}\nDuration: {}",
+                        template.title,
+                        if template.all_day {
+                            "All day".to_string()
+                        } else {
+                            let h = template.duration_minutes / 60;
+                            let m = template.duration_minutes % 60;
+                            if h > 0 && m > 0 {
+                                format!("{}h {}m", h, m)
+                            } else if h > 0 {
+                                format!("{}h", h)
+                            } else {
+                                format!("{}m", m)
+                            }
+                        }
+                    )).clicked() {
+                        self.create_event_from_template(template);
+                        ui.close_menu();
+                    }
+                }
+                ui.separator();
+            }
+
+            if ui.button("Manage Templates...").clicked() {
+                self.state.template_manager_state.open(self.context.database());
+                ui.close_menu();
+            }
+        });
+    }
+
+    /// Create a new event from a template
+    fn create_event_from_template(&mut self, template: &crate::models::template::EventTemplate) {
+        use chrono::{Duration, NaiveDateTime};
+        
+        let mut state = EventDialogState::new_event(self.current_date, &self.settings);
+        
+        // Apply template values
+        state.title = template.title.clone();
+        state.description = template.description.clone().unwrap_or_default();
+        state.location = template.location.clone().unwrap_or_default();
+        state.category = template.category.clone().unwrap_or_default();
+        state.color = template.color.clone().unwrap_or_else(|| "#3B82F6".to_string());
+        state.all_day = template.all_day;
+        
+        // Calculate end time based on duration
+        if !template.all_day {
+            let start_dt = NaiveDateTime::new(state.date, state.start_time);
+            let end_dt = start_dt + Duration::minutes(template.duration_minutes as i64);
+            state.end_time = end_dt.time();
+            // If end goes past midnight, adjust end date
+            if end_dt.date() > state.date {
+                state.end_date = end_dt.date();
+            }
+        }
+        
+        self.event_dialog_state = Some(state);
+        self.show_event_dialog = true;
+    }
+    
+    /// Create a new event from a template by ID with a specific date and optional time
+    /// Used by context menus in calendar views
+    pub(super) fn create_event_from_template_with_date(
+        &mut self,
+        template_id: i64,
+        date: chrono::NaiveDate,
+        time: Option<chrono::NaiveTime>,
+    ) {
+        let service = TemplateService::new(self.context.database().connection());
+        if let Ok(template) = service.get_by_id(template_id) {
+            use chrono::{Duration, NaiveDateTime};
+            
+            let mut state = EventDialogState::new_event(date, &self.settings);
+            
+            // Apply template values
+            state.title = template.title.clone();
+            state.description = template.description.clone().unwrap_or_default();
+            state.location = template.location.clone().unwrap_or_default();
+            state.category = template.category.clone().unwrap_or_default();
+            state.color = template.color.clone().unwrap_or_else(|| "#3B82F6".to_string());
+            state.all_day = template.all_day;
+            
+            // Use the clicked time if provided, otherwise use the default start time
+            if let Some(start_time) = time {
+                if !template.all_day {
+                    state.start_time = start_time;
+                }
+            }
+            
+            // Calculate end time based on duration
+            if !template.all_day {
+                let start_dt = NaiveDateTime::new(state.date, state.start_time);
+                let end_dt = start_dt + Duration::minutes(template.duration_minutes as i64);
+                state.end_time = end_dt.time();
+                // If end goes past midnight, adjust end date
+                if end_dt.date() > state.date {
+                    state.end_date = end_dt.date();
+                }
+            }
+            
+            // Apply recurrence rule from template if present
+            // The recurrence rule parsing is done in EventDialogState::from_event
+            // For templates, we'll need to parse the RRULE string
+            if template.recurrence_rule.is_some() {
+                state.is_recurring = true;
+                // Template recurrence will be applied when saving - let user customize
+            }
+            
+            self.event_dialog_state = Some(state);
+            self.show_event_dialog = true;
+        }
+    }
+
+    fn render_help_menu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("Help", |ui| {
+            if ui.button("ℹ About...").clicked() {
+                self.state.show_about_dialog = true;
+                ui.close_menu();
+            }
+        });
+    }
+
+    pub(super) fn render_about_dialog(&mut self, ctx: &Context) {
+        if !self.state.show_about_dialog {
+            return;
+        }
+
+        let mut dialog_open = true;
+        egui::Window::new("About Rust Calendar")
+            .open(&mut dialog_open)
+            .collapsible(false)
+            .resizable(false)
+            .auto_sized()
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.set_min_width(300.0);
+                ui.set_max_width(400.0);
+                
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::symmetric(15.0, 10.0))
+                    .show(ui, |ui| {
+                        ui.vertical_centered(|ui| {
+                            // App icon/title
+                            ui.heading("📅 Rust Calendar");
+                            ui.add_space(5.0);
+                            
+                            // Version
+                            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                            ui.add_space(10.0);
+                            
+                            ui.separator();
+                            ui.add_space(10.0);
+                            
+                            // Description
+                            ui.label(env!("CARGO_PKG_DESCRIPTION"));
+                            ui.add_space(10.0);
+                            
+                            // Author
+                            ui.label(format!("Author: {}", env!("CARGO_PKG_AUTHORS")));
+                            ui.add_space(5.0);
+                            
+                            // License
+                            ui.label(format!("License: {}", env!("CARGO_PKG_LICENSE")));
+                            ui.add_space(10.0);
+                            
+                            ui.separator();
+                            ui.add_space(10.0);
+                            
+                            // System info
+                            ui.label(egui::RichText::new("System Information").strong());
+                            ui.add_space(5.0);
+                        });
+                        
+                        // Grid needs to be outside vertical_centered to align properly
+                        egui::Grid::new("about_system_info")
+                            .num_columns(2)
+                            .spacing([20.0, 4.0])
+                            .show(ui, |ui| {
+                                ui.label("Rust Version:");
+                                ui.label(env!("CARGO_PKG_RUST_VERSION", "stable"));
+                                ui.end_row();
+                                
+                                ui.label("Target:");
+                                ui.label(std::env::consts::ARCH);
+                                ui.end_row();
+                                
+                                ui.label("OS:");
+                                ui.label(std::env::consts::OS);
+                                ui.end_row();
+                                
+                                ui.label("GUI Framework:");
+                                ui.label("egui/eframe 0.28");
+                                ui.end_row();
+                            });
+                        
+                        ui.add_space(15.0);
+                        
+                        ui.vertical_centered(|ui| {
+                            // Repository link
+                            ui.hyperlink_to(
+                                "🔗 GitHub Repository",
+                                env!("CARGO_PKG_REPOSITORY"),
+                            );
+                        });
+                        
+                        ui.add_space(5.0);
+                    });
+            });
+        
+        if !dialog_open {
+            self.state.show_about_dialog = false;
+        }
+    }
+
+    /// Export all events to an .ics file
+    fn export_all_events_ics(&mut self) {
+        let event_service = EventService::new(self.context.database().connection());
+        let events = match event_service.list_all() {
+            Ok(events) => events,
+            Err(e) => {
+                log::error!("Failed to load events for export: {}", e);
+                self.toast_manager.error("Failed to load events");
+                return;
+            }
+        };
+
+        if events.is_empty() {
+            self.toast_manager.warning("No events to export");
+            return;
+        }
+
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export All Events")
+            .set_file_name("calendar_events.ics")
+            .add_filter("iCalendar", &["ics"])
+            .save_file()
+        {
+            use crate::services::icalendar::ICalendarService;
+            let ics_service = ICalendarService::new();
+            
+            match ics_service.export_events_to_file(&events, &path) {
+                Ok(()) => {
+                    log::info!("Exported {} events to {:?}", events.len(), path);
+                    self.toast_manager.success(format!("Exported {} events", events.len()));
+                }
+                Err(e) => {
+                    log::error!("Failed to export events: {}", e);
+                    self.toast_manager.error("Failed to export events");
+                }
+            }
+        }
+    }
+
+    /// Export filtered events (by category) to an .ics file
+    fn export_filtered_events_ics(&mut self) {
+        let category = match &self.active_category_filter {
+            Some(cat) => cat.clone(),
+            None => {
+                // No filter active, fall back to export all
+                self.export_all_events_ics();
+                return;
+            }
+        };
+
+        let event_service = EventService::new(self.context.database().connection());
+        let all_events = match event_service.list_all() {
+            Ok(events) => events,
+            Err(e) => {
+                log::error!("Failed to load events for export: {}", e);
+                self.toast_manager.error("Failed to load events");
+                return;
+            }
+        };
+
+        // Filter events by category
+        let events: Vec<_> = all_events
+            .into_iter()
+            .filter(|e| e.category.as_deref() == Some(&category))
+            .collect();
+
+        if events.is_empty() {
+            self.toast_manager.warning(format!("No '{}' events to export", category));
+            return;
+        }
+
+        let safe_category = category.replace(' ', "_").replace('/', "-");
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title(&format!("Export '{}' Events", category))
+            .set_file_name(&format!("{}_events.ics", safe_category))
+            .add_filter("iCalendar", &["ics"])
+            .save_file()
+        {
+            use crate::services::icalendar::ICalendarService;
+            let ics_service = ICalendarService::new();
+            
+            match ics_service.export_events_to_file(&events, &path) {
+                Ok(()) => {
+                    log::info!("Exported {} '{}' events to {:?}", events.len(), category, path);
+                    self.toast_manager.success(format!("Exported {} '{}' events", events.len(), category));
+                }
+                Err(e) => {
+                    log::error!("Failed to export events: {}", e);
+                    self.toast_manager.error("Failed to export events");
+                }
+            }
+        }
+    }
+
+    /// Export events in a date range to an .ics file
+    pub(super) fn export_events_in_range(&mut self, start: chrono::NaiveDate, end: chrono::NaiveDate) {
+        use chrono::{Local, NaiveTime, TimeZone};
+        
+        // Convert NaiveDate to DateTime for the query
+        let start_dt = Local.from_local_datetime(
+            &start.and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+        ).unwrap();
+        let end_dt = Local.from_local_datetime(
+            &end.and_time(NaiveTime::from_hms_opt(23, 59, 59).unwrap())
+        ).unwrap();
+        
+        let event_service = EventService::new(self.context.database().connection());
+        let events = match event_service.find_by_date_range(start_dt, end_dt) {
+            Ok(events) => events,
+            Err(e) => {
+                log::error!("Failed to load events for export: {}", e);
+                self.toast_manager.error("Failed to load events");
+                return;
+            }
+        };
+
+        if events.is_empty() {
+            self.toast_manager.warning("No events in selected range");
+            return;
+        }
+
+        let filename = format!("calendar_{}_{}.ics", 
+            start.format("%Y%m%d"), 
+            end.format("%Y%m%d")
+        );
+
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Events")
+            .set_file_name(&filename)
+            .add_filter("iCalendar", &["ics"])
+            .save_file()
+        {
+            use crate::services::icalendar::ICalendarService;
+            let ics_service = ICalendarService::new();
+            
+            match ics_service.export_events_to_file(&events, &path) {
+                Ok(()) => {
+                    log::info!("Exported {} events to {:?}", events.len(), path);
+                    self.toast_manager.success(format!("Exported {} events", events.len()));
+                }
+                Err(e) => {
+                    log::error!("Failed to export events: {}", e);
+                    self.toast_manager.error("Failed to export events");
+                }
+            }
+        }
     }
 }

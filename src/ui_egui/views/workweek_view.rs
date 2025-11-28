@@ -7,7 +7,7 @@ use super::week_shared::{
     format_short_date, get_week_start, render_ribbon_event, render_time_grid,
     EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
-use super::{AutoFocusRequest, CountdownRequest};
+use super::{filter_events_by_category, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -43,6 +43,7 @@ impl WorkWeekView {
         show_ribbon: bool,
         all_day_events: &[Event],
         focus_request: &mut Option<AutoFocusRequest>,
+        category_filter: Option<&str>,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -56,6 +57,7 @@ impl WorkWeekView {
         // Get events for the work week
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_dates(&event_service, &work_week_dates);
+        let events = filter_events_by_category(events, category_filter);
 
         // Calculate column width accounting for scrollbar (16px typical)
         let scrollbar_width = 16.0;

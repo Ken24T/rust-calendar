@@ -3,9 +3,9 @@ use egui::{Color32, RichText};
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::services::category::CategoryService;
 use crate::services::countdown::CountdownCardId;
 use crate::services::database::Database;
-use crate::services::event::EventService;
 
 use super::recurrence::{RecurrenceFrequency, RecurrencePattern, Weekday};
 use super::state::{DatePickerTarget, EventDialogState};
@@ -25,13 +25,19 @@ pub struct CountdownCardChanges {
     pub days_font_size: f32,
 }
 
+/// Request for delete confirmation from the event dialog
+#[derive(Clone)]
+pub struct EventDeleteRequest {
+    pub event_id: i64,
+    pub event_title: String,
+}
+
 #[derive(Default)]
 pub struct EventDialogResult {
     pub saved_event: Option<Event>,
     pub card_changes: Option<CountdownCardChanges>,
-    /// ID of the event that was deleted, if any.
-    /// The caller should use this to remove associated countdown cards.
-    pub deleted_event_id: Option<i64>,
+    /// Request to show delete confirmation dialog
+    pub delete_request: Option<EventDeleteRequest>,
 }
 
 impl EventDialogResult {}
@@ -48,6 +54,9 @@ pub fn render_event_dialog(
     let mut result = EventDialogResult::default();
     let mut dialog_open = *show_dialog;
 
+    // Check for warnings (overlap detection, etc.) - this updates state.warning_messages
+    state.check_warnings(database);
+
     egui::Window::new(if state.event_id.is_some() {
         "Edit Event"
     } else {
@@ -57,13 +66,14 @@ pub fn render_event_dialog(
     .collapsible(false)
     .resizable(true)
     .default_width(600.0)
-    .default_height(720.0)
-    .min_height(680.0)
+    .default_height(750.0)
+    .min_height(720.0)
     .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
     .show(ctx, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
             render_error_banner(ui, state);
-            render_basic_information_section(ui, state);
+            render_warning_banner(ui, state);
+            render_basic_information_section(ui, state, database);
             render_date_time_section(ui, state);
             render_appearance_section(ui, state);
             render_recurrence_section(ui, state, settings);
@@ -89,7 +99,23 @@ fn render_error_banner(ui: &mut egui::Ui, state: &EventDialogState) {
     }
 }
 
-fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogState) {
+fn render_warning_banner(ui: &mut egui::Ui, state: &EventDialogState) {
+    if state.warning_messages.is_empty() {
+        return;
+    }
+    
+    let warning_color = Color32::from_rgb(200, 140, 0); // Orange/amber
+    
+    for warning in &state.warning_messages {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("⚠").color(warning_color));
+            ui.colored_label(warning_color, warning);
+        });
+    }
+    ui.add_space(4.0);
+}
+
+fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogState, database: &Database) {
     ui.heading("Basic Information");
     ui.add_space(4.0);
 
@@ -116,8 +142,9 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
         ui.text_edit_singleline(&mut state.location);
     });
 
+    // Category dropdown
     labeled_row(ui, "Category:", |ui| {
-        ui.text_edit_singleline(&mut state.category);
+        render_category_dropdown(ui, &mut state.category, database);
     });
 
     labeled_row(ui, "Description:", |ui| {
@@ -608,7 +635,7 @@ fn render_action_buttons(
     show_dialog: &mut bool,
 ) -> EventDialogResult {
     let mut saved_event = None;
-    let mut deleted_event_id = None;
+    let mut delete_request = None;
 
     indented_row(ui, |ui| {
         let can_save = !state.title.trim().is_empty();
@@ -651,17 +678,18 @@ fn render_action_buttons(
                 .clicked()
             {
                 if let Some(id) = state.event_id {
-                    let service = EventService::new(database.connection());
-                    if let Err(e) = service.delete(id) {
-                        state.error_message = Some(format!("Failed to delete: {}", e));
-                    } else {
-                        deleted_event_id = Some(id);
-                        *show_dialog = false;
-                    }
+                    delete_request = Some(EventDeleteRequest {
+                        event_id: id,
+                        event_title: state.title.clone(),
+                    });
+                    *show_dialog = false;
                 }
             }
         }
     });
+
+    // Add padding below buttons
+    ui.add_space(16.0);
 
     // Build card changes if there's a linked card and we saved successfully
     let card_changes = if saved_event.is_some() {
@@ -691,8 +719,84 @@ fn render_action_buttons(
     EventDialogResult {
         saved_event,
         card_changes,
-        deleted_event_id,
+        delete_request,
     }
+}
+
+/// Render a category dropdown with color swatches
+fn render_category_dropdown(ui: &mut egui::Ui, selected_category: &mut String, database: &Database) {
+    let service = CategoryService::new(database.connection());
+    let categories = service.list_all().unwrap_or_default();
+    
+    // Find the selected category for display
+    let selected_display = if selected_category.is_empty() {
+        "None".to_string()
+    } else {
+        categories.iter()
+            .find(|c| c.name == *selected_category)
+            .map(|c| c.display_name())
+            .unwrap_or_else(|| selected_category.clone())
+    };
+    
+    // Get the color of the selected category for the preview
+    let selected_color = categories.iter()
+        .find(|c| c.name == *selected_category)
+        .map(|c| hex_to_color32(&c.color))
+        .unwrap_or(Color32::TRANSPARENT);
+
+    ui.horizontal(|ui| {
+        // Show color swatch for selected category
+        if !selected_category.is_empty() {
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+            ui.painter().rect_filled(rect, 3.0, selected_color);
+        }
+        
+        egui::ComboBox::from_id_source("category_dropdown")
+            .selected_text(&selected_display)
+            .width(180.0)
+            .show_ui(ui, |ui| {
+                // "None" option
+                let is_none = selected_category.is_empty();
+                if ui.selectable_label(is_none, "None").clicked() {
+                    selected_category.clear();
+                }
+                
+                ui.separator();
+                
+                // Category options
+                for cat in &categories {
+                    let is_selected = cat.name == *selected_category;
+                    
+                    ui.horizontal(|ui| {
+                        // Color swatch
+                        let color = hex_to_color32(&cat.color);
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 2.0, color);
+                        
+                        if ui.selectable_label(is_selected, cat.display_name()).clicked() {
+                            *selected_category = cat.name.clone();
+                        }
+                    });
+                }
+            });
+    });
+}
+
+/// Convert hex color string to Color32
+fn hex_to_color32(hex: &str) -> Color32 {
+    let hex = hex.trim().trim_start_matches('#');
+    
+    if hex.len() == 6 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&hex[0..2], 16),
+            u8::from_str_radix(&hex[2..4], 16),
+            u8::from_str_radix(&hex[4..6], 16),
+        ) {
+            return Color32::from_rgb(r, g, b);
+        }
+    }
+    
+    Color32::GRAY
 }
 
 fn labeled_row<F>(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>, add_contents: F)

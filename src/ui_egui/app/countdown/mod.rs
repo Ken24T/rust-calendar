@@ -113,6 +113,8 @@ impl CalendarApp {
                 event_id,
                 title,
                 target_at,
+                Some(start_at),
+                Some(end_at),
                 event_color,
                 event_body,
                 self.settings.default_card_width,

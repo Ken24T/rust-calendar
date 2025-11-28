@@ -211,7 +211,11 @@ pub fn render_theme_dialog(
                                 let response = ui.selectable_label(is_current, label);
                                 
                                 // Live preview on hover
-                                if response.hovered() && !is_current && state.preview_theme.as_deref() != Some(name) {
+                                // Allow preview even for current theme if we're already previewing something else
+                                let should_preview = response.hovered() 
+                                    && state.preview_theme.as_deref() != Some(name)
+                                    && (!is_current || state.preview_theme.is_some());
+                                if should_preview {
                                     action = ThemeDialogAction::PreviewTheme(name.to_string());
                                 }
                                 
@@ -277,7 +281,11 @@ pub fn render_theme_dialog(
                                     let response = ui.selectable_label(is_current, label);
                                     
                                     // Live preview on hover
-                                    if response.hovered() && !is_current && state.preview_theme.as_deref() != Some(theme_name.as_str()) {
+                                    // Allow preview even for current theme if we're already previewing something else
+                                    let should_preview = response.hovered() 
+                                        && state.preview_theme.as_deref() != Some(theme_name.as_str())
+                                        && (!is_current || state.preview_theme.is_some());
+                                    if should_preview {
                                         action = ThemeDialogAction::PreviewTheme(theme_name.to_string());
                                     }
                                     

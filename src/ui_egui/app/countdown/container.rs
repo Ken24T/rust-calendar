@@ -7,6 +7,53 @@ use crate::services::countdown::{
 use chrono::{DateTime, Local};
 use std::collections::HashMap;
 
+/// Format the detailed countdown tooltip for a card
+pub fn format_card_tooltip(card: &CountdownCardState, now: DateTime<Local>) -> String {
+    let mut lines = Vec::new();
+    
+    // Event date range if available
+    if let (Some(start), Some(end)) = (card.event_start, card.event_end) {
+        let start_str = start.format("%d %b %Y %H:%M").to_string();
+        let end_str = if start.date_naive() == end.date_naive() {
+            // Same day - just show time for end
+            end.format("%H:%M").to_string()
+        } else {
+            end.format("%d %b %Y %H:%M").to_string()
+        };
+        lines.push(format!("📅 {} → {}", start_str, end_str));
+    }
+    
+    // Detailed countdown (DD:HH:MM)
+    let duration = card.start_at.signed_duration_since(now);
+    if duration.num_seconds() > 0 {
+        let total_seconds = duration.num_seconds();
+        let days = total_seconds / 86400;
+        let hours = (total_seconds % 86400) / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        
+        if days > 0 {
+            lines.push(format!("⏱ {}d {:02}h {:02}m remaining", days, hours, minutes));
+        } else if hours > 0 {
+            lines.push(format!("⏱ {:02}h {:02}m remaining", hours, minutes));
+        } else {
+            lines.push(format!("⏱ {:02}m remaining", minutes));
+        }
+    } else {
+        lines.push("⏱ Event has started!".to_string());
+    }
+    
+    // Target time
+    lines.push(format!("🎯 Target: {}", card.start_at.format("%d %b %Y %H:%M")));
+    
+    // Comment/description if present
+    if let Some(body) = card.comment.as_ref().map(|t| t.trim()).filter(|t| !t.is_empty()) {
+        lines.push(String::new()); // blank line
+        lines.push(format!("📝 {}", body));
+    }
+    
+    lines.join("\n")
+}
+
 /// Layout orientation for cards within the container
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutOrientation {
@@ -36,12 +83,24 @@ const CARD_MIN_COUNTDOWN_HEIGHT: f32 = 36.0;
 const CARD_SPACING: f32 = 4.0;
 
 /// Number of frames to wait before checking if window position is valid
-const VISIBILITY_CHECK_FRAMES: u32 = 10;
+const VISIBILITY_CHECK_FRAMES: u32 = 15;
+
+/// Get the primary monitor width from context, with fallback to 1920
+fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
+    ctx.input(|input| {
+        input.raw.viewports
+            .values()
+            .filter_map(|info| info.monitor_size)
+            .next()
+            .map(|s| s.x)
+            .unwrap_or(1920.0)
+    })
+}
 
 /// Layout calculator for arranging cards within the container
 #[derive(Debug, Clone)]
 pub struct ContainerLayout {
-    /// Current layout orientation
+    /// Current layout orientation (always recalculated from aspect ratio)
     pub orientation: LayoutOrientation,
     /// Computed rectangles for each card
     pub card_rects: HashMap<CountdownCardId, egui::Rect>,
@@ -59,6 +118,8 @@ pub struct ContainerLayout {
     pub visibility_check_frames: u32,
     /// Whether the position has been verified as working
     pub position_verified: bool,
+    /// Whether the window has ever gained focus this session
+    pub has_ever_had_focus: bool,
 }
 
 impl Default for ContainerLayout {
@@ -73,6 +134,7 @@ impl Default for ContainerLayout {
             last_card_count: 0,
             visibility_check_frames: 0,
             position_verified: false,
+            has_ever_had_focus: false,
         }
     }
 }
@@ -80,11 +142,12 @@ impl Default for ContainerLayout {
 impl ContainerLayout {
     /// Calculate the layout for cards within the container.
     /// 
-    /// This method determines the orientation based on the container's aspect ratio:
-    /// - Wide containers (aspect ratio > 1.5) use horizontal layout
-    /// - Tall/square containers use vertical layout
+    /// Orientation is determined by the container's aspect ratio:
+    /// - Wide containers (aspect ratio > 1.5) use horizontal layout (landscape)
+    /// - Tall/square containers use vertical layout (portrait)
     /// 
     /// Cards are evenly distributed within the available space, respecting minimum sizes.
+    /// When the user resizes the container, orientation updates to match the new aspect ratio.
     pub fn calculate_layout(
         &mut self,
         available_rect: egui::Rect,
@@ -97,7 +160,8 @@ impl ContainerLayout {
             return;
         }
 
-        // Determine orientation based on aspect ratio
+        // Always determine orientation from current aspect ratio
+        // This allows the container to switch between portrait/landscape when resized
         let aspect_ratio = available_rect.width() / available_rect.height();
         self.orientation = if aspect_ratio > 1.5 {
             LayoutOrientation::Horizontal
@@ -531,17 +595,10 @@ pub fn render_card_content(
                         .color(days_fg),
                 );
 
-                // Tooltip with comment if present
-                if let Some(body) = card
-                    .comment
-                    .as_ref()
-                    .map(|text| text.trim())
-                    .filter(|text| !text.is_empty())
-                {
-                    countdown_response.on_hover_ui_at_pointer(|ui| {
-                        ui.label(body);
-                    });
-                }
+                // Enhanced tooltip with event details and countdown
+                countdown_response.on_hover_ui_at_pointer(|ui| {
+                    ui.label(format_card_tooltip(card, now));
+                });
             },
         );
     });
@@ -611,35 +668,61 @@ pub fn render_container_window(
     let current_card_count = cards.len();
     let num_cards = current_card_count.max(1) as f32;
     let default_width = default_card_width + CARD_PADDING * 2.0;
-    let ideal_height = default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0);
+    let ideal_vertical_height = default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0);
 
     // Detect if card count changed (card added or removed)
     let card_count_changed = layout.initialized && layout.last_card_count != current_card_count;
+    let cards_added = current_card_count > layout.last_card_count;
+    let card_count_diff = (current_card_count as i32 - layout.last_card_count as i32).abs() as f32;
     layout.last_card_count = current_card_count;
 
-    // Use stored geometry, but adjust height if cards were added/removed
-    let initial_geometry = if card_count_changed {
-        // Calculate height adjustment based on card count change
-        let current_geom = container_geometry.unwrap_or(CountdownCardGeometry {
-            x: 100.0,
-            y: 100.0,
-            width: default_width.max(container_min_width),
-            height: ideal_height.max(container_min_height),
-        });
-        // Resize to accommodate new card count while keeping position and width
-        CountdownCardGeometry {
-            x: current_geom.x,
-            y: current_geom.y,
-            width: current_geom.width,
-            height: ideal_height.max(container_min_height).min(800.0),
+    // Calculate geometry - grow container when cards are added based on orientation
+    let initial_geometry = if let Some(stored) = container_geometry {
+        if card_count_changed {
+            // Determine current orientation from stored geometry
+            let aspect_ratio = stored.width / stored.height;
+            let is_horizontal = aspect_ratio > 1.5;
+            
+            if is_horizontal {
+                // Landscape: grow/shrink width when cards change
+                let width_change = (default_card_width + CARD_PADDING) * card_count_diff;
+                let new_width = if cards_added {
+                    stored.width + width_change
+                } else {
+                    (stored.width - width_change).max(container_min_width)
+                };
+                CountdownCardGeometry {
+                    x: stored.x,
+                    y: stored.y,
+                    width: new_width,
+                    height: stored.height,
+                }
+            } else {
+                // Portrait: grow/shrink height when cards change
+                let height_change = (default_card_height + CARD_PADDING) * card_count_diff;
+                let new_height = if cards_added {
+                    stored.height + height_change
+                } else {
+                    (stored.height - height_change).max(container_min_height)
+                };
+                CountdownCardGeometry {
+                    x: stored.x,
+                    y: stored.y,
+                    width: stored.width,
+                    height: new_height,
+                }
+            }
+        } else {
+            stored
         }
     } else {
-        container_geometry.unwrap_or(CountdownCardGeometry {
+        // No stored geometry - use defaults for vertical layout
+        CountdownCardGeometry {
             x: 100.0,
             y: 100.0,
             width: default_width.max(container_min_width),
-            height: ideal_height.max(container_min_height).min(600.0),
-        })
+            height: ideal_vertical_height.max(container_min_height).min(600.0),
+        }
     };
 
     let viewport_id = egui::ViewportId::from_hash_of("countdown_container");
@@ -665,7 +748,7 @@ pub fn render_container_window(
         .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
         .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
 
-    // Log on first render or when card count changes
+    // Log on first render or resize
     if needs_resize {
         log::info!(
             "Container setting position to ({}, {}) size ({}, {})",
@@ -724,6 +807,11 @@ pub fn render_container_window(
         
         // Check if window has focus (indicates it's actually visible and usable)
         let has_focus = child_ctx.input(|i| i.viewport().focused.unwrap_or(false));
+        
+        // Track if window has ever gained focus this session
+        if has_focus {
+            layout.has_ever_had_focus = true;
+        }
 
         if let Some(new_geom) = current_geometry {
             // Log the actual geometry reported by the viewport
@@ -740,18 +828,34 @@ pub fn render_container_window(
                 layout.visibility_check_frames += 1;
                 
                 if layout.visibility_check_frames >= VISIBILITY_CHECK_FRAMES {
+                    // Get actual primary monitor width for multi-monitor detection
+                    let primary_width = get_primary_monitor_width(child_ctx);
+                    
                     // Check if position is way off from what we stored (indicating OS moved it)
-                    // or if position is on a secondary monitor (x > 1920 or x < 0 typically)
+                    // We're more lenient now - only consider "stuck" if:
+                    // 1. Position is on a secondary monitor area AND
+                    // 2. We've been trying to show for multiple frames AND  
+                    // 3. Window has NEVER gained focus this session (not just currently unfocused)
                     let position_seems_stuck = if let Some(stored) = container_geometry {
                         // Window reports being at stored position but we can't see/interact with it
                         // This happens when the position is on a monitor that's no longer available
-                        // or when egui/winit fails to properly position on secondary monitors
-                        let on_secondary = stored.x > 1920.0 || stored.x < 0.0 || stored.y < 0.0;
+                        // Use dynamic primary monitor width instead of hardcoded 1920
+                        let possibly_on_secondary = stored.x > primary_width || stored.x < 0.0 || stored.y < 0.0;
                         let position_matches = (new_geom.x - stored.x).abs() < 50.0 
                             && (new_geom.y - stored.y).abs() < 50.0;
                         
-                        // If on secondary monitor and focus request didn't work, assume stuck
-                        on_secondary && position_matches && !has_focus
+                        // Log diagnostic info for multi-monitor debugging
+                        if possibly_on_secondary {
+                            log::debug!(
+                                "Container position check: stored=({}, {}), current=({}, {}), primary_width={}, has_focus={}, ever_focused={}",
+                                stored.x, stored.y, new_geom.x, new_geom.y, primary_width, has_focus, layout.has_ever_had_focus
+                            );
+                        }
+                        
+                        // Only consider stuck if on secondary area, position matches stored,
+                        // AND window has NEVER gained focus (if it did once, user can see it)
+                        // This prevents false positives when user just clicked elsewhere
+                        possibly_on_secondary && position_matches && !layout.has_ever_had_focus
                     } else {
                         false
                     };

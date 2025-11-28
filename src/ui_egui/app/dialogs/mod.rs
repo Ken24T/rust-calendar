@@ -3,7 +3,10 @@ use super::CalendarApp;
 use crate::services::countdown::RgbaColor;
 use crate::services::event::EventService;
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
+use crate::ui_egui::dialogs::category_manager::render_category_manager_dialog;
+use crate::ui_egui::dialogs::export_dialog::{render_export_range_dialog, ExportDialogResult};
 use crate::ui_egui::dialogs::search_dialog::{render_search_dialog, SearchDialogAction};
+use crate::ui_egui::dialogs::template_manager::render_template_manager_dialog;
 use crate::ui_egui::dialogs::theme_creator::{render_theme_creator, ThemeCreatorAction};
 use crate::ui_egui::dialogs::theme_dialog::{render_theme_dialog, ThemeDialogAction};
 use crate::ui_egui::event_dialog::{
@@ -33,6 +36,10 @@ impl CalendarApp {
 
         self.render_theme_dialog(ctx);
         self.render_theme_creator(ctx);
+        self.render_about_dialog(ctx);
+        self.render_export_range_dialog(ctx);
+        self.render_template_manager_dialog(ctx);
+        self.render_category_manager_dialog(ctx);
 
         let should_reload_db =
             render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
@@ -94,7 +101,7 @@ impl CalendarApp {
             return;
         }
 
-        let (saved_event, card_changes, auto_create_card, was_new_event, event_saved, deleted_event_id) = {
+        let (saved_event, card_changes, auto_create_card, was_new_event, event_saved, delete_request) = {
             let state = self
                 .event_dialog_state
                 .as_mut()
@@ -102,7 +109,7 @@ impl CalendarApp {
             let EventDialogResult {
                 saved_event,
                 card_changes,
-                deleted_event_id,
+                delete_request,
             } = render_event_dialog(
                 ctx,
                 state,
@@ -111,9 +118,15 @@ impl CalendarApp {
                 &mut self.show_event_dialog,
             );
 
+            // For auto-creating countdown cards, check if the event is in the future
+            // For multi-day events, check if the end date/time is in the future
+            let now = Local::now();
+            let event_end_dt = state.end_date.and_time(state.end_time);
+            let event_ends_in_future = event_end_dt > now.naive_local();
+            
             let auto_create_card = state.create_countdown 
                 && state.event_id.is_none()
-                && state.date > Local::now().date_naive();
+                && event_ends_in_future;
             let was_new_event = state.event_id.is_none();
             let event_saved = saved_event.is_some();
             (
@@ -122,16 +135,17 @@ impl CalendarApp {
                 auto_create_card,
                 was_new_event,
                 event_saved,
-                deleted_event_id,
+                delete_request,
             )
         };
 
-        // If an event was deleted, also remove associated countdown cards
-        if let Some(event_id) = deleted_event_id {
-            let removed = self.context.countdown_service_mut().remove_cards_for_event(event_id);
-            if removed > 0 {
-                log::info!("Removed {} countdown card(s) for deleted event {}", removed, event_id);
-            }
+        // If delete was requested, trigger confirmation dialog
+        if let Some(request) = delete_request {
+            use super::confirm::ConfirmAction;
+            self.confirm_dialog.request(ConfirmAction::DeleteEvent {
+                event_id: request.event_id,
+                event_title: request.event_title,
+            });
         }
 
         // Apply card changes if any
@@ -139,14 +153,17 @@ impl CalendarApp {
             self.apply_countdown_card_changes(changes);
         }
 
-        if let Some(event) = saved_event {
+        if let Some(ref event) = saved_event {
             if auto_create_card {
-                self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
+                self.consume_countdown_requests(vec![CountdownRequest::from_event(event)]);
             }
-            self.sync_cards_from_event(&event);
+            self.sync_cards_from_event(event);
 
             if was_new_event {
-                self.focus_on_event(&event);
+                self.focus_on_event(event);
+                self.toast_manager.success(format!("Created \"{}\"", event.title));
+            } else {
+                self.toast_manager.success("Event saved");
             }
         }
 
@@ -309,8 +326,10 @@ impl CalendarApp {
             ThemeDialogAction::DeleteTheme(name) => {
                 if let Err(e) = theme_service.delete_theme(&name) {
                     log::error!("Failed to delete theme: {}", e);
+                    self.toast_manager.error(format!("Failed to delete theme: {}", e));
                 } else {
                     log::info!("Successfully deleted theme: {}", name);
+                    self.toast_manager.success(format!("Deleted theme \"{}\"", name));
                     // Clear cached colors
                     self.state.theme_dialog_state.custom_theme_colors.remove(&name);
                     // If we deleted the current theme, switch to Light
@@ -330,7 +349,8 @@ impl CalendarApp {
 
                 if let Ok(theme) = theme_service.get_theme(&name) {
                     theme.apply_to_context(ctx);
-                    self.active_theme = theme;
+                    self.active_theme = theme.clone();
+                    self.toast_manager.success(format!("Applied theme \"{}\"", name));
                 } else {
                     let fallback = Self::fallback_theme_for_settings(&self.settings);
                     fallback.apply_to_context(ctx);
@@ -343,9 +363,11 @@ impl CalendarApp {
                 }
             }
             ThemeDialogAction::PreviewTheme(name) => {
-                // Temporarily apply theme for preview (don't save)
+                // Temporarily apply theme for preview (don't save to settings)
                 if let Ok(theme) = theme_service.get_theme(&name) {
                     theme.apply_to_context(ctx);
+                    // Also update active_theme so all UI components use preview colors
+                    self.active_theme = theme;
                     self.state.theme_dialog_state.preview_theme = Some(name);
                 }
             }
@@ -354,6 +376,8 @@ impl CalendarApp {
                 if let Some(original) = &self.state.theme_dialog_state.original_theme {
                     if let Ok(theme) = theme_service.get_theme(original) {
                         theme.apply_to_context(ctx);
+                        // Restore active_theme to original
+                        self.active_theme = theme;
                     }
                 }
                 self.state.theme_dialog_state.preview_theme = None;
@@ -361,8 +385,10 @@ impl CalendarApp {
             ThemeDialogAction::DuplicateTheme { source, new_name } => {
                 if let Err(e) = theme_service.duplicate_theme(&source, &new_name) {
                     log::error!("Failed to duplicate theme: {}", e);
+                    self.toast_manager.error(format!("Failed to duplicate: {}", e));
                 } else {
                     log::info!("Successfully duplicated theme '{}' to '{}'", source, new_name);
+                    self.toast_manager.success(format!("Created \"{}\"", new_name));
                     // Cache colors for the new theme
                     if let Ok(theme) = theme_service.get_theme(&new_name) {
                         self.state.theme_dialog_state.cache_theme_colors(&new_name, theme.preview_colors());
@@ -379,8 +405,10 @@ impl CalendarApp {
                 {
                     if let Err(e) = theme_service.export_theme(&name, &path) {
                         log::error!("Failed to export theme: {}", e);
+                        self.toast_manager.error(format!("Export failed: {}", e));
                     } else {
                         log::info!("Successfully exported theme to {:?}", path);
+                        self.toast_manager.success("Theme exported");
                     }
                 }
             }
@@ -394,6 +422,7 @@ impl CalendarApp {
                     match theme_service.import_theme(&path) {
                         Ok(name) => {
                             log::info!("Successfully imported theme: {}", name);
+                            self.toast_manager.success(format!("Imported \"{}\"", name));
                             // Cache colors for the imported theme
                             if let Ok(theme) = theme_service.get_theme(&name) {
                                 self.state.theme_dialog_state.cache_theme_colors(&name, theme.preview_colors());
@@ -401,6 +430,7 @@ impl CalendarApp {
                         }
                         Err(e) => {
                             log::error!("Failed to import theme: {}", e);
+                            self.toast_manager.error(format!("Import failed: {}", e));
                         }
                     }
                 }
@@ -441,6 +471,52 @@ impl CalendarApp {
             ThemeCreatorAction::Cancel => {
                 self.state.theme_creator_state.close();
             }
+        }
+    }
+
+    fn render_export_range_dialog(&mut self, ctx: &egui::Context) {
+        if !self.state.show_export_range_dialog {
+            return;
+        }
+
+        let result = render_export_range_dialog(
+            ctx,
+            &mut self.state.export_dialog_state,
+        );
+
+        match result {
+            ExportDialogResult::None => {}
+            ExportDialogResult::Cancelled => {
+                self.state.show_export_range_dialog = false;
+                self.state.export_dialog_state.reset();
+            }
+            ExportDialogResult::Export { start, end } => {
+                self.state.show_export_range_dialog = false;
+                self.export_events_in_range(start, end);
+                self.state.export_dialog_state.reset();
+            }
+        }
+    }
+
+    fn render_template_manager_dialog(&mut self, ctx: &egui::Context) {
+        render_template_manager_dialog(
+            ctx,
+            &mut self.state.template_manager_state,
+            self.context.database(),
+            &self.settings,
+        );
+    }
+
+    fn render_category_manager_dialog(&mut self, ctx: &egui::Context) {
+        let response = render_category_manager_dialog(
+            ctx,
+            &mut self.state.category_manager_state,
+            self.context.database(),
+        );
+
+        if response.categories_changed {
+            // Categories were modified - could refresh event display if needed
+            log::info!("Categories changed");
         }
     }
 }

@@ -1,9 +1,11 @@
+use super::confirm::ConfirmAction;
 use super::state::ViewType;
 use super::CalendarApp;
 use crate::models::event::Event;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
+use crate::ui_egui::views::week_shared::DeleteConfirmRequest;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
@@ -11,6 +13,31 @@ use chrono::{Datelike, Local, NaiveDate};
 use std::collections::HashSet;
 
 impl CalendarApp {
+    /// Handle a delete confirmation request from a view
+    fn handle_delete_confirm_request(&mut self, request: DeleteConfirmRequest) {
+        let action = if request.occurrence_only {
+            if let Some(date) = request.occurrence_date {
+                ConfirmAction::DeleteEventOccurrence {
+                    event_id: request.event_id,
+                    event_title: request.event_title,
+                    occurrence_date: date,
+                }
+            } else {
+                // Fallback to full event deletion if no date provided
+                ConfirmAction::DeleteEvent {
+                    event_id: request.event_id,
+                    event_title: request.event_title,
+                }
+            }
+        } else {
+            ConfirmAction::DeleteEvent {
+                event_id: request.event_id,
+                event_title: request.event_title,
+            }
+        };
+        self.confirm_dialog.request(action);
+    }
+    
     pub(super) fn render_main_panel(
         &mut self,
         ctx: &egui::Context,
@@ -24,7 +51,22 @@ impl CalendarApp {
             .filter_map(|card| card.event_id)
             .collect();
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        // Use a frame with no outer/inner margin to prevent gaps between panels
+        // The sidebar already has its own inner padding
+        let panel_frame = egui::Frame::central_panel(&ctx.style())
+            .outer_margin(egui::Margin::ZERO)
+            .inner_margin(egui::Margin::same(8.0));
+
+        egui::CentralPanel::default()
+            .frame(panel_frame)
+            .show(ctx, |ui| {
+            // DEBUG: Log central panel rect
+            let panel_rect = ui.max_rect();
+            let available_rect = ui.available_rect_before_wrap();
+            log::info!(
+                "CENTRAL PANEL DEBUG: max_rect={:?}, available_rect={:?}",
+                panel_rect, available_rect
+            );
             // Clickable heading - double-click to go to today
             let heading_text = format!(
                 "{} View - {}",
@@ -46,13 +88,13 @@ impl CalendarApp {
 
             ui.horizontal(|ui| {
                 // Navigation buttons with keyboard hint tooltips
-                if ui.button("◀ Previous").on_hover_text("← Arrow").clicked() {
+                if ui.button("◀").on_hover_text("Previous (← Arrow)").clicked() {
                     self.navigate_previous();
                 }
                 if ui.button("Today").on_hover_text("Ctrl+T").clicked() {
                     self.jump_to_today();
                 }
-                if ui.button("Next ▶").on_hover_text("→ Arrow").clicked() {
+                if ui.button("▶").on_hover_text("Next (→ Arrow)").clicked() {
                     self.navigate_next();
                 }
 
@@ -149,6 +191,7 @@ impl CalendarApp {
             countdown_requests,
             active_countdown_events,
             focus_request,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle clicked event - open edit dialog
@@ -158,7 +201,17 @@ impl CalendarApp {
             self.show_event_dialog = true;
         }
         
-        // Handle deleted events - remove countdown cards
+        // Handle delete confirmation request
+        if let Some(request) = view_result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
+        }
+        
+        // Handle template selection from context menu
+        if let Some((template_id, date, time)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date, time);
+        }
+        
+        // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
@@ -220,6 +273,7 @@ impl CalendarApp {
             show_ribbon,
             &all_day_events,
             focus_request,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle clicked event - open edit dialog
@@ -229,7 +283,17 @@ impl CalendarApp {
             self.show_event_dialog = true;
         }
         
-        // Handle deleted events - remove countdown cards
+        // Handle delete confirmation request
+        if let Some(request) = view_result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
+        }
+        
+        // Handle template selection from context menu
+        if let Some((template_id, date, time)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date, time);
+        }
+        
+        // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
@@ -295,6 +359,7 @@ impl CalendarApp {
             self.show_ribbon,
             &all_day_events,
             focus_request,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle clicked event - open edit dialog
@@ -304,7 +369,17 @@ impl CalendarApp {
             self.show_event_dialog = true;
         }
         
-        // Handle deleted events - remove countdown cards
+        // Handle delete confirmation request
+        if let Some(request) = view_result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
+        }
+        
+        // Handle template selection from context menu
+        if let Some((template_id, date, time)) = view_result.template_selection {
+            self.create_event_from_template_with_date(template_id, date, time);
+        }
+        
+        // Handle deleted events - remove countdown cards (legacy path)
         for event_id in view_result.deleted_event_ids {
             self.context.countdown_service_mut().remove_cards_for_event(event_id);
         }
@@ -316,8 +391,7 @@ impl CalendarApp {
     }
 
     pub(super) fn render_month_view(&mut self, ui: &mut egui::Ui) {
-        let mut deleted_event_ids = Vec::new();
-        let action = MonthView::show(
+        let result = MonthView::show(
             ui,
             &mut self.current_date,
             self.context.database(),
@@ -327,18 +401,24 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
-            &mut deleted_event_ids,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle month view actions
-        if let MonthViewAction::SwitchToDayView(date) = action {
-            self.current_date = date;
-            self.current_view = ViewType::Day;
+        match result.action {
+            MonthViewAction::SwitchToDayView(date) => {
+                self.current_date = date;
+                self.current_view = ViewType::Day;
+            }
+            MonthViewAction::CreateFromTemplate(template_id, date) => {
+                self.create_event_from_template_with_date(template_id, date, None);
+            }
+            MonthViewAction::None => {}
         }
         
-        // Handle deleted events - remove countdown cards
-        for event_id in deleted_event_ids {
-            self.context.countdown_service_mut().remove_cards_for_event(event_id);
+        // Handle delete confirmation request
+        if let Some(request) = result.delete_confirm_request {
+            self.handle_delete_confirm_request(request);
         }
     }
 

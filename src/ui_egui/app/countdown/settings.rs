@@ -27,7 +27,8 @@ pub(super) enum CountdownSettingsCommand {
     SetUseDefaultBodyBg(CountdownCardId, bool),
     SetUseDefaultDaysFg(CountdownCardId, bool),
     ApplyVisualDefaults(CountdownCardId),
-    DeleteCard(CountdownCardId),
+    /// Request delete confirmation (goes through confirm dialog)
+    RequestDeleteCard(CountdownCardId, String),
     SetStartAt(CountdownCardId, chrono::DateTime<chrono::Local>),
     SetDefaultTitleBgColor(RgbaColor),
     ResetDefaultTitleBgColor,
@@ -329,7 +330,7 @@ pub(super) fn render_countdown_settings_ui(
                             if delete_clicked {
                                 result
                                     .commands
-                                    .push(CountdownSettingsCommand::DeleteCard(card.id));
+                                    .push(CountdownSettingsCommand::RequestDeleteCard(card.id, card.event_title.clone()));
                                 result.close_requested = true;
                             }
                             if ui.button("Cancel").clicked() {

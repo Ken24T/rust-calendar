@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::services::category::CategoryService;
 use crate::services::countdown::CountdownService;
 use crate::services::database::Database;
 use crate::services::event::EventService;
@@ -64,5 +65,9 @@ impl AppContext {
 
     pub fn event_service(&self) -> EventService<'_> {
         EventService::new(self.database.connection())
+    }
+
+    pub fn category_service(&self) -> CategoryService<'_> {
+        CategoryService::new(self.database.connection())
     }
 }

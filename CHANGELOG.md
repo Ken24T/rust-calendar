@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.16] - 2025-11-28
+
+### Added
+- **Context Menu Template Access** - Create events from templates directly in calendar views:
+  - Right-click on empty space in Month, Week, or Day view to see "📋 From Template" submenu
+  - Templates listed with hover tooltips showing title and duration
+  - Clicking a template creates an event for that specific date/time
+
+### Fixed
+- **Keyboard Shortcuts** - View shortcuts (D, M, W, K) no longer interfere while typing:
+  - Fixed issue where pressing 'd', 'm', 'w' etc. would change views while typing in dialogs
+  - Shortcuts now properly detect when a text input has focus
+
+## [1.0.15] - 2025-11-28
+
+### Added
+- **Event Templates** - Save and reuse common event configurations:
+  - Templates submenu in Events menu with quick access to saved templates
+  - "Manage Templates..." dialog for creating, editing, and deleting templates
+  - Templates store: name, title, description, location, duration, category, and color
+  - Click a template to instantly create a new event prefilled with template values
+  - Database table `event_templates` for persistent storage
+
+## [1.0.14] - 2025-11-28
+
+### Added
+- **Event Validation Enhancements** - Non-blocking warnings in the event dialog:
+  - Overlap detection: Warns when the event overlaps with existing events
+  - Distant past warning: Warns when creating events more than 5 years in the past
+  - Warnings displayed in orange/amber (non-blocking - save still allowed)
+
+### Changed
+- Export dialog now uses calendar-style date picker matching the event dialog
+
+## [1.0.13] - 2025-11-28
+
+### Added
+- **Export Events to iCalendar (.ics)** - Events menu now has Export submenu:
+  - "Export All Events..." - Exports all calendar events to a single .ics file
+  - "Export Date Range..." - Opens a dialog to select start/end dates for export
+  - Quick select buttons for "This Month", "This Year", and "Last 30 Days"
+  - Toast notifications for success/failure feedback
+- New `export_dialog.rs` module for the date range picker dialog
+
+### Changed
+- Reorganized Events menu to group Import and Export operations
+
 ## [Unreleased]
 
 ### Planning Phase

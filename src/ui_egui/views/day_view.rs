@@ -3,14 +3,18 @@ use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
-use super::week_shared::{maybe_focus_slot, parse_color, EventInteractionResult};
+use super::week_shared::{maybe_focus_slot, parse_color, DeleteConfirmRequest, EventInteractionResult};
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::models::template::EventTemplate;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::theme::CalendarTheme;
+
+use super::filter_events_by_category;
 
 pub struct DayView;
 
@@ -28,6 +32,7 @@ impl DayView {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         focus_request: &mut Option<AutoFocusRequest>,
+        category_filter: Option<&str>,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -38,6 +43,7 @@ impl DayView {
         // Get events for this day
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_day(&event_service, *current_date);
+        let events = filter_events_by_category(events, category_filter);
 
         // Day header
         let day_name = current_date.format("%A").to_string();
@@ -497,27 +503,35 @@ impl DayView {
                         if event.recurrence_rule.is_some() {
                             if ui.button("🗑 Delete This Occurrence").clicked() {
                                 if let Some(id) = event.id {
-                                    let service = EventService::new(database.connection());
-                                    let _ = service.delete_occurrence(id, event.start);
-                                    // Note: occurrence deletion doesn't delete the whole event,
-                                    // so countdown card stays (it's for the event series)
+                                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                        event_id: id,
+                                        event_title: event.title.clone(),
+                                        occurrence_only: true,
+                                        occurrence_date: Some(event.start),
+                                    });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
                             if ui.button("🗑 Delete All Occurrences").clicked() {
                                 if let Some(id) = event.id {
-                                    let service = EventService::new(database.connection());
-                                    let _ = service.delete(id);
-                                    result.deleted_event_ids.push(id);
+                                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                        event_id: id,
+                                        event_title: event.title.clone(),
+                                        occurrence_only: false,
+                                        occurrence_date: None,
+                                    });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
                         } else {
                             if ui.button("🗑 Delete").clicked() {
                                 if let Some(id) = event.id {
-                                    let service = EventService::new(database.connection());
-                                    let _ = service.delete(id);
-                                    result.deleted_event_ids.push(id);
+                                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                        event_id: id,
+                                        event_title: event.title.clone(),
+                                        occurrence_only: false,
+                                        occurrence_date: None,
+                                    });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
@@ -564,6 +578,42 @@ impl DayView {
                             *event_dialog_time = Some(time);
                             *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
                             ui.memory_mut(|mem| mem.close_popup());
+                        }
+                        
+                        // Template submenu
+                        let templates: Vec<EventTemplate> = TemplateService::new(database.connection())
+                            .list_all()
+                            .unwrap_or_default();
+                        
+                        if !templates.is_empty() {
+                            ui.separator();
+                            ui.menu_button("📋 From Template", |ui| {
+                                for template in &templates {
+                                    let label = format!("{}", template.name);
+                                    if ui.button(&label).on_hover_text(format!(
+                                        "Create '{}' event\nDuration: {}",
+                                        template.title,
+                                        if template.all_day {
+                                            "All day".to_string()
+                                        } else {
+                                            let h = template.duration_minutes / 60;
+                                            let m = template.duration_minutes % 60;
+                                            if h > 0 && m > 0 {
+                                                format!("{}h {}m", h, m)
+                                            } else if h > 0 {
+                                                format!("{}h", h)
+                                            } else {
+                                                format!("{}m", m)
+                                            }
+                                        }
+                                    )).clicked() {
+                                        if let Some(id) = template.id {
+                                            result.template_selection = Some((id, date, Some(time)));
+                                        }
+                                        ui.memory_mut(|mem| mem.close_popup());
+                                    }
+                                }
+                            });
                         }
                     }
                 },

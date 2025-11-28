@@ -1,5 +1,6 @@
 #[path = "app/context.rs"]
 mod context;
+mod confirm;
 mod countdown;
 mod dialogs;
 mod geometry;
@@ -12,11 +13,14 @@ mod shortcuts;
 mod sidebar;
 mod state;
 mod status_bar;
+mod toast;
 mod views;
 
 use self::context::AppContext;
 use self::countdown::CountdownUiState;
 use self::state::{AppState, ViewType};
+use self::toast::ToastManager;
+use self::confirm::ConfirmDialogState;
 use crate::models::settings::Settings;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::theme::CalendarTheme;
@@ -47,6 +51,12 @@ pub struct CalendarApp {
     countdown_ui: CountdownUiState,
     /// Aggregated dialog/control state
     state: AppState,
+    /// Toast notification manager
+    toast_manager: ToastManager,
+    /// Confirmation dialog state
+    confirm_dialog: ConfirmDialogState,
+    /// Active category filter (None = show all categories)
+    active_category_filter: Option<String>,
 }
 
 impl eframe::App for CalendarApp {

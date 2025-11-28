@@ -12,6 +12,9 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_events_table(conn)?;
     create_countdown_tables(conn)?;
     run_countdown_migrations(conn)?;
+    create_event_templates_table(conn)?;
+    create_categories_table(conn)?;
+    initialize_default_categories(conn)?;
     Ok(())
 }
 
@@ -120,6 +123,13 @@ fn run_settings_migrations(conn: &Connection) -> Result<()> {
         "settings",
         "show_week_numbers",
         "ALTER TABLE settings ADD COLUMN show_week_numbers INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "sidebar_width",
+        "ALTER TABLE settings ADD COLUMN sidebar_width REAL NOT NULL DEFAULT 180.0",
     )?;
 
     let had_time_slot = migrations::column_exists(conn, "settings", "time_slot_interval")?;
@@ -440,6 +450,21 @@ fn run_countdown_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE countdown_settings ADD COLUMN card_order TEXT",
     )?;
 
+    // Add event_start and event_end columns for enhanced tooltip display
+    migrations::ensure_column(
+        conn,
+        "countdown_cards",
+        "event_start",
+        "ALTER TABLE countdown_cards ADD COLUMN event_start TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "countdown_cards",
+        "event_end",
+        "ALTER TABLE countdown_cards ADD COLUMN event_end TEXT",
+    )?;
+
     // Reset use_default_* flags to 0 for existing cards (one-time migration)
     // This ensures checkboxes start unchecked by default
     migrate_use_default_flags(conn)?;
@@ -486,5 +511,53 @@ fn migrate_use_default_flags(conn: &Connection) -> Result<()> {
         )?;
     }
 
+    Ok(())
+}
+
+fn create_event_templates_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS event_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            description TEXT,
+            location TEXT,
+            duration_minutes INTEGER NOT NULL DEFAULT 60,
+            all_day INTEGER NOT NULL DEFAULT 0,
+            category TEXT,
+            color TEXT,
+            recurrence_rule TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create event_templates table")?;
+
+    Ok(())
+}
+
+fn create_categories_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT NOT NULL,
+            icon TEXT,
+            is_system INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create categories table")?;
+
+    Ok(())
+}
+
+fn initialize_default_categories(conn: &Connection) -> Result<()> {
+    use crate::services::category::CategoryService;
+    
+    let service = CategoryService::new(conn);
+    service.initialize_defaults()?;
+    
     Ok(())
 }

@@ -430,6 +430,7 @@ impl CalendarTheme {
         // Customize visuals based on our theme
         visuals.window_fill = self.app_background;
         visuals.panel_fill = self.app_background;
+        visuals.extreme_bg_color = self.app_background; // Prevents black gaps between panels
 
         // Override widget colors to match our theme
         visuals.widgets.noninteractive.bg_fill = self.day_background;
@@ -441,6 +442,13 @@ impl CalendarTheme {
         visuals.override_text_color = Some(self.text_primary);
 
         ctx.set_visuals(visuals);
+        
+        // Also adjust spacing/interaction to reduce gaps between panels
+        let mut style = (*ctx.style()).clone();
+        style.spacing.window_margin = egui::Margin::ZERO;
+        // Reduce resize grab radius to eliminate gaps
+        style.interaction.resize_grab_radius_side = 0.0;
+        ctx.set_style(style);
     }
 
     /// Convert Color32 to hex string for display

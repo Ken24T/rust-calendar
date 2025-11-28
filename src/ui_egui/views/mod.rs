@@ -129,3 +129,87 @@ impl CountdownRequest {
         }
     }
 }
+
+/// Filter events by category if a filter is active.
+/// Returns only events whose category matches the filter.
+/// If filter is None, all events pass through.
+pub fn filter_events_by_category(events: Vec<Event>, filter: Option<&str>) -> Vec<Event> {
+    match filter {
+        None => events,
+        Some(category) => events
+            .into_iter()
+            .filter(|e| e.category.as_deref() == Some(category))
+            .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn make_event(title: &str, category: Option<&str>) -> Event {
+        let start = Local.with_ymd_and_hms(2025, 1, 15, 10, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2025, 1, 15, 11, 0, 0).unwrap();
+        Event {
+            id: None,
+            title: title.to_string(),
+            description: None,
+            location: None,
+            start,
+            end,
+            all_day: false,
+            category: category.map(|s| s.to_string()),
+            color: None,
+            recurrence_rule: None,
+            recurrence_exceptions: None,
+            created_at: None,
+            updated_at: None,
+        }
+    }
+
+    #[test]
+    fn test_filter_events_no_filter_passes_all() {
+        let events = vec![
+            make_event("Work Event", Some("Work")),
+            make_event("Personal Event", Some("Personal")),
+            make_event("No Category", None),
+        ];
+        
+        let result = filter_events_by_category(events, None);
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_filter_events_with_category_filter() {
+        let events = vec![
+            make_event("Work Event 1", Some("Work")),
+            make_event("Personal Event", Some("Personal")),
+            make_event("Work Event 2", Some("Work")),
+            make_event("No Category", None),
+        ];
+        
+        let result = filter_events_by_category(events, Some("Work"));
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|e| e.category.as_deref() == Some("Work")));
+    }
+
+    #[test]
+    fn test_filter_events_no_matches() {
+        let events = vec![
+            make_event("Work Event", Some("Work")),
+            make_event("Personal Event", Some("Personal")),
+        ];
+        
+        let result = filter_events_by_category(events, Some("Birthday"));
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_events_empty_list() {
+        let events: Vec<Event> = vec![];
+        
+        let result = filter_events_by_category(events, Some("Work"));
+        assert_eq!(result.len(), 0);
+    }
+}

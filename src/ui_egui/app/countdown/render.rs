@@ -1,4 +1,5 @@
 use super::super::geometry::{geometry_changed, geometry_from_viewport_info};
+use super::container::format_card_tooltip;
 use crate::services::countdown::{
     CountdownCardGeometry, CountdownCardState, CountdownNotificationConfig, CountdownWarningState,
     RgbaColor, MAX_DAYS_FONT_SIZE,
@@ -293,16 +294,10 @@ pub(super) fn render_countdown_card_ui(
                             .color(days_fg),
                     );
 
-                    if let Some(body) = card
-                        .comment
-                        .as_ref()
-                        .map(|text| text.trim())
-                        .filter(|text| !text.is_empty())
-                    {
-                        countdown_response.on_hover_ui_at_pointer(|ui| {
-                            ui.label(body);
-                        });
-                    }
+                    // Enhanced tooltip with event details and countdown
+                    countdown_response.on_hover_ui_at_pointer(|ui| {
+                        ui.label(format_card_tooltip(card, now));
+                    });
                 },
             );
         });

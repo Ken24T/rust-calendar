@@ -271,6 +271,12 @@ pub struct CountdownCardState {
     pub event_id: Option<i64>,
     pub event_title: String,
     pub start_at: DateTime<Local>,
+    /// The original event start time (for display in tooltip)
+    #[serde(default)]
+    pub event_start: Option<DateTime<Local>>,
+    /// The original event end time (for display in tooltip)
+    #[serde(default)]
+    pub event_end: Option<DateTime<Local>>,
     pub title_override: Option<String>,
     #[serde(default)]
     pub auto_title_override: bool,

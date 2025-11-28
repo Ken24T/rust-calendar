@@ -83,31 +83,27 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 
 ---
 
-### 3. Export Menu Integration
+### 3. Export Menu Integration ✅
 
+**Status:** ✅ COMPLETE  
 **Priority:** High - Completes existing feature  
 **Estimated Time:** 2 hours  
-**Branch:** `feat/export-menu`
+**Branch:** `feat/ui-improvements`
 
 **Implementation:**
-- Add File menu items:
-  - "Export Event..." (on event context menu, right-click)
-  - "Export All Events..." → File dialog, save all events as .ics
-  - "Export Date Range..." → Date picker dialog, export subset
-- Use existing `ICalendarService::single()` and `multiple()`
-- Use `rfd::FileDialog::new().add_filter("iCalendar", &["ics"]).save_file()`
-- Show success toast notification after export
+- Added File menu items:
+  - "Export All Events..." → File dialog, save all events as .ics ✅
+  - "Export Date Range..." → Date picker dialog, export subset ✅
+- Used existing `ICalendarService::export_events_to_file()` ✅
+- Used `rfd::FileDialog::new().add_filter("iCalendar", &["ics"]).save_file()` ✅
+- Show success toast notification after export ✅
+- Quick select buttons: "This Month", "This Year", "Last 30 Days" ✅
 
-**Files to Modify:**
-- `src/ui_egui/app.rs` - Add File menu items
-- Event context menus in views (day/week/month) - Add "Export Event"
-- Create `src/ui_egui/dialogs/export_dialog.rs` - Date range picker for export
-
-**Testing:**
-- Export single event, verify .ics file valid
-- Export all events, verify all included
-- Export date range, verify only events in range included
-- Test file overwrite confirmation works
+**Files Modified:**
+- `src/ui_egui/app/menu.rs` - Added Export Events submenu with export functions
+- `src/ui_egui/app/state.rs` - Added ExportRangeDialogState
+- `src/ui_egui/app/dialogs/mod.rs` - Wired up export dialog rendering
+- Created `src/ui_egui/dialogs/export_dialog.rs` - Date range picker dialog
 
 ---
 
@@ -231,11 +227,27 @@ INSERT INTO categories (name, color, icon) VALUES
 
 ---
 
-### 7. Event Templates
+### 7. Event Templates ✅
 
+**Status:** ✅ COMPLETE (v1.0.15)
 **Priority:** Medium - Time-saving feature  
 **Estimated Time:** 4 hours  
 **Branch:** `feat/event-templates`
+
+**What was implemented:**
+- ✅ EventTemplate model with validation (`src/models/template/mod.rs`)
+- ✅ TemplateService for CRUD operations (`src/services/template/mod.rs`)
+- ✅ Database table `event_templates` with all fields
+- ✅ Events → Templates menu with:
+  - Quick-create submenu listing all templates
+  - "Manage Templates..." dialog for CRUD
+- ✅ Template Manager dialog with create/edit/delete functionality
+- ✅ Context menu "📋 From Template" submenu in:
+  - Month view context menu
+  - Week view context menu
+  - Work week view context menu
+  - Day view context menu
+- ✅ Keyboard shortcut fix: D/M/W/K keys no longer captured while typing in dialogs
 
 **Database Changes:**
 ```sql
@@ -254,28 +266,23 @@ CREATE TABLE event_templates (
 );
 ```
 
-**Implementation:**
-- Add File → Templates menu with:
-  - "Save Current Event as Template..." (when editing event)
-  - "Manage Templates..." → Dialog to view/edit/delete templates
-  - Template list submenu showing all templates (quick create)
-- Create template from event: saves all properties except dates
-- Apply template: opens event dialog with template values prefilled, user sets date/time
-- Templates dialog shows list with preview and actions
-
-**Files to Modify:**
-- `src/services/database/mod.rs` - Add event_templates table
-- Create `src/services/template.rs` - TemplateService
-- `src/models/template/mod.rs` - EventTemplate model
-- `src/ui_egui/app.rs` - Add File → Templates menu
-- Create `src/ui_egui/dialogs/template_manager.rs` - Template CRUD dialog
-- `src/ui_egui/event_dialog.rs` - Add "Save as Template" button
+**Files Created/Modified:**
+- `src/models/template/mod.rs` - EventTemplate model with validation
+- `src/services/template/mod.rs` - TemplateService for CRUD
+- `src/ui_egui/dialogs/template_manager.rs` - Template management dialog
+- `src/ui_egui/app/menu.rs` - Templates submenu, create_event_from_template methods
+- `src/ui_egui/app/state.rs` - TemplateManagerState
+- `src/ui_egui/views/month_view.rs` - Context menu template support
+- `src/ui_egui/views/week_shared.rs` - Context menu template support
+- `src/ui_egui/app/shortcuts.rs` - Fixed keyboard input detection
 
 **Testing:**
-- Save event as template, verify stored correctly
-- Create event from template, verify all fields prefilled
-- Edit template, verify changes apply to new events
-- Delete template, verify removed from menu
+- ✅ Create template, verify stored correctly
+- ✅ Create event from template via menu
+- ✅ Create event from template via context menu
+- ✅ Edit template, verify changes persist
+- ✅ Delete template, verify removed
+- ✅ 175 tests passing
 
 ---
 
@@ -875,15 +882,15 @@ docs: document keyboard shortcuts in README
 
 ### Phase 1 Status
 - [x] Database Backup System
-- [ ] Keyboard Shortcuts
-- [ ] Export Menu Integration
-- [ ] Event Validation Enhancements
+- [x] Keyboard Shortcuts
+- [x] Export Menu Integration
+- [x] Event Validation Enhancements
 
 ### Phase 2 Status
-- [ ] Event Search
-- [ ] Category Management & Filtering
-- [ ] Event Templates
-- [ ] Week Numbers
+- [x] Event Search
+- [x] Category Management & Filtering
+- [x] Event Templates
+- [x] Week Numbers
 
 ### Phase 3 Status
 - [ ] Undo/Redo System

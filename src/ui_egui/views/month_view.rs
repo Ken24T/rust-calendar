@@ -2,14 +2,35 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
+use super::week_shared::DeleteConfirmRequest;
+use super::filter_events_by_category;
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::models::template::EventTemplate;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::ui_egui::theme::CalendarTheme;
 
 /// Width of the week number column
 const WEEK_NUMBER_WIDTH: f32 = 35.0;
+
+/// Result returned from month view
+pub struct MonthViewResult {
+    /// Action to perform
+    pub action: MonthViewAction,
+    /// Request to show delete confirmation dialog
+    pub delete_confirm_request: Option<DeleteConfirmRequest>,
+}
+
+impl Default for MonthViewResult {
+    fn default() -> Self {
+        Self {
+            action: MonthViewAction::None,
+            delete_confirm_request: None,
+        }
+    }
+}
 
 /// Action returned from month view
 pub enum MonthViewAction {
@@ -17,6 +38,8 @@ pub enum MonthViewAction {
     None,
     /// Switch to day view for a specific date
     SwitchToDayView(NaiveDate),
+    /// Create event from template (template_id, date)
+    CreateFromTemplate(i64, NaiveDate),
 }
 
 /// Blend header color for weekend columns (slightly darker/lighter)
@@ -42,14 +65,15 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
-        deleted_event_ids: &mut Vec<i64>,
-    ) -> MonthViewAction {
+        category_filter: Option<&str>,
+    ) -> MonthViewResult {
         let today = Local::now().date_naive();
-        let mut action = MonthViewAction::None;
+        let mut result = MonthViewResult::default();
 
         // Get events for the month
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_month(&event_service, *current_date);
+        let events = filter_events_by_category(events, category_filter);
 
         // Day of week headers - use Grid to match column widths below
         let day_names = Self::get_day_names(settings.first_day_of_week);
@@ -232,7 +256,7 @@ impl MonthView {
                                 })
                                 .collect();
 
-                            let (cell_action, _clicked_event) = Self::render_day_cell(
+                            let (cell_action, _clicked_event, delete_request) = Self::render_day_cell(
                                 ui,
                                 day_counter,
                                 date,
@@ -244,13 +268,17 @@ impl MonthView {
                                 event_dialog_date,
                                 event_dialog_recurrence,
                                 event_to_edit,
-                                deleted_event_ids,
                                 palette,
                             );
                             
                             // Check if we need to switch to day view
                             if matches!(cell_action, MonthViewAction::SwitchToDayView(_)) {
-                                action = cell_action;
+                                result.action = cell_action;
+                            }
+                            
+                            // Check if there's a delete confirmation request
+                            if delete_request.is_some() {
+                                result.delete_confirm_request = delete_request;
                             }
                         }
                         day_counter += 1;
@@ -259,7 +287,7 @@ impl MonthView {
                 }
             });
         
-        action
+        result
     }
 
     fn render_day_cell(
@@ -274,9 +302,8 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
-        deleted_event_ids: &mut Vec<i64>,
         palette: CalendarCellPalette,
-    ) -> (MonthViewAction, Option<Event>) {
+    ) -> (MonthViewAction, Option<Event>, Option<DeleteConfirmRequest>) {
         let desired_size = Vec2::new(ui.available_width(), 80.0);
         let (rect, response) =
             ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
@@ -348,7 +375,7 @@ impl MonthView {
         
         // Return action if day number clicked
         if day_number_clicked {
-            return (MonthViewAction::SwitchToDayView(date), None);
+            return (MonthViewAction::SwitchToDayView(date), None, None);
         }
 
         let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
@@ -387,11 +414,18 @@ impl MonthView {
                 Color32::WHITE
             };
 
+            // Build title text with category badge if present
+            let title_text = if let Some(category) = &event.category {
+                format!("{} [{}]", event.title, category)
+            } else {
+                event.title.clone()
+            };
+
             // Event title with truncation
             let font_id = egui::FontId::proportional(11.0);
             let available_width = event_rect.width() - 6.0;
             let layout_job = egui::text::LayoutJob::simple(
-                event.title.clone(),
+                title_text,
                 font_id.clone(),
                 text_color,
                 available_width,
@@ -517,10 +551,35 @@ impl MonthView {
         );
 
         let mut context_menu_event: Option<Event> = None;
+        let mut delete_confirm_request: Option<DeleteConfirmRequest> = None;
+        
+        // Check for pending delete request from previous frame
+        let pending_delete_id = ui.ctx().memory_mut(|mem| {
+            mem.data.remove_temp::<(i64, String)>(popup_id.with("pending_delete"))
+        });
+        if let Some((event_id, event_title)) = pending_delete_id {
+            delete_confirm_request = Some(DeleteConfirmRequest {
+                event_id,
+                event_title,
+                occurrence_only: false,
+                occurrence_date: None,
+            });
+        }
+        
+        // Check for pending template selection from previous frame
+        let pending_template = ui.ctx().memory_mut(|mem| {
+            mem.data.remove_temp::<i64>(popup_id.with("pending_template"))
+        });
+        
         if response.secondary_clicked() {
             context_menu_event = pointer_event.clone();
             ui.memory_mut(|mem| mem.open_popup(popup_id));
         }
+        
+        // Load templates for context menu
+        let templates: Vec<EventTemplate> = TemplateService::new(database.connection())
+            .list_all()
+            .unwrap_or_default();
 
         egui::popup::popup_above_or_below_widget(
             ui,
@@ -550,9 +609,10 @@ impl MonthView {
 
                     if ui.button("🗑 Delete").clicked() {
                         if let Some(id) = event.id {
-                            let service = EventService::new(database.connection());
-                            let _ = service.delete(id);
-                            deleted_event_ids.push(id);
+                            // Store delete request in temp memory for next frame
+                            ui.ctx().memory_mut(|mem| {
+                                mem.data.insert_temp(popup_id.with("pending_delete"), (id, event.title.clone()));
+                            });
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
@@ -573,9 +633,48 @@ impl MonthView {
                         *event_dialog_recurrence = Some("FREQ=MONTHLY".to_string());
                         ui.memory_mut(|mem| mem.close_popup());
                     }
+                    
+                    // Template submenu
+                    if !templates.is_empty() {
+                        ui.separator();
+                        ui.menu_button("📋 From Template", |ui| {
+                            for template in &templates {
+                                let label = format!("{}", template.name);
+                                if ui.button(&label).on_hover_text(format!(
+                                    "Create '{}' event\nDuration: {}",
+                                    template.title,
+                                    if template.all_day {
+                                        "All day".to_string()
+                                    } else {
+                                        let h = template.duration_minutes / 60;
+                                        let m = template.duration_minutes % 60;
+                                        if h > 0 && m > 0 {
+                                            format!("{}h {}m", h, m)
+                                        } else if h > 0 {
+                                            format!("{}h", h)
+                                        } else {
+                                            format!("{}m", m)
+                                        }
+                                    }
+                                )).clicked() {
+                                    if let Some(id) = template.id {
+                                        ui.ctx().memory_mut(|mem| {
+                                            mem.data.insert_temp(popup_id.with("pending_template"), id);
+                                        });
+                                    }
+                                    ui.memory_mut(|mem| mem.close_popup());
+                                }
+                            }
+                        });
+                    }
                 }
             },
         );
+        
+        // Handle pending template selection (return action)
+        if let Some(template_id) = pending_template {
+            return (MonthViewAction::CreateFromTemplate(template_id, date), None, delete_confirm_request);
+        }
 
         // Handle click to edit or create event
         if response.clicked() {
@@ -585,7 +684,7 @@ impl MonthView {
                     *event_to_edit = Some(id);
                     *event_dialog_date = Some(date);
                 }
-                return (MonthViewAction::None, Some(event));
+                return (MonthViewAction::None, Some(event), delete_confirm_request);
             }
 
             // No event clicked - create new event
@@ -603,10 +702,10 @@ impl MonthView {
         
         // Handle "+X more" click to switch to day view
         if more_clicked {
-            return (MonthViewAction::SwitchToDayView(date), None);
+            return (MonthViewAction::SwitchToDayView(date), None, delete_confirm_request);
         }
         
-        (MonthViewAction::None, None)
+        (MonthViewAction::None, None, delete_confirm_request)
     }
 
     fn get_events_for_month(event_service: &EventService, date: NaiveDate) -> Vec<Event> {

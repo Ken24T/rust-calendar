@@ -9,15 +9,28 @@ use std::collections::HashSet;
 use super::palette::TimeGridPalette;
 use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
+use crate::models::template::EventTemplate;
 use crate::services::database::Database;
 use crate::services::event::EventService;
+use crate::services::template::TemplateService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 
 /// Constants for time grid rendering
 pub const SLOT_INTERVAL: i64 = 15;
 pub const TIME_LABEL_WIDTH: f32 = 50.0;
-pub const COLUMN_SPACING: f32 = 2.0;
+pub const COLUMN_SPACING: f32 = 1.0;
 pub const SLOT_HEIGHT: f32 = 30.0;
+
+/// Request for delete confirmation (event_id, event_title, is_occurrence_only)
+#[derive(Clone)]
+pub struct DeleteConfirmRequest {
+    pub event_id: i64,
+    pub event_title: String,
+    /// If true, only delete this occurrence (for recurring events)
+    pub occurrence_only: bool,
+    /// The occurrence date (needed for occurrence-only deletion)
+    pub occurrence_date: Option<chrono::DateTime<chrono::Local>>,
+}
 
 /// Result of event interactions in views (context menus, clicks, etc.)
 #[derive(Default)]
@@ -28,6 +41,10 @@ pub struct EventInteractionResult {
     pub deleted_event_ids: Vec<i64>,
     /// Events that were moved via drag-and-drop (need countdown card sync)
     pub moved_events: Vec<Event>,
+    /// Request to show delete confirmation dialog
+    pub delete_confirm_request: Option<DeleteConfirmRequest>,
+    /// Request to create event from template (template_id, date, optional time)
+    pub template_selection: Option<(i64, NaiveDate, Option<NaiveTime>)>,
 }
 
 impl EventInteractionResult {
@@ -37,6 +54,12 @@ impl EventInteractionResult {
         }
         self.deleted_event_ids.extend(other.deleted_event_ids);
         self.moved_events.extend(other.moved_events);
+        if other.delete_confirm_request.is_some() {
+            self.delete_confirm_request = other.delete_confirm_request;
+        }
+        if other.template_selection.is_some() {
+            self.template_selection = other.template_selection;
+        }
     }
 }
 
@@ -63,7 +86,7 @@ pub fn render_ribbon_event(
     event: &Event,
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
-    database: &'static Database,
+    _database: &'static Database,
 ) -> EventInteractionResult {
     let mut result = EventInteractionResult::default();
     
@@ -102,6 +125,15 @@ pub fn render_ribbon_event(
                         .color(Color32::WHITE)
                         .size(12.0),
                 );
+
+                // Show category badge if present
+                if let Some(category) = &event.category {
+                    ui.label(
+                        egui::RichText::new(format!("[{}]", category))
+                            .color(Color32::from_gray(230))
+                            .size(10.0),
+                    );
+                }
 
                 if event.start.date_naive() != event.end.date_naive() {
                     ui.label(
@@ -167,26 +199,34 @@ pub fn render_ribbon_event(
         if event.recurrence_rule.is_some() {
             if ui.button("🗑 Delete This Occurrence").clicked() {
                 if let Some(id) = event.id {
-                    let service = EventService::new(database.connection());
-                    let _ = service.delete_occurrence(id, event.start);
-                    // Note: occurrence deletion doesn't delete the whole event,
-                    // so countdown card stays (it's for the event series)
+                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                        event_id: id,
+                        event_title: event.title.clone(),
+                        occurrence_only: true,
+                        occurrence_date: Some(event.start),
+                    });
                 }
                 ui.close_menu();
             }
             if ui.button("🗑 Delete All Occurrences").clicked() {
                 if let Some(id) = event.id {
-                    let service = EventService::new(database.connection());
-                    let _ = service.delete(id);
-                    result.deleted_event_ids.push(id);
+                    result.delete_confirm_request = Some(DeleteConfirmRequest {
+                        event_id: id,
+                        event_title: event.title.clone(),
+                        occurrence_only: false,
+                        occurrence_date: None,
+                    });
                 }
                 ui.close_menu();
             }
         } else if ui.button("🗑 Delete").clicked() {
             if let Some(id) = event.id {
-                let service = EventService::new(database.connection());
-                let _ = service.delete(id);
-                result.deleted_event_ids.push(id);
+                result.delete_confirm_request = Some(DeleteConfirmRequest {
+                    event_id: id,
+                    event_title: event.title.clone(),
+                    occurrence_only: false,
+                    occurrence_date: None,
+                });
             }
             ui.close_menu();
         }
@@ -224,11 +264,14 @@ pub fn render_ribbon_event(
 }
 
 /// Render an event bar inside a time cell (for events starting in this slot).
+/// If `continues_to_next_slot` is true, the bottom edge extends to connect
+/// with continuation blocks in subsequent slots.
 pub fn render_event_in_cell(
     ui: &mut egui::Ui, 
     cell_rect: Rect, 
     event: &Event,
     has_countdown: bool,
+    continues_to_next_slot: bool,
 ) -> Rect {
     let now = Local::now();
     let is_past = event.end < now;
@@ -246,21 +289,34 @@ pub fn render_event_in_cell(
         base_color
     };
 
+    // If event continues to next slot, extend to bottom of cell (no bottom margin)
+    let bottom_margin = if continues_to_next_slot { 0.0 } else { 2.0 };
     let bar_rect = Rect::from_min_size(
-        Pos2::new(cell_rect.left() + 2.0, cell_rect.top() + 2.0),
-        Vec2::new(cell_rect.width() - 4.0, cell_rect.height() - 4.0),
+        Pos2::new(cell_rect.left() + 1.0, cell_rect.top() + 2.0),
+        Vec2::new(cell_rect.width() - 2.0, cell_rect.height() - 2.0 - bottom_margin),
     );
-    ui.painter().rect_filled(bar_rect, 2.0, event_color);
+    // Use rounded corners only at top if continuing, full rounding otherwise
+    let rounding = if continues_to_next_slot {
+        egui::Rounding { nw: 2.0, ne: 2.0, sw: 0.0, se: 0.0 }
+    } else {
+        egui::Rounding::same(2.0)
+    };
+    ui.painter().rect_filled(bar_rect, rounding, event_color);
 
     let font_id = egui::FontId::proportional(10.0);
     let available_width = cell_rect.width() - 10.0;
 
-    // Build title with countdown indicator if applicable
-    let title_text = if has_countdown {
+    // Build title with countdown indicator and category if applicable
+    let mut title_text = if has_countdown {
         format!("⏱ {}", event.title)
     } else {
         event.title.clone()
     };
+    
+    // Add category badge if present
+    if let Some(category) = &event.category {
+        title_text.push_str(&format!(" [{}]", category));
+    }
 
     // Dim text for past events
     let text_color = if is_past {
@@ -288,7 +344,16 @@ pub fn render_event_in_cell(
 }
 
 /// Render a continuation block for events spanning multiple time slots.
-pub fn render_event_continuation(ui: &mut egui::Ui, cell_rect: Rect, event: &Event) -> Rect {
+/// This extends upward to cover the grid line at the top of the cell,
+/// making multi-slot events appear as one contiguous block.
+/// If `continues_to_next_slot` is true, the bottom edge also extends to connect
+/// with the next continuation block.
+pub fn render_event_continuation(
+    ui: &mut egui::Ui, 
+    cell_rect: Rect, 
+    event: &Event,
+    continues_to_next_slot: bool,
+) -> Rect {
     let now = Local::now();
     let is_past = event.end < now;
     
@@ -305,12 +370,22 @@ pub fn render_event_continuation(ui: &mut egui::Ui, cell_rect: Rect, event: &Eve
         base_color.linear_multiply(0.5)
     };
 
+    // Extend upward to cover the grid line (start at cell top, not top + 2)
+    // This makes the continuation seamlessly connect with the previous slot
+    // If continuing to next slot, extend to bottom too
+    let bottom_margin = if continues_to_next_slot { 0.0 } else { 2.0 };
     let bg_rect = Rect::from_min_size(
-        Pos2::new(cell_rect.left() + 2.0, cell_rect.top() + 2.0),
-        Vec2::new(cell_rect.width() - 4.0, cell_rect.height() - 4.0),
+        Pos2::new(cell_rect.left() + 1.0, cell_rect.top()),
+        Vec2::new(cell_rect.width() - 2.0, cell_rect.height() - bottom_margin),
     );
-    ui.painter()
-        .rect_filled(bg_rect, 2.0, event_color);
+    
+    // Only round bottom corners if this is the last slot of the event
+    let rounding = if continues_to_next_slot {
+        egui::Rounding::ZERO
+    } else {
+        egui::Rounding { nw: 0.0, ne: 0.0, sw: 2.0, se: 2.0 }
+    };
+    ui.painter().rect_filled(bg_rect, rounding, event_color);
 
     bg_rect
 }
@@ -543,10 +618,17 @@ pub fn render_time_cell(
     }
 
     let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
+    let slot_end_dt = date.and_time(slot_end);
 
     // Draw continuing events first
     for event in continuing_events {
-        let event_rect = render_event_continuation(ui, rect, event);
+        // Check if event continues beyond this slot
+        let segment_end = event_time_segment_for_date(event, date)
+            .map(|(_, end)| end)
+            .unwrap_or_else(|| event.end.naive_local());
+        let continues_to_next_slot = segment_end > slot_end_dt;
+        
+        let event_rect = render_event_continuation(ui, rect, event, continues_to_next_slot);
         event_hitboxes.push((event_rect, (*event).clone()));
     }
 
@@ -556,7 +638,14 @@ pub fn render_time_cell(
             .id
             .map(|id| active_countdown_events.contains(&id))
             .unwrap_or(false);
-        let event_rect = render_event_in_cell(ui, rect, event, has_countdown);
+        
+        // Check if event continues beyond this slot
+        let segment_end = event_time_segment_for_date(event, date)
+            .map(|(_, end)| end)
+            .unwrap_or_else(|| event.end.naive_local());
+        let continues_to_next_slot = segment_end > slot_end_dt;
+        
+        let event_rect = render_event_in_cell(ui, rect, event, has_countdown, continues_to_next_slot);
         event_hitboxes.push((event_rect, (*event).clone()));
     }
 
@@ -677,26 +766,34 @@ pub fn render_time_cell(
                 if event.recurrence_rule.is_some() {
                     if ui.button("🗑 Delete This Occurrence").clicked() {
                         if let Some(id) = event.id {
-                            let service = EventService::new(database.connection());
-                            let _ = service.delete_occurrence(id, event.start);
-                            // Note: occurrence deletion doesn't delete the whole event,
-                            // so countdown card stays (it's for the event series)
+                            result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                event_id: id,
+                                event_title: event.title.clone(),
+                                occurrence_only: true,
+                                occurrence_date: Some(event.start),
+                            });
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
                     if ui.button("🗑 Delete All Occurrences").clicked() {
                         if let Some(id) = event.id {
-                            let service = EventService::new(database.connection());
-                            let _ = service.delete(id);
-                            result.deleted_event_ids.push(id);
+                            result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                event_id: id,
+                                event_title: event.title.clone(),
+                                occurrence_only: false,
+                                occurrence_date: None,
+                            });
                         }
                         ui.memory_mut(|mem| mem.close_popup());
                     }
                 } else if ui.button("🗑 Delete").clicked() {
                     if let Some(id) = event.id {
-                        let service = EventService::new(database.connection());
-                        let _ = service.delete(id);
-                        result.deleted_event_ids.push(id);
+                        result.delete_confirm_request = Some(DeleteConfirmRequest {
+                            event_id: id,
+                            event_title: event.title.clone(),
+                            occurrence_only: false,
+                            occurrence_date: None,
+                        });
                     }
                     ui.memory_mut(|mem| mem.close_popup());
                 }
@@ -741,6 +838,42 @@ pub fn render_time_cell(
                     *event_dialog_time = Some(time);
                     *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
                     ui.memory_mut(|mem| mem.close_popup());
+                }
+                
+                // Template submenu
+                let templates: Vec<EventTemplate> = TemplateService::new(database.connection())
+                    .list_all()
+                    .unwrap_or_default();
+                
+                if !templates.is_empty() {
+                    ui.separator();
+                    ui.menu_button("📋 From Template", |ui| {
+                        for template in &templates {
+                            let label = format!("{}", template.name);
+                            if ui.button(&label).on_hover_text(format!(
+                                "Create '{}' event\nDuration: {}",
+                                template.title,
+                                if template.all_day {
+                                    "All day".to_string()
+                                } else {
+                                    let h = template.duration_minutes / 60;
+                                    let m = template.duration_minutes % 60;
+                                    if h > 0 && m > 0 {
+                                        format!("{}h {}m", h, m)
+                                    } else if h > 0 {
+                                        format!("{}h", h)
+                                    } else {
+                                        format!("{}m", m)
+                                    }
+                                }
+                            )).clicked() {
+                                if let Some(id) = template.id {
+                                    result.template_selection = Some((id, date, Some(time)));
+                                }
+                                ui.memory_mut(|mem| mem.close_popup());
+                            }
+                        }
+                    });
                 }
             }
         },

@@ -374,6 +374,8 @@ impl CountdownService {
         event_id: Option<i64>,
         event_title: impl Into<String>,
         start_at: DateTime<Local>,
+        event_start: Option<DateTime<Local>>,
+        event_end: Option<DateTime<Local>>,
         event_color: Option<RgbaColor>,
         event_body: Option<String>,
         default_width: f32,
@@ -423,6 +425,8 @@ impl CountdownService {
             event_id,
             event_title: event_title.into(),
             start_at,
+            event_start,
+            event_end,
             title_override: None,
             auto_title_override: false,
             geometry,
@@ -436,6 +440,8 @@ impl CountdownService {
         };
         apply_event_palette_if_needed(&mut card);
         self.cards.push(card);
+        self.card_order.push(id);
+        self.sort_cards_by_date();
         self.dirty = true;
         id
     }
@@ -443,6 +449,7 @@ impl CountdownService {
     pub fn remove_card(&mut self, id: CountdownCardId) -> bool {
         if let Some(idx) = self.cards.iter().position(|card| card.id == id) {
             let card = self.cards.remove(idx);
+            self.card_order.retain(|&card_id| card_id != id);
             log::info!(
                 "remove_card: removed card {:?} for event {:?} ({})",
                 id,
@@ -460,6 +467,13 @@ impl CountdownService {
     /// Call this when deleting an event to keep the in-memory state in sync.
     pub fn remove_cards_for_event(&mut self, event_id: i64) -> usize {
         let initial_count = self.cards.len();
+        // Collect IDs to remove for card_order cleanup
+        let ids_to_remove: Vec<CountdownCardId> = self.cards
+            .iter()
+            .filter(|card| card.event_id == Some(event_id))
+            .map(|card| card.id)
+            .collect();
+        
         self.cards.retain(|card| {
             if card.event_id == Some(event_id) {
                 log::info!(
@@ -472,6 +486,12 @@ impl CountdownService {
                 true
             }
         });
+        
+        // Remove from card_order
+        for id in &ids_to_remove {
+            self.card_order.retain(|&card_id| card_id != *id);
+        }
+        
         let removed = initial_count - self.cards.len();
         if removed > 0 {
             self.dirty = true;
@@ -1202,6 +1222,8 @@ mod tests {
             target_start,
             None,
             None,
+            None,
+            None,
             120.0,
             110.0,
         );
@@ -1225,7 +1247,7 @@ mod tests {
         let file_path = dir.path().join("countdowns.json");
         let mut service = CountdownService::new();
         let target_start = Local::now() + Duration::days(10);
-        service.create_card(None, "Persist", target_start, None, None, 120.0, 110.0);
+        service.create_card(None, "Persist", target_start, None, None, None, None, 120.0, 110.0);
         service.save_to_disk(&file_path).unwrap();
 
         let loaded = CountdownService::load_from_disk(&file_path).unwrap();
@@ -1242,6 +1264,8 @@ mod tests {
             Some(1),
             "Palette",
             target_start,
+            None,
+            None,
             Some(accent),
             None,
             120.0,
@@ -1269,9 +1293,9 @@ mod tests {
         let target_start = Local::now() + Duration::days(3);
         let accent = RgbaColor::new(10, 150, 200, 255);
         let card_a =
-            service.create_card(Some(1), "A", target_start, Some(accent), None, 120.0, 110.0);
+            service.create_card(Some(1), "A", target_start, None, None, Some(accent), None, 120.0, 110.0);
         let card_b =
-            service.create_card(Some(2), "B", target_start, Some(accent), None, 120.0, 110.0);
+            service.create_card(Some(2), "B", target_start, None, None, Some(accent), None, 120.0, 110.0);
 
         assert!(service.set_use_default_title_bg(card_a, false));
         assert!(service.set_use_default_title_bg(card_b, true));
@@ -1292,6 +1316,8 @@ mod tests {
             Some(1),
             "First",
             base_time,
+            None,
+            None,
             Some(accent),
             None,
             120.0,
@@ -1303,6 +1329,8 @@ mod tests {
             Some(2),
             "Second",
             base_time + Duration::days(3),
+            None,
+            None,
             Some(accent),
             None,
             120.0,

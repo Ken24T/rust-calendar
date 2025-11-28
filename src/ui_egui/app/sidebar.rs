@@ -12,29 +12,130 @@ impl CalendarApp {
             return;
         }
 
-        let panel_id = "sidebar";
-        
         // Mini calendar needs: 7 cols × 18px + 6 gaps × 2px + padding ≈ 150px
         const SIDEBAR_MIN_WIDTH: f32 = 150.0;
-        const SIDEBAR_DEFAULT_WIDTH: f32 = 180.0;
         const SIDEBAR_MAX_WIDTH: f32 = 300.0;
         
-        if self.settings.my_day_position_right {
+        // Use persisted width from settings, clamped to valid range
+        let width = self.settings.sidebar_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+        
+        // Use unique IDs for left and right panels
+        let panel_id = if self.settings.my_day_position_right {
+            "sidebar_right"
+        } else {
+            "sidebar_left"
+        };
+        
+        // Build the panel - use exact_width to force our size
+        // Use a frame with no outer margin and no stroke to prevent gaps between panels
+        // Inner margin provides padding for content
+        let panel_frame = egui::Frame::side_top_panel(&ctx.style())
+            .outer_margin(egui::Margin::ZERO)
+            .inner_margin(egui::Margin {
+                left: 8.0,
+                right: 0.0,  // No right margin - central panel will provide its padding
+                top: 8.0,
+                bottom: 8.0,
+            })
+            .stroke(egui::Stroke::NONE);
+        
+        let panel = if self.settings.my_day_position_right {
             egui::SidePanel::right(panel_id)
-                .default_width(SIDEBAR_DEFAULT_WIDTH)
-                .width_range(SIDEBAR_MIN_WIDTH..=SIDEBAR_MAX_WIDTH)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    self.render_sidebar_content(ui);
-                });
         } else {
             egui::SidePanel::left(panel_id)
-                .default_width(SIDEBAR_DEFAULT_WIDTH)
-                .width_range(SIDEBAR_MIN_WIDTH..=SIDEBAR_MAX_WIDTH)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    self.render_sidebar_content(ui);
-                });
+        };
+        
+        // Use exact_width which disables egui's built-in resizing
+        // Set min/max to same value to prevent any resize margin allocation
+        let response = panel
+            .min_width(width)
+            .max_width(width)
+            .default_width(width)
+            .resizable(false) // Disable egui's resize, we'll handle it ourselves
+            .show_separator_line(false) // No separator line
+            .frame(panel_frame)
+            .show(ctx, |ui| {
+                self.render_sidebar_content(ui);
+            });
+        
+        // DEBUG: Log panel rect info
+        let panel_rect = response.response.rect;
+        let screen_rect = ctx.screen_rect();
+        log::info!(
+            "SIDEBAR DEBUG: panel_rect={:?}, screen_rect={:?}, sidebar_position_right={}, width_setting={}",
+            panel_rect, screen_rect, self.settings.my_day_position_right, width
+        );
+        
+        // Manual resize handle on the panel edge
+        let panel_rect = response.response.rect;
+        let resize_grab_width = 4.0; // Fixed grab width
+        
+        let resize_rect = if self.settings.my_day_position_right {
+            // Resize handle on the left edge of right panel
+            egui::Rect::from_x_y_ranges(
+                (panel_rect.left() - resize_grab_width)..=(panel_rect.left() + resize_grab_width),
+                panel_rect.y_range(),
+            )
+        } else {
+            // Resize handle on the right edge of left panel
+            egui::Rect::from_x_y_ranges(
+                (panel_rect.right() - resize_grab_width)..=(panel_rect.right() + resize_grab_width),
+                panel_rect.y_range(),
+            )
+        };
+        
+        let resize_id = egui::Id::new(panel_id).with("__resize");
+        
+        // Check for pointer interaction directly
+        let pointer_pos = ctx.input(|i| i.pointer.interact_pos());
+        let is_hovering = pointer_pos.map(|p| resize_rect.contains(p)).unwrap_or(false);
+        let is_dragging = ctx.is_being_dragged(resize_id);
+        let drag_started = is_hovering && ctx.input(|i| i.pointer.any_pressed());
+        let drag_released = ctx.input(|i| i.pointer.any_released());
+        
+        // Start drag
+        if drag_started && !is_dragging {
+            ctx.set_dragged_id(resize_id);
+        }
+        
+        // Show resize cursor when hovering or dragging
+        if is_hovering || is_dragging {
+            ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+        
+        // Handle drag to resize
+        if is_dragging {
+            if let Some(pos) = pointer_pos {
+                let screen = ctx.screen_rect();
+                let new_width = if self.settings.my_day_position_right {
+                    screen.right() - pos.x
+                } else {
+                    pos.x - screen.left()
+                };
+                
+                let clamped_width = new_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+                if (clamped_width - self.settings.sidebar_width).abs() > 0.5 {
+                    self.settings.sidebar_width = clamped_width;
+                }
+            }
+            
+            // Draw resize indicator line
+            let x = if self.settings.my_day_position_right {
+                panel_rect.left()
+            } else {
+                panel_rect.right()
+            };
+            ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, resize_id))
+                .line_segment(
+                    [egui::pos2(x, panel_rect.top()), egui::pos2(x, panel_rect.bottom())],
+                    egui::Stroke::new(2.0, ctx.style().visuals.selection.bg_fill),
+                );
+        }
+        
+        // Stop dragging and save on release
+        if drag_released && is_dragging {
+            ctx.stop_dragging();
+            self.save_settings();
         }
     }
 
@@ -69,20 +170,23 @@ impl CalendarApp {
                 self.current_date = shift_month(self.current_date, -1);
             }
 
-            ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                let header = viewing_date.format("%B %Y").to_string();
-                if ui.selectable_label(false, RichText::new(&header).strong())
-                    .on_hover_text("Go to today")
-                    .clicked()
-                {
-                    self.current_date = today;
-                    self.focus_on_current_time_if_visible();
+            // Center the month label between the arrows
+            let header = viewing_date.format("%B %Y").to_string();
+            let available_width = ui.available_width() - 20.0; // Reserve space for right arrow
+            ui.add_space((available_width - ui.text_style_height(&egui::TextStyle::Body) * header.len() as f32 * 0.5).max(0.0) / 2.0);
+            if ui.selectable_label(false, RichText::new(&header).strong())
+                .on_hover_text("Go to today")
+                .clicked()
+            {
+                self.current_date = today;
+                self.focus_on_current_time_if_visible();
+            }
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.small_button("▶").on_hover_text("Next month").clicked() {
+                    self.current_date = shift_month(self.current_date, 1);
                 }
             });
-
-            if ui.small_button("▶").on_hover_text("Next month").clicked() {
-                self.current_date = shift_month(self.current_date, 1);
-            }
         });
 
         ui.add_space(4.0);

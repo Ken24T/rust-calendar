@@ -1,6 +1,8 @@
 use super::context::AppContext;
 use super::countdown::CountdownUiState;
 use super::state::{AppState, ViewType};
+use super::toast::ToastManager;
+use super::confirm::ConfirmDialogState;
 use super::CalendarApp;
 use crate::models::settings::Settings;
 use crate::services::backup::BackupService;
@@ -68,6 +70,9 @@ impl CalendarApp {
             pending_focus: None,
             countdown_ui,
             state: AppState::new(backup_manager_state, pending_root_geometry),
+            toast_manager: ToastManager::new(),
+            confirm_dialog: ConfirmDialogState::new(),
+            active_category_filter: None,
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);
@@ -164,9 +169,26 @@ impl CalendarApp {
         for request in render_result.go_to_date_requests {
             self.current_date = request.date;
         }
+        
+        // Handle delete confirmation requests for countdown cards
+        for request in render_result.delete_card_requests {
+            self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                card_id: request.card_id,
+                card_title: request.card_title,
+            });
+        }
 
         self.countdown_ui
             .render_settings_dialogs(ctx, self.context.countdown_service_mut());
+        
+        // Handle delete requests from settings dialogs
+        for request in self.countdown_ui.drain_delete_requests() {
+            self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                card_id: request.card_id,
+                card_title: request.card_title,
+            });
+        }
+        
         self.flush_pending_event_bodies();
         self.handle_dialogs(ctx);
 
@@ -178,6 +200,13 @@ impl CalendarApp {
         self.check_and_show_countdown_notifications(ctx);
 
         self.persist_countdowns_if_needed();
+
+        // Handle confirmation dialogs
+        self.handle_confirm_dialog(ctx);
+
+        // Render toast notifications (last, so they appear on top)
+        let is_dark = self.active_theme.is_dark;
+        self.toast_manager.render(ctx, is_dark);
     }
 
     pub(super) fn handle_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
