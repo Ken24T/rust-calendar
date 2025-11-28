@@ -806,7 +806,7 @@ docs: document keyboard shortcuts in README
 - [x] Week Numbers
 
 ### Phase 3 Status
-- [ ] Undo/Redo System
+- [x] Undo/Redo System
 - [ ] Multi-Select Events
 - [ ] Drag-to-Resize Events
 - [ ] Countdown Card Templates

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.21] - 2025-11-29
+
+### Added
+- **Undo/Redo System** - Full undo/redo support for event operations:
+  - Undo/Redo items in Edit menu with dynamic descriptions
+  - Ctrl+Z for undo, Ctrl+Y or Ctrl+Shift+Z for redo
+  - Toast notifications showing what was undone/redone
+  - Command pattern architecture for extensibility
+  - Supports: Create Event, Update Event, Delete Event
+  - History limit of 50 operations
+  - 6 new unit tests for command system
+
+### Changed
+- Edit menu reorganized with Undo/Redo at top, separator before settings
+
 ## [1.0.16] - 2025-11-28
 
 ### Added
