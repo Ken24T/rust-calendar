@@ -888,7 +888,7 @@ docs: document keyboard shortcuts in README
 
 ### Phase 2 Status
 - [x] Event Search
-- [ ] Category Management & Filtering
+- [x] Category Management & Filtering
 - [x] Event Templates
 - [x] Week Numbers
 
