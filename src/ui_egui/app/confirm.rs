@@ -6,6 +6,7 @@
 // Allow unused variants/methods - these are API surface for future use
 #![allow(dead_code)]
 
+use crate::ui_egui::commands::DeleteEventCommand;
 use egui::{Context, RichText};
 
 /// Types of confirmation dialogs
@@ -244,12 +245,22 @@ impl CalendarApp {
         match action {
             ConfirmAction::DeleteEvent { event_id, event_title } => {
                 let event_service = self.context.event_service();
+                
+                // Fetch the full event before deleting (for undo)
+                let event_for_undo = event_service.get(event_id).ok().flatten();
+                
                 if let Err(e) = event_service.delete(event_id) {
                     log::error!("Failed to delete event: {}", e);
                     self.toast_manager.error(format!("Failed to delete event: {}", e));
                 } else {
                     log::info!("Deleted event: {} (ID: {})", event_title, event_id);
                     self.toast_manager.success(format!("Deleted \"{}\"", event_title));
+                    
+                    // Push delete command for undo capability
+                    if let Some(event) = event_for_undo {
+                        let cmd = DeleteEventCommand::new(event);
+                        self.undo_manager.push(Box::new(cmd));
+                    }
                     
                     // Also remove any linked countdown card
                     self.context.countdown_service_mut().remove_cards_for_event(event_id);
