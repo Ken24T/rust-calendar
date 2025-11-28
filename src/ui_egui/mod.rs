@@ -1,4 +1,5 @@
 mod app;
+pub mod commands;
 pub mod dialogs;
 pub mod drag;
 mod event_dialog;
