@@ -126,6 +126,15 @@ pub fn render_ribbon_event(
                         .size(12.0),
                 );
 
+                // Show category badge if present
+                if let Some(category) = &event.category {
+                    ui.label(
+                        egui::RichText::new(format!("[{}]", category))
+                            .color(Color32::from_gray(230))
+                            .size(10.0),
+                    );
+                }
+
                 if event.start.date_naive() != event.end.date_naive() {
                     ui.label(
                         egui::RichText::new(format!(
@@ -297,12 +306,17 @@ pub fn render_event_in_cell(
     let font_id = egui::FontId::proportional(10.0);
     let available_width = cell_rect.width() - 10.0;
 
-    // Build title with countdown indicator if applicable
-    let title_text = if has_countdown {
+    // Build title with countdown indicator and category if applicable
+    let mut title_text = if has_countdown {
         format!("⏱ {}", event.title)
     } else {
         event.title.clone()
     };
+    
+    // Add category badge if present
+    if let Some(category) = &event.category {
+        title_text.push_str(&format!(" [{}]", category));
+    }
 
     // Dim text for past events
     let text_color = if is_past {

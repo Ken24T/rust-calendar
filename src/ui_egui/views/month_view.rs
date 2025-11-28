@@ -414,11 +414,18 @@ impl MonthView {
                 Color32::WHITE
             };
 
+            // Build title text with category badge if present
+            let title_text = if let Some(category) = &event.category {
+                format!("{} [{}]", event.title, category)
+            } else {
+                event.title.clone()
+            };
+
             // Event title with truncation
             let font_id = egui::FontId::proportional(11.0);
             let available_width = event_rect.width() - 6.0;
             let layout_job = egui::text::LayoutJob::simple(
-                event.title.clone(),
+                title_text,
                 font_id.clone(),
                 text_color,
                 available_width,
