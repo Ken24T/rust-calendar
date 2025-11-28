@@ -136,6 +136,12 @@ impl CalendarApp {
             self.state.geometry_sanitized = true;
         }
 
+        // Apply pending theme change (from menu selection)
+        if self.state.pending_theme_apply {
+            self.apply_theme_from_db(ctx);
+            self.state.pending_theme_apply = false;
+        }
+
         self.apply_pending_root_geometry(ctx);
 
         self.render_menu_bar(ctx);

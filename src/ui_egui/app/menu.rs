@@ -179,40 +179,73 @@ impl CalendarApp {
 
             ui.separator();
 
-            if ui
-                .selectable_label(self.current_view == super::state::ViewType::Day, "Day")
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::Day;
-                self.focus_on_current_time_if_visible();
-                ui.close_menu();
-            }
-            if ui
-                .selectable_label(self.current_view == super::state::ViewType::Week, "Week")
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::Week;
-                self.focus_on_current_time_if_visible();
-                ui.close_menu();
-            }
-            if ui
-                .selectable_label(
-                    self.current_view == super::state::ViewType::WorkWeek,
-                    "Work Week",
-                )
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::WorkWeek;
-                self.focus_on_current_time_if_visible();
-                ui.close_menu();
-            }
-            if ui
-                .selectable_label(self.current_view == super::state::ViewType::Month, "Month")
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::Month;
-                ui.close_menu();
-            }
+            // Calendar Views submenu
+            ui.menu_button("📅 Calendar Views", |ui| {
+                if ui
+                    .selectable_label(self.current_view == super::state::ViewType::Day, "Day")
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::Day;
+                    self.focus_on_current_time_if_visible();
+                    ui.close_menu();
+                }
+                if ui
+                    .selectable_label(self.current_view == super::state::ViewType::Week, "Week")
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::Week;
+                    self.focus_on_current_time_if_visible();
+                    ui.close_menu();
+                }
+                if ui
+                    .selectable_label(
+                        self.current_view == super::state::ViewType::WorkWeek,
+                        "Work Week",
+                    )
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::WorkWeek;
+                    self.focus_on_current_time_if_visible();
+                    ui.close_menu();
+                }
+                if ui
+                    .selectable_label(self.current_view == super::state::ViewType::Month, "Month")
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::Month;
+                    ui.close_menu();
+                }
+            });
+
+            // Themes submenu
+            ui.menu_button("🎨 Themes", |ui| {
+                let theme_service = self.context.theme_service();
+                let available_themes = theme_service.list_themes().unwrap_or_default();
+                let current_theme = self.settings.theme.clone();
+
+                for theme_name in &available_themes {
+                    let is_selected = theme_name == &current_theme;
+                    if ui.selectable_label(is_selected, theme_name).clicked() {
+                        if theme_service.get_theme(theme_name).is_ok() {
+                            self.settings.theme = theme_name.clone();
+                            let settings_service = self.context.settings_service();
+                            if let Err(err) = settings_service.update(&self.settings) {
+                                log::error!("Failed to update settings: {}", err);
+                            }
+                            // Flag to apply theme on next frame (we don't have ctx here)
+                            self.state.pending_theme_apply = true;
+                        }
+                        ui.close_menu();
+                    }
+                }
+
+                ui.separator();
+
+                if ui.button("🎨 Manage Themes...").clicked() {
+                    self.state.theme_dialog_state.open(&self.settings.theme);
+                    ui.close_menu();
+                }
+            });
 
             ui.separator();
 

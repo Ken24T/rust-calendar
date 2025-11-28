@@ -51,6 +51,8 @@ pub struct AppState {
     pub date_picker_state: DatePickerState,
     /// Whether we've done the initial geometry sanitization on first frame
     pub geometry_sanitized: bool,
+    /// Flag to apply theme on next frame (set when theme changed from menu)
+    pub pending_theme_apply: bool,
 }
 
 impl AppState {
@@ -72,6 +74,7 @@ impl AppState {
             pending_root_geometry,
             date_picker_state: DatePickerState::default(),
             geometry_sanitized: false,
+            pending_theme_apply: false,
         }
     }
 }
