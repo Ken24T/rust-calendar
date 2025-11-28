@@ -100,10 +100,8 @@ fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
 /// Layout calculator for arranging cards within the container
 #[derive(Debug, Clone)]
 pub struct ContainerLayout {
-    /// Current layout orientation
+    /// Current layout orientation (always recalculated from aspect ratio)
     pub orientation: LayoutOrientation,
-    /// Whether the orientation has been set (prevents auto-switching on card count changes)
-    pub orientation_set: bool,
     /// Computed rectangles for each card
     pub card_rects: HashMap<CountdownCardId, egui::Rect>,
     /// Minimum card width
@@ -128,7 +126,6 @@ impl Default for ContainerLayout {
     fn default() -> Self {
         Self {
             orientation: LayoutOrientation::Vertical,
-            orientation_set: false,
             card_rects: HashMap::new(),
             min_card_width: MIN_CARD_WIDTH,
             min_card_height: MIN_CARD_HEIGHT,
@@ -145,12 +142,12 @@ impl Default for ContainerLayout {
 impl ContainerLayout {
     /// Calculate the layout for cards within the container.
     /// 
-    /// On first layout, this method determines the orientation based on the container's aspect ratio:
-    /// - Wide containers (aspect ratio > 1.5) use horizontal layout
-    /// - Tall/square containers use vertical layout
+    /// Orientation is determined by the container's aspect ratio:
+    /// - Wide containers (aspect ratio > 1.5) use horizontal layout (landscape)
+    /// - Tall/square containers use vertical layout (portrait)
     /// 
-    /// After the first layout, orientation is preserved even when cards are added/removed.
     /// Cards are evenly distributed within the available space, respecting minimum sizes.
+    /// When the user resizes the container, orientation updates to match the new aspect ratio.
     pub fn calculate_layout(
         &mut self,
         available_rect: egui::Rect,
@@ -163,17 +160,14 @@ impl ContainerLayout {
             return;
         }
 
-        // Only auto-detect orientation on first layout
-        // After that, preserve the current orientation
-        if !self.orientation_set {
-            let aspect_ratio = available_rect.width() / available_rect.height();
-            self.orientation = if aspect_ratio > 1.5 {
-                LayoutOrientation::Horizontal
-            } else {
-                LayoutOrientation::Vertical
-            };
-            self.orientation_set = true;
-        }
+        // Always determine orientation from current aspect ratio
+        // This allows the container to switch between portrait/landscape when resized
+        let aspect_ratio = available_rect.width() / available_rect.height();
+        self.orientation = if aspect_ratio > 1.5 {
+            LayoutOrientation::Horizontal
+        } else {
+            LayoutOrientation::Vertical
+        };
 
         // Calculate card positions
         match self.orientation {
@@ -674,24 +668,67 @@ pub fn render_container_window(
     let current_card_count = cards.len();
     let num_cards = current_card_count.max(1) as f32;
     let default_width = default_card_width + CARD_PADDING * 2.0;
-    let ideal_height = default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0);
+    let ideal_vertical_height = default_card_height * num_cards + CARD_PADDING * (num_cards + 1.0);
 
-    // Track card count for other purposes (but don't resize on change)
+    // Detect if card count changed (card added or removed)
+    let card_count_changed = layout.initialized && layout.last_card_count != current_card_count;
+    let cards_added = current_card_count > layout.last_card_count;
+    let card_count_diff = (current_card_count as i32 - layout.last_card_count as i32).abs() as f32;
     layout.last_card_count = current_card_count;
 
-    // Use stored geometry - preserve user's container size even when cards are added/removed
-    // Cards will scale to fit within the container dimensions the user has chosen
-    let initial_geometry = container_geometry.unwrap_or(CountdownCardGeometry {
-        x: 100.0,
-        y: 100.0,
-        width: default_width.max(container_min_width),
-        height: ideal_height.max(container_min_height).min(600.0),
-    });
+    // Calculate geometry - grow container when cards are added based on orientation
+    let initial_geometry = if let Some(stored) = container_geometry {
+        if card_count_changed {
+            // Determine current orientation from stored geometry
+            let aspect_ratio = stored.width / stored.height;
+            let is_horizontal = aspect_ratio > 1.5;
+            
+            if is_horizontal {
+                // Landscape: grow/shrink width when cards change
+                let width_change = (default_card_width + CARD_PADDING) * card_count_diff;
+                let new_width = if cards_added {
+                    stored.width + width_change
+                } else {
+                    (stored.width - width_change).max(container_min_width)
+                };
+                CountdownCardGeometry {
+                    x: stored.x,
+                    y: stored.y,
+                    width: new_width,
+                    height: stored.height,
+                }
+            } else {
+                // Portrait: grow/shrink height when cards change
+                let height_change = (default_card_height + CARD_PADDING) * card_count_diff;
+                let new_height = if cards_added {
+                    stored.height + height_change
+                } else {
+                    (stored.height - height_change).max(container_min_height)
+                };
+                CountdownCardGeometry {
+                    x: stored.x,
+                    y: stored.y,
+                    width: stored.width,
+                    height: new_height,
+                }
+            }
+        } else {
+            stored
+        }
+    } else {
+        // No stored geometry - use defaults for vertical layout
+        CountdownCardGeometry {
+            x: 100.0,
+            y: 100.0,
+            width: default_width.max(container_min_width),
+            height: ideal_vertical_height.max(container_min_height).min(600.0),
+        }
+    };
 
     let viewport_id = egui::ViewportId::from_hash_of("countdown_container");
 
-    // Set position/size on first render only - don't resize when cards are added/removed
-    let needs_resize = !layout.initialized;
+    // Set position/size on first render OR when card count changes
+    let needs_resize = !layout.initialized || card_count_changed;
     
     // Log the geometry being used
     if !layout.initialized {
@@ -711,12 +748,17 @@ pub fn render_container_window(
         .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
         .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
 
-    // Log on first render
+    // Log on first render or resize
     if needs_resize {
         log::info!(
             "Container setting position to ({}, {}) size ({}, {})",
             initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
         );
+        
+        // Push geometry change when resizing due to card count change
+        if card_count_changed {
+            actions.push(ContainerAction::GeometryChanged(initial_geometry));
+        }
     }
 
     // Render the container viewport
