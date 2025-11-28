@@ -3,6 +3,7 @@ use egui::{Color32, RichText};
 
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::services::category::CategoryService;
 use crate::services::countdown::CountdownCardId;
 use crate::services::database::Database;
 
@@ -72,7 +73,7 @@ pub fn render_event_dialog(
         egui::ScrollArea::vertical().show(ui, |ui| {
             render_error_banner(ui, state);
             render_warning_banner(ui, state);
-            render_basic_information_section(ui, state);
+            render_basic_information_section(ui, state, database);
             render_date_time_section(ui, state);
             render_appearance_section(ui, state);
             render_recurrence_section(ui, state, settings);
@@ -114,7 +115,7 @@ fn render_warning_banner(ui: &mut egui::Ui, state: &EventDialogState) {
     ui.add_space(4.0);
 }
 
-fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogState) {
+fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogState, database: &Database) {
     ui.heading("Basic Information");
     ui.add_space(4.0);
 
@@ -141,8 +142,9 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
         ui.text_edit_singleline(&mut state.location);
     });
 
+    // Category dropdown
     labeled_row(ui, "Category:", |ui| {
-        ui.text_edit_singleline(&mut state.category);
+        render_category_dropdown(ui, &mut state.category, database);
     });
 
     labeled_row(ui, "Description:", |ui| {
@@ -719,6 +721,82 @@ fn render_action_buttons(
         card_changes,
         delete_request,
     }
+}
+
+/// Render a category dropdown with color swatches
+fn render_category_dropdown(ui: &mut egui::Ui, selected_category: &mut String, database: &Database) {
+    let service = CategoryService::new(database.connection());
+    let categories = service.list_all().unwrap_or_default();
+    
+    // Find the selected category for display
+    let selected_display = if selected_category.is_empty() {
+        "None".to_string()
+    } else {
+        categories.iter()
+            .find(|c| c.name == *selected_category)
+            .map(|c| c.display_name())
+            .unwrap_or_else(|| selected_category.clone())
+    };
+    
+    // Get the color of the selected category for the preview
+    let selected_color = categories.iter()
+        .find(|c| c.name == *selected_category)
+        .map(|c| hex_to_color32(&c.color))
+        .unwrap_or(Color32::TRANSPARENT);
+
+    ui.horizontal(|ui| {
+        // Show color swatch for selected category
+        if !selected_category.is_empty() {
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+            ui.painter().rect_filled(rect, 3.0, selected_color);
+        }
+        
+        egui::ComboBox::from_id_source("category_dropdown")
+            .selected_text(&selected_display)
+            .width(180.0)
+            .show_ui(ui, |ui| {
+                // "None" option
+                let is_none = selected_category.is_empty();
+                if ui.selectable_label(is_none, "None").clicked() {
+                    selected_category.clear();
+                }
+                
+                ui.separator();
+                
+                // Category options
+                for cat in &categories {
+                    let is_selected = cat.name == *selected_category;
+                    
+                    ui.horizontal(|ui| {
+                        // Color swatch
+                        let color = hex_to_color32(&cat.color);
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 2.0, color);
+                        
+                        if ui.selectable_label(is_selected, cat.display_name()).clicked() {
+                            *selected_category = cat.name.clone();
+                        }
+                    });
+                }
+            });
+    });
+}
+
+/// Convert hex color string to Color32
+fn hex_to_color32(hex: &str) -> Color32 {
+    let hex = hex.trim().trim_start_matches('#');
+    
+    if hex.len() == 6 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&hex[0..2], 16),
+            u8::from_str_radix(&hex[2..4], 16),
+            u8::from_str_radix(&hex[4..6], 16),
+        ) {
+            return Color32::from_rgb(r, g, b);
+        }
+    }
+    
+    Color32::GRAY
 }
 
 fn labeled_row<F>(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>, add_contents: F)
