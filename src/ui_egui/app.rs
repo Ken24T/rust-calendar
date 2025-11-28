@@ -22,6 +22,7 @@ use self::state::{AppState, ViewType};
 use self::toast::ToastManager;
 use self::confirm::ConfirmDialogState;
 use crate::models::settings::Settings;
+use crate::ui_egui::commands::UndoManager;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::AutoFocusRequest;
@@ -57,6 +58,8 @@ pub struct CalendarApp {
     confirm_dialog: ConfirmDialogState,
     /// Active category filter (None = show all categories)
     active_category_filter: Option<String>,
+    /// Undo/Redo manager for event operations
+    undo_manager: UndoManager,
 }
 
 impl eframe::App for CalendarApp {
