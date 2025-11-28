@@ -191,6 +191,7 @@ impl CalendarApp {
             countdown_requests,
             active_countdown_events,
             focus_request,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle clicked event - open edit dialog
@@ -272,6 +273,7 @@ impl CalendarApp {
             show_ribbon,
             &all_day_events,
             focus_request,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle clicked event - open edit dialog
@@ -357,6 +359,7 @@ impl CalendarApp {
             self.show_ribbon,
             &all_day_events,
             focus_request,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle clicked event - open edit dialog
@@ -398,6 +401,7 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
+            self.active_category_filter.as_deref(),
         );
         
         // Handle month view actions

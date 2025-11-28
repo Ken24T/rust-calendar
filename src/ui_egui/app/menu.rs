@@ -212,6 +212,11 @@ impl CalendarApp {
 
             ui.separator();
 
+            // Category filter submenu
+            self.render_category_filter_submenu(ui);
+
+            ui.separator();
+
             // Countdown Cards submenu
             ui.menu_button("⏱ Countdown Cards", |ui| {
                 let current_mode = self.context.countdown_service().display_mode();
@@ -249,6 +254,37 @@ impl CalendarApp {
         });
     }
 
+    fn render_category_filter_submenu(&mut self, ui: &mut egui::Ui) {
+        ui.menu_button("📂 Filter by Category", |ui| {
+            // Get all categories
+            let categories = self.context.category_service().list_all().unwrap_or_default();
+            
+            // "All Categories" option
+            let is_all_selected = self.active_category_filter.is_none();
+            if ui.selectable_label(is_all_selected, "All Categories").clicked() {
+                self.active_category_filter = None;
+                ui.close_menu();
+            }
+            
+            if !categories.is_empty() {
+                ui.separator();
+                
+                for category in &categories {
+                    let label = if let Some(icon) = &category.icon {
+                        format!("{} {}", icon, category.name)
+                    } else {
+                        category.name.clone()
+                    };
+                    
+                    let is_selected = self.active_category_filter.as_ref() == Some(&category.name);
+                    if ui.selectable_label(is_selected, label).clicked() {
+                        self.active_category_filter = Some(category.name.clone());
+                        ui.close_menu();
+                    }
+                }
+            }
+        });
+    }
 
 
     fn render_events_menu(&mut self, ui: &mut egui::Ui) {

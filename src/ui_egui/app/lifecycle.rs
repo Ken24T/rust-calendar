@@ -72,6 +72,7 @@ impl CalendarApp {
             state: AppState::new(backup_manager_state, pending_root_geometry),
             toast_manager: ToastManager::new(),
             confirm_dialog: ConfirmDialogState::new(),
+            active_category_filter: None,
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);

@@ -55,6 +55,8 @@ pub struct CalendarApp {
     toast_manager: ToastManager,
     /// Confirmation dialog state
     confirm_dialog: ConfirmDialogState,
+    /// Active category filter (None = show all categories)
+    active_category_filter: Option<String>,
 }
 
 impl eframe::App for CalendarApp {

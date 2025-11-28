@@ -3,6 +3,7 @@ use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
 use super::week_shared::DeleteConfirmRequest;
+use super::filter_events_by_category;
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::models::template::EventTemplate;
@@ -64,6 +65,7 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
+        category_filter: Option<&str>,
     ) -> MonthViewResult {
         let today = Local::now().date_naive();
         let mut result = MonthViewResult::default();
@@ -71,6 +73,7 @@ impl MonthView {
         // Get events for the month
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_month(&event_service, *current_date);
+        let events = filter_events_by_category(events, category_filter);
 
         // Day of week headers - use Grid to match column widths below
         let day_names = Self::get_day_names(settings.first_day_of_week);

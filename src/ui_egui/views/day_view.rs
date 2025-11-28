@@ -14,6 +14,8 @@ use crate::services::template::TemplateService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::theme::CalendarTheme;
 
+use super::filter_events_by_category;
+
 pub struct DayView;
 
 impl DayView {
@@ -30,6 +32,7 @@ impl DayView {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         focus_request: &mut Option<AutoFocusRequest>,
+        category_filter: Option<&str>,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -40,6 +43,7 @@ impl DayView {
         // Get events for this day
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_day(&event_service, *current_date);
+        let events = filter_events_by_category(events, category_filter);
 
         // Day header
         let day_name = current_date.format("%A").to_string();

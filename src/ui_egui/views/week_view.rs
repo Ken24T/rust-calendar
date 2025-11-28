@@ -7,7 +7,7 @@ use super::week_shared::{
     self, format_short_date, get_week_start, render_ribbon_event, render_time_grid,
     EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
-use super::{AutoFocusRequest, CountdownRequest};
+use super::{filter_events_by_category, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -43,6 +43,7 @@ impl WeekView {
         show_ribbon: bool,
         all_day_events: &[Event],
         focus_request: &mut Option<AutoFocusRequest>,
+        category_filter: Option<&str>,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -56,6 +57,7 @@ impl WeekView {
         // Get events for the week
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_week(&event_service, week_start);
+        let events = filter_events_by_category(events, category_filter);
 
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
