@@ -138,6 +138,38 @@ impl CalendarApp {
 
     fn render_edit_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Edit", |ui| {
+            // Undo/Redo section
+            let can_undo = self.undo_manager.can_undo();
+            let can_redo = self.undo_manager.can_redo();
+            
+            let undo_label = if let Some(desc) = self.undo_manager.undo_description() {
+                format!("↶ Undo {}    Ctrl+Z", desc)
+            } else {
+                "↶ Undo    Ctrl+Z".to_string()
+            };
+            
+            let redo_label = if let Some(desc) = self.undo_manager.redo_description() {
+                format!("↷ Redo {}    Ctrl+Y", desc)
+            } else {
+                "↷ Redo    Ctrl+Y".to_string()
+            };
+            
+            ui.add_enabled_ui(can_undo, |ui| {
+                if ui.button(&undo_label).clicked() {
+                    self.perform_undo();
+                    ui.close_menu();
+                }
+            });
+            
+            ui.add_enabled_ui(can_redo, |ui| {
+                if ui.button(&redo_label).clicked() {
+                    self.perform_redo();
+                    ui.close_menu();
+                }
+            });
+            
+            ui.separator();
+            
             if ui.button("⚙ Settings    Ctrl+S").clicked() {
                 self.show_settings_dialog = true;
                 ui.close_menu();
@@ -151,6 +183,40 @@ impl CalendarApp {
                 ui.close_menu();
             }
         });
+    }
+    
+    /// Perform undo operation
+    pub(super) fn perform_undo(&mut self) {
+        let event_service = self.context.event_service();
+        match self.undo_manager.undo(&event_service) {
+            Ok(Some(desc)) => {
+                self.toast_manager.info(format!("Undone: {}", desc));
+            }
+            Ok(None) => {
+                // Nothing to undo
+            }
+            Err(e) => {
+                log::error!("Undo failed: {}", e);
+                self.toast_manager.error(format!("Undo failed: {}", e));
+            }
+        }
+    }
+    
+    /// Perform redo operation
+    pub(super) fn perform_redo(&mut self) {
+        let event_service = self.context.event_service();
+        match self.undo_manager.redo(&event_service) {
+            Ok(Some(desc)) => {
+                self.toast_manager.info(format!("Redone: {}", desc));
+            }
+            Ok(None) => {
+                // Nothing to redo
+            }
+            Err(e) => {
+                log::error!("Redo failed: {}", e);
+                self.toast_manager.error(format!("Redo failed: {}", e));
+            }
+        }
     }
 
     fn render_view_menu(&mut self, ui: &mut egui::Ui) {

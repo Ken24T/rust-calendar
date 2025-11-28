@@ -60,6 +60,18 @@ impl CalendarApp {
                 }
             }
 
+            // Ctrl+Z to undo
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::Z) && !i.modifiers.shift {
+                self.perform_undo();
+            }
+
+            // Ctrl+Y or Ctrl+Shift+Z to redo
+            if (i.modifiers.ctrl && i.key_pressed(egui::Key::Y)) 
+                || (i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Z)) 
+            {
+                self.perform_redo();
+            }
+
             // Ctrl+\ to toggle sidebar
             if i.modifiers.ctrl && i.key_pressed(egui::Key::Backslash) {
                 self.toggle_sidebar();
