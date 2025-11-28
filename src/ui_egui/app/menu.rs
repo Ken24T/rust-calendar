@@ -340,9 +340,22 @@ impl CalendarApp {
             ui.separator();
             
             ui.menu_button("📤 Export Events", |ui| {
-                if ui.button("Export All Events...").clicked() {
-                    self.export_all_events_ics();
-                    ui.close_menu();
+                // Show category-specific export if filter is active
+                if let Some(category) = &self.active_category_filter {
+                    let label = format!("Export '{}' Events...", category);
+                    if ui.button(&label).clicked() {
+                        self.export_filtered_events_ics();
+                        ui.close_menu();
+                    }
+                    if ui.button("Export All Events...").clicked() {
+                        self.export_all_events_ics();
+                        ui.close_menu();
+                    }
+                } else {
+                    if ui.button("Export All Events...").clicked() {
+                        self.export_all_events_ics();
+                        ui.close_menu();
+                    }
                 }
                 if ui.button("Export Date Range...").clicked() {
                     self.state.show_export_range_dialog = true;
@@ -609,6 +622,61 @@ impl CalendarApp {
                 Ok(()) => {
                     log::info!("Exported {} events to {:?}", events.len(), path);
                     self.toast_manager.success(format!("Exported {} events", events.len()));
+                }
+                Err(e) => {
+                    log::error!("Failed to export events: {}", e);
+                    self.toast_manager.error("Failed to export events");
+                }
+            }
+        }
+    }
+
+    /// Export filtered events (by category) to an .ics file
+    fn export_filtered_events_ics(&mut self) {
+        let category = match &self.active_category_filter {
+            Some(cat) => cat.clone(),
+            None => {
+                // No filter active, fall back to export all
+                self.export_all_events_ics();
+                return;
+            }
+        };
+
+        let event_service = EventService::new(self.context.database().connection());
+        let all_events = match event_service.list_all() {
+            Ok(events) => events,
+            Err(e) => {
+                log::error!("Failed to load events for export: {}", e);
+                self.toast_manager.error("Failed to load events");
+                return;
+            }
+        };
+
+        // Filter events by category
+        let events: Vec<_> = all_events
+            .into_iter()
+            .filter(|e| e.category.as_deref() == Some(&category))
+            .collect();
+
+        if events.is_empty() {
+            self.toast_manager.warning(format!("No '{}' events to export", category));
+            return;
+        }
+
+        let safe_category = category.replace(' ', "_").replace('/', "-");
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title(&format!("Export '{}' Events", category))
+            .set_file_name(&format!("{}_events.ics", safe_category))
+            .add_filter("iCalendar", &["ics"])
+            .save_file()
+        {
+            use crate::services::icalendar::ICalendarService;
+            let ics_service = ICalendarService::new();
+            
+            match ics_service.export_events_to_file(&events, &path) {
+                Ok(()) => {
+                    log::info!("Exported {} '{}' events to {:?}", events.len(), category, path);
+                    self.toast_manager.success(format!("Exported {} '{}' events", events.len(), category));
                 }
                 Err(e) => {
                     log::error!("Failed to export events: {}", e);
