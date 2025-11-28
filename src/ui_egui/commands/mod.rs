@@ -6,6 +6,7 @@
 use crate::models::event::Event;
 use crate::services::event::EventService;
 use anyhow::Result;
+use std::sync::Mutex;
 
 /// Trait for undoable commands
 pub trait Command: std::fmt::Debug {
@@ -20,38 +21,44 @@ pub trait Command: std::fmt::Debug {
 }
 
 /// Command for creating an event
-#[derive(Debug, Clone)]
+/// Uses Mutex to allow updating the event ID after redo (recreation)
+#[derive(Debug)]
 pub struct CreateEventCommand {
     /// The event that was created (with ID set after execution)
-    pub event: Event,
+    /// Wrapped in Mutex so we can update the ID after recreation
+    event: Mutex<Event>,
 }
 
 impl CreateEventCommand {
     pub fn new(event: Event) -> Self {
-        Self { event }
+        Self { event: Mutex::new(event) }
     }
 }
 
 impl Command for CreateEventCommand {
     fn execute(&self, event_service: &EventService) -> Result<()> {
-        // Re-create the event (for redo)
-        // Note: This creates a new event with the same data but potentially different ID
-        let mut event = self.event.clone();
-        event.id = None; // Clear ID so it creates a new record
-        event_service.create(event)?;
+        // Re-create the event (for redo) and update stored ID
+        let mut event = self.event.lock().unwrap();
+        let mut new_event = event.clone();
+        new_event.id = None; // Clear ID so it creates a new record
+        let created = event_service.create(new_event)?;
+        // Update our stored event with the new ID so undo works
+        event.id = created.id;
         Ok(())
     }
 
     fn undo(&self, event_service: &EventService) -> Result<()> {
         // Delete the event
-        if let Some(id) = self.event.id {
+        let event = self.event.lock().unwrap();
+        if let Some(id) = event.id {
             event_service.delete(id)?;
         }
         Ok(())
     }
 
     fn description(&self) -> String {
-        format!("Create event \"{}\"", self.event.title)
+        let event = self.event.lock().unwrap();
+        format!("Create event \"{}\"", event.title)
     }
 }
 
@@ -90,36 +97,43 @@ impl Command for UpdateEventCommand {
 }
 
 /// Command for deleting an event
-#[derive(Debug, Clone)]
+/// Uses Mutex to allow updating the event ID after undo (recreation)
+#[derive(Debug)]
 pub struct DeleteEventCommand {
     /// The event that was deleted (stored for undo)
-    pub event: Event,
+    /// Wrapped in Mutex so we can update the ID after recreation
+    event: Mutex<Event>,
 }
 
 impl DeleteEventCommand {
     pub fn new(event: Event) -> Self {
-        Self { event }
+        Self { event: Mutex::new(event) }
     }
 }
 
 impl Command for DeleteEventCommand {
     fn execute(&self, event_service: &EventService) -> Result<()> {
-        if let Some(id) = self.event.id {
+        let event = self.event.lock().unwrap();
+        if let Some(id) = event.id {
             event_service.delete(id)?;
         }
         Ok(())
     }
 
     fn undo(&self, event_service: &EventService) -> Result<()> {
-        // Re-create the event
-        let mut event = self.event.clone();
-        event.id = None; // Clear ID so it creates a new record
-        event_service.create(event)?;
+        // Re-create the event and update stored ID
+        let mut event = self.event.lock().unwrap();
+        let mut new_event = event.clone();
+        new_event.id = None; // Clear ID so it creates a new record
+        let created = event_service.create(new_event)?;
+        // Update our stored event with the new ID so redo works
+        event.id = created.id;
         Ok(())
     }
 
     fn description(&self) -> String {
-        format!("Delete event \"{}\"", self.event.title)
+        let event = self.event.lock().unwrap();
+        format!("Delete event \"{}\"", event.title)
     }
 }
 
