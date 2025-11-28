@@ -142,8 +142,12 @@ impl CalendarApp {
                 self.show_settings_dialog = true;
                 ui.close_menu();
             }
-            if ui.button("Themes...").clicked() {
+            if ui.button("🎨 Manage Themes...").clicked() {
                 self.state.theme_dialog_state.open(&self.settings.theme);
+                ui.close_menu();
+            }
+            if ui.button("📂 Manage Categories...").clicked() {
+                self.state.category_manager_state.open();
                 ui.close_menu();
             }
         });
@@ -300,12 +304,6 @@ impl CalendarApp {
             
             // Templates submenu
             self.render_templates_submenu(ui);
-            
-            // Categories management
-            if ui.button("📂 Manage Categories...").clicked() {
-                self.state.category_manager_state.open();
-                ui.close_menu();
-            }
             
             ui.separator();
             if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
