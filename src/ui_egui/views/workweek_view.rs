@@ -13,6 +13,7 @@ use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::DragView;
+use crate::ui_egui::resize::ResizeView;
 use crate::ui_egui::theme::CalendarTheme;
 
 /// Blend header color for weekend columns (slightly darker/lighter)
@@ -255,6 +256,7 @@ impl WorkWeekView {
             .show(ui, |scroll_ui| {
                 let config = TimeCellConfig {
                     drag_view: DragView::WorkWeek,
+                    resize_view: ResizeView::WorkWeek,
                     check_weekend: false, // WorkWeek doesn't highlight weekends differently
                 };
 

@@ -457,6 +457,7 @@ impl DayView {
                         ui,
                         &resize_ctx,
                         rect,
+                        date,
                         time,
                         slot_end,
                         event_color,
@@ -886,9 +887,14 @@ impl DayView {
             .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
         
-        // Dim past events
+        // Dim past events with stronger dimming for visibility
         let event_color = if is_past {
-            base_color.linear_multiply(0.5)
+            Color32::from_rgba_unmultiplied(
+                (base_color.r() as f32 * 0.4) as u8,
+                (base_color.g() as f32 * 0.4) as u8,
+                (base_color.b() as f32 * 0.4) as u8,
+                140,
+            )
         } else {
             base_color
         };
@@ -970,9 +976,14 @@ impl DayView {
             .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
         
-        // Dim past events further
+        // Dim past events with stronger dimming for visibility
         let event_color = if is_past {
-            base_color.linear_multiply(0.3)
+            Color32::from_rgba_unmultiplied(
+                (base_color.r() as f32 * 0.25) as u8,
+                (base_color.g() as f32 * 0.25) as u8,
+                (base_color.b() as f32 * 0.25) as u8,
+                120,
+            )
         } else {
             base_color
         };

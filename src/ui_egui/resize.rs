@@ -487,6 +487,7 @@ pub fn draw_handles(
 /// - `ui`: The egui Ui context
 /// - `resize_ctx`: The active resize context with drag state
 /// - `slot_rect`: The rect of the current time slot being rendered
+/// - `slot_date`: The date of the current slot (to check if preview should appear in this column)
 /// - `slot_time`: The start time of the current slot
 /// - `slot_end_time`: The end time of the current slot  
 /// - `event_color`: The color of the event (will be made translucent)
@@ -495,6 +496,7 @@ pub fn draw_resize_preview(
     ui: &mut egui::Ui,
     resize_ctx: &ResizeContext,
     slot_rect: Rect,
+    slot_date: NaiveDate,
     slot_time: NaiveTime,
     slot_end_time: NaiveTime,
     event_color: egui::Color32,
@@ -505,6 +507,13 @@ pub fn draw_resize_preview(
         Some(times) => times,
         None => return, // No valid preview yet
     };
+    
+    // Only draw preview in the correct column (same date as the event)
+    // For vertical resize, the date doesn't change
+    let event_date = resize_ctx.original_start.date_naive();
+    if slot_date != event_date {
+        return;
+    }
     
     let preview_start_time = preview_start.time();
     let preview_end_time = preview_end.time();
