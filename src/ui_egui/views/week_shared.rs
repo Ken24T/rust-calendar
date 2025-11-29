@@ -82,6 +82,12 @@ pub fn maybe_focus_slot(
 }
 
 /// Render an event in the all-day ribbon area.
+/// Returns the interaction result and the event rect (for resize handle tracking).
+/// 
+/// Parameters:
+/// - `show_left_handle`: True if this is the first day of the event (can resize start date)
+/// - `show_right_handle`: True if this is the last day of the event (can resize end date)
+/// - `current_date`: The date of the column being rendered (for resize tracking)
 pub fn render_ribbon_event(
     ui: &mut egui::Ui,
     event: &Event,
@@ -89,6 +95,24 @@ pub fn render_ribbon_event(
     active_countdown_events: &HashSet<i64>,
     _database: &'static Database,
 ) -> EventInteractionResult {
+    render_ribbon_event_with_handles(
+        ui, event, countdown_requests, active_countdown_events, _database,
+        false, false, None,
+    ).0
+}
+
+/// Extended ribbon event renderer with resize handle support.
+/// Returns (EventInteractionResult, Option<Rect>) where Rect is the event's bounding box.
+pub fn render_ribbon_event_with_handles(
+    ui: &mut egui::Ui,
+    event: &Event,
+    countdown_requests: &mut Vec<CountdownRequest>,
+    active_countdown_events: &HashSet<i64>,
+    _database: &'static Database,
+    show_left_handle: bool,
+    show_right_handle: bool,
+    _current_date: Option<NaiveDate>,
+) -> (EventInteractionResult, Option<Rect>) {
     let mut result = EventInteractionResult::default();
     
     let now = Local::now();
@@ -121,15 +145,21 @@ pub fn render_ribbon_event(
 
     let available_width = ui.available_width();
 
+    // Frame has 6.0 horizontal margin on each side (12.0 total)
+    let frame_margin = 12.0;
     let event_frame = egui::Frame::none()
         .fill(event_color)
         .rounding(egui::Rounding::same(4.0))
-        .inner_margin(egui::Margin::symmetric(6.0, 3.0));
+        .inner_margin(egui::Margin::symmetric(6.0, 1.0));
 
     let response = event_frame
         .show(ui, |ui| {
-            ui.set_min_width(available_width - 8.0);
+            // Account for frame margin so total width fits within available_width
+            ui.set_min_width(available_width - frame_margin);
+            ui.set_max_width(available_width - frame_margin);
+            ui.spacing_mut().item_spacing.y = 0.0;
             ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
                 // Show countdown indicator if this event has a card
                 let has_countdown = event
                     .id
@@ -139,42 +169,23 @@ pub fn render_ribbon_event(
                     ui.label(
                         egui::RichText::new("⏱")
                             .color(text_color)
-                            .size(11.0),
+                            .size(10.0),
                     );
                 }
                 
                 ui.label(
                     egui::RichText::new(&event.title)
                         .color(text_color)
-                        .size(12.0),
+                        .size(11.0),
                 );
 
-                // Show category badge if present
-                if let Some(category) = &event.category {
-                    ui.label(
-                        egui::RichText::new(format!("[{}]", category))
-                            .color(if is_past { Color32::from_gray(180) } else { Color32::from_gray(230) })
-                            .size(10.0),
-                    );
-                }
-
-                if event.start.date_naive() != event.end.date_naive() {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "({} - {})",
-                            event.start.format("%b %d"),
-                            event.end.format("%b %d")
-                        ))
-                        .color(if is_past { Color32::from_gray(160) } else { Color32::from_gray(220) })
-                        .size(10.0),
-                    );
-                }
             });
         })
         .response;
 
     // Add tooltip with days-until info for future events
     let now = Local::now();
+    // Use click_and_drag sensing to detect resize drag start
     let interactive_response = if event.start > now {
         let days_until = (event.start.date_naive() - now.date_naive()).num_days();
         let tooltip = if days_until == 0 {
@@ -184,9 +195,9 @@ pub fn render_ribbon_event(
         } else {
             format!("{}\n{} days from now", event.title, days_until)
         };
-        response.interact(Sense::click()).on_hover_text(tooltip)
+        response.interact(Sense::click_and_drag()).on_hover_text(tooltip)
     } else {
-        response.interact(Sense::click())
+        response.interact(Sense::click_and_drag())
     };
 
     interactive_response.context_menu(|ui| {
@@ -278,12 +289,59 @@ pub fn render_ribbon_event(
         }
     });
 
-    // Handle click to edit
-    if interactive_response.clicked() {
+    // Handle click to edit (only if not dragging)
+    if interactive_response.clicked() && !interactive_response.dragged() {
         result.event_to_edit = Some(event.clone());
     }
 
-    result
+    // Get the event rect for resize handle tracking
+    let event_rect = interactive_response.rect;
+    
+    // Draw resize handles if applicable (not past, not recurring, handles enabled)
+    let can_resize = !is_past && event.recurrence_rule.is_none() && (show_left_handle || show_right_handle);
+    
+    if can_resize {
+        let handles = HandleRects::for_ribbon_event_in_day(event_rect, show_left_handle, show_right_handle);
+        
+        // Check for hover on handles
+        let pointer_pos = ui.input(|i| i.pointer.hover_pos());
+        let hovered_handle = pointer_pos.and_then(|pos| handles.hit_test(pos));
+        
+        // Draw handles when hovering over the event
+        if interactive_response.hovered() || hovered_handle.is_some() {
+            let handle_color = event
+                .color
+                .as_deref()
+                .and_then(parse_color)
+                .unwrap_or(Color32::from_rgb(100, 150, 200));
+            draw_handles(ui, &handles, hovered_handle, handle_color);
+        }
+        
+        // Set cursor for resize handles
+        if let Some(handle) = hovered_handle {
+            ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+        }
+        
+        // Detect drag start on handles to initiate resize
+        if interactive_response.drag_started() {
+            let drag_start_pos = interactive_response.interact_pointer_pos();
+            if let Some(pos) = drag_start_pos {
+                if let Some(handle) = handles.hit_test(pos) {
+                    // Start resize operation
+                    if let Some(resize_context) = ResizeContext::from_event(
+                        event,
+                        handle,
+                        ResizeView::Ribbon,
+                    ) {
+                        ResizeManager::begin(ui.ctx(), resize_context);
+                        ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+                    }
+                }
+            }
+        }
+    }
+
+    (result, Some(event_rect))
 }
 
 /// Render an event bar inside a time cell (for events starting in this slot).

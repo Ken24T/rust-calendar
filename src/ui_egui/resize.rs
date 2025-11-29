@@ -354,19 +354,37 @@ impl HandleRects {
 
     /// Create handle rects for ribbon events (left/right only)
     pub fn for_ribbon_event(event_rect: Rect) -> Self {
+        Self::for_ribbon_event_in_day(event_rect, true, true)
+    }
+
+    /// Create handle rects for ribbon events in a specific day column
+    /// - show_left: true if this is the first day of the event (show left handle)
+    /// - show_right: true if this is the last day of the event (show right handle)
+    pub fn for_ribbon_event_in_day(event_rect: Rect, show_left: bool, show_right: bool) -> Self {
         let handle_height = event_rect.height().min(20.0);
+        
+        // Add some horizontal padding for easier grabbing
+        const EDGE_PADDING: f32 = 4.0;
         
         Self {
             top: None,
             bottom: None,
-            left: Some(Rect::from_center_size(
-                Pos2::new(event_rect.left(), event_rect.center().y),
-                Vec2::new(HANDLE_SIZE, handle_height),
-            )),
-            right: Some(Rect::from_center_size(
-                Pos2::new(event_rect.right(), event_rect.center().y),
-                Vec2::new(HANDLE_SIZE, handle_height),
-            )),
+            left: if show_left {
+                Some(Rect::from_center_size(
+                    Pos2::new(event_rect.left() - EDGE_PADDING / 2.0, event_rect.center().y),
+                    Vec2::new(HANDLE_SIZE + EDGE_PADDING, handle_height),
+                ))
+            } else {
+                None
+            },
+            right: if show_right {
+                Some(Rect::from_center_size(
+                    Pos2::new(event_rect.right() + EDGE_PADDING / 2.0, event_rect.center().y),
+                    Vec2::new(HANDLE_SIZE + EDGE_PADDING, handle_height),
+                ))
+            } else {
+                None
+            },
         }
     }
 
@@ -405,22 +423,47 @@ pub fn draw_handles(
 ) {
     let draw_handle = |rect: Rect, handle_type: ResizeHandle, is_hovered: bool| {
         // Position the visual elements at the edge
-        let center_x = rect.center().x;
-        let (center_y, bar_y) = match handle_type {
-            ResizeHandle::Top => (
-                rect.top() + HANDLE_VISUAL_SIZE / 2.0 + 4.0,
-                rect.top() + 4.0,
-            ),
-            ResizeHandle::Bottom => (
-                rect.bottom() - HANDLE_VISUAL_SIZE / 2.0 - 4.0,
-                rect.bottom() - 4.0,
-            ),
-            ResizeHandle::Left | ResizeHandle::Right => (
-                rect.center().y,
-                rect.center().y,
-            ),
+        let is_vertical_handle = matches!(handle_type, ResizeHandle::Top | ResizeHandle::Bottom);
+        
+        let (center, bar_start, bar_end) = if is_vertical_handle {
+            // Top/Bottom handles - horizontal bar
+            let center_x = rect.center().x;
+            let bar_y = match handle_type {
+                ResizeHandle::Top => rect.top() + 4.0,
+                ResizeHandle::Bottom => rect.bottom() - 4.0,
+                _ => rect.center().y,
+            };
+            let center_y = match handle_type {
+                ResizeHandle::Top => rect.top() + HANDLE_VISUAL_SIZE / 2.0 + 4.0,
+                ResizeHandle::Bottom => rect.bottom() - HANDLE_VISUAL_SIZE / 2.0 - 4.0,
+                _ => rect.center().y,
+            };
+            let bar_width = rect.width().min(40.0);
+            (
+                Pos2::new(center_x, center_y),
+                Pos2::new(center_x - bar_width / 2.0, bar_y),
+                Pos2::new(center_x + bar_width / 2.0, bar_y),
+            )
+        } else {
+            // Left/Right handles - vertical bar
+            let center_y = rect.center().y;
+            let bar_x = match handle_type {
+                ResizeHandle::Left => rect.left() + 4.0,
+                ResizeHandle::Right => rect.right() - 4.0,
+                _ => rect.center().x,
+            };
+            let center_x = match handle_type {
+                ResizeHandle::Left => rect.left() + HANDLE_VISUAL_SIZE / 2.0 + 2.0,
+                ResizeHandle::Right => rect.right() - HANDLE_VISUAL_SIZE / 2.0 - 2.0,
+                _ => rect.center().x,
+            };
+            let bar_height = rect.height().min(20.0);
+            (
+                Pos2::new(center_x, center_y),
+                Pos2::new(bar_x, center_y - bar_height / 2.0),
+                Pos2::new(bar_x, center_y + bar_height / 2.0),
+            )
         };
-        let center = Pos2::new(center_x, center_y);
         
         let radius = if is_hovered {
             HANDLE_VISUAL_SIZE / 2.0 + 2.0
@@ -429,23 +472,17 @@ pub fn draw_handles(
         };
         
         // Draw a subtle bar indicator across the hit zone
-        let bar_width = rect.width().min(40.0);
-        if handle_type == ResizeHandle::Top || handle_type == ResizeHandle::Bottom {
-            ui.painter().line_segment(
-                [
-                    Pos2::new(center_x - bar_width / 2.0, bar_y),
-                    Pos2::new(center_x + bar_width / 2.0, bar_y),
-                ],
-                egui::Stroke::new(
-                    if is_hovered { 3.0 } else { 2.0 },
-                    if is_hovered {
-                        egui::Color32::WHITE
-                    } else {
-                        egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180)
-                    },
-                ),
-            );
-        }
+        ui.painter().line_segment(
+            [bar_start, bar_end],
+            egui::Stroke::new(
+                if is_hovered { 3.0 } else { 2.0 },
+                if is_hovered {
+                    egui::Color32::WHITE
+                } else {
+                    egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+                },
+            ),
+        );
         
         // Draw circle handle (more prominent)
         ui.painter().circle_filled(
