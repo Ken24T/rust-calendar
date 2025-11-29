@@ -283,7 +283,6 @@ pub struct HandleRects {
 impl HandleRects {
     /// Create handle rects for a timed event (top/bottom only)
     pub fn for_timed_event(event_rect: Rect) -> Self {
-        let handle_width = event_rect.width().min(50.0);
         let event_height = event_rect.height();
         
         // For small events (single slot), divide into top and bottom halves
@@ -294,14 +293,15 @@ impl HandleRects {
             20.0 // 20px zone at top and bottom
         };
         
+        // Hit zones span the full width of the event for easy clicking
         Self {
             top: Some(Rect::from_min_size(
                 Pos2::new(event_rect.left(), event_rect.top()),
-                Vec2::new(handle_width, zone_height),
+                Vec2::new(event_rect.width(), zone_height),
             )),
             bottom: Some(Rect::from_min_size(
                 Pos2::new(event_rect.left(), event_rect.bottom() - zone_height),
-                Vec2::new(handle_width, zone_height),
+                Vec2::new(event_rect.width(), zone_height),
             )),
             left: None,
             right: None,
