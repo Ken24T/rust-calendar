@@ -476,7 +476,7 @@ impl DayView {
                     
                     // Update resize hover for any slot during resize
                     if is_resize_active && rect.contains(pointer) {
-                        ResizeManager::update_hover(ui.ctx(), date, time, pointer);
+                        ResizeManager::update_hover(ui.ctx(), date, time, slot_end, pointer);
                     }
                     
                     if DragManager::is_active_for_view(ui.ctx(), DragView::Day) {

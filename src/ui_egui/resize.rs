@@ -212,17 +212,24 @@ impl ResizeManager {
     }
 
     /// Update hover position during resize
+    /// For bottom handle: use slot_end as the target time
+    /// For top handle: use slot_start as the target time
     pub fn update_hover(
         ctx: &Context,
         date: NaiveDate,
-        time: NaiveTime,
+        slot_start: NaiveTime,
+        slot_end: NaiveTime,
         pointer_pos: Pos2,
     ) {
         let id = Self::storage_id();
         ctx.memory_mut(|mem| {
             if let Some(mut state) = mem.data.get_persisted::<ResizeContext>(id) {
                 state.hovered_date = Some(date);
-                state.hovered_time = Some(time);
+                // Use appropriate time based on which handle is being dragged
+                state.hovered_time = Some(match state.handle {
+                    ResizeHandle::Bottom | ResizeHandle::Right => slot_end,
+                    ResizeHandle::Top | ResizeHandle::Left => slot_start,
+                });
                 state.pointer_pos = Some(pointer_pos);
                 mem.data.insert_persisted(id, state);
             }
