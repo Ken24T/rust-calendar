@@ -383,7 +383,13 @@ pub fn draw_handles(
             if is_hovered {
                 egui::Color32::WHITE
             } else {
-                color.linear_multiply(1.2)
+                // Use a lighter version of the color for non-hovered handles
+                egui::Color32::from_rgba_unmultiplied(
+                    color.r().saturating_add(60),
+                    color.g().saturating_add(60),
+                    color.b().saturating_add(60),
+                    color.a(),
+                )
             },
         );
         ui.painter().circle_stroke(
