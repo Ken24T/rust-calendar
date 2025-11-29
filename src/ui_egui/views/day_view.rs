@@ -479,25 +479,24 @@ impl DayView {
                 // (not just when contained in the specific slot rect)
                 let is_resize_active = ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day);
                 
-                if rect.contains(pointer) || is_resize_active {
-                    // Only update drag hover when pointer is in rect
-                    if rect.contains(pointer) {
-                        DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
-                    }
+                if rect.contains(pointer) {
+                    // Update drag hover when pointer is in rect
+                    DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
                     
-                    // Update resize hover for any slot during resize
-                    if is_resize_active && rect.contains(pointer) {
+                    // Update resize hover - works for ANY slot during active resize
+                    if is_resize_active {
                         ResizeManager::update_hover(ui.ctx(), date, time, slot_end, pointer);
                     }
-                    
-                    if DragManager::is_active_for_view(ui.ctx(), DragView::Day) {
-                        ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
-                        ui.ctx().request_repaint();
-                    }
-                    if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), ResizeView::Day) {
-                        ui.output_mut(|out| out.cursor_icon = resize_ctx.handle.cursor_icon());
-                        ui.ctx().request_repaint();
-                    }
+                }
+                
+                // Set cursor icons
+                if DragManager::is_active_for_view(ui.ctx(), DragView::Day) {
+                    ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                    ui.ctx().request_repaint();
+                }
+                if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), ResizeView::Day) {
+                    ui.output_mut(|out| out.cursor_icon = resize_ctx.handle.cursor_icon());
+                    ui.ctx().request_repaint();
                 }
             }
             
