@@ -101,6 +101,30 @@ impl ResizeContext {
         })
     }
 
+    /// Create a resize context from an event (without requiring rect upfront)
+    /// Used when we know we're on a resize handle but don't need the rect
+    pub fn from_event(
+        event: &Event,
+        handle: ResizeHandle,
+        view: ResizeView,
+    ) -> Option<Self> {
+        Self::new(event, handle, view, Rect::NOTHING)
+    }
+
+    /// Get the new start and end times based on hover state
+    pub fn hovered_times(&self) -> Option<(DateTime<Local>, DateTime<Local>)> {
+        let new_start = self.calculate_new_start()?;
+        let new_end = self.calculate_new_end()?;
+        
+        // Validate: start must be before end, with minimum 15 min duration
+        let min_duration = chrono::Duration::minutes(15);
+        if new_end - new_start >= min_duration {
+            Some((new_start, new_end))
+        } else {
+            None
+        }
+    }
+
     /// Calculate the new start time based on drag position
     pub fn calculate_new_start(&self) -> Option<DateTime<Local>> {
         match self.handle {
