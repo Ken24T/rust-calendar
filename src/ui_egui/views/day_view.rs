@@ -367,24 +367,35 @@ impl DayView {
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
 
-            let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
+            // Track (rect, event, is_starting, is_ending) for handle visibility
+            let mut event_hitboxes: Vec<(Rect, Event, bool, bool)> = Vec::new();
 
             // Draw continuing events first (colored blocks only)
             for event in continuing_events {
                 let event_rect = Self::render_event_continuation(ui, rect, event);
-                event_hitboxes.push((event_rect, (*event).clone()));
+                // Check if event ends in this slot
+                let event_end = event.end.time();
+                let is_ending = event_end > time && event_end <= slot_end;
+                // Continuing events never show top handle (they started earlier)
+                event_hitboxes.push((event_rect, (*event).clone(), false, is_ending));
             }
 
             // Draw starting events (full details)
             for event in starting_events {
                 let event_rect = Self::render_event_in_slot(ui, rect, event);
-                event_hitboxes.push((event_rect, (*event).clone()));
+                // Check if event ends in this slot
+                let event_end = event.end.time();
+                let is_ending = event_end > time && event_end <= slot_end;
+                // Starting events always show top handle
+                event_hitboxes.push((event_rect, (*event).clone(), true, is_ending));
             }
 
             // Build resize handle info for each event
             let event_handles: Vec<(Rect, Event, HandleRects)> = event_hitboxes
                 .iter()
-                .map(|(r, e)| (*r, e.clone(), HandleRects::for_timed_event(*r)))
+                .map(|(r, e, is_starting, is_ending)| {
+                    (*r, e.clone(), HandleRects::for_timed_event_in_slot(*r, *is_starting, *is_ending))
+                })
                 .collect();
 
             // Check for pointer position - use hover position to catch right-clicks too
@@ -395,8 +406,8 @@ impl DayView {
                 event_hitboxes
                     .iter()
                     .rev()
-                    .find(|(hit_rect, _)| hit_rect.contains(pos))
-                    .map(|(hit_rect, event)| (*hit_rect, event.clone()))
+                    .find(|(hit_rect, _, _, _)| hit_rect.contains(pos))
+                    .map(|(hit_rect, event, _, _)| (*hit_rect, event.clone()))
             });
             let pointer_event = pointer_hit.as_ref().map(|(_, event)| event.clone());
             let single_event_fallback = if event_hitboxes.len() == 1 {

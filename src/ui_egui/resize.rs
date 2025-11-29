@@ -282,7 +282,9 @@ pub struct HandleRects {
 
 impl HandleRects {
     /// Create handle rects for a timed event (top/bottom only)
-    pub fn for_timed_event(event_rect: Rect) -> Self {
+    /// - show_top: true if this is the starting slot for the event
+    /// - show_bottom: true if this is the ending slot for the event
+    pub fn for_timed_event_in_slot(event_rect: Rect, show_top: bool, show_bottom: bool) -> Self {
         let event_height = event_rect.height();
         
         // For small events (single slot), divide into top and bottom halves
@@ -295,17 +297,30 @@ impl HandleRects {
         
         // Hit zones span the full width of the event for easy clicking
         Self {
-            top: Some(Rect::from_min_size(
-                Pos2::new(event_rect.left(), event_rect.top()),
-                Vec2::new(event_rect.width(), zone_height),
-            )),
-            bottom: Some(Rect::from_min_size(
-                Pos2::new(event_rect.left(), event_rect.bottom() - zone_height),
-                Vec2::new(event_rect.width(), zone_height),
-            )),
+            top: if show_top {
+                Some(Rect::from_min_size(
+                    Pos2::new(event_rect.left(), event_rect.top()),
+                    Vec2::new(event_rect.width(), zone_height),
+                ))
+            } else {
+                None
+            },
+            bottom: if show_bottom {
+                Some(Rect::from_min_size(
+                    Pos2::new(event_rect.left(), event_rect.bottom() - zone_height),
+                    Vec2::new(event_rect.width(), zone_height),
+                ))
+            } else {
+                None
+            },
             left: None,
             right: None,
         }
+    }
+
+    /// Create handle rects for a timed event (top/bottom only) - shows both handles
+    pub fn for_timed_event(event_rect: Rect) -> Self {
+        Self::for_timed_event_in_slot(event_rect, true, true)
     }
 
     /// Create handle rects for a multi-day event (all four handles)
