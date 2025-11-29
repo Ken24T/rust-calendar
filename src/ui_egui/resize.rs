@@ -52,9 +52,11 @@ pub enum ResizeView {
 }
 
 /// Size of the resize handle hit area
-pub const HANDLE_SIZE: f32 = 8.0;
+pub const HANDLE_SIZE: f32 = 10.0;
 /// Visual size of the handle circle
-pub const HANDLE_VISUAL_SIZE: f32 = 6.0;
+pub const HANDLE_VISUAL_SIZE: f32 = 8.0;
+/// Width of the handle hit zone (narrower than event to avoid confusion with drag)
+pub const HANDLE_HIT_WIDTH: f32 = 60.0;
 
 /// Context for an active resize operation
 #[derive(Clone, Debug)]
@@ -285,30 +287,32 @@ impl HandleRects {
     /// - show_top: true if this is the starting slot for the event
     /// - show_bottom: true if this is the ending slot for the event
     pub fn for_timed_event_in_slot(event_rect: Rect, show_top: bool, show_bottom: bool) -> Self {
-        let event_height = event_rect.height();
+        // Height of the hit zone at each edge
+        let zone_height = HANDLE_SIZE + 4.0; // Handle size plus small padding
         
-        // For small events (single slot), divide into top and bottom halves
-        // For larger events, use a fixed zone at edges
-        let zone_height = if event_height < 50.0 {
-            event_height / 2.0
-        } else {
-            20.0 // 20px zone at top and bottom
-        };
+        // Add extra padding to catch drag starts that slip just outside the event
+        const EDGE_PADDING: f32 = 6.0;
         
-        // Hit zones span the full width of the event for easy clicking
+        // Hit zone is centered on the event, narrower than full width to avoid
+        // confusion with event drag operations. Use min of event width and constant.
+        let hit_width = event_rect.width().min(HANDLE_HIT_WIDTH);
+        let center_x = event_rect.center().x;
+        
         Self {
             top: if show_top {
+                // Centered hit zone at top edge, extending slightly above
                 Some(Rect::from_min_size(
-                    Pos2::new(event_rect.left(), event_rect.top()),
-                    Vec2::new(event_rect.width(), zone_height),
+                    Pos2::new(center_x - hit_width / 2.0, event_rect.top() - EDGE_PADDING),
+                    Vec2::new(hit_width, zone_height + EDGE_PADDING),
                 ))
             } else {
                 None
             },
             bottom: if show_bottom {
+                // Centered hit zone at bottom edge, extending slightly below
                 Some(Rect::from_min_size(
-                    Pos2::new(event_rect.left(), event_rect.bottom() - zone_height),
-                    Vec2::new(event_rect.width(), zone_height),
+                    Pos2::new(center_x - hit_width / 2.0, event_rect.bottom() - zone_height),
+                    Vec2::new(hit_width, zone_height + EDGE_PADDING),
                 ))
             } else {
                 None
@@ -400,40 +404,66 @@ pub fn draw_handles(
     color: egui::Color32,
 ) {
     let draw_handle = |rect: Rect, handle_type: ResizeHandle, is_hovered: bool| {
-        // Position the visual circle at the edge, not center of hit zone
-        let center = match handle_type {
-            ResizeHandle::Top => Pos2::new(rect.center().x, rect.top() + HANDLE_VISUAL_SIZE / 2.0 + 2.0),
-            ResizeHandle::Bottom => Pos2::new(rect.center().x, rect.bottom() - HANDLE_VISUAL_SIZE / 2.0 - 2.0),
-            ResizeHandle::Left => Pos2::new(rect.left() + HANDLE_VISUAL_SIZE / 2.0 + 2.0, rect.center().y),
-            ResizeHandle::Right => Pos2::new(rect.right() - HANDLE_VISUAL_SIZE / 2.0 - 2.0, rect.center().y),
+        // Position the visual elements at the edge
+        let center_x = rect.center().x;
+        let (center_y, bar_y) = match handle_type {
+            ResizeHandle::Top => (
+                rect.top() + HANDLE_VISUAL_SIZE / 2.0 + 4.0,
+                rect.top() + 4.0,
+            ),
+            ResizeHandle::Bottom => (
+                rect.bottom() - HANDLE_VISUAL_SIZE / 2.0 - 4.0,
+                rect.bottom() - 4.0,
+            ),
+            ResizeHandle::Left | ResizeHandle::Right => (
+                rect.center().y,
+                rect.center().y,
+            ),
         };
+        let center = Pos2::new(center_x, center_y);
         
         let radius = if is_hovered {
-            HANDLE_VISUAL_SIZE / 2.0 + 1.0
+            HANDLE_VISUAL_SIZE / 2.0 + 2.0
         } else {
             HANDLE_VISUAL_SIZE / 2.0
         };
         
-        // Draw circle handle
+        // Draw a subtle bar indicator across the hit zone
+        let bar_width = rect.width().min(40.0);
+        if handle_type == ResizeHandle::Top || handle_type == ResizeHandle::Bottom {
+            ui.painter().line_segment(
+                [
+                    Pos2::new(center_x - bar_width / 2.0, bar_y),
+                    Pos2::new(center_x + bar_width / 2.0, bar_y),
+                ],
+                egui::Stroke::new(
+                    if is_hovered { 3.0 } else { 2.0 },
+                    if is_hovered {
+                        egui::Color32::WHITE
+                    } else {
+                        egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+                    },
+                ),
+            );
+        }
+        
+        // Draw circle handle (more prominent)
         ui.painter().circle_filled(
             center,
             radius,
             if is_hovered {
                 egui::Color32::WHITE
             } else {
-                // Use a lighter version of the color for non-hovered handles
-                egui::Color32::from_rgba_unmultiplied(
-                    color.r().saturating_add(60),
-                    color.g().saturating_add(60),
-                    color.b().saturating_add(60),
-                    color.a(),
-                )
+                egui::Color32::from_rgba_unmultiplied(255, 255, 255, 220)
             },
         );
         ui.painter().circle_stroke(
             center,
             radius,
-            egui::Stroke::new(1.0, color.linear_multiply(0.6)),
+            egui::Stroke::new(
+                if is_hovered { 2.0 } else { 1.5 },
+                color.linear_multiply(0.8),
+            ),
         );
     };
 
@@ -449,6 +479,100 @@ pub fn draw_handles(
     if let Some(rect) = handles.right {
         draw_handle(rect, ResizeHandle::Right, hovered_handle == Some(ResizeHandle::Right));
     }
+}
+
+/// Draw a resize preview silhouette showing where the event will end up
+/// 
+/// Parameters:
+/// - `ui`: The egui Ui context
+/// - `resize_ctx`: The active resize context with drag state
+/// - `slot_rect`: The rect of the current time slot being rendered
+/// - `slot_time`: The start time of the current slot
+/// - `slot_end_time`: The end time of the current slot  
+/// - `event_color`: The color of the event (will be made translucent)
+/// - `left_margin`: Left margin for the event rect within the slot
+pub fn draw_resize_preview(
+    ui: &mut egui::Ui,
+    resize_ctx: &ResizeContext,
+    slot_rect: Rect,
+    slot_time: NaiveTime,
+    slot_end_time: NaiveTime,
+    event_color: egui::Color32,
+    left_margin: f32,
+) {
+    // Get the new start/end times based on current drag position
+    let (preview_start, preview_end) = match resize_ctx.hovered_times() {
+        Some(times) => times,
+        None => return, // No valid preview yet
+    };
+    
+    let preview_start_time = preview_start.time();
+    let preview_end_time = preview_end.time();
+    
+    // Check if this slot overlaps with the preview time range
+    let slot_overlaps = preview_start_time < slot_end_time && preview_end_time > slot_time;
+    
+    if !slot_overlaps {
+        return;
+    }
+    
+    // Calculate the visible portion of the preview in this slot
+    let visible_start = preview_start_time.max(slot_time);
+    let visible_end = preview_end_time.min(slot_end_time);
+    
+    // Calculate Y positions within the slot
+    let slot_duration = (slot_end_time - slot_time).num_minutes() as f32;
+    let start_offset = (visible_start - slot_time).num_minutes() as f32 / slot_duration;
+    let end_offset = (visible_end - slot_time).num_minutes() as f32 / slot_duration;
+    
+    let top_y = slot_rect.top() + slot_rect.height() * start_offset;
+    let bottom_y = slot_rect.top() + slot_rect.height() * end_offset;
+    
+    // Create the preview rect (same layout as events)
+    let preview_rect = Rect::from_min_max(
+        Pos2::new(slot_rect.left() + left_margin, top_y + 2.0),
+        Pos2::new(slot_rect.right() - 5.0, bottom_y - 2.0),
+    );
+    
+    // Draw with a pale, translucent version of the event color
+    let preview_color = egui::Color32::from_rgba_unmultiplied(
+        event_color.r(),
+        event_color.g(),
+        event_color.b(),
+        60, // Very translucent
+    );
+    
+    // Fill
+    ui.painter().rect_filled(preview_rect, 3.0, preview_color);
+    
+    // Dashed border effect - draw as a stroke with the event color
+    let border_color = egui::Color32::from_rgba_unmultiplied(
+        event_color.r(),
+        event_color.g(),
+        event_color.b(),
+        140,
+    );
+    ui.painter().rect_stroke(
+        preview_rect,
+        3.0,
+        egui::Stroke::new(2.0, border_color),
+    );
+    
+    // Draw accent bar on left side
+    let bar_rect = Rect::from_min_size(
+        Pos2::new(preview_rect.left(), preview_rect.top()),
+        Vec2::new(4.0, preview_rect.height()),
+    );
+    ui.painter().rect_filled(
+        bar_rect,
+        2.0,
+        egui::Color32::from_rgba_unmultiplied(
+            event_color.r(),
+            event_color.g(),
+            event_color.b(),
+            100,
+        ),
+    );
 }
 
 #[cfg(test)]
