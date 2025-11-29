@@ -420,13 +420,18 @@ impl DayView {
             };
 
             // Check if pointer is on a resize handle
+            let now = Local::now();
             let hovered_handle: Option<(ResizeHandle, Rect, Event)> = pointer_pos.and_then(|pos| {
                 event_handles
                     .iter()
                     .rev()
                     .find_map(|(event_rect, event, handles)| {
-                        // Only allow resize for non-recurring events
+                        // Only allow resize for non-recurring events and non-past events
                         if event.recurrence_rule.is_some() {
+                            return None;
+                        }
+                        // Don't allow resize for past events
+                        if event.end < now {
                             return None;
                         }
                         handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
@@ -468,8 +473,9 @@ impl DayView {
             
             if !is_dragging && !is_resizing {
                 if let Some((hit_rect, hovered_event, is_starting, is_ending)) = &pointer_hit {
-                    // Only show handles for non-recurring events
-                    if hovered_event.recurrence_rule.is_none() {
+                    // Only show handles for non-recurring events and non-past events
+                    let is_past_event = hovered_event.end < now;
+                    if hovered_event.recurrence_rule.is_none() && !is_past_event {
                         // Use slot-aware handles: only show handles that are active in this slot
                         let handles = HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
                         let hovered_h = hovered_handle.as_ref().map(|(h, _, _)| *h);
@@ -779,7 +785,11 @@ impl DayView {
                         .iter()
                         .rev()
                         .find_map(|(event_rect, event, handles)| {
+                            // Don't allow resize for recurring or past events
                             if event.recurrence_rule.is_some() {
+                                return None;
+                            }
+                            if event.end < now {
                                 return None;
                             }
                             handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))

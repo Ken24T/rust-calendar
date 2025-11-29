@@ -64,6 +64,8 @@ pub struct EventDialogState {
     pub active_date_picker: Option<DatePickerTarget>,
     /// The month/year currently being viewed in the date picker
     pub date_picker_viewing: NaiveDate,
+    /// Whether this is a past event (end time < now) - date/time fields are read-only
+    pub is_past_event: bool,
 }
 
 impl EventDialogState {
@@ -130,6 +132,7 @@ impl EventDialogState {
             show_card_settings: false,
             active_date_picker: None,
             date_picker_viewing: date,
+            is_past_event: false,
         }
     }
 
@@ -137,6 +140,7 @@ impl EventDialogState {
         let date = event.start.date_naive();
         let start_time = event.start.time();
         let end_time = event.end.time();
+        let is_past = event.end < Local::now();
 
         let parsed = event
             .recurrence_rule
@@ -178,6 +182,7 @@ impl EventDialogState {
             show_card_settings: false,
             active_date_picker: None,
             date_picker_viewing: date,
+            is_past_event: is_past,
         }
     }
 
