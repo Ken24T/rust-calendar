@@ -283,18 +283,25 @@ pub struct HandleRects {
 impl HandleRects {
     /// Create handle rects for a timed event (top/bottom only)
     pub fn for_timed_event(event_rect: Rect) -> Self {
-        let handle_width = event_rect.width().min(40.0);
-        // Position handles fully inside the event rect for reliable hit detection
-        let handle_inset = HANDLE_SIZE / 2.0 + 2.0;
+        let handle_width = event_rect.width().min(50.0);
+        let event_height = event_rect.height();
+        
+        // For small events (single slot), divide into top and bottom halves
+        // For larger events, use a fixed zone at edges
+        let zone_height = if event_height < 50.0 {
+            event_height / 2.0
+        } else {
+            20.0 // 20px zone at top and bottom
+        };
         
         Self {
-            top: Some(Rect::from_center_size(
-                Pos2::new(event_rect.center().x, event_rect.top() + handle_inset),
-                Vec2::new(handle_width, HANDLE_SIZE + 4.0), // Larger hit area
+            top: Some(Rect::from_min_size(
+                Pos2::new(event_rect.left(), event_rect.top()),
+                Vec2::new(handle_width, zone_height),
             )),
-            bottom: Some(Rect::from_center_size(
-                Pos2::new(event_rect.center().x, event_rect.bottom() - handle_inset),
-                Vec2::new(handle_width, HANDLE_SIZE + 4.0), // Larger hit area
+            bottom: Some(Rect::from_min_size(
+                Pos2::new(event_rect.left(), event_rect.bottom() - zone_height),
+                Vec2::new(handle_width, zone_height),
             )),
             left: None,
             right: None,
@@ -377,8 +384,15 @@ pub fn draw_handles(
     hovered_handle: Option<ResizeHandle>,
     color: egui::Color32,
 ) {
-    let draw_handle = |rect: Rect, is_hovered: bool| {
-        let center = rect.center();
+    let draw_handle = |rect: Rect, handle_type: ResizeHandle, is_hovered: bool| {
+        // Position the visual circle at the edge, not center of hit zone
+        let center = match handle_type {
+            ResizeHandle::Top => Pos2::new(rect.center().x, rect.top() + HANDLE_VISUAL_SIZE / 2.0 + 2.0),
+            ResizeHandle::Bottom => Pos2::new(rect.center().x, rect.bottom() - HANDLE_VISUAL_SIZE / 2.0 - 2.0),
+            ResizeHandle::Left => Pos2::new(rect.left() + HANDLE_VISUAL_SIZE / 2.0 + 2.0, rect.center().y),
+            ResizeHandle::Right => Pos2::new(rect.right() - HANDLE_VISUAL_SIZE / 2.0 - 2.0, rect.center().y),
+        };
+        
         let radius = if is_hovered {
             HANDLE_VISUAL_SIZE / 2.0 + 1.0
         } else {
@@ -409,16 +423,16 @@ pub fn draw_handles(
     };
 
     if let Some(rect) = handles.top {
-        draw_handle(rect, hovered_handle == Some(ResizeHandle::Top));
+        draw_handle(rect, ResizeHandle::Top, hovered_handle == Some(ResizeHandle::Top));
     }
     if let Some(rect) = handles.bottom {
-        draw_handle(rect, hovered_handle == Some(ResizeHandle::Bottom));
+        draw_handle(rect, ResizeHandle::Bottom, hovered_handle == Some(ResizeHandle::Bottom));
     }
     if let Some(rect) = handles.left {
-        draw_handle(rect, hovered_handle == Some(ResizeHandle::Left));
+        draw_handle(rect, ResizeHandle::Left, hovered_handle == Some(ResizeHandle::Left));
     }
     if let Some(rect) = handles.right {
-        draw_handle(rect, hovered_handle == Some(ResizeHandle::Right));
+        draw_handle(rect, ResizeHandle::Right, hovered_handle == Some(ResizeHandle::Right));
     }
 }
 
