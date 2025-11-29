@@ -276,16 +276,18 @@ pub struct HandleRects {
 impl HandleRects {
     /// Create handle rects for a timed event (top/bottom only)
     pub fn for_timed_event(event_rect: Rect) -> Self {
-        let handle_width = event_rect.width().min(30.0);
+        let handle_width = event_rect.width().min(40.0);
+        // Position handles fully inside the event rect for reliable hit detection
+        let handle_inset = HANDLE_SIZE / 2.0 + 2.0;
         
         Self {
             top: Some(Rect::from_center_size(
-                Pos2::new(event_rect.center().x, event_rect.top()),
-                Vec2::new(handle_width, HANDLE_SIZE),
+                Pos2::new(event_rect.center().x, event_rect.top() + handle_inset),
+                Vec2::new(handle_width, HANDLE_SIZE + 4.0), // Larger hit area
             )),
             bottom: Some(Rect::from_center_size(
-                Pos2::new(event_rect.center().x, event_rect.bottom()),
-                Vec2::new(handle_width, HANDLE_SIZE),
+                Pos2::new(event_rect.center().x, event_rect.bottom() - handle_inset),
+                Vec2::new(handle_width, HANDLE_SIZE + 4.0), // Larger hit area
             )),
             left: None,
             right: None,

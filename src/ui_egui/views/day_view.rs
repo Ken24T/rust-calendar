@@ -464,10 +464,20 @@ impl DayView {
                 .pointer_interact_pos()
                 .or_else(|| ui.input(|i| i.pointer.hover_pos()));
             if let Some(pointer) = pointer_for_hover {
-                if rect.contains(pointer) {
-                    DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
-                    // Also update resize hover
-                    ResizeManager::update_hover(ui.ctx(), date, time, pointer);
+                // During active resize, update hover for ANY slot the pointer is over
+                // (not just when contained in the specific slot rect)
+                let is_resize_active = ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day);
+                
+                if rect.contains(pointer) || is_resize_active {
+                    // Only update drag hover when pointer is in rect
+                    if rect.contains(pointer) {
+                        DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
+                    }
+                    
+                    // Update resize hover for any slot during resize
+                    if is_resize_active && rect.contains(pointer) {
+                        ResizeManager::update_hover(ui.ctx(), date, time, pointer);
+                    }
                     
                     if DragManager::is_active_for_view(ui.ctx(), DragView::Day) {
                         ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
@@ -476,6 +486,29 @@ impl DayView {
                     if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), ResizeView::Day) {
                         ui.output_mut(|out| out.cursor_icon = resize_ctx.handle.cursor_icon());
                         ui.ctx().request_repaint();
+                    }
+                }
+            }
+            
+            // Check for global mouse release to complete resize operations
+            // This handles the case where drag started on one slot but ended on another
+            let primary_released = ui.input(|i| i.pointer.primary_released());
+            if primary_released && ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day) {
+                if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), ResizeView::Day) {
+                    if let Some((new_start, new_end)) = resize_ctx.hovered_times() {
+                        let event_service = EventService::new(database.connection());
+                        if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
+                            event.start = new_start;
+                            event.end = new_end;
+                            if let Err(err) = event_service.update(&event) {
+                                log::error!(
+                                    "Failed to resize event {}: {}",
+                                    resize_ctx.event_id, err
+                                );
+                            } else {
+                                result.moved_events.push(event);
+                            }
+                        }
                     }
                 }
             }
@@ -743,25 +776,8 @@ impl DayView {
             }
 
             if response.drag_stopped() {
-                // Handle resize completion
-                if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), ResizeView::Day) {
-                    if let Some((new_start, new_end)) = resize_ctx.hovered_times() {
-                        let event_service = EventService::new(database.connection());
-                        if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
-                            event.start = new_start;
-                            event.end = new_end;
-                            if let Err(err) = event_service.update(&event) {
-                                log::error!(
-                                    "Failed to resize event {}: {}",
-                                    resize_ctx.event_id, err
-                                );
-                            } else {
-                                // Track resized event for countdown card sync
-                                result.moved_events.push(event);
-                            }
-                        }
-                    }
-                }
+                // Note: Resize completion is handled by global primary_released check above
+                // This ensures resize works even when drag ends on a different slot
                 
                 // Handle drag completion
                 if let Some(drag_context) = DragManager::finish_for_view(ui.ctx(), DragView::Day) {
