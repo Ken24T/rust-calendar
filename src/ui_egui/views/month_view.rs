@@ -491,6 +491,9 @@ impl MonthView {
                     ui.label(tooltip_text);
                 });
             }
+        } else if response.hovered() {
+            // Show hint tooltip when hovering on empty space in day cell
+            response.clone().on_hover_text("Click to view this day\nRight-click for more options");
         }
 
         // Show "+N more" if there are more events - make it clickable

@@ -541,6 +541,9 @@ pub fn format_event_tooltip(event: &Event) -> String {
         }
     }
     
+    // Add interaction hint
+    lines.push("\n💡 Double-click to edit, right-click for more options".to_string());
+    
     lines.join("\n")
 }
 
