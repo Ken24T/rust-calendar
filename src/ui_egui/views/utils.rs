@@ -7,6 +7,25 @@ use egui::Color32;
 
 use crate::models::event::Event;
 
+/// Default color used for events when no custom color is specified.
+/// A pleasant blue-gray color (RGB: 100, 150, 200).
+pub const DEFAULT_EVENT_COLOR: Color32 = Color32::from_rgb(100, 150, 200);
+
+/// Get the display color for an event, falling back to the default if not set.
+///
+/// # Arguments
+/// * `event` - The event to get the color for
+///
+/// # Returns
+/// The parsed event color or the default color if not set or invalid.
+pub fn get_event_color(event: &Event) -> Color32 {
+    event
+        .color
+        .as_deref()
+        .and_then(parse_color)
+        .unwrap_or(DEFAULT_EVENT_COLOR)
+}
+
 /// Calculate the start of the week containing the given date.
 ///
 /// # Arguments
@@ -254,5 +273,10 @@ mod tests {
         // Jan 31 -> Feb 28 (non-leap year)
         let date2 = NaiveDate::from_ymd_opt(2023, 1, 31).unwrap();
         assert_eq!(shift_month(date2, 1), NaiveDate::from_ymd_opt(2023, 2, 28).unwrap());
+    }
+
+    #[test]
+    fn test_default_event_color() {
+        assert_eq!(DEFAULT_EVENT_COLOR, Color32::from_rgb(100, 150, 200));
     }
 }

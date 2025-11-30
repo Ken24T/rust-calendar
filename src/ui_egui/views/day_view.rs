@@ -3,7 +3,10 @@ use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
-use super::week_shared::{maybe_focus_slot, parse_color, DeleteConfirmRequest, EventInteractionResult};
+use super::week_shared::{
+    maybe_focus_slot, get_event_color, DeleteConfirmRequest, EventInteractionResult,
+    DEFAULT_EVENT_COLOR,
+};
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
@@ -449,13 +452,8 @@ impl DayView {
                     let event_color = event_hitboxes
                         .iter()
                         .find(|(_, e, _, _)| e.id == Some(resize_ctx.event_id))
-                        .map(|(_, e, _, _)| {
-                            e.color
-                                .as_deref()
-                                .and_then(parse_color)
-                                .unwrap_or(Color32::from_rgb(100, 150, 200))
-                        })
-                        .unwrap_or(Color32::from_rgb(100, 150, 200));
+                        .map(|(_, e, _, _)| get_event_color(e))
+                        .unwrap_or(DEFAULT_EVENT_COLOR);
                     
                     // Draw the preview for this slot
                     draw_resize_preview(
@@ -479,11 +477,7 @@ impl DayView {
                         // Use slot-aware handles: only show handles that are active in this slot
                         let handles = HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
                         let hovered_h = hovered_handle.as_ref().map(|(h, _, _)| *h);
-                        let event_color = hovered_event
-                            .color
-                            .as_deref()
-                            .and_then(parse_color)
-                            .unwrap_or(Color32::from_rgb(100, 150, 200));
+                        let event_color = get_event_color(hovered_event);
                         draw_handles(ui, &handles, hovered_h, event_color);
                     }
                 }
@@ -905,11 +899,7 @@ impl DayView {
         let now = Local::now();
         let is_past = event.end < now;
         
-        let base_color = event
-            .color
-            .as_deref()
-            .and_then(parse_color)
-            .unwrap_or(Color32::from_rgb(100, 150, 200));
+        let base_color = get_event_color(event);
         
         // Dim past events with stronger dimming for visibility
         let event_color = if is_past {
@@ -994,11 +984,7 @@ impl DayView {
         let now = Local::now();
         let is_past = event.end < now;
         
-        let base_color = event
-            .color
-            .as_deref()
-            .and_then(parse_color)
-            .unwrap_or(Color32::from_rgb(100, 150, 200));
+        let base_color = get_event_color(event);
         
         // Dim past events with stronger dimming for visibility
         let event_color = if is_past {

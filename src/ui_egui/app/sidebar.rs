@@ -2,7 +2,7 @@
 
 use super::CalendarApp;
 use crate::models::event::Event;
-use crate::ui_egui::views::utils::{parse_color, shift_month};
+use crate::ui_egui::views::utils::{get_event_color, shift_month};
 use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone};
 use egui::{Color32, RichText};
 
@@ -311,11 +311,7 @@ impl CalendarApp {
 
     /// Render a single event item in the sidebar
     fn render_sidebar_event_item(&mut self, ui: &mut egui::Ui, event: &Event, show_date: bool) {
-        let event_color = event
-            .color
-            .as_deref()
-            .and_then(parse_color)
-            .unwrap_or(Color32::from_rgb(100, 150, 200));
+        let event_color = get_event_color(event);
 
         let available_width = ui.available_width();
         

@@ -1,12 +1,13 @@
 //! Search dialog for finding events
 
 use chrono::NaiveDate;
-use egui::{Color32, Margin, RichText, Stroke, Vec2};
+use egui::{Margin, RichText, Stroke, Vec2};
 
 use crate::models::event::Event;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::theme::CalendarTheme;
+use crate::ui_egui::views::utils::get_event_color;
 
 /// State for the search dialog
 pub struct SearchDialogState {
@@ -115,11 +116,7 @@ pub fn render_search_dialog(
                             theme.day_background
                         };
                         
-                        let event_color = event
-                            .color
-                            .as_deref()
-                            .and_then(parse_color)
-                            .unwrap_or(Color32::from_rgb(100, 150, 200));
+                        let event_color = get_event_color(event);
 
                         let response = egui::Frame::none()
                             .fill(frame_bg)
@@ -251,21 +248,4 @@ pub fn render_search_dialog(
     }
 
     action
-}
-
-fn parse_color(hex: &str) -> Option<Color32> {
-    if hex.is_empty() {
-        return None;
-    }
-
-    let hex = hex.trim_start_matches('#');
-    if hex.len() != 6 {
-        return None;
-    }
-
-    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-
-    Some(Color32::from_rgb(r, g, b))
 }

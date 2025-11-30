@@ -10,7 +10,10 @@ use super::palette::TimeGridPalette;
 use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 
 // Re-export utility functions for backward compatibility
-pub use super::utils::{format_event_tooltip, format_short_date, get_week_start, parse_color};
+pub use super::utils::{
+    format_event_tooltip, format_short_date, get_event_color, get_week_start, 
+    DEFAULT_EVENT_COLOR,
+};
 
 // Re-export types for backward compatibility
 pub use super::types::{DeleteConfirmRequest, EventInteractionResult};
@@ -83,11 +86,7 @@ pub fn render_ribbon_event_with_handles(
     let now = Local::now();
     let is_past = event.end < now;
     
-    let base_color = event
-        .color
-        .as_deref()
-        .and_then(parse_color)
-        .unwrap_or(Color32::from_rgb(100, 150, 200));
+    let base_color = get_event_color(event);
     
     // Dim past events with stronger dimming for visibility
     let event_color = if is_past {
@@ -285,11 +284,7 @@ pub fn render_ribbon_event_with_handles(
         
         // Draw handles when hovering over the event
         if interactive_response.hovered() || hovered_handle.is_some() {
-            let handle_color = event
-                .color
-                .as_deref()
-                .and_then(parse_color)
-                .unwrap_or(Color32::from_rgb(100, 150, 200));
+            let handle_color = get_event_color(event);
             draw_handles(ui, &handles, hovered_handle, handle_color);
         }
         
@@ -338,11 +333,7 @@ pub fn render_event_in_cell(
     let now = Local::now();
     let is_past = event.end < now;
     
-    let base_color = event
-        .color
-        .as_deref()
-        .and_then(parse_color)
-        .unwrap_or(Color32::from_rgb(100, 150, 200));
+    let base_color = get_event_color(event);
     
     // Dim past events by reducing both color intensity and alpha
     // Using a stronger dimming factor (0.4) and ensuring consistent opacity
@@ -434,11 +425,7 @@ pub fn render_event_continuation(
     let now = Local::now();
     let is_past = event.end < now;
     
-    let base_color = event
-        .color
-        .as_deref()
-        .and_then(parse_color)
-        .unwrap_or(Color32::from_rgb(100, 150, 200));
+    let base_color = get_event_color(event);
 
     // Dim past events further (continuation blocks are already dimmer)
     let event_color = if is_past {
@@ -709,13 +696,8 @@ pub fn render_time_cell(
             let event_color = event_hitboxes
                 .iter()
                 .find(|(_, e, _, _)| e.id == Some(resize_ctx.event_id))
-                .map(|(_, e, _, _)| {
-                    e.color
-                        .as_deref()
-                        .and_then(parse_color)
-                        .unwrap_or(Color32::from_rgb(100, 150, 200))
-                })
-                .unwrap_or(Color32::from_rgb(100, 150, 200));
+                .map(|(_, e, _, _)| get_event_color(e))
+                .unwrap_or(DEFAULT_EVENT_COLOR);
             
             // Draw the preview for this slot
             draw_resize_preview(
@@ -739,11 +721,7 @@ pub fn render_time_cell(
                 // Use slot-aware handles: only show handles that are active in this slot
                 let handles = HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
                 let hovered_h = hovered_handle.as_ref().map(|(h, _, _)| *h);
-                let event_color = hovered_event
-                    .color
-                    .as_deref()
-                    .and_then(parse_color)
-                    .unwrap_or(Color32::from_rgb(100, 150, 200));
+                let event_color = get_event_color(hovered_event);
                 draw_handles(ui, &handles, hovered_h, event_color);
             }
         }

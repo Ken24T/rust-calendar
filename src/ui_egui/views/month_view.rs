@@ -2,7 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
-use super::utils::{days_in_month, get_short_day_names, parse_color};
+use super::utils::{days_in_month, get_event_color, get_short_day_names};
 use super::week_shared::DeleteConfirmRequest;
 use super::filter_events_by_category;
 use crate::models::event::Event;
@@ -395,11 +395,7 @@ impl MonthView {
         for &event in events.iter().take(3) {
             let is_past = event.end < now;
             
-            let base_color = event
-                .color
-                .as_deref()
-                .and_then(parse_color)
-                .unwrap_or(Color32::from_rgb(100, 150, 200));
+            let base_color = get_event_color(event);
             
             // Dim past events with stronger dimming for visibility (matching week view)
             let event_color = if is_past {
