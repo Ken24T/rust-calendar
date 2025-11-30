@@ -12,6 +12,7 @@ use std::path::Path;
 
 use crate::models::event::Event;
 use crate::services::event::EventService;
+use crate::utils::date::{get_full_day_names, get_short_day_names};
 
 /// Service for exporting calendar data to PDF
 pub struct PdfExportService;
@@ -69,7 +70,7 @@ impl PdfExportService {
         Self::draw_text(&layer, &font_bold, 24.0, 105.0, 280.0, &month_name, true);
 
         // Draw day headers
-        let day_names = Self::get_day_names(first_day_of_week);
+        let day_names = get_short_day_names(first_day_of_week);
         let col_width = 25.0;
         let start_x = 20.0;
         let header_y = 265.0;
@@ -141,7 +142,7 @@ impl PdfExportService {
         let col_width = 38.0;
         let start_x = 15.0;
         let header_y = 180.0;
-        let day_names = Self::get_full_day_names(first_day_of_week);
+        let day_names = get_full_day_names(first_day_of_week);
 
         // Get events for the week
         let start = Local
@@ -476,25 +477,5 @@ impl PdfExportService {
         .unwrap()
         .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
         .num_days() as i32
-    }
-
-    fn get_day_names(first_day_of_week: u8) -> Vec<&'static str> {
-        let all_days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        let start = first_day_of_week as usize;
-        (0..7).map(|i| all_days[(start + i) % 7]).collect()
-    }
-
-    fn get_full_day_names(first_day_of_week: u8) -> Vec<&'static str> {
-        let all_days = [
-            "Sunday",
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-        ];
-        let start = first_day_of_week as usize;
-        (0..7).map(|i| all_days[(start + i) % 7]).collect()
     }
 }

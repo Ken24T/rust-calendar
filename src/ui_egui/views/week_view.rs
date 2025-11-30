@@ -3,6 +3,7 @@ use egui::{Color32, Margin, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::DayStripPalette;
+use super::utils::get_full_day_names;
 use super::week_shared::{
     self, format_short_date, get_week_start, render_ribbon_event, render_ribbon_event_with_handles,
     render_time_grid, EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
@@ -60,7 +61,7 @@ impl WeekView {
         let events = Self::get_events_for_week(&event_service, week_start);
         let events = filter_events_by_category(events, category_filter);
 
-        let day_names = Self::get_day_names(settings.first_day_of_week);
+        let day_names = get_full_day_names(settings.first_day_of_week);
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
         let show_week_numbers = settings.show_week_numbers;
 
@@ -346,24 +347,6 @@ impl WeekView {
 
     pub(crate) fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
         week_shared::get_week_start(date, first_day_of_week)
-    }
-
-    fn get_day_names(first_day_of_week: u8) -> Vec<&'static str> {
-        let all_days = [
-            "Sunday",
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-        ];
-        let start = first_day_of_week as usize;
-        let mut result = Vec::with_capacity(7);
-        for i in 0..7 {
-            result.push(all_days[(start + i) % 7]);
-        }
-        result
     }
 
     fn get_events_for_week(event_service: &EventService, week_start: NaiveDate) -> Vec<Event> {

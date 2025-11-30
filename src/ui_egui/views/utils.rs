@@ -71,6 +71,9 @@ pub fn shift_month(date: NaiveDate, delta: i32) -> NaiveDate {
     NaiveDate::from_ymd_opt(new_year, new_month, day).unwrap_or(date)
 }
 
+// Re-export day name functions from the central date utilities
+pub use crate::utils::date::{get_full_day_names, get_short_day_names};
+
 /// Parse a hex color string to Color32.
 ///
 /// # Arguments

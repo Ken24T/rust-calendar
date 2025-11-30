@@ -2,7 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
-use super::utils::{days_in_month, parse_color};
+use super::utils::{days_in_month, get_short_day_names, parse_color};
 use super::week_shared::DeleteConfirmRequest;
 use super::filter_events_by_category;
 use crate::models::event::Event;
@@ -79,7 +79,7 @@ impl MonthView {
         let events = filter_events_by_category(events, category_filter);
 
         // Day of week headers - use Grid to match column widths below
-        let day_names = Self::get_day_names(settings.first_day_of_week);
+        let day_names = get_short_day_names(settings.first_day_of_week);
         let spacing = 2.0;
         let show_week_numbers = settings.show_week_numbers;
         let week_col_extra = if show_week_numbers { WEEK_NUMBER_WIDTH + spacing } else { 0.0 };
@@ -762,15 +762,5 @@ impl MonthView {
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
-    }
-
-    fn get_day_names(first_day_of_week: u8) -> Vec<&'static str> {
-        let all_days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        let start = first_day_of_week as usize;
-        let mut result = Vec::with_capacity(7);
-        for i in 0..7 {
-            result.push(all_days[(start + i) % 7]);
-        }
-        result
     }
 }
