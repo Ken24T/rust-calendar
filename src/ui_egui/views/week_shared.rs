@@ -176,6 +176,15 @@ pub fn render_ribbon_event_with_handles(
                     );
                 }
                 
+                // Show location icon if event has a location
+                if event.location.as_ref().map(|l| !l.is_empty()).unwrap_or(false) {
+                    ui.label(
+                        egui::RichText::new("📍")
+                            .color(text_color)
+                            .size(10.0),
+                    );
+                }
+                
                 ui.label(
                     egui::RichText::new(&event.title)
                         .color(text_color)
@@ -404,12 +413,20 @@ pub fn render_event_in_cell(
     let font_id = egui::FontId::proportional(10.0);
     let available_width = cell_rect.width() - 10.0;
 
-    // Build title with countdown indicator and category if applicable
-    let mut title_text = if has_countdown {
-        format!("⏱ {}", event.title)
-    } else {
-        event.title.clone()
-    };
+    // Build title with countdown indicator, location icon, and category if applicable
+    let mut title_text = String::new();
+    
+    // Add countdown indicator
+    if has_countdown {
+        title_text.push_str("⏱ ");
+    }
+    
+    // Add location icon if event has a location
+    if event.location.as_ref().map(|l| !l.is_empty()).unwrap_or(false) {
+        title_text.push_str("📍");
+    }
+    
+    title_text.push_str(&event.title);
     
     // Add category badge if present
     if let Some(category) = &event.category {

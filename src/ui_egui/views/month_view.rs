@@ -428,11 +428,17 @@ impl MonthView {
                 Color32::WHITE
             };
 
-            // Build title text with category badge if present
-            let title_text = if let Some(category) = &event.category {
-                format!("{} [{}]", event.title, category)
+            // Build title text with location icon and category badge if present
+            let location_icon = if event.location.as_ref().map(|l| !l.is_empty()).unwrap_or(false) {
+                "📍"
             } else {
-                event.title.clone()
+                ""
+            };
+            
+            let title_text = if let Some(category) = &event.category {
+                format!("{}{} [{}]", location_icon, event.title, category)
+            } else {
+                format!("{}{}", location_icon, event.title)
             };
 
             // Event title with truncation
