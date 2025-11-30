@@ -157,7 +157,12 @@ impl MonthView {
             % 7;
         let days_in_month = Self::get_days_in_month(current_date.year(), current_date.month());
 
-        // Build calendar grid (6 rows of 7 days)
+        // Calculate how many weeks are needed for this month
+        // Total cells needed = days before month start + days in month
+        let total_cells = first_weekday + days_in_month;
+        let weeks_needed = (total_cells + 6) / 7; // Ceiling division
+
+        // Build calendar grid (dynamic number of rows based on month)
         let mut day_counter = 1 - first_weekday;
 
         let palette = CalendarCellPalette::from_theme(theme);
@@ -165,7 +170,7 @@ impl MonthView {
         egui::Grid::new("month_grid")
             .spacing([spacing, spacing])
             .show(ui, |ui| {
-                for _week_row in 0..6 {
+                for _week_row in 0..weeks_needed {
                     // Week number column
                     if show_week_numbers {
                         // Calculate the date for this row (use middle of week for reliability)
@@ -269,6 +274,7 @@ impl MonthView {
                                 event_dialog_recurrence,
                                 event_to_edit,
                                 palette,
+                                col_width,
                             );
                             
                             // Check if we need to switch to day view
@@ -303,8 +309,9 @@ impl MonthView {
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
         palette: CalendarCellPalette,
+        col_width: f32,
     ) -> (MonthViewAction, Option<Event>, Option<DeleteConfirmRequest>) {
-        let desired_size = Vec2::new(ui.available_width(), 80.0);
+        let desired_size = Vec2::new(col_width, 80.0);
         let (rect, response) =
             ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
 
