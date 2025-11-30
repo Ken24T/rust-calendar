@@ -121,11 +121,7 @@ impl CalendarApp {
                 self.settings.default_card_height,
             );
 
-            if let Some(label) = display_label {
-                self.context
-                    .countdown_service_mut()
-                    .set_auto_title_override(card_id, Some(label));
-            }
+            // Card title defaults to event title, user can override in settings
             let geometry = self
                 .context
                 .countdown_service()

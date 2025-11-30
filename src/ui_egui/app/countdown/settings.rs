@@ -80,19 +80,23 @@ pub(super) fn render_countdown_settings_ui(
                         .clone()
                         .unwrap_or_else(|| card.event_title.clone());
                     field_row(ui, "Countdown title:", |ui| {
-                        if ui
-                            .add(
-                                egui::TextEdit::singleline(&mut title_text)
-                                    .desired_width(260.0)
-                                    .hint_text("Countdown title"),
-                            )
-                            .changed()
-                        {
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut title_text)
+                                .desired_width(260.0)
+                                .hint_text("Countdown title"),
+                        );
+                        // Only update on lost focus to allow typing spaces freely
+                        if response.lost_focus() || response.changed() {
                             let trimmed = title_text.trim();
+                            // On lost_focus, trim and finalize; on changed, preserve spaces
                             let payload = if trimmed.is_empty() || trimmed == card.event_title {
                                 None
+                            } else if response.lost_focus() {
+                                // Final save - trim leading/trailing whitespace
+                                Some(trimmed.to_string())
                             } else {
-                                Some(trimmed.to_owned())
+                                // While typing - preserve spaces
+                                Some(title_text.clone())
                             };
                             result
                                 .commands
