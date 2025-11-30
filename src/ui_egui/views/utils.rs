@@ -2,7 +2,7 @@
 //!
 //! This module contains pure helper functions used across different view types.
 
-use chrono::{Datelike, Duration, NaiveDate};
+use chrono::{Datelike, Duration, Local, NaiveDate};
 use egui::Color32;
 
 use crate::models::event::Event;
@@ -24,6 +24,33 @@ pub fn get_event_color(event: &Event) -> Color32 {
         .as_deref()
         .and_then(parse_color)
         .unwrap_or(DEFAULT_EVENT_COLOR)
+}
+
+/// Dim a color for past events (factor 0.4, alpha 140).
+/// Used for event blocks that have already ended.
+pub fn dim_past_color(color: Color32) -> Color32 {
+    Color32::from_rgba_unmultiplied(
+        (color.r() as f32 * 0.4) as u8,
+        (color.g() as f32 * 0.4) as u8,
+        (color.b() as f32 * 0.4) as u8,
+        140,
+    )
+}
+
+/// Dim a color for past event continuation blocks (factor 0.25, alpha 120).
+/// Used for continuation blocks showing events that span multiple time slots.
+pub fn dim_past_continuation_color(color: Color32) -> Color32 {
+    Color32::from_rgba_unmultiplied(
+        (color.r() as f32 * 0.25) as u8,
+        (color.g() as f32 * 0.25) as u8,
+        (color.b() as f32 * 0.25) as u8,
+        120,
+    )
+}
+
+/// Check if an event is in the past (has ended before now).
+pub fn is_event_past(event: &Event) -> bool {
+    event.end < Local::now()
 }
 
 /// Calculate the start of the week containing the given date.
@@ -278,5 +305,21 @@ mod tests {
     #[test]
     fn test_default_event_color() {
         assert_eq!(DEFAULT_EVENT_COLOR, Color32::from_rgb(100, 150, 200));
+    }
+
+    #[test]
+    fn test_dim_past_color() {
+        let color = Color32::from_rgb(100, 150, 200);
+        let dimmed = dim_past_color(color);
+        // 100 * 0.4 = 40, 150 * 0.4 = 60, 200 * 0.4 = 80, alpha = 140
+        assert_eq!(dimmed, Color32::from_rgba_unmultiplied(40, 60, 80, 140));
+    }
+
+    #[test]
+    fn test_dim_past_continuation_color() {
+        let color = Color32::from_rgb(100, 200, 100);
+        let dimmed = dim_past_continuation_color(color);
+        // 100 * 0.25 = 25, 200 * 0.25 = 50, 100 * 0.25 = 25, alpha = 120
+        assert_eq!(dimmed, Color32::from_rgba_unmultiplied(25, 50, 25, 120));
     }
 }

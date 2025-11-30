@@ -2,7 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
-use super::utils::{days_in_month, get_event_color, get_short_day_names};
+use super::utils::{days_in_month, dim_past_color, get_event_color, get_short_day_names, is_event_past};
 use super::week_shared::DeleteConfirmRequest;
 use super::filter_events_by_category;
 use crate::models::event::Event;
@@ -390,21 +390,14 @@ impl MonthView {
 
         let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
         let mut y_offset = 24.0;
-        let now = Local::now();
         
         for &event in events.iter().take(3) {
-            let is_past = event.end < now;
-            
+            let is_past = is_event_past(event);
             let base_color = get_event_color(event);
             
             // Dim past events with stronger dimming for visibility (matching week view)
             let event_color = if is_past {
-                Color32::from_rgba_unmultiplied(
-                    (base_color.r() as f32 * 0.4) as u8,
-                    (base_color.g() as f32 * 0.4) as u8,
-                    (base_color.b() as f32 * 0.4) as u8,
-                    140,
-                )
+                dim_past_color(base_color)
             } else {
                 base_color
             };

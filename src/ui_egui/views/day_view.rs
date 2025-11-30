@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
 use super::week_shared::{
-    maybe_focus_slot, get_event_color, DeleteConfirmRequest, EventInteractionResult,
-    DEFAULT_EVENT_COLOR,
+    maybe_focus_slot, get_event_color, dim_past_color, dim_past_continuation_color,
+    is_event_past, DeleteConfirmRequest, EventInteractionResult, DEFAULT_EVENT_COLOR,
 };
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
@@ -896,19 +896,12 @@ impl DayView {
     }
 
     fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
-        let now = Local::now();
-        let is_past = event.end < now;
-        
+        let is_past = is_event_past(event);
         let base_color = get_event_color(event);
         
         // Dim past events with stronger dimming for visibility
         let event_color = if is_past {
-            Color32::from_rgba_unmultiplied(
-                (base_color.r() as f32 * 0.4) as u8,
-                (base_color.g() as f32 * 0.4) as u8,
-                (base_color.b() as f32 * 0.4) as u8,
-                140,
-            )
+            dim_past_color(base_color)
         } else {
             base_color
         };
@@ -981,19 +974,12 @@ impl DayView {
     }
 
     fn render_event_continuation(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
-        let now = Local::now();
-        let is_past = event.end < now;
-        
+        let is_past = is_event_past(event);
         let base_color = get_event_color(event);
         
         // Dim past events with stronger dimming for visibility
         let event_color = if is_past {
-            Color32::from_rgba_unmultiplied(
-                (base_color.r() as f32 * 0.25) as u8,
-                (base_color.g() as f32 * 0.25) as u8,
-                (base_color.b() as f32 * 0.25) as u8,
-                120,
-            )
+            dim_past_continuation_color(base_color)
         } else {
             base_color
         };

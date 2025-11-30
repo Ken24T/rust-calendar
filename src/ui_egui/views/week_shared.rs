@@ -11,8 +11,8 @@ use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 
 // Re-export utility functions for backward compatibility
 pub use super::utils::{
-    format_event_tooltip, format_short_date, get_event_color, get_week_start, 
-    DEFAULT_EVENT_COLOR,
+    dim_past_color, dim_past_continuation_color, format_event_tooltip, format_short_date,
+    get_event_color, get_week_start, is_event_past, DEFAULT_EVENT_COLOR,
 };
 
 // Re-export types for backward compatibility
@@ -83,19 +83,12 @@ pub fn render_ribbon_event_with_handles(
 ) -> (EventInteractionResult, Option<Rect>) {
     let mut result = EventInteractionResult::default();
     
-    let now = Local::now();
-    let is_past = event.end < now;
-    
+    let is_past = is_event_past(event);
     let base_color = get_event_color(event);
     
     // Dim past events with stronger dimming for visibility
     let event_color = if is_past {
-        Color32::from_rgba_unmultiplied(
-            (base_color.r() as f32 * 0.4) as u8,
-            (base_color.g() as f32 * 0.4) as u8,
-            (base_color.b() as f32 * 0.4) as u8,
-            140,
-        )
+        dim_past_color(base_color)
     } else {
         base_color
     };
@@ -330,21 +323,12 @@ pub fn render_event_in_cell(
     has_countdown: bool,
     continues_to_next_slot: bool,
 ) -> Rect {
-    let now = Local::now();
-    let is_past = event.end < now;
-    
+    let is_past = is_event_past(event);
     let base_color = get_event_color(event);
     
-    // Dim past events by reducing both color intensity and alpha
-    // Using a stronger dimming factor (0.4) and ensuring consistent opacity
+    // Dim past events
     let event_color = if is_past {
-        // Multiply RGB by 0.4 and reduce alpha to 140 for visible dimming
-        Color32::from_rgba_unmultiplied(
-            (base_color.r() as f32 * 0.4) as u8,
-            (base_color.g() as f32 * 0.4) as u8,
-            (base_color.b() as f32 * 0.4) as u8,
-            140,
-        )
+        dim_past_color(base_color)
     } else {
         base_color
     };
@@ -422,20 +406,12 @@ pub fn render_event_continuation(
     event: &Event,
     continues_to_next_slot: bool,
 ) -> Rect {
-    let now = Local::now();
-    let is_past = event.end < now;
-    
+    let is_past = is_event_past(event);
     let base_color = get_event_color(event);
 
     // Dim past events further (continuation blocks are already dimmer)
     let event_color = if is_past {
-        // Stronger dimming for past continuation blocks
-        Color32::from_rgba_unmultiplied(
-            (base_color.r() as f32 * 0.25) as u8,
-            (base_color.g() as f32 * 0.25) as u8,
-            (base_color.b() as f32 * 0.25) as u8,
-            120,
-        )
+        dim_past_continuation_color(base_color)
     } else {
         base_color.linear_multiply(0.5)
     };
