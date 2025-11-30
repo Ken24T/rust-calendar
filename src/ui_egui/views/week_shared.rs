@@ -2,12 +2,15 @@
 //!
 //! This module extracts common code to reduce duplication between week_view.rs and workweek_view.rs.
 
-use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Timelike};
+use chrono::{Datelike, Local, NaiveDate, NaiveTime, Timelike};
 use egui::{Align, Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::TimeGridPalette;
 use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
+
+// Re-export utility functions for backward compatibility
+pub use super::utils::{format_short_date, get_week_start, parse_color};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
@@ -565,42 +568,6 @@ pub fn format_event_tooltip(event: &Event) -> String {
     lines.push("\n💡 Double-click to edit, right-click for more options".to_string());
     
     lines.join("\n")
-}
-
-/// Get the start of the week containing the given date.
-pub fn get_week_start(date: NaiveDate, first_day_of_week: u8) -> NaiveDate {
-    let weekday = date.weekday().num_days_from_sunday() as i64;
-    let offset = (weekday - first_day_of_week as i64 + 7) % 7;
-    date - Duration::days(offset)
-}
-
-/// Format a date in short form based on the date format setting.
-pub fn format_short_date(date: NaiveDate, date_format: &str) -> String {
-    if date_format.starts_with("DD/MM") || date_format.starts_with("dd/mm") {
-        date.format("%d/%m").to_string()
-    } else if date_format.starts_with("YYYY") || date_format.starts_with("yyyy") {
-        date.format("%Y/%m/%d").to_string()
-    } else {
-        date.format("%m/%d").to_string()
-    }
-}
-
-/// Parse a hex color string to Color32.
-pub fn parse_color(hex: &str) -> Option<Color32> {
-    if hex.is_empty() {
-        return None;
-    }
-
-    let hex = hex.trim_start_matches('#');
-    if hex.len() != 6 {
-        return None;
-    }
-
-    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-
-    Some(Color32::from_rgb(r, g, b))
 }
 
 /// Draw the current time indicator line across a day column.

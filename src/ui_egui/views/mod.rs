@@ -6,9 +6,13 @@ pub mod day_view;
 pub mod month_view;
 mod palette;
 pub mod quarter_view;
+pub mod utils;
 pub mod week_shared;
 pub mod week_view;
 pub mod workweek_view;
+
+// Re-export commonly used utility functions
+// Note: These are also re-exported from week_shared for backward compatibility
 
 #[derive(Clone, Debug)]
 pub struct CountdownRequest {
