@@ -1,7 +1,9 @@
 use super::countdown::OpenEventDialogRequest;
 use super::CalendarApp;
+use crate::models::event::Event;
 use crate::services::countdown::RgbaColor;
 use crate::services::event::EventService;
+use crate::ui_egui::commands::{CreateEventCommand, UpdateEventCommand};
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
 use crate::ui_egui::dialogs::category_manager::render_category_manager_dialog;
 use crate::ui_egui::dialogs::export_dialog::{render_export_range_dialog, ExportDialogResult};
@@ -101,6 +103,17 @@ impl CalendarApp {
             return;
         }
 
+        // Capture old event state before rendering (for undo on updates)
+        let old_event: Option<Event> = {
+            let state = self.event_dialog_state.as_ref().expect("dialog state just checked");
+            if let Some(event_id) = state.event_id {
+                // This is an edit - fetch the current state before any changes
+                self.context.event_service().get(event_id).ok().flatten()
+            } else {
+                None
+            }
+        };
+
         let (saved_event, card_changes, auto_create_card, was_new_event, event_saved, delete_request) = {
             let state = self
                 .event_dialog_state
@@ -154,6 +167,17 @@ impl CalendarApp {
         }
 
         if let Some(ref event) = saved_event {
+            // Push undo command for the saved event
+            if was_new_event {
+                // New event created - push CreateEventCommand
+                let cmd = CreateEventCommand::new(event.clone());
+                self.undo_manager.push(Box::new(cmd));
+            } else if let Some(old) = old_event {
+                // Existing event updated - push UpdateEventCommand
+                let cmd = UpdateEventCommand::new(old, event.clone());
+                self.undo_manager.push(Box::new(cmd));
+            }
+
             if auto_create_card {
                 self.consume_countdown_requests(vec![CountdownRequest::from_event(event)]);
             }

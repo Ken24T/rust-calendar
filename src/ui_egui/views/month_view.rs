@@ -38,6 +38,8 @@ pub enum MonthViewAction {
     None,
     /// Switch to day view for a specific date
     SwitchToDayView(NaiveDate),
+    /// Switch to user's default view for a specific date
+    SwitchToDefaultView(NaiveDate),
     /// Create event from template (template_id, date)
     CreateFromTemplate(i64, NaiveDate),
 }
@@ -157,7 +159,12 @@ impl MonthView {
             % 7;
         let days_in_month = Self::get_days_in_month(current_date.year(), current_date.month());
 
-        // Build calendar grid (6 rows of 7 days)
+        // Calculate how many weeks are needed for this month
+        // Total cells needed = days before month start + days in month
+        let total_cells = first_weekday + days_in_month;
+        let weeks_needed = (total_cells + 6) / 7; // Ceiling division
+
+        // Build calendar grid (dynamic number of rows based on month)
         let mut day_counter = 1 - first_weekday;
 
         let palette = CalendarCellPalette::from_theme(theme);
@@ -165,7 +172,7 @@ impl MonthView {
         egui::Grid::new("month_grid")
             .spacing([spacing, spacing])
             .show(ui, |ui| {
-                for _week_row in 0..6 {
+                for _week_row in 0..weeks_needed {
                     // Week number column
                     if show_week_numbers {
                         // Calculate the date for this row (use middle of week for reliability)
@@ -269,10 +276,11 @@ impl MonthView {
                                 event_dialog_recurrence,
                                 event_to_edit,
                                 palette,
+                                col_width,
                             );
                             
-                            // Check if we need to switch to day view
-                            if matches!(cell_action, MonthViewAction::SwitchToDayView(_)) {
+                            // Check if we need to switch views
+                            if !matches!(cell_action, MonthViewAction::None) {
                                 result.action = cell_action;
                             }
                             
@@ -303,8 +311,9 @@ impl MonthView {
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
         palette: CalendarCellPalette,
+        col_width: f32,
     ) -> (MonthViewAction, Option<Event>, Option<DeleteConfirmRequest>) {
-        let desired_size = Vec2::new(ui.available_width(), 80.0);
+        let desired_size = Vec2::new(col_width, 80.0);
         let (rect, response) =
             ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
 
@@ -391,9 +400,14 @@ impl MonthView {
                 .and_then(Self::parse_color)
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
             
-            // Dim past events
+            // Dim past events with stronger dimming for visibility (matching week view)
             let event_color = if is_past {
-                base_color.linear_multiply(0.5)
+                Color32::from_rgba_unmultiplied(
+                    (base_color.r() as f32 * 0.4) as u8,
+                    (base_color.g() as f32 * 0.4) as u8,
+                    (base_color.b() as f32 * 0.4) as u8,
+                    140,
+                )
             } else {
                 base_color
             };
@@ -407,9 +421,9 @@ impl MonthView {
             ui.painter().rect_filled(event_rect, 2.0, event_color);
             event_hitboxes.push((event_rect, event.clone()));
 
-            // Dim text for past events
+            // Dim text for past events (matching week view)
             let text_color = if is_past {
-                Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+                Color32::from_rgba_unmultiplied(255, 255, 255, 150)
             } else {
                 Color32::WHITE
             };
@@ -459,14 +473,27 @@ impl MonthView {
             None
         };
 
-        // Show tooltip when hovering over an event
+        // Show tooltip when hovering over an event and draw hover highlight
         if let Some((hit_rect, hovered_event)) = &pointer_hit {
             if response.hovered() && hit_rect.contains(pointer_pos.unwrap_or_default()) {
+                // Draw subtle hover highlight on the event
+                ui.painter().rect_stroke(
+                    hit_rect.expand(1.0),
+                    3.0,
+                    Stroke::new(2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 180)),
+                );
+                
+                // Show pointer cursor
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                
                 let tooltip_text = super::week_shared::format_event_tooltip(hovered_event);
                 response.clone().on_hover_ui_at_pointer(|ui| {
                     ui.label(tooltip_text);
                 });
             }
+        } else if response.hovered() {
+            // Show hint tooltip when hovering on empty space in day cell
+            response.clone().on_hover_text("Click to view this day\nDouble-click to create event\nRight-click for more options");
         }
 
         // Show "+N more" if there are more events - make it clickable
@@ -676,28 +703,28 @@ impl MonthView {
             return (MonthViewAction::CreateFromTemplate(template_id, date), None, delete_confirm_request);
         }
 
-        // Handle click to edit or create event
-        if response.clicked() {
+        // Double-click on event opens edit dialog, on empty space creates new event
+        if response.double_clicked() {
             if let Some(event) = pointer_event.clone() {
+                // Double-click on event - edit it
                 if let Some(id) = event.id {
                     *show_event_dialog = true;
                     *event_to_edit = Some(id);
                     *event_dialog_date = Some(date);
                 }
                 return (MonthViewAction::None, Some(event), delete_confirm_request);
+            } else {
+                // Double-click on empty space - create new event for this date
+                *show_event_dialog = true;
+                *event_dialog_date = Some(date);
+                *event_dialog_recurrence = None;
+                return (MonthViewAction::None, None, delete_confirm_request);
             }
-
-            // No event clicked - create new event
-            *show_event_dialog = true;
-            *event_dialog_date = Some(date);
-            *event_dialog_recurrence = None; // Default to non-recurring
         }
 
-        // Handle double-click for recurring event
-        if response.double_clicked() {
-            *show_event_dialog = true;
-            *event_dialog_date = Some(date);
-            *event_dialog_recurrence = Some("FREQ=MONTHLY".to_string());
+        // Single left-click anywhere in day cell switches to default view for that date
+        if response.clicked() {
+            return (MonthViewAction::SwitchToDefaultView(date), None, delete_confirm_request);
         }
         
         // Handle "+X more" click to switch to day view

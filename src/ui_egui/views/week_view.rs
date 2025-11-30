@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use super::palette::DayStripPalette;
 use super::week_shared::{
-    self, format_short_date, get_week_start, render_ribbon_event, render_time_grid,
-    EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
+    self, format_short_date, get_week_start, render_ribbon_event, render_ribbon_event_with_handles,
+    render_time_grid, EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
 use super::{filter_events_by_category, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
@@ -13,6 +13,7 @@ use crate::models::settings::Settings;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::DragView;
+use crate::ui_egui::resize::{ResizeManager, ResizeView};
 use crate::ui_egui::theme::CalendarTheme;
 
 /// Blend header color for weekend columns (slightly darker/lighter)
@@ -63,6 +64,11 @@ impl WeekView {
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
         let show_week_numbers = settings.show_week_numbers;
 
+        // Calculate column width once at the top level for consistency across header, ribbon, and grid
+        let available_width = ui.available_width();
+        let available_for_cols = available_width - TIME_LABEL_WIDTH - total_spacing;
+        let col_width = available_for_cols / 7.0;
+
         // Week header with day names
         let header_frame = egui::Frame::none()
             .fill(day_strip_palette.header_bg)
@@ -76,12 +82,6 @@ impl WeekView {
             });
 
         let header_response = header_frame.show(ui, |strip_ui| {
-            // Calculate column width based on actual available width in this context
-            let frame_available_width = strip_ui.available_width();
-            let frame_available_for_cols =
-                frame_available_width - TIME_LABEL_WIDTH - total_spacing;
-            let col_width = frame_available_for_cols / 7.0;
-
             // Header row with day names (and optional week number)
             strip_ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -173,68 +173,129 @@ impl WeekView {
 
             // Ribbon row with all-day events
             if show_ribbon && !all_day_events.is_empty() {
-                strip_ui.add_space(4.0);
+                strip_ui.add_space(2.0);
 
                 strip_ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
 
-                    // Use allocate_exact_size for consistent spacing
-                    ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, 0.0), egui::Sense::hover());
+                    // Use allocate_exact_size with matching height for consistent spacing
+                    ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, 18.0), egui::Sense::hover());
 
                     ui.add_space(COLUMN_SPACING);
 
                     for (i, date) in week_dates.iter().enumerate() {
-                        ui.vertical(|day_ui| {
-                            day_ui.set_width(col_width);
+                        // Use allocate_ui_with_layout with Center alignment to match header
+                        let col_response = ui.allocate_ui_with_layout(
+                            Vec2::new(col_width, 18.0),
+                            egui::Layout::top_down(egui::Align::Center),
+                            |day_ui| {
+                                let mut multi_day_events = Vec::new();
+                                let mut single_day_events = Vec::new();
 
-                            let mut multi_day_events = Vec::new();
-                            let mut single_day_events = Vec::new();
+                                for event in all_day_events {
+                                    let event_start_date = event.start.date_naive();
+                                    let event_end_date = event.end.date_naive();
 
-                            for event in all_day_events {
-                                let event_start_date = event.start.date_naive();
-                                let event_end_date = event.end.date_naive();
-
-                                if event_start_date != event_end_date {
-                                    if event_start_date <= *date && event_end_date >= *date {
-                                        multi_day_events.push(event);
+                                    if event_start_date != event_end_date {
+                                        if event_start_date <= *date && event_end_date >= *date {
+                                            multi_day_events.push(event);
+                                        }
+                                    } else if event_start_date == *date {
+                                        single_day_events.push(event);
                                     }
-                                } else if event_start_date == *date {
-                                    single_day_events.push(event);
+                                }
+
+                                let found_event =
+                                    !multi_day_events.is_empty() || !single_day_events.is_empty();
+
+                                for event in &multi_day_events {
+                                    // For multi-day events, show handles on first/last days
+                                    let event_start_date = event.start.date_naive();
+                                    let event_end_date = event.end.date_naive();
+                                    let is_first_day = event_start_date == *date;
+                                    let is_last_day = event_end_date == *date;
+                                    
+                                    let (ribbon_result, _event_rect) = render_ribbon_event_with_handles(
+                                        day_ui,
+                                        event,
+                                        countdown_requests,
+                                        active_countdown_events,
+                                        database,
+                                        is_first_day,  // show left handle
+                                        is_last_day,   // show right handle
+                                        Some(*date),
+                                    );
+                                    result.merge(ribbon_result);
+                                }
+
+                                for event in single_day_events {
+                                    let ribbon_result = render_ribbon_event(
+                                        day_ui,
+                                        event,
+                                        countdown_requests,
+                                        active_countdown_events,
+                                        database,
+                                    );
+                                    result.merge(ribbon_result);
+                                }
+
+                                if !found_event {
+                                    day_ui.allocate_space(Vec2::new(col_width, 18.0));
+                                }
+                            },
+                        );
+                        
+                        // Track resize hover for this column using the response rect
+                        let col_rect = col_response.response.rect;
+                        if ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Ribbon) {
+                            if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                                if col_rect.contains(pointer_pos) {
+                                    // Update hovered date for ribbon resize
+                                    // Use midnight as time since we're resizing dates, not times
+                                    let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+                                    let end_of_day = NaiveTime::from_hms_opt(23, 59, 59).unwrap();
+                                    ResizeManager::update_hover(
+                                        ui.ctx(),
+                                        *date,
+                                        midnight,
+                                        end_of_day,
+                                        pointer_pos,
+                                    );
                                 }
                             }
-
-                            let found_event =
-                                !multi_day_events.is_empty() || !single_day_events.is_empty();
-
-                            for event in multi_day_events {
-                                let ribbon_result = render_ribbon_event(
-                                    day_ui,
-                                    event,
-                                    countdown_requests,
-                                    active_countdown_events,
-                                    database,
-                                );
-                                result.merge(ribbon_result);
-                            }
-
-                            for event in single_day_events {
-                                let ribbon_result = render_ribbon_event(
-                                    day_ui,
-                                    event,
-                                    countdown_requests,
-                                    active_countdown_events,
-                                    database,
-                                );
-                                result.merge(ribbon_result);
-                            }
-
-                            if !found_event {
-                                day_ui.allocate_space(Vec2::new(col_width, 24.0));
-                            }
-                        });
+                        }
 
                         if i < week_dates.len() - 1 {
                             ui.add_space(COLUMN_SPACING);
+                        }
+                    }
+                    
+                    // Handle ribbon resize completion (mouse release)
+                    let primary_released = ui.input(|i| i.pointer.primary_released());
+                    if primary_released && ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Ribbon) {
+                        if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), ResizeView::Ribbon) {
+                            log::info!(
+                                "Ribbon resize finished: handle={:?}, hovered_date={:?}",
+                                resize_ctx.handle,
+                                resize_ctx.hovered_date
+                            );
+                            // Calculate new dates based on handle
+                            if let (Some(new_start), Some(new_end)) = (resize_ctx.calculate_new_start(), resize_ctx.calculate_new_end()) {
+                                log::info!("New dates: start={}, end={}", new_start, new_end);
+                                let event_service = EventService::new(database.connection());
+                                if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
+                                    event.start = new_start;
+                                    event.end = new_end;
+                                    if let Err(err) = event_service.update(&event) {
+                                        log::error!(
+                                            "Failed to resize ribbon event {}: {}",
+                                            resize_ctx.event_id, err
+                                        );
+                                    } else {
+                                        result.moved_events.push(event);
+                                    }
+                                }
+                            }
                         }
                     }
                 });
@@ -254,12 +315,10 @@ impl WeekView {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |scroll_ui| {
-                let available_width = scroll_ui.available_width();
-                let available_for_cols = available_width - TIME_LABEL_WIDTH - total_spacing;
-                let col_width = available_for_cols / 7.0;
-
+                // Use the same col_width calculated at top level for alignment
                 let config = TimeCellConfig {
                     drag_view: DragView::Week,
+                    resize_view: ResizeView::Week,
                     check_weekend: true,
                 };
 

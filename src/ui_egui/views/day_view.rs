@@ -12,6 +12,7 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::services::template::TemplateService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
+use crate::ui_egui::resize::{HandleRects, ResizeContext, ResizeHandle, ResizeManager, ResizeView, draw_handles, draw_resize_preview};
 use crate::ui_egui::theme::CalendarTheme;
 
 use super::filter_events_by_category;
@@ -366,41 +367,134 @@ impl DayView {
                 ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             }
 
-            let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
+            // Track (rect, event, is_starting, is_ending) for handle visibility
+            let mut event_hitboxes: Vec<(Rect, Event, bool, bool)> = Vec::new();
 
             // Draw continuing events first (colored blocks only)
             for event in continuing_events {
                 let event_rect = Self::render_event_continuation(ui, rect, event);
-                event_hitboxes.push((event_rect, (*event).clone()));
+                // Check if event ends in this slot
+                let event_end = event.end.time();
+                let is_ending = event_end > time && event_end <= slot_end;
+                // Continuing events never show top handle (they started earlier)
+                event_hitboxes.push((event_rect, (*event).clone(), false, is_ending));
             }
 
             // Draw starting events (full details)
             for event in starting_events {
                 let event_rect = Self::render_event_in_slot(ui, rect, event);
-                event_hitboxes.push((event_rect, (*event).clone()));
+                // Check if event ends in this slot
+                let event_end = event.end.time();
+                let is_ending = event_end > time && event_end <= slot_end;
+                // Starting events always show top handle
+                event_hitboxes.push((event_rect, (*event).clone(), true, is_ending));
             }
+
+            // Build resize handle info for each event
+            let event_handles: Vec<(Rect, Event, HandleRects)> = event_hitboxes
+                .iter()
+                .map(|(r, e, is_starting, is_ending)| {
+                    (*r, e.clone(), HandleRects::for_timed_event_in_slot(*r, *is_starting, *is_ending))
+                })
+                .collect();
 
             // Check for pointer position - use hover position to catch right-clicks too
             let pointer_pos = response
                 .interact_pointer_pos()
                 .or_else(|| ui.input(|i| i.pointer.hover_pos()));
+            // Include is_starting and is_ending flags for proper handle visibility
             let pointer_hit = pointer_pos.and_then(|pos| {
                 event_hitboxes
                     .iter()
                     .rev()
-                    .find(|(hit_rect, _)| hit_rect.contains(pos))
-                    .map(|(hit_rect, event)| (*hit_rect, event.clone()))
+                    .find(|(hit_rect, _, _, _)| hit_rect.contains(pos))
+                    .map(|(hit_rect, event, is_starting, is_ending)| {
+                        (*hit_rect, event.clone(), *is_starting, *is_ending)
+                    })
             });
-            let pointer_event = pointer_hit.as_ref().map(|(_, event)| event.clone());
+            let pointer_event = pointer_hit.as_ref().map(|(_, event, _, _)| event.clone());
             let single_event_fallback = if event_hitboxes.len() == 1 {
                 Some(event_hitboxes[0].1.clone())
             } else {
                 None
             };
 
-            // Show tooltip when hovering over an event
-            if let Some((hit_rect, hovered_event)) = &pointer_hit {
-                if response.hovered() && hit_rect.contains(pointer_pos.unwrap_or_default()) {
+            // Check if pointer is on a resize handle
+            let now = Local::now();
+            let hovered_handle: Option<(ResizeHandle, Rect, Event)> = pointer_pos.and_then(|pos| {
+                event_handles
+                    .iter()
+                    .rev()
+                    .find_map(|(event_rect, event, handles)| {
+                        // Only allow resize for non-recurring events and non-past events
+                        if event.recurrence_rule.is_some() {
+                            return None;
+                        }
+                        // Don't allow resize for past events
+                        if event.end < now {
+                            return None;
+                        }
+                        handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
+                    })
+            });
+
+            // Draw resize handles on hovered event (when not dragging/resizing)
+            let is_dragging = DragManager::is_active_for_view(ui.ctx(), DragView::Day);
+            let is_resizing = ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day);
+            
+            // Draw resize preview silhouette when actively resizing
+            if is_resizing {
+                if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), ResizeView::Day) {
+                    // Find the event color for the preview
+                    let event_color = event_hitboxes
+                        .iter()
+                        .find(|(_, e, _, _)| e.id == Some(resize_ctx.event_id))
+                        .map(|(_, e, _, _)| {
+                            e.color
+                                .as_deref()
+                                .and_then(parse_color)
+                                .unwrap_or(Color32::from_rgb(100, 150, 200))
+                        })
+                        .unwrap_or(Color32::from_rgb(100, 150, 200));
+                    
+                    // Draw the preview for this slot
+                    draw_resize_preview(
+                        ui,
+                        &resize_ctx,
+                        rect,
+                        date,
+                        time,
+                        slot_end,
+                        event_color,
+                        55.0, // Left margin matching event rendering
+                    );
+                }
+            }
+            
+            if !is_dragging && !is_resizing {
+                if let Some((hit_rect, hovered_event, is_starting, is_ending)) = &pointer_hit {
+                    // Only show handles for non-recurring events and non-past events
+                    let is_past_event = hovered_event.end < now;
+                    if hovered_event.recurrence_rule.is_none() && !is_past_event {
+                        // Use slot-aware handles: only show handles that are active in this slot
+                        let handles = HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
+                        let hovered_h = hovered_handle.as_ref().map(|(h, _, _)| *h);
+                        let event_color = hovered_event
+                            .color
+                            .as_deref()
+                            .and_then(parse_color)
+                            .unwrap_or(Color32::from_rgb(100, 150, 200));
+                        draw_handles(ui, &handles, hovered_h, event_color);
+                    }
+                }
+            }
+
+            // Show tooltip when hovering over an event (but not on resize handles)
+            if let Some((hit_rect, hovered_event, _, _)) = &pointer_hit {
+                if response.hovered() 
+                    && hit_rect.contains(pointer_pos.unwrap_or_default())
+                    && hovered_handle.is_none()
+                {
                     let tooltip_text = super::week_shared::format_event_tooltip(hovered_event);
                     response.clone().on_hover_ui_at_pointer(|ui| {
                         ui.label(tooltip_text);
@@ -408,16 +502,75 @@ impl DayView {
                 }
             }
 
+            // Set cursor for resize handles or pointer for events
+            if let Some((handle, _, _)) = &hovered_handle {
+                if !is_dragging && !is_resizing {
+                    ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+                }
+            } else if pointer_hit.is_some() && !is_dragging && !is_resizing {
+                // Pointer cursor when hovering over an event (indicates it's interactive)
+                ui.output_mut(|out| out.cursor_icon = CursorIcon::PointingHand);
+            }
+
             let pointer_for_hover = ui
                 .ctx()
                 .pointer_interact_pos()
                 .or_else(|| ui.input(|i| i.pointer.hover_pos()));
             if let Some(pointer) = pointer_for_hover {
+                // During active resize, update hover for ANY slot the pointer is over
+                // (not just when contained in the specific slot rect)
+                let is_resize_active = ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day);
+                
                 if rect.contains(pointer) {
+                    // Update drag hover when pointer is in rect
                     DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
-                    if DragManager::is_active_for_view(ui.ctx(), DragView::Day) {
-                        ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
-                        ui.ctx().request_repaint();
+                    
+                    // Update resize hover - works for ANY slot during active resize
+                    if is_resize_active {
+                        ResizeManager::update_hover(ui.ctx(), date, time, slot_end, pointer);
+                    }
+                }
+                
+                // Set cursor icons
+                if DragManager::is_active_for_view(ui.ctx(), DragView::Day) {
+                    ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                    ui.ctx().request_repaint();
+                }
+                if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), ResizeView::Day) {
+                    ui.output_mut(|out| out.cursor_icon = resize_ctx.handle.cursor_icon());
+                    ui.ctx().request_repaint();
+                }
+            }
+            
+            // Check for global mouse release to complete resize operations
+            // This handles the case where drag started on one slot but ended on another
+            let primary_released = ui.input(|i| i.pointer.primary_released());
+            if primary_released && ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day) {
+                if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), ResizeView::Day) {
+                    log::info!(
+                        "Resize finished: handle={:?}, hovered_time={:?}, original_start={}, original_end={}",
+                        resize_ctx.handle,
+                        resize_ctx.hovered_time,
+                        resize_ctx.original_start,
+                        resize_ctx.original_end
+                    );
+                    if let Some((new_start, new_end)) = resize_ctx.hovered_times() {
+                        log::info!("New times: start={}, end={}", new_start, new_end);
+                        let event_service = EventService::new(database.connection());
+                        if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
+                            event.start = new_start;
+                            event.end = new_end;
+                            if let Err(err) = event_service.update(&event) {
+                                log::error!(
+                                    "Failed to resize event {}: {}",
+                                    resize_ctx.event_id, err
+                                );
+                            } else {
+                                result.moved_events.push(event);
+                            }
+                        }
+                    } else {
+                        log::warn!("hovered_times() returned None");
                     }
                 }
             }
@@ -626,7 +779,39 @@ impl DayView {
 
             // Check drag_started BEFORE clicked to ensure drag detection works
             if response.drag_started() {
-                if let Some((hit_rect, event)) = pointer_hit.clone() {
+                // Use interact_pointer_pos for the drag start position
+                let drag_start_pos = response.interact_pointer_pos();
+                
+                // Recalculate which handle was clicked using the drag start position
+                let drag_handle: Option<(ResizeHandle, Rect, Event)> = drag_start_pos.and_then(|pos| {
+                    event_handles
+                        .iter()
+                        .rev()
+                        .find_map(|(event_rect, event, handles)| {
+                            // Don't allow resize for recurring or past events
+                            if event.recurrence_rule.is_some() {
+                                return None;
+                            }
+                            if event.end < now {
+                                return None;
+                            }
+                            handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
+                        })
+                });
+                
+                // First check if we're starting a resize operation
+                if let Some((handle, _hit_rect, event)) = drag_handle {
+                    // Start resize instead of drag
+                    if let Some(resize_context) = ResizeContext::from_event(
+                        &event,
+                        handle,
+                        ResizeView::Day,
+                    ) {
+                        ResizeManager::begin(ui.ctx(), resize_context);
+                        ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+                    }
+                } else if let Some((hit_rect, event, _, _)) = pointer_hit.clone() {
+                    // Otherwise start a drag operation
                     if event.recurrence_rule.is_none() {
                         if let Some(drag_context) = DragContext::from_event(
                             &event,
@@ -640,32 +825,40 @@ impl DayView {
                         }
                     }
                 }
-            } else if result.event_to_edit.is_none() && response.clicked() {
-                if let Some(event) = pointer_event.clone() {
-                    result.event_to_edit = Some(event);
-                }
-
-                if result.event_to_edit.is_none() {
-                    *show_event_dialog = true;
-                    *event_dialog_date = Some(date);
-                    *event_dialog_time = Some(time); // Use the clicked time slot
-                    *event_dialog_recurrence = None; // Default to non-recurring
-                }
             }
 
-            // Handle double-click for recurring event
+            // Double-click on event opens edit dialog, on empty space creates new event
             if response.double_clicked() {
-                *show_event_dialog = true;
-                *event_dialog_date = Some(date);
-                *event_dialog_time = Some(time); // Use the clicked time slot
-                *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
+                if let Some(event) = pointer_event.clone() {
+                    // Double-click on event - edit it
+                    if result.event_to_edit.is_none() {
+                        result.event_to_edit = Some(event);
+                    }
+                } else {
+                    // Double-click on empty space - create new event at this time
+                    *show_event_dialog = true;
+                    *event_dialog_date = Some(date);
+                    *event_dialog_time = Some(time);
+                    *event_dialog_recurrence = None;
+                }
             }
 
             if response.dragged() {
-                ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                // Set appropriate cursor for drag or resize
+                if ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day) {
+                    if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), ResizeView::Day) {
+                        ui.output_mut(|out| out.cursor_icon = resize_ctx.handle.cursor_icon());
+                    }
+                } else {
+                    ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
+                }
             }
 
             if response.drag_stopped() {
+                // Note: Resize completion is handled by global primary_released check above
+                // This ensures resize works even when drag ends on a different slot
+                
+                // Handle drag completion
                 if let Some(drag_context) = DragManager::finish_for_view(ui.ctx(), DragView::Day) {
                     if let Some(target_start) = drag_context
                         .hovered_start()
@@ -704,9 +897,14 @@ impl DayView {
             .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
         
-        // Dim past events
+        // Dim past events with stronger dimming for visibility
         let event_color = if is_past {
-            base_color.linear_multiply(0.5)
+            Color32::from_rgba_unmultiplied(
+                (base_color.r() as f32 * 0.4) as u8,
+                (base_color.g() as f32 * 0.4) as u8,
+                (base_color.b() as f32 * 0.4) as u8,
+                140,
+            )
         } else {
             base_color
         };
@@ -788,9 +986,14 @@ impl DayView {
             .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
         
-        // Dim past events further
+        // Dim past events with stronger dimming for visibility
         let event_color = if is_past {
-            base_color.linear_multiply(0.3)
+            Color32::from_rgba_unmultiplied(
+                (base_color.r() as f32 * 0.25) as u8,
+                (base_color.g() as f32 * 0.25) as u8,
+                (base_color.b() as f32 * 0.25) as u8,
+                120,
+            )
         } else {
             base_color
         };

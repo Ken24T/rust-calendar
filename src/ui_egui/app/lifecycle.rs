@@ -10,6 +10,7 @@ use crate::services::countdown::CountdownService;
 use crate::services::database::Database;
 use crate::services::notification::NotificationService;
 use crate::services::settings::SettingsService;
+use crate::ui_egui::commands::UndoManager;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
@@ -73,6 +74,7 @@ impl CalendarApp {
             toast_manager: ToastManager::new(),
             confirm_dialog: ConfirmDialogState::new(),
             active_category_filter: None,
+            undo_manager: UndoManager::new(),
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);
@@ -134,6 +136,12 @@ impl CalendarApp {
         if !self.state.geometry_sanitized {
             self.sanitize_countdown_geometries(ctx);
             self.state.geometry_sanitized = true;
+        }
+
+        // Apply pending theme change (from menu selection)
+        if self.state.pending_theme_apply {
+            self.apply_theme_from_db(ctx);
+            self.state.pending_theme_apply = false;
         }
 
         self.apply_pending_root_geometry(ctx);

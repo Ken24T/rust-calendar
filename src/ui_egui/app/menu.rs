@@ -138,6 +138,38 @@ impl CalendarApp {
 
     fn render_edit_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Edit", |ui| {
+            // Undo/Redo section
+            let can_undo = self.undo_manager.can_undo();
+            let can_redo = self.undo_manager.can_redo();
+            
+            let undo_label = if let Some(desc) = self.undo_manager.undo_description() {
+                format!("↶ Undo {}    Ctrl+Z", desc)
+            } else {
+                "↶ Undo    Ctrl+Z".to_string()
+            };
+            
+            let redo_label = if let Some(desc) = self.undo_manager.redo_description() {
+                format!("↷ Redo {}    Ctrl+Y", desc)
+            } else {
+                "↷ Redo    Ctrl+Y".to_string()
+            };
+            
+            ui.add_enabled_ui(can_undo, |ui| {
+                if ui.button(&undo_label).clicked() {
+                    self.perform_undo();
+                    ui.close_menu();
+                }
+            });
+            
+            ui.add_enabled_ui(can_redo, |ui| {
+                if ui.button(&redo_label).clicked() {
+                    self.perform_redo();
+                    ui.close_menu();
+                }
+            });
+            
+            ui.separator();
+            
             if ui.button("⚙ Settings    Ctrl+S").clicked() {
                 self.show_settings_dialog = true;
                 ui.close_menu();
@@ -151,6 +183,40 @@ impl CalendarApp {
                 ui.close_menu();
             }
         });
+    }
+    
+    /// Perform undo operation
+    pub(super) fn perform_undo(&mut self) {
+        let event_service = self.context.event_service();
+        match self.undo_manager.undo(&event_service) {
+            Ok(Some(desc)) => {
+                self.toast_manager.info(format!("Undone: {}", desc));
+            }
+            Ok(None) => {
+                // Nothing to undo
+            }
+            Err(e) => {
+                log::error!("Undo failed: {}", e);
+                self.toast_manager.error(format!("Undo failed: {}", e));
+            }
+        }
+    }
+    
+    /// Perform redo operation
+    pub(super) fn perform_redo(&mut self) {
+        let event_service = self.context.event_service();
+        match self.undo_manager.redo(&event_service) {
+            Ok(Some(desc)) => {
+                self.toast_manager.info(format!("Redone: {}", desc));
+            }
+            Ok(None) => {
+                // Nothing to redo
+            }
+            Err(e) => {
+                log::error!("Redo failed: {}", e);
+                self.toast_manager.error(format!("Redo failed: {}", e));
+            }
+        }
     }
 
     fn render_view_menu(&mut self, ui: &mut egui::Ui) {
@@ -179,40 +245,73 @@ impl CalendarApp {
 
             ui.separator();
 
-            if ui
-                .selectable_label(self.current_view == super::state::ViewType::Day, "Day")
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::Day;
-                self.focus_on_current_time_if_visible();
-                ui.close_menu();
-            }
-            if ui
-                .selectable_label(self.current_view == super::state::ViewType::Week, "Week")
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::Week;
-                self.focus_on_current_time_if_visible();
-                ui.close_menu();
-            }
-            if ui
-                .selectable_label(
-                    self.current_view == super::state::ViewType::WorkWeek,
-                    "Work Week",
-                )
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::WorkWeek;
-                self.focus_on_current_time_if_visible();
-                ui.close_menu();
-            }
-            if ui
-                .selectable_label(self.current_view == super::state::ViewType::Month, "Month")
-                .clicked()
-            {
-                self.current_view = super::state::ViewType::Month;
-                ui.close_menu();
-            }
+            // Calendar Views submenu
+            ui.menu_button("📅 Calendar Views", |ui| {
+                if ui
+                    .selectable_label(self.current_view == super::state::ViewType::Day, "Day")
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::Day;
+                    self.focus_on_current_time_if_visible();
+                    ui.close_menu();
+                }
+                if ui
+                    .selectable_label(self.current_view == super::state::ViewType::Week, "Week")
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::Week;
+                    self.focus_on_current_time_if_visible();
+                    ui.close_menu();
+                }
+                if ui
+                    .selectable_label(
+                        self.current_view == super::state::ViewType::WorkWeek,
+                        "Work Week",
+                    )
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::WorkWeek;
+                    self.focus_on_current_time_if_visible();
+                    ui.close_menu();
+                }
+                if ui
+                    .selectable_label(self.current_view == super::state::ViewType::Month, "Month")
+                    .clicked()
+                {
+                    self.current_view = super::state::ViewType::Month;
+                    ui.close_menu();
+                }
+            });
+
+            // Themes submenu
+            ui.menu_button("🎨 Themes", |ui| {
+                let theme_service = self.context.theme_service();
+                let available_themes = theme_service.list_themes().unwrap_or_default();
+                let current_theme = self.settings.theme.clone();
+
+                for theme_name in &available_themes {
+                    let is_selected = theme_name == &current_theme;
+                    if ui.selectable_label(is_selected, theme_name).clicked() {
+                        if theme_service.get_theme(theme_name).is_ok() {
+                            self.settings.theme = theme_name.clone();
+                            let settings_service = self.context.settings_service();
+                            if let Err(err) = settings_service.update(&self.settings) {
+                                log::error!("Failed to update settings: {}", err);
+                            }
+                            // Flag to apply theme on next frame (we don't have ctx here)
+                            self.state.pending_theme_apply = true;
+                        }
+                        ui.close_menu();
+                    }
+                }
+
+                ui.separator();
+
+                if ui.button("🎨 Manage Themes...").clicked() {
+                    self.state.theme_dialog_state.open(&self.settings.theme);
+                    ui.close_menu();
+                }
+            });
 
             ui.separator();
 
