@@ -369,8 +369,8 @@ impl CalendarApp {
                     .clicked()
                 {
                     self.context.countdown_service_mut().reset_all_positions();
-                    // Reset container UI state so it re-applies the new geometry
-                    self.countdown_ui.reset_container_state();
+                    // Full reset of all UI state to prevent flashing from stale state
+                    self.countdown_ui.reset_all_ui_state();
                     self.toast_manager.info("Card positions reset to defaults");
                     ui.close_menu();
                 }

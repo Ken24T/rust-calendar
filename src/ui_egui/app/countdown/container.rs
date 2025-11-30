@@ -120,6 +120,8 @@ pub struct ContainerLayout {
     pub position_verified: bool,
     /// Whether the window has ever gained focus this session
     pub has_ever_had_focus: bool,
+    /// Number of frames to skip geometry change detection (used after reset)
+    pub skip_geometry_frames: u32,
 }
 
 impl Default for ContainerLayout {
@@ -135,6 +137,7 @@ impl Default for ContainerLayout {
             visibility_check_frames: 0,
             position_verified: false,
             has_ever_had_focus: false,
+            skip_geometry_frames: 0,
         }
     }
 }
@@ -739,14 +742,23 @@ pub fn render_container_window(
         );
     }
     
-    let builder = egui::ViewportBuilder::default()
-        .with_title("Countdown Cards")
-        .with_resizable(true)
-        .with_visible(true)  // Ensure window is visible
-        .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
-        // Always set position and size from stored geometry (like individual cards do)
-        .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
-        .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height));
+    // Only set position/size in the builder on first render or when resizing
+    // Otherwise, let the OS/user control the window position to prevent shaking during drag
+    let builder = if needs_resize {
+        egui::ViewportBuilder::default()
+            .with_title("Countdown Cards")
+            .with_resizable(true)
+            .with_visible(true)
+            .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
+            .with_position(egui::pos2(initial_geometry.x, initial_geometry.y))
+            .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height))
+    } else {
+        egui::ViewportBuilder::default()
+            .with_title("Countdown Cards")
+            .with_resizable(true)
+            .with_visible(true)
+            .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
+    };
 
     // Log on first render or resize
     if needs_resize {
@@ -883,31 +895,39 @@ pub fn render_container_window(
                 }
             }
             
-            // Save geometry for any reasonable position
-            // We previously tried to restrict to "primary monitor" but monitor layouts vary
-            // Just save if the values are finite and not extremely off-screen
-            let should_save_geometry = new_geom.x.is_finite() 
-                && new_geom.y.is_finite() 
-                && new_geom.x.abs() < 10000.0 
-                && new_geom.y.abs() < 10000.0;
-            
-            let geometry_changed = container_geometry.map(|g| {
-                (g.x - new_geom.x).abs() > 1.0
-                    || (g.y - new_geom.y).abs() > 1.0
-                    || (g.width - new_geom.width).abs() > 1.0
-                    || (g.height - new_geom.height).abs() > 1.0
-            }).unwrap_or(true);
-            
-            // Log geometry tracking for debugging
-            if geometry_changed {
-                log::debug!(
-                    "Container geometry changed: stored={:?} -> current=({}, {}, {}, {}), should_save={}",
-                    container_geometry, new_geom.x, new_geom.y, new_geom.width, new_geom.height, should_save_geometry
-                );
+            // Decrement skip_geometry_frames counter if active
+            let skip_geometry_updates = layout.skip_geometry_frames > 0;
+            if layout.skip_geometry_frames > 0 {
+                layout.skip_geometry_frames -= 1;
             }
             
-            if should_save_geometry && geometry_changed {
-                actions.push(ContainerAction::GeometryChanged(new_geom));
+            // Save geometry for any reasonable position (unless skipping)
+            // We previously tried to restrict to "primary monitor" but monitor layouts vary
+            // Just save if the values are finite and not extremely off-screen
+            if !skip_geometry_updates {
+                let should_save_geometry = new_geom.x.is_finite() 
+                    && new_geom.y.is_finite() 
+                    && new_geom.x.abs() < 10000.0 
+                    && new_geom.y.abs() < 10000.0;
+                
+                let geometry_changed = container_geometry.map(|g| {
+                    (g.x - new_geom.x).abs() > 1.0
+                        || (g.y - new_geom.y).abs() > 1.0
+                        || (g.width - new_geom.width).abs() > 1.0
+                        || (g.height - new_geom.height).abs() > 1.0
+                }).unwrap_or(true);
+                
+                // Log geometry tracking for debugging
+                if geometry_changed {
+                    log::debug!(
+                        "Container geometry changed: stored={:?} -> current=({}, {}, {}, {}), should_save={}",
+                        container_geometry, new_geom.x, new_geom.y, new_geom.width, new_geom.height, should_save_geometry
+                    );
+                }
+                
+                if should_save_geometry && geometry_changed {
+                    actions.push(ContainerAction::GeometryChanged(new_geom));
+                }
             }
         }
 

@@ -51,6 +51,8 @@ pub(in super::super) struct CountdownUiState {
     container_drag_state: DragState,
     // Pending delete requests from settings dialogs
     pending_delete_requests: Vec<DeleteCardRequest>,
+    // Skip geometry updates for this many frames (used after reset)
+    skip_geometry_frames: u32,
 }
 
 const MAX_PENDING_GEOMETRY_FRAMES: u32 = 120;
@@ -85,6 +87,38 @@ impl CountdownUiState {
     /// Reset container state so it will re-initialize on next render
     pub(in super::super) fn reset_container_state(&mut self) {
         self.container_layout.initialized = false;
+    }
+    
+    /// Full reset of all UI state when card positions are reset.
+    /// This clears pending geometry, resets container layout completely,
+    /// and clears any geometry sampling state to prevent flashing/feedback loops.
+    /// 
+    /// IMPORTANT: We clear pending_geometry entirely (not re-populate it) so that
+    /// cards render immediately at their new positions without the hide/show cycle
+    /// that causes flickering.
+    pub(in super::super) fn reset_all_ui_state(&mut self) {
+        log::info!("Resetting all countdown UI state for position reset");
+        
+        // Completely reset container layout to default state
+        self.container_layout = ContainerLayout::default();
+        // Skip geometry change detection for 30 frames to let the window settle
+        self.container_layout.skip_geometry_frames = 30;
+        
+        // Clear ALL pending geometry - do NOT re-populate!
+        // This ensures cards render immediately at new positions without visibility toggling
+        self.pending_geometry.clear();
+        
+        // Clear geometry sampling state  
+        self.geometry_samples.clear();
+        
+        // Clear render log state so next render logs fresh info
+        self.render_log_state.clear();
+        
+        // Reset container drag state
+        self.container_drag_state = DragState::default();
+        
+        // Skip geometry updates for individual cards too
+        self.skip_geometry_frames = 30;
     }
     
     /// Drain pending delete requests from settings dialogs
@@ -277,6 +311,12 @@ impl CountdownUiState {
             return CountdownRenderResult::default();
         }
 
+        // Decrement skip counter at start of frame
+        let skip_geometry_updates = self.skip_geometry_frames > 0;
+        if self.skip_geometry_frames > 0 {
+            self.skip_geometry_frames -= 1;
+        }
+
         let now = Local::now();
         let mut removals = Vec::new();
         let mut event_dialog_requests = Vec::new();
@@ -391,24 +431,27 @@ impl CountdownUiState {
                 continue;
             }
 
-            if let Some(info) = viewport_info.as_ref() {
-                if !waiting_on_geometry && viewport_title_matches(info, &card.event_title) {
-                    if let Some(current_geometry) = geometry_from_viewport_info(info) {
-                        log::debug!(
-                            "card {:?} sampled viewport geometry {:?}",
-                            card.id,
-                            current_geometry
-                        );
-                        if self.record_geometry_sample(card.id, current_geometry)
-                            && geometry_changed(card.geometry, current_geometry)
-                            && service.queue_geometry_update(card.id, current_geometry)
-                        {
+            // Skip geometry updates for several frames after reset to prevent feedback loops
+            if !skip_geometry_updates {
+                if let Some(info) = viewport_info.as_ref() {
+                    if !waiting_on_geometry && viewport_title_matches(info, &card.event_title) {
+                        if let Some(current_geometry) = geometry_from_viewport_info(info) {
                             log::debug!(
-                                "queue geometry update for card {:?}: {:?} -> {:?}",
+                                "card {:?} sampled viewport geometry {:?}",
                                 card.id,
-                                card.geometry,
                                 current_geometry
                             );
+                            if self.record_geometry_sample(card.id, current_geometry)
+                                && geometry_changed(card.geometry, current_geometry)
+                                && service.queue_geometry_update(card.id, current_geometry)
+                            {
+                                log::debug!(
+                                    "queue geometry update for card {:?}: {:?} -> {:?}",
+                                    card.id,
+                                    card.geometry,
+                                    current_geometry
+                                );
+                            }
                         }
                     }
                 }
