@@ -5,6 +5,8 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use egui::Color32;
 
+use crate::models::event::Event;
+
 /// Calculate the start of the week containing the given date.
 ///
 /// # Arguments
@@ -54,6 +56,62 @@ pub fn parse_color(hex: &str) -> Option<Color32> {
     let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
 
     Some(Color32::from_rgb(r, g, b))
+}
+
+/// Generate a rich tooltip string for an event.
+/// Shows title, time range, location, and description preview.
+pub fn format_event_tooltip(event: &Event) -> String {
+    let mut lines = Vec::new();
+    
+    // Title (bold via unicode)
+    lines.push(format!("📌 {}", event.title));
+    
+    // Time
+    if event.all_day {
+        let date_str = event.start.format("%A, %B %d, %Y").to_string();
+        lines.push(format!("🕐 All day - {}", date_str));
+    } else {
+        let start_str = event.start.format("%H:%M").to_string();
+        let end_str = event.end.format("%H:%M").to_string();
+        let date_str = event.start.format("%A, %B %d").to_string();
+        lines.push(format!("🕐 {} - {} ({})", start_str, end_str, date_str));
+    }
+    
+    // Location
+    if let Some(ref location) = event.location {
+        if !location.is_empty() {
+            lines.push(format!("📍 {}", location));
+        }
+    }
+    
+    // Category
+    if let Some(ref category) = event.category {
+        if !category.is_empty() {
+            lines.push(format!("🏷️ {}", category));
+        }
+    }
+    
+    // Recurring indicator
+    if event.recurrence_rule.is_some() {
+        lines.push("🔄 Recurring event".to_string());
+    }
+    
+    // Description preview (truncated)
+    if let Some(ref description) = event.description {
+        if !description.is_empty() {
+            let preview = if description.len() > 100 {
+                format!("{}...", &description[..100])
+            } else {
+                description.clone()
+            };
+            lines.push(format!("\n📝 {}", preview));
+        }
+    }
+    
+    // Add interaction hint
+    lines.push("\n💡 Double-click to edit, right-click for more options".to_string());
+    
+    lines.join("\n")
 }
 
 #[cfg(test)]

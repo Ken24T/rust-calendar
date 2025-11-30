@@ -10,7 +10,7 @@ use super::palette::TimeGridPalette;
 use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 
 // Re-export utility functions for backward compatibility
-pub use super::utils::{format_short_date, get_week_start, parse_color};
+pub use super::utils::{format_event_tooltip, format_short_date, get_week_start, parse_color};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
@@ -512,62 +512,6 @@ pub fn render_event_continuation(
     ui.painter().rect_filled(bg_rect, rounding, event_color);
 
     bg_rect
-}
-
-/// Generate a rich tooltip string for an event.
-/// Shows title, time range, location, and description preview.
-pub fn format_event_tooltip(event: &Event) -> String {
-    let mut lines = Vec::new();
-    
-    // Title (bold via unicode)
-    lines.push(format!("📌 {}", event.title));
-    
-    // Time
-    if event.all_day {
-        let date_str = event.start.format("%A, %B %d, %Y").to_string();
-        lines.push(format!("🕐 All day - {}", date_str));
-    } else {
-        let start_str = event.start.format("%H:%M").to_string();
-        let end_str = event.end.format("%H:%M").to_string();
-        let date_str = event.start.format("%A, %B %d").to_string();
-        lines.push(format!("🕐 {} - {} ({})", start_str, end_str, date_str));
-    }
-    
-    // Location
-    if let Some(ref location) = event.location {
-        if !location.is_empty() {
-            lines.push(format!("📍 {}", location));
-        }
-    }
-    
-    // Category
-    if let Some(ref category) = event.category {
-        if !category.is_empty() {
-            lines.push(format!("🏷️ {}", category));
-        }
-    }
-    
-    // Recurring indicator
-    if event.recurrence_rule.is_some() {
-        lines.push("🔄 Recurring event".to_string());
-    }
-    
-    // Description preview (truncated)
-    if let Some(ref description) = event.description {
-        if !description.is_empty() {
-            let preview = if description.len() > 100 {
-                format!("{}...", &description[..100])
-            } else {
-                description.clone()
-            };
-            lines.push(format!("\n📝 {}", preview));
-        }
-    }
-    
-    // Add interaction hint
-    lines.push("\n💡 Double-click to edit, right-click for more options".to_string());
-    
-    lines.join("\n")
 }
 
 /// Draw the current time indicator line across a day column.
