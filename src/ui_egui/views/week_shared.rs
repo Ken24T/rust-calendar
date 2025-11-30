@@ -46,6 +46,8 @@ pub struct EventInteractionResult {
     pub delete_confirm_request: Option<DeleteConfirmRequest>,
     /// Request to create event from template (template_id, date, optional time)
     pub template_selection: Option<(i64, NaiveDate, Option<NaiveTime>)>,
+    /// Undo requests: (old_event, new_event) pairs for drag/resize operations
+    pub undo_requests: Vec<(Event, Event)>,
 }
 
 impl EventInteractionResult {
@@ -61,6 +63,7 @@ impl EventInteractionResult {
         if other.template_selection.is_some() {
             self.template_selection = other.template_selection;
         }
+        self.undo_requests.extend(other.undo_requests);
     }
 }
 
@@ -1179,16 +1182,25 @@ pub fn render_time_cell(
         if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), config.resize_view) {
             if let Some((new_start, new_end)) = resize_ctx.hovered_times() {
                 let event_service = EventService::new(database.connection());
-                if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
-                    event.start = new_start;
-                    event.end = new_end;
-                    if let Err(err) = event_service.update(&event) {
+                if let Ok(Some(event)) = event_service.get(resize_ctx.event_id) {
+                    // Capture old event for undo before modifying
+                    let old_event = event.clone();
+                    let mut new_event = event;
+                    new_event.start = new_start;
+                    new_event.end = new_end;
+                    
+                    // Validate the new event times
+                    if new_event.validate().is_err() {
+                        log::warn!("Resize would create invalid event, ignoring");
+                    } else if let Err(err) = event_service.update(&new_event) {
                         log::error!(
                             "Failed to resize event {}: {}",
                             resize_ctx.event_id, err
                         );
                     } else {
-                        result.moved_events.push(event);
+                        // Track for undo and countdown card sync
+                        result.undo_requests.push((old_event, new_event.clone()));
+                        result.moved_events.push(new_event);
                     }
                 }
             }
@@ -1203,14 +1215,19 @@ pub fn render_time_cell(
             {
                 let new_end = target_start + drag_context.duration;
                 let event_service = EventService::new(database.connection());
-                if let Ok(Some(mut event)) = event_service.get(drag_context.event_id) {
-                    event.start = target_start;
-                    event.end = new_end;
-                    if let Err(err) = event_service.update(&event) {
+                if let Ok(Some(event)) = event_service.get(drag_context.event_id) {
+                    // Capture old event for undo before modifying
+                    let old_event = event.clone();
+                    let mut new_event = event;
+                    new_event.start = target_start;
+                    new_event.end = new_end;
+                    
+                    if let Err(err) = event_service.update(&new_event) {
                         log::error!("Failed to move event {}: {}", drag_context.event_id, err);
                     } else {
-                        // Track moved event for countdown card sync
-                        result.moved_events.push(event);
+                        // Track for undo and countdown card sync
+                        result.undo_requests.push((old_event, new_event.clone()));
+                        result.moved_events.push(new_event);
                     }
                 }
             }

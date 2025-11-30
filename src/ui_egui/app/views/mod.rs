@@ -2,6 +2,7 @@ use super::confirm::ConfirmAction;
 use super::state::ViewType;
 use super::CalendarApp;
 use crate::models::event::Event;
+use crate::ui_egui::commands::UpdateEventCommand;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
@@ -220,6 +221,13 @@ impl CalendarApp {
         for event in view_result.moved_events {
             self.sync_cards_from_event(&event);
         }
+        
+        // Handle undo requests from drag/resize operations
+        for (old_event, new_event) in view_result.undo_requests {
+            let cmd: Box<dyn crate::ui_egui::commands::Command + Send + Sync> = 
+                Box::new(UpdateEventCommand::new(old_event, new_event));
+            self.undo_manager.push(cmd);
+        }
     }
 
     pub(super) fn render_week_view(
@@ -301,6 +309,13 @@ impl CalendarApp {
         // Handle moved events - sync countdown cards
         for event in view_result.moved_events {
             self.sync_cards_from_event(&event);
+        }
+        
+        // Handle undo requests from drag/resize operations
+        for (old_event, new_event) in view_result.undo_requests {
+            let cmd: Box<dyn crate::ui_egui::commands::Command + Send + Sync> = 
+                Box::new(UpdateEventCommand::new(old_event, new_event));
+            self.undo_manager.push(cmd);
         }
     }
 
@@ -387,6 +402,13 @@ impl CalendarApp {
         // Handle moved events - sync countdown cards
         for event in view_result.moved_events {
             self.sync_cards_from_event(&event);
+        }
+        
+        // Handle undo requests from drag/resize operations
+        for (old_event, new_event) in view_result.undo_requests {
+            let cmd: Box<dyn crate::ui_egui::commands::Command + Send + Sync> = 
+                Box::new(UpdateEventCommand::new(old_event, new_event));
+            self.undo_manager.push(cmd);
         }
     }
 

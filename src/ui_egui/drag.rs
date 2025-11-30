@@ -46,7 +46,21 @@ impl DragContext {
 
     pub fn hovered_start(&self) -> Option<DateTime<Local>> {
         match (self.hovered_date, self.hovered_time) {
-            (Some(date), Some(time)) => date.and_time(time).and_local_timezone(Local).single(),
+            (Some(date), Some(time)) => {
+                // Try to create DateTime from naive date/time
+                // Handle DST transitions where time might not exist
+                match date.and_time(time).and_local_timezone(Local) {
+                    chrono::LocalResult::Single(dt) => Some(dt),
+                    chrono::LocalResult::Ambiguous(dt, _) => Some(dt), // Use earlier time
+                    chrono::LocalResult::None => {
+                        // Time doesn't exist (DST spring forward) - try one hour later
+                        let adjusted_time = time + chrono::Duration::hours(1);
+                        date.and_time(adjusted_time)
+                            .and_local_timezone(Local)
+                            .single()
+                    }
+                }
+            }
             _ => None,
         }
     }

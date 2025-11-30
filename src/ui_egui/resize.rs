@@ -133,19 +133,34 @@ impl ResizeContext {
             ResizeHandle::Top => {
                 // Vertical resize - use hovered time with original date
                 self.hovered_time.and_then(|time| {
-                    self.original_start
-                        .date_naive()
-                        .and_time(time)
-                        .and_local_timezone(Local)
-                        .single()
+                    let naive = self.original_start.date_naive().and_time(time);
+                    // Handle DST transitions
+                    match naive.and_local_timezone(Local) {
+                        chrono::LocalResult::Single(dt) => Some(dt),
+                        chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
+                        chrono::LocalResult::None => {
+                            // Time doesn't exist - try one hour later
+                            let adjusted = self.original_start.date_naive()
+                                .and_time(time + chrono::Duration::hours(1));
+                            adjusted.and_local_timezone(Local).single()
+                        }
+                    }
                 })
             }
             ResizeHandle::Left => {
                 // Horizontal resize - use hovered date with original time
                 self.hovered_date.and_then(|date| {
-                    date.and_time(self.original_start.time())
-                        .and_local_timezone(Local)
-                        .single()
+                    let naive = date.and_time(self.original_start.time());
+                    // Handle DST transitions
+                    match naive.and_local_timezone(Local) {
+                        chrono::LocalResult::Single(dt) => Some(dt),
+                        chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
+                        chrono::LocalResult::None => {
+                            // Time doesn't exist - try one hour later
+                            let adjusted = date.and_time(self.original_start.time() + chrono::Duration::hours(1));
+                            adjusted.and_local_timezone(Local).single()
+                        }
+                    }
                 })
             }
             _ => Some(self.original_start),
@@ -158,19 +173,34 @@ impl ResizeContext {
             ResizeHandle::Bottom => {
                 // Vertical resize - use hovered time with original date
                 self.hovered_time.and_then(|time| {
-                    self.original_end
-                        .date_naive()
-                        .and_time(time)
-                        .and_local_timezone(Local)
-                        .single()
+                    let naive = self.original_end.date_naive().and_time(time);
+                    // Handle DST transitions
+                    match naive.and_local_timezone(Local) {
+                        chrono::LocalResult::Single(dt) => Some(dt),
+                        chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
+                        chrono::LocalResult::None => {
+                            // Time doesn't exist - try one hour later
+                            let adjusted = self.original_end.date_naive()
+                                .and_time(time + chrono::Duration::hours(1));
+                            adjusted.and_local_timezone(Local).single()
+                        }
+                    }
                 })
             }
             ResizeHandle::Right => {
                 // Horizontal resize - use hovered date with original time
                 self.hovered_date.and_then(|date| {
-                    date.and_time(self.original_end.time())
-                        .and_local_timezone(Local)
-                        .single()
+                    let naive = date.and_time(self.original_end.time());
+                    // Handle DST transitions
+                    match naive.and_local_timezone(Local) {
+                        chrono::LocalResult::Single(dt) => Some(dt),
+                        chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
+                        chrono::LocalResult::None => {
+                            // Time doesn't exist - try one hour later
+                            let adjusted = date.and_time(self.original_end.time() + chrono::Duration::hours(1));
+                            adjusted.and_local_timezone(Local).single()
+                        }
+                    }
                 })
             }
             _ => Some(self.original_end),

@@ -557,16 +557,25 @@ impl DayView {
                     if let Some((new_start, new_end)) = resize_ctx.hovered_times() {
                         log::info!("New times: start={}, end={}", new_start, new_end);
                         let event_service = EventService::new(database.connection());
-                        if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
-                            event.start = new_start;
-                            event.end = new_end;
-                            if let Err(err) = event_service.update(&event) {
+                        if let Ok(Some(event)) = event_service.get(resize_ctx.event_id) {
+                            // Capture old event for undo before modifying
+                            let old_event = event.clone();
+                            let mut new_event = event;
+                            new_event.start = new_start;
+                            new_event.end = new_end;
+                            
+                            // Validate the new event times
+                            if new_event.validate().is_err() {
+                                log::warn!("Resize would create invalid event, ignoring");
+                            } else if let Err(err) = event_service.update(&new_event) {
                                 log::error!(
                                     "Failed to resize event {}: {}",
                                     resize_ctx.event_id, err
                                 );
                             } else {
-                                result.moved_events.push(event);
+                                // Track for undo and countdown card sync
+                                result.undo_requests.push((old_event, new_event.clone()));
+                                result.moved_events.push(new_event);
                             }
                         }
                     } else {
@@ -866,17 +875,22 @@ impl DayView {
                     {
                         let new_end = target_start + drag_context.duration;
                         let event_service = EventService::new(database.connection());
-                        if let Ok(Some(mut event)) = event_service.get(drag_context.event_id) {
-                            event.start = target_start;
-                            event.end = new_end;
-                            if let Err(err) = event_service.update(&event) {
+                        if let Ok(Some(event)) = event_service.get(drag_context.event_id) {
+                            // Capture old event for undo before modifying
+                            let old_event = event.clone();
+                            let mut new_event = event;
+                            new_event.start = target_start;
+                            new_event.end = new_end;
+                            
+                            if let Err(err) = event_service.update(&new_event) {
                                 log::error!(
                                     "Failed to move event {}: {}",
                                     drag_context.event_id, err
                                 );
                             } else {
-                                // Track moved event for countdown card sync
-                                result.moved_events.push(event);
+                                // Track for undo and countdown card sync
+                                result.undo_requests.push((old_event, new_event.clone()));
+                                result.moved_events.push(new_event);
                             }
                         }
                     }
