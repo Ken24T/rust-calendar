@@ -11,6 +11,10 @@ use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 
 // Re-export utility functions for backward compatibility
 pub use super::utils::{format_event_tooltip, format_short_date, get_week_start, parse_color};
+
+// Re-export types for backward compatibility
+pub use super::types::{DeleteConfirmRequest, EventInteractionResult};
+
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
@@ -24,51 +28,6 @@ pub const SLOT_INTERVAL: i64 = 15;
 pub const TIME_LABEL_WIDTH: f32 = 50.0;
 pub const COLUMN_SPACING: f32 = 1.0;
 pub const SLOT_HEIGHT: f32 = 30.0;
-
-/// Request for delete confirmation (event_id, event_title, is_occurrence_only)
-#[derive(Clone)]
-pub struct DeleteConfirmRequest {
-    pub event_id: i64,
-    pub event_title: String,
-    /// If true, only delete this occurrence (for recurring events)
-    pub occurrence_only: bool,
-    /// The occurrence date (needed for occurrence-only deletion)
-    pub occurrence_date: Option<chrono::DateTime<chrono::Local>>,
-}
-
-/// Result of event interactions in views (context menus, clicks, etc.)
-#[derive(Default)]
-pub struct EventInteractionResult {
-    /// Event that was clicked for editing
-    pub event_to_edit: Option<Event>,
-    /// IDs of events that were deleted (need countdown card cleanup)
-    pub deleted_event_ids: Vec<i64>,
-    /// Events that were moved via drag-and-drop (need countdown card sync)
-    pub moved_events: Vec<Event>,
-    /// Request to show delete confirmation dialog
-    pub delete_confirm_request: Option<DeleteConfirmRequest>,
-    /// Request to create event from template (template_id, date, optional time)
-    pub template_selection: Option<(i64, NaiveDate, Option<NaiveTime>)>,
-    /// Undo requests: (old_event, new_event) pairs for drag/resize operations
-    pub undo_requests: Vec<(Event, Event)>,
-}
-
-impl EventInteractionResult {
-    pub fn merge(&mut self, other: EventInteractionResult) {
-        if other.event_to_edit.is_some() {
-            self.event_to_edit = other.event_to_edit;
-        }
-        self.deleted_event_ids.extend(other.deleted_event_ids);
-        self.moved_events.extend(other.moved_events);
-        if other.delete_confirm_request.is_some() {
-            self.delete_confirm_request = other.delete_confirm_request;
-        }
-        if other.template_selection.is_some() {
-            self.template_selection = other.template_selection;
-        }
-        self.undo_requests.extend(other.undo_requests);
-    }
-}
 
 /// Scroll to focus a specific time slot if it matches the focus request.
 pub fn maybe_focus_slot(
