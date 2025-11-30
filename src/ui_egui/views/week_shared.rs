@@ -289,8 +289,8 @@ pub fn render_ribbon_event_with_handles(
         }
     });
 
-    // Handle click to edit (only if not dragging)
-    if interactive_response.clicked() && !interactive_response.dragged() {
+    // Double-click to edit event
+    if interactive_response.double_clicked() {
         result.event_to_edit = Some(event.clone());
     }
 
@@ -1134,22 +1134,13 @@ pub fn render_time_cell(
                 }
             }
         }
-    } else if result.event_to_edit.is_none() && response.clicked() {
-        if let Some(event) = pointer_event {
-            result.event_to_edit = Some(event);
-        } else {
-            *show_event_dialog = true;
-            *event_dialog_date = Some(date);
-            *event_dialog_time = Some(time);
-            *event_dialog_recurrence = None;
-        }
     }
 
-    if response.double_clicked() {
-        *show_event_dialog = true;
-        *event_dialog_date = Some(date);
-        *event_dialog_time = Some(time);
-        *event_dialog_recurrence = Some("FREQ=WEEKLY".to_string());
+    // Double-click on event opens edit dialog
+    if result.event_to_edit.is_none() && response.double_clicked() {
+        if let Some(event) = pointer_event {
+            result.event_to_edit = Some(event);
+        }
     }
 
     if response.dragged() {

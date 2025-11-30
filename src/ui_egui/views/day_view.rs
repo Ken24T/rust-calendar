@@ -822,25 +822,13 @@ impl DayView {
                         }
                     }
                 }
-            } else if result.event_to_edit.is_none() && response.clicked() {
+            }
+
+            // Double-click on event opens edit dialog
+            if result.event_to_edit.is_none() && response.double_clicked() {
                 if let Some(event) = pointer_event.clone() {
                     result.event_to_edit = Some(event);
                 }
-
-                if result.event_to_edit.is_none() {
-                    *show_event_dialog = true;
-                    *event_dialog_date = Some(date);
-                    *event_dialog_time = Some(time); // Use the clicked time slot
-                    *event_dialog_recurrence = None; // Default to non-recurring
-                }
-            }
-
-            // Handle double-click for recurring event
-            if response.double_clicked() {
-                *show_event_dialog = true;
-                *event_dialog_date = Some(date);
-                *event_dialog_time = Some(time); // Use the clicked time slot
-                *event_dialog_recurrence = Some("FREQ=DAILY".to_string());
             }
 
             if response.dragged() {

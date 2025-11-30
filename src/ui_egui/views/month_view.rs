@@ -38,6 +38,8 @@ pub enum MonthViewAction {
     None,
     /// Switch to day view for a specific date
     SwitchToDayView(NaiveDate),
+    /// Switch to user's default view for a specific date
+    SwitchToDefaultView(NaiveDate),
     /// Create event from template (template_id, date)
     CreateFromTemplate(i64, NaiveDate),
 }
@@ -277,8 +279,8 @@ impl MonthView {
                                 col_width,
                             );
                             
-                            // Check if we need to switch to day view
-                            if matches!(cell_action, MonthViewAction::SwitchToDayView(_)) {
+                            // Check if we need to switch views
+                            if !matches!(cell_action, MonthViewAction::None) {
                                 result.action = cell_action;
                             }
                             
@@ -398,9 +400,14 @@ impl MonthView {
                 .and_then(Self::parse_color)
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
             
-            // Dim past events
+            // Dim past events with stronger dimming for visibility (matching week view)
             let event_color = if is_past {
-                base_color.linear_multiply(0.5)
+                Color32::from_rgba_unmultiplied(
+                    (base_color.r() as f32 * 0.4) as u8,
+                    (base_color.g() as f32 * 0.4) as u8,
+                    (base_color.b() as f32 * 0.4) as u8,
+                    140,
+                )
             } else {
                 base_color
             };
@@ -414,9 +421,9 @@ impl MonthView {
             ui.painter().rect_filled(event_rect, 2.0, event_color);
             event_hitboxes.push((event_rect, event.clone()));
 
-            // Dim text for past events
+            // Dim text for past events (matching week view)
             let text_color = if is_past {
-                Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+                Color32::from_rgba_unmultiplied(255, 255, 255, 150)
             } else {
                 Color32::WHITE
             };
@@ -683,8 +690,8 @@ impl MonthView {
             return (MonthViewAction::CreateFromTemplate(template_id, date), None, delete_confirm_request);
         }
 
-        // Handle click to edit or create event
-        if response.clicked() {
+        // Double-click on event opens edit dialog (check first, before single click)
+        if response.double_clicked() {
             if let Some(event) = pointer_event.clone() {
                 if let Some(id) = event.id {
                     *show_event_dialog = true;
@@ -693,18 +700,11 @@ impl MonthView {
                 }
                 return (MonthViewAction::None, Some(event), delete_confirm_request);
             }
-
-            // No event clicked - create new event
-            *show_event_dialog = true;
-            *event_dialog_date = Some(date);
-            *event_dialog_recurrence = None; // Default to non-recurring
         }
 
-        // Handle double-click for recurring event
-        if response.double_clicked() {
-            *show_event_dialog = true;
-            *event_dialog_date = Some(date);
-            *event_dialog_recurrence = Some("FREQ=MONTHLY".to_string());
+        // Single left-click anywhere in day cell switches to default view for that date
+        if response.clicked() {
+            return (MonthViewAction::SwitchToDefaultView(date), None, delete_confirm_request);
         }
         
         // Handle "+X more" click to switch to day view

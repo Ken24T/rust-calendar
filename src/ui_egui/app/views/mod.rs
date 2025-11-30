@@ -410,6 +410,17 @@ impl CalendarApp {
                 self.current_date = date;
                 self.current_view = ViewType::Day;
             }
+            MonthViewAction::SwitchToDefaultView(date) => {
+                self.current_date = date;
+                // Parse the default view from settings
+                self.current_view = match self.settings.current_view.as_str() {
+                    "Day" => ViewType::Day,
+                    "Week" => ViewType::Week,
+                    "WorkWeek" => ViewType::WorkWeek,
+                    "Month" => ViewType::Day, // If already in Month, go to Day
+                    _ => ViewType::Day, // Default fallback
+                };
+            }
             MonthViewAction::CreateFromTemplate(template_id, date) => {
                 self.create_event_from_template_with_date(template_id, date, None);
             }
