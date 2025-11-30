@@ -473,9 +473,19 @@ impl MonthView {
             None
         };
 
-        // Show tooltip when hovering over an event
+        // Show tooltip when hovering over an event and draw hover highlight
         if let Some((hit_rect, hovered_event)) = &pointer_hit {
             if response.hovered() && hit_rect.contains(pointer_pos.unwrap_or_default()) {
+                // Draw subtle hover highlight on the event
+                ui.painter().rect_stroke(
+                    hit_rect.expand(1.0),
+                    3.0,
+                    Stroke::new(2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 180)),
+                );
+                
+                // Show pointer cursor
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                
                 let tooltip_text = super::week_shared::format_event_tooltip(hovered_event);
                 response.clone().on_hover_ui_at_pointer(|ui| {
                     ui.label(tooltip_text);
