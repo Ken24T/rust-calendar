@@ -2,6 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
+use super::utils::parse_color;
 use super::week_shared::DeleteConfirmRequest;
 use super::filter_events_by_category;
 use crate::models::event::Event;
@@ -397,7 +398,7 @@ impl MonthView {
             let base_color = event
                 .color
                 .as_deref()
-                .and_then(Self::parse_color)
+                .and_then(parse_color)
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
             
             // Dim past events with stronger dimming for visibility (matching week view)
@@ -782,22 +783,5 @@ impl MonthView {
             result.push(all_days[(start + i) % 7]);
         }
         result
-    }
-
-    fn parse_color(hex: &str) -> Option<Color32> {
-        if hex.is_empty() {
-            return None;
-        }
-
-        let hex = hex.trim_start_matches('#');
-        if hex.len() != 6 {
-            return None;
-        }
-
-        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-
-        Some(Color32::from_rgb(r, g, b))
     }
 }

@@ -2,6 +2,7 @@
 
 use super::CalendarApp;
 use crate::models::event::Event;
+use crate::ui_egui::views::utils::parse_color;
 use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone};
 use egui::{Color32, RichText};
 
@@ -313,7 +314,7 @@ impl CalendarApp {
         let event_color = event
             .color
             .as_deref()
-            .and_then(parse_hex_color)
+            .and_then(parse_color)
             .unwrap_or(Color32::from_rgb(100, 150, 200));
 
         let available_width = ui.available_width();
@@ -433,17 +434,4 @@ fn days_in_month(year: i32, month: u32) -> u32 {
         .and_then(|d| d.pred_opt())
         .map(|d| d.day())
         .unwrap_or(30)
-}
-
-/// Parse a hex color string to Color32
-fn parse_hex_color(s: &str) -> Option<Color32> {
-    let s = s.trim_start_matches('#');
-    if s.len() == 6 {
-        let r = u8::from_str_radix(&s[0..2], 16).ok()?;
-        let g = u8::from_str_radix(&s[2..4], 16).ok()?;
-        let b = u8::from_str_radix(&s[4..6], 16).ok()?;
-        Some(Color32::from_rgb(r, g, b))
-    } else {
-        None
-    }
 }
