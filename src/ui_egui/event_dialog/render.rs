@@ -140,6 +140,18 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
 
     labeled_row(ui, "Location:", |ui| {
         ui.text_edit_singleline(&mut state.location);
+        
+        // Show "Open in Maps" button if location is not empty
+        let location_trimmed = state.location.trim();
+        if !location_trimmed.is_empty() {
+            if ui.button("🗺").on_hover_text("Open in Google Maps").clicked() {
+                let encoded = urlencoding::encode(location_trimmed);
+                let url = format!("https://www.google.com/maps/search/?api=1&query={}", encoded);
+                if let Err(e) = webbrowser::open(&url) {
+                    log::error!("Failed to open maps URL: {}", e);
+                }
+            }
+        }
     });
 
     // Category dropdown

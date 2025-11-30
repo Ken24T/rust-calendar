@@ -68,6 +68,10 @@ anyhow = "1.0"
 thiserror = "1.0"
 rfd = "0.15.4"
 
+# URL opening
+webbrowser = "1.0"
+urlencoding = "2.1"
+
 # System theme detection
 dark-light = "1.1"
 
