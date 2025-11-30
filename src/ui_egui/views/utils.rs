@@ -33,6 +33,44 @@ pub fn format_short_date(date: NaiveDate, date_format: &str) -> String {
     }
 }
 
+/// Get the number of days in a given month.
+///
+/// # Arguments
+/// * `year` - The year
+/// * `month` - The month (1-12)
+///
+/// # Returns
+/// The number of days in that month (28, 29, 30, or 31)
+pub fn days_in_month(year: i32, month: u32) -> u32 {
+    let (next_year, next_month) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
+    NaiveDate::from_ymd_opt(next_year, next_month, 1)
+        .and_then(|d| d.pred_opt())
+        .map(|d| d.day())
+        .unwrap_or(30)
+}
+
+/// Shift a date by the given number of months, preserving the day if possible.
+///
+/// # Arguments
+/// * `date` - The starting date
+/// * `delta` - The number of months to shift (positive = forward, negative = backward)
+///
+/// # Returns
+/// The new date, with the day clamped to the last day of the target month if necessary.
+/// For example, shifting Jan 31 by 1 month returns Feb 28 (or 29 in leap years).
+pub fn shift_month(date: NaiveDate, delta: i32) -> NaiveDate {
+    let total_months = (date.year() * 12) as i32 + (date.month() as i32 - 1) + delta;
+    let new_year = total_months.div_euclid(12);
+    let new_month = (total_months.rem_euclid(12) + 1) as u32;
+    let max_day = days_in_month(new_year, new_month);
+    let day = date.day().min(max_day);
+    NaiveDate::from_ymd_opt(new_year, new_month, day).unwrap_or(date)
+}
+
 /// Parse a hex color string to Color32.
 ///
 /// # Arguments
@@ -172,5 +210,46 @@ mod tests {
     fn test_format_short_date_iso() {
         let date = NaiveDate::from_ymd_opt(2024, 12, 4).unwrap();
         assert_eq!(format_short_date(date, "YYYY/MM/DD"), "2024/12/04");
+    }
+
+    #[test]
+    fn test_days_in_month_regular() {
+        assert_eq!(days_in_month(2024, 1), 31);
+        assert_eq!(days_in_month(2024, 4), 30);
+        assert_eq!(days_in_month(2024, 6), 30);
+        assert_eq!(days_in_month(2024, 12), 31);
+    }
+
+    #[test]
+    fn test_days_in_month_february() {
+        // Leap year
+        assert_eq!(days_in_month(2024, 2), 29);
+        // Non-leap year
+        assert_eq!(days_in_month(2023, 2), 28);
+    }
+
+    #[test]
+    fn test_shift_month_forward() {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        assert_eq!(shift_month(date, 1), NaiveDate::from_ymd_opt(2024, 2, 15).unwrap());
+        assert_eq!(shift_month(date, 12), NaiveDate::from_ymd_opt(2025, 1, 15).unwrap());
+    }
+
+    #[test]
+    fn test_shift_month_backward() {
+        let date = NaiveDate::from_ymd_opt(2024, 3, 15).unwrap();
+        assert_eq!(shift_month(date, -1), NaiveDate::from_ymd_opt(2024, 2, 15).unwrap());
+        assert_eq!(shift_month(date, -3), NaiveDate::from_ymd_opt(2023, 12, 15).unwrap());
+    }
+
+    #[test]
+    fn test_shift_month_clamp_day() {
+        // Jan 31 -> Feb 29 (leap year)
+        let date = NaiveDate::from_ymd_opt(2024, 1, 31).unwrap();
+        assert_eq!(shift_month(date, 1), NaiveDate::from_ymd_opt(2024, 2, 29).unwrap());
+        
+        // Jan 31 -> Feb 28 (non-leap year)
+        let date2 = NaiveDate::from_ymd_opt(2023, 1, 31).unwrap();
+        assert_eq!(shift_month(date2, 1), NaiveDate::from_ymd_opt(2023, 2, 28).unwrap());
     }
 }

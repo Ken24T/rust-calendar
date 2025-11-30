@@ -3,6 +3,8 @@
 use chrono::{Datelike, Local, NaiveDate};
 use egui::Context;
 
+use crate::ui_egui::views::utils::shift_month;
+
 /// Result from the export dialog
 pub enum ExportDialogResult {
     /// User hasn't made a choice yet
@@ -375,27 +377,4 @@ fn render_inline_date_picker(
     });
 
     action
-}
-
-/// Shift a date by the given number of months
-fn shift_month(date: NaiveDate, delta: i32) -> NaiveDate {
-    let total_months = (date.year() * 12) as i32 + (date.month() as i32 - 1) + delta;
-    let new_year = total_months.div_euclid(12);
-    let new_month = (total_months.rem_euclid(12) + 1) as u32;
-    let max_day = days_in_month(new_year, new_month);
-    let day = date.day().min(max_day);
-    NaiveDate::from_ymd_opt(new_year, new_month, day).unwrap_or(date)
-}
-
-/// Get the number of days in a given month
-fn days_in_month(year: i32, month: u32) -> u32 {
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1)
-    } else {
-        (year, month + 1)
-    };
-    NaiveDate::from_ymd_opt(next_year, next_month, 1)
-        .and_then(|d| d.pred_opt())
-        .map(|d| d.day())
-        .unwrap_or(30)
 }

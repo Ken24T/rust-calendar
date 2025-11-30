@@ -2,6 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::CalendarCellPalette;
+use super::utils::days_in_month;
 use crate::models::settings::Settings;
 use crate::ui_egui::theme::CalendarTheme;
 
@@ -89,7 +90,7 @@ impl QuarterView {
             - settings.first_day_of_week as i32
             + 7)
             % 7;
-        let days_in_month = Self::get_days_in_month(month_date.year(), month_date.month());
+        let days_in_month = days_in_month(month_date.year(), month_date.month()) as i32;
 
         // Build mini calendar grid
         let mut day_counter = 1 - first_weekday;
@@ -249,16 +250,5 @@ impl QuarterView {
             *event_dialog_date = Some(date);
             *event_dialog_recurrence = Some("FREQ=MONTHLY;INTERVAL=3".to_string());
         }
-    }
-
-    fn get_days_in_month(year: i32, month: u32) -> i32 {
-        NaiveDate::from_ymd_opt(
-            if month == 12 { year + 1 } else { year },
-            if month == 12 { 1 } else { month + 1 },
-            1,
-        )
-        .unwrap()
-        .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
-        .num_days() as i32
     }
 }

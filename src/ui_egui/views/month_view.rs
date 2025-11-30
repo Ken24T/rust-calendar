@@ -2,7 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
-use super::utils::parse_color;
+use super::utils::{days_in_month, parse_color};
 use super::week_shared::DeleteConfirmRequest;
 use super::filter_events_by_category;
 use crate::models::event::Event;
@@ -158,7 +158,7 @@ impl MonthView {
             - settings.first_day_of_week as i32
             + 7)
             % 7;
-        let days_in_month = Self::get_days_in_month(current_date.year(), current_date.month());
+        let days_in_month = days_in_month(current_date.year(), current_date.month()) as i32;
 
         // Calculate how many weeks are needed for this month
         // Total cells needed = days before month start + days in month
@@ -752,8 +752,8 @@ impl MonthView {
             .unwrap();
 
         // Get last day of month
-        let days_in_month = Self::get_days_in_month(date.year(), date.month());
-        let end_of_month = date.with_day(days_in_month as u32).unwrap();
+        let month_days = days_in_month(date.year(), date.month());
+        let end_of_month = date.with_day(month_days).unwrap();
         let end = Local
             .from_local_datetime(&end_of_month.and_hms_opt(23, 59, 59).unwrap())
             .single()
@@ -762,17 +762,6 @@ impl MonthView {
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
-    }
-
-    fn get_days_in_month(year: i32, month: u32) -> i32 {
-        NaiveDate::from_ymd_opt(
-            if month == 12 { year + 1 } else { year },
-            if month == 12 { 1 } else { month + 1 },
-            1,
-        )
-        .unwrap()
-        .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
-        .num_days() as i32
     }
 
     fn get_day_names(first_day_of_week: u8) -> Vec<&'static str> {

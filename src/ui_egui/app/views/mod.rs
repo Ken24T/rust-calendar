@@ -6,11 +6,12 @@ use crate::ui_egui::commands::UpdateEventCommand;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
+use crate::ui_egui::views::utils::shift_month;
 use crate::ui_egui::views::week_shared::DeleteConfirmRequest;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
 use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
-use chrono::{Datelike, Local, NaiveDate};
+use chrono::{Datelike, Local};
 use std::collections::HashSet;
 
 impl CalendarApp {
@@ -621,27 +622,4 @@ impl CalendarApp {
             self.state.date_picker_state.close();
         }
     }
-}
-
-/// Shift a date by the given number of months
-fn shift_month(date: NaiveDate, delta: i32) -> NaiveDate {
-    let total_months = (date.year() * 12) as i32 + (date.month() as i32 - 1) + delta;
-    let new_year = total_months.div_euclid(12);
-    let new_month = (total_months.rem_euclid(12) + 1) as u32;
-    let max_day = days_in_month(new_year, new_month);
-    let day = date.day().min(max_day);
-    NaiveDate::from_ymd_opt(new_year, new_month, day).unwrap_or(date)
-}
-
-/// Get the number of days in a given month
-fn days_in_month(year: i32, month: u32) -> u32 {
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1)
-    } else {
-        (year, month + 1)
-    };
-    NaiveDate::from_ymd_opt(next_year, next_month, 1)
-        .and_then(|d| d.pred_opt())
-        .map(|d| d.day())
-        .unwrap_or(30)
 }
