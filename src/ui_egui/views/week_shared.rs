@@ -300,12 +300,14 @@ pub fn render_ribbon_event_with_handles(
     // Draw resize handles if applicable (not past, not recurring, handles enabled)
     let can_resize = !is_past && event.recurrence_rule.is_none() && (show_left_handle || show_right_handle);
     
+    let mut on_resize_handle = false;
     if can_resize {
         let handles = HandleRects::for_ribbon_event_in_day(event_rect, show_left_handle, show_right_handle);
         
         // Check for hover on handles
         let pointer_pos = ui.input(|i| i.pointer.hover_pos());
         let hovered_handle = pointer_pos.and_then(|pos| handles.hit_test(pos));
+        on_resize_handle = hovered_handle.is_some();
         
         // Draw handles when hovering over the event
         if interactive_response.hovered() || hovered_handle.is_some() {
@@ -339,6 +341,11 @@ pub fn render_ribbon_event_with_handles(
                 }
             }
         }
+    }
+    
+    // Pointer cursor when hovering over ribbon event (not on resize handles)
+    if interactive_response.hovered() && !on_resize_handle {
+        ui.output_mut(|out| out.cursor_icon = CursorIcon::PointingHand);
     }
 
     (result, Some(event_rect))
@@ -854,6 +861,9 @@ pub fn render_time_cell(
         if !is_dragging && !is_resizing {
             ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
         }
+    } else if pointer_hit.is_some() && !is_dragging && !is_resizing {
+        // Pointer cursor when hovering over an event (indicates it's interactive)
+        ui.output_mut(|out| out.cursor_icon = CursorIcon::PointingHand);
     }
 
     // Show tooltip when hovering over an event (but not on resize handles)

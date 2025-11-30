@@ -502,11 +502,14 @@ impl DayView {
                 }
             }
 
-            // Set cursor for resize handles
+            // Set cursor for resize handles or pointer for events
             if let Some((handle, _, _)) = &hovered_handle {
                 if !is_dragging && !is_resizing {
                     ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
                 }
+            } else if pointer_hit.is_some() && !is_dragging && !is_resizing {
+                // Pointer cursor when hovering over an event (indicates it's interactive)
+                ui.output_mut(|out| out.cursor_icon = CursorIcon::PointingHand);
             }
 
             let pointer_for_hover = ui
