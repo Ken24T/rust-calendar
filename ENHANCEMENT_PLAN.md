@@ -1,9 +1,9 @@
 # Rust Calendar Enhancement Plan
 
 **Created:** November 19, 2025  
-**Last Updated:** November 29, 2025  
-**Status:** Phase 1 & 2 Complete, Phase 3-5 In Progress  
-**Current Branch:** feat/ux-improvements-20251129
+**Last Updated:** November 30, 2025  
+**Status:** Phase 1, 2, & 3 Complete, Phase 4-5 In Progress  
+**Current Branch:** feat/ux-improvements-20251130
 
 ## Overview
 
@@ -343,46 +343,37 @@ multi_select_mode: bool,
 
 ---
 
-### 11. Drag-to-Resize Events
+### 11. Drag-to-Resize Events ✅
 
+**Status:** ✅ COMPLETE (v1.0.26)
 **Priority:** Medium - Intuitive editing  
 **Estimated Time:** 4 hours  
-**Branch:** `feat/drag-resize-events`
+**Branch:** `feat/ux-improvements-20251129`
 
-**Implementation:**
-- Extend `DragManager` with `DragMode` enum:
-```rust
-enum DragMode {
-    Move,
-    ResizeStart,  // Dragging top edge
-    ResizeEnd,    // Dragging bottom edge
-}
-```
+**What was implemented:**
+- ✅ `ResizeManager` with handle detection and resize context
+- ✅ Top/bottom edge detection for timed events
+- ✅ Left/right edge detection for ribbon (multi-day) events
+- ✅ Visual resize handles on hover
+- ✅ Cursor changes (↕ for vertical, ↔ for horizontal)
+- ✅ Snap to 15-minute intervals
+- ✅ Only non-recurring, non-past events can be resized
+- ✅ Undo support via command pattern
 
-- Detect cursor position on event:
-  - Top 5px → ResizeStart cursor (↕)
-  - Bottom 5px → ResizeEnd cursor (↕)
-  - Middle → Move cursor (✋)
-
-- Implement resize logic:
-  - Snap to time slot intervals (15/30/60 min based on settings)
-  - Update event start/end via `EventService::update()`
-  - Visual feedback during drag (ghost event)
-
-- Only allow resize for non-recurring events (too complex for recurring)
-
-**Files to Modify:**
-- `src/ui_egui/drag.rs` - Add DragMode, edge detection, resize logic
-- `src/ui_egui/views/day_view.rs` - Handle resize interactions
-- `src/ui_egui/views/week_view.rs` - Handle resize interactions
-- `src/ui_egui/views/workweek_view.rs` - Handle resize interactions
+**Files Created/Modified:**
+- `src/ui_egui/resize.rs` - ResizeManager, ResizeContext, HandleRects ✅
+- `src/ui_egui/views/day_view.rs` - Resize interactions ✅
+- `src/ui_egui/views/week_view.rs` - Resize interactions ✅
+- `src/ui_egui/views/workweek_view.rs` - Resize interactions ✅
+- `src/ui_egui/views/week_shared.rs` - Ribbon resize for multi-day events ✅
 
 **Testing:**
-- Drag top edge to change start time
-- Drag bottom edge to change end time
-- Verify snapping to time slots
-- Test minimum duration (15 minutes)
-- Verify recurring events cannot be resized
+- ✅ Drag top edge to change start time
+- ✅ Drag bottom edge to change end time
+- ✅ Drag left/right edges for multi-day events
+- ✅ Verify snapping to 15-minute intervals
+- ✅ Recurring events cannot be resized
+- ✅ Past events cannot be resized
 
 ---
 
@@ -808,7 +799,7 @@ docs: document keyboard shortcuts in README
 ### Phase 3 Status
 - [x] Undo/Redo System
 - [ ] Multi-Select Events
-- [ ] Drag-to-Resize Events
+- [x] Drag-to-Resize Events
 - [ ] Countdown Card Templates
 
 ### Phase 4 Status
