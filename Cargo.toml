@@ -1,6 +1,6 @@
 [package]
 name = "rust-calendar"
-version = "1.0.21"
+version = "1.0.26"
 edition = "2021"
 authors = ["Ken24T"]
 description = "A modern Windows desktop calendar application with theming and event management"
