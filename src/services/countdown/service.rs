@@ -830,6 +830,44 @@ impl CountdownService {
         }
     }
 
+    /// Reset all card and container positions to safe defaults on the primary monitor.
+    /// This is useful when cards get "lost" on disconnected monitors or in invalid positions.
+    pub fn reset_all_positions(&mut self) {
+        const DEFAULT_X: f32 = 100.0;
+        const DEFAULT_Y: f32 = 100.0;
+        const DEFAULT_WIDTH: f32 = 300.0;
+        const DEFAULT_HEIGHT: f32 = 200.0;
+        const CARD_WIDTH: f32 = 120.0;
+        const CARD_HEIGHT: f32 = 110.0;
+        const CARD_SPACING: f32 = 20.0;
+
+        log::info!("Resetting all countdown card and container positions to defaults");
+
+        // Reset container geometry to a safe default position
+        self.container_geometry = Some(CountdownCardGeometry {
+            x: DEFAULT_X,
+            y: DEFAULT_Y,
+            width: DEFAULT_WIDTH,
+            height: DEFAULT_HEIGHT,
+        });
+
+        // Reset each card's geometry to stacked positions
+        for (index, card) in self.cards.iter_mut().enumerate() {
+            let offset = index as f32 * CARD_SPACING;
+            card.geometry = CountdownCardGeometry {
+                x: DEFAULT_X + offset,
+                y: DEFAULT_Y + offset,
+                width: CARD_WIDTH,
+                height: CARD_HEIGHT,
+            };
+            log::debug!("Reset card {:?} position to ({}, {})", card.id, card.geometry.x, card.geometry.y);
+        }
+
+        // Clear pending geometry updates since we're resetting
+        self.pending_geometry.clear();
+        self.dirty = true;
+    }
+
     pub fn card_order(&self) -> &[CountdownCardId] {
         &self.card_order
     }

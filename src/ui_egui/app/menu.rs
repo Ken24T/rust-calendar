@@ -353,6 +353,27 @@ impl CalendarApp {
                         .set_display_mode(CountdownDisplayMode::Container);
                     ui.close_menu();
                 }
+                
+                ui.separator();
+                
+                // Reset positions option - helpful when cards get lost on disconnected monitors
+                let card_count = self.context.countdown_service().cards().len();
+                let reset_label = if card_count > 0 {
+                    format!("🔄 Reset Card Positions ({})", card_count)
+                } else {
+                    "🔄 Reset Card Positions".to_string()
+                };
+                
+                if ui.button(&reset_label)
+                    .on_hover_text("Reset all countdown cards and container to default positions on the primary monitor")
+                    .clicked()
+                {
+                    self.context.countdown_service_mut().reset_all_positions();
+                    // Reset container UI state so it re-applies the new geometry
+                    self.countdown_ui.reset_container_state();
+                    self.toast_manager.info("Card positions reset to defaults");
+                    ui.close_menu();
+                }
             });
         });
     }
