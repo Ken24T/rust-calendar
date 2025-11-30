@@ -493,7 +493,7 @@ impl MonthView {
             }
         } else if response.hovered() {
             // Show hint tooltip when hovering on empty space in day cell
-            response.clone().on_hover_text("Click to view this day\nRight-click for more options");
+            response.clone().on_hover_text("Click to view this day\nDouble-click to create event\nRight-click for more options");
         }
 
         // Show "+N more" if there are more events - make it clickable
@@ -703,15 +703,22 @@ impl MonthView {
             return (MonthViewAction::CreateFromTemplate(template_id, date), None, delete_confirm_request);
         }
 
-        // Double-click on event opens edit dialog (check first, before single click)
+        // Double-click on event opens edit dialog, on empty space creates new event
         if response.double_clicked() {
             if let Some(event) = pointer_event.clone() {
+                // Double-click on event - edit it
                 if let Some(id) = event.id {
                     *show_event_dialog = true;
                     *event_to_edit = Some(id);
                     *event_dialog_date = Some(date);
                 }
                 return (MonthViewAction::None, Some(event), delete_confirm_request);
+            } else {
+                // Double-click on empty space - create new event for this date
+                *show_event_dialog = true;
+                *event_dialog_date = Some(date);
+                *event_dialog_recurrence = None;
+                return (MonthViewAction::None, None, delete_confirm_request);
             }
         }
 

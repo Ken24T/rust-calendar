@@ -1149,10 +1149,19 @@ pub fn render_time_cell(
         }
     }
 
-    // Double-click on event opens edit dialog
-    if result.event_to_edit.is_none() && response.double_clicked() {
+    // Double-click on event opens edit dialog, on empty space creates new event
+    if response.double_clicked() {
         if let Some(event) = pointer_event {
-            result.event_to_edit = Some(event);
+            // Double-click on event - edit it
+            if result.event_to_edit.is_none() {
+                result.event_to_edit = Some(event);
+            }
+        } else {
+            // Double-click on empty space - create new event at this time
+            *show_event_dialog = true;
+            *event_dialog_date = Some(date);
+            *event_dialog_time = Some(time);
+            *event_dialog_recurrence = None;
         }
     }
 
