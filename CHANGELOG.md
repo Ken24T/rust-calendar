@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.35] - 2025-12-01
+
+### Changed
+- **Code Modularization** - Major refactoring of view modules for improved maintainability:
+  - Created `views/utils.rs` module with centralized utility functions
+  - Created `views/types.rs` module with shared type definitions
+  - Extracted 15+ utility functions from large view files
+  - Centralized color constants: `DEFAULT_EVENT_COLOR`, `DIMMED_WHITE_TEXT`, `SEMI_DIMMED_WHITE_TEXT`
+  - Added `blend_current_time_highlight()` for time slot highlighting
+  - Added `format_time_hhmm()` generic time formatter
+  - Added `hours_since_midnight()` for time indicator positioning
+  - Extracted `dim_past_color()` and `dim_past_continuation_color()` helpers
+  - Moved `DeleteConfirmRequest` and `EventInteractionResult` types to dedicated module
+  - Reduced code duplication across day_view.rs, week_shared.rs, and month_view.rs
+  - Added comprehensive unit tests for all new utilities
+
 ## [1.0.21] - 2025-11-29
 
 ### Added
