@@ -2,7 +2,7 @@
 //!
 //! This module contains pure helper functions used across different view types.
 
-use chrono::{Datelike, Duration, Local, NaiveDate};
+use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Timelike};
 use egui::Color32;
 
 use crate::models::event::Event;
@@ -10,6 +10,9 @@ use crate::models::event::Event;
 /// Default color used for events when no custom color is specified.
 /// A pleasant blue-gray color (RGB: 100, 150, 200).
 pub const DEFAULT_EVENT_COLOR: Color32 = Color32::from_rgb(100, 150, 200);
+
+/// Dimmed white color for text on past events (alpha 150).
+pub const DIMMED_WHITE_TEXT: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 150);
 
 /// Get the display color for an event, falling back to the default if not set.
 ///
@@ -51,6 +54,12 @@ pub fn dim_past_continuation_color(color: Color32) -> Color32 {
 /// Check if an event is in the past (has ended before now).
 pub fn is_event_past(event: &Event) -> bool {
     event.end < Local::now()
+}
+
+/// Calculate hours since midnight as a float (e.g., 14:30 = 14.5).
+/// Used for positioning the current time indicator on time grids.
+pub fn hours_since_midnight(time: NaiveTime) -> f32 {
+    time.hour() as f32 + (time.minute() as f32 / 60.0)
 }
 
 /// Calculate the start of the week containing the given date.

@@ -1,11 +1,12 @@
-use chrono::{Local, NaiveDate, NaiveTime, TimeZone, Timelike};
+use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use egui::{Color32, CursorIcon, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
 use super::week_shared::{
     maybe_focus_slot, get_event_color, dim_past_color, dim_past_continuation_color,
-    is_event_past, DeleteConfirmRequest, EventInteractionResult, DEFAULT_EVENT_COLOR,
+    is_event_past, hours_since_midnight, DeleteConfirmRequest, EventInteractionResult,
+    DEFAULT_EVENT_COLOR,
 };
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
@@ -241,8 +242,7 @@ impl DayView {
             const SLOT_HEIGHT: f32 = 40.0;
             const SLOTS_PER_HOUR: f32 = 4.0;
             
-            let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
-            let relative_y = hours_since_midnight * SLOTS_PER_HOUR * SLOT_HEIGHT;
+            let relative_y = hours_since_midnight(now_time) * SLOTS_PER_HOUR * SLOT_HEIGHT;
 
             // Get the UI's current position to calculate absolute coordinates
             let ui_top = ui.min_rect().top();

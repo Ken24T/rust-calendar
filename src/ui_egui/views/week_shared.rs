@@ -2,7 +2,7 @@
 //!
 //! This module extracts common code to reduce duplication between week_view.rs and workweek_view.rs.
 
-use chrono::{Datelike, Local, NaiveDate, NaiveTime, Timelike};
+use chrono::{Datelike, Local, NaiveDate, NaiveTime};
 use egui::{Align, Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
@@ -12,7 +12,8 @@ use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 // Re-export utility functions for backward compatibility
 pub use super::utils::{
     dim_past_color, dim_past_continuation_color, format_event_tooltip, format_short_date,
-    get_event_color, get_week_start, is_event_past, DEFAULT_EVENT_COLOR,
+    get_event_color, get_week_start, hours_since_midnight, is_event_past, DEFAULT_EVENT_COLOR,
+    DIMMED_WHITE_TEXT,
 };
 
 // Re-export types for backward compatibility
@@ -95,7 +96,7 @@ pub fn render_ribbon_event_with_handles(
     
     // Text color for past events
     let text_color = if is_past {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 150)
+        DIMMED_WHITE_TEXT
     } else {
         Color32::WHITE
     };
@@ -453,8 +454,7 @@ pub fn draw_current_time_indicator(
         // Each hour has 4 slots (15 minutes each), each slot is SLOT_HEIGHT pixels
         const SLOTS_PER_HOUR: f32 = 4.0;
         
-        let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
-        let relative_y = hours_since_midnight * SLOTS_PER_HOUR * SLOT_HEIGHT;
+        let relative_y = hours_since_midnight(now_time) * SLOTS_PER_HOUR * SLOT_HEIGHT;
 
         let ui_top = ui.min_rect().top();
         let y_position = ui_top + relative_y;
