@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use super::palette::{DayStripPalette, TimeGridPalette};
 use super::week_shared::{
     maybe_focus_slot, get_event_color, dim_past_color, dim_past_continuation_color,
-    is_event_past, hours_since_midnight, format_time_hhmm, DeleteConfirmRequest, EventInteractionResult,
-    DEFAULT_EVENT_COLOR,
+    is_event_past, hours_since_midnight, format_time_hhmm, blend_current_time_highlight,
+    DeleteConfirmRequest, EventInteractionResult, DEFAULT_EVENT_COLOR, SEMI_DIMMED_WHITE_TEXT,
 };
 use super::{AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
@@ -333,20 +333,11 @@ impl DayView {
             let is_current_time_slot = date == today && now >= time && now < slot_end;
             
             // Background - highlight current time slot with a subtle tint
+            let base_bg = if is_hour_start { hour_bg } else { regular_bg };
             let bg_color = if is_current_time_slot {
-                // Blend with a soft highlight color (light blue/cyan tint)
-                let highlight = Color32::from_rgba_unmultiplied(100, 180, 255, 25);
-                let base = if is_hour_start { hour_bg } else { regular_bg };
-                // Simple alpha blend
-                Color32::from_rgb(
-                    ((base.r() as u16 * 230 + highlight.r() as u16 * 25) / 255) as u8,
-                    ((base.g() as u16 * 230 + highlight.g() as u16 * 25) / 255) as u8,
-                    ((base.b() as u16 * 230 + highlight.b() as u16 * 25) / 255) as u8,
-                )
-            } else if is_hour_start {
-                hour_bg
+                blend_current_time_highlight(base_bg)
             } else {
-                regular_bg
+                base_bg
             };
             ui.painter().rect_filled(rect, 0.0, bg_color);
 
@@ -933,7 +924,7 @@ impl DayView {
         
         // Dim text for past events
         let text_color = if is_past {
-            Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+            SEMI_DIMMED_WHITE_TEXT
         } else {
             Color32::WHITE
         };

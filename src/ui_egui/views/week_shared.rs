@@ -11,9 +11,10 @@ use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 
 // Re-export utility functions for backward compatibility
 pub use super::utils::{
-    dim_past_color, dim_past_continuation_color, format_event_tooltip, format_short_date,
-    format_time_hhmm, get_event_color, get_week_start, hours_since_midnight, is_event_past,
-    DEFAULT_EVENT_COLOR, DIMMED_WHITE_TEXT,
+    blend_current_time_highlight, dim_past_color, dim_past_continuation_color,
+    format_event_tooltip, format_short_date, format_time_hhmm, get_event_color, get_week_start,
+    hours_since_midnight, is_event_past, DEFAULT_EVENT_COLOR, DIMMED_WHITE_TEXT,
+    SEMI_DIMMED_WHITE_TEXT,
 };
 
 // Re-export types for backward compatibility
@@ -373,7 +374,7 @@ pub fn render_event_in_cell(
 
     // Dim text for past events
     let text_color = if is_past {
-        Color32::from_rgba_unmultiplied(255, 255, 255, 180)
+        SEMI_DIMMED_WHITE_TEXT
     } else {
         Color32::WHITE
     };
@@ -535,12 +536,7 @@ pub fn render_time_cell(
     };
     
     let bg_color = if is_current_time_slot {
-        // Blend with a soft highlight color (light blue/cyan tint)
-        Color32::from_rgb(
-            ((base_bg.r() as u16 * 230 + 100 * 25) / 255) as u8,
-            ((base_bg.g() as u16 * 230 + 180 * 25) / 255) as u8,
-            ((base_bg.b() as u16 * 230 + 255 * 25) / 255) as u8,
-        )
+        blend_current_time_highlight(base_bg)
     } else {
         base_bg
     };

@@ -11,8 +11,13 @@ use crate::models::event::Event;
 /// A pleasant blue-gray color (RGB: 100, 150, 200).
 pub const DEFAULT_EVENT_COLOR: Color32 = Color32::from_rgb(100, 150, 200);
 
-/// Dimmed white color for text on past events (alpha 150).
+/// Dimmed white color for text on past all-day/ribbon events (alpha 150).
+/// Use for ribbon events in week views.
 pub const DIMMED_WHITE_TEXT: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 150);
+
+/// Slightly dimmed white color for text on past timed events (alpha 180).
+/// Use for events in time grid cells (day/week views).
+pub const SEMI_DIMMED_WHITE_TEXT: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 180);
 
 /// Get the display color for an event, falling back to the default if not set.
 ///
@@ -54,6 +59,24 @@ pub fn dim_past_continuation_color(color: Color32) -> Color32 {
 /// Check if an event is in the past (has ended before now).
 pub fn is_event_past(event: &Event) -> bool {
     event.end < Local::now()
+}
+
+/// Blend a base background color with a highlight tint for current time slots.
+/// Uses a soft blue/cyan tint at 25/255 intensity.
+///
+/// # Arguments
+/// * `base_color` - The base background color for the slot
+///
+/// # Returns
+/// A blended color with a subtle blue highlight
+pub fn blend_current_time_highlight(base_color: Color32) -> Color32 {
+    // Highlight color: rgba(100, 180, 255, 25)
+    // Blend formula: (base * 230 + highlight * 25) / 255
+    Color32::from_rgb(
+        ((base_color.r() as u16 * 230 + 100 * 25) / 255) as u8,
+        ((base_color.g() as u16 * 230 + 180 * 25) / 255) as u8,
+        ((base_color.b() as u16 * 230 + 255 * 25) / 255) as u8,
+    )
 }
 
 /// Calculate hours since midnight as a float (e.g., 14:30 = 14.5).
@@ -353,5 +376,20 @@ mod tests {
         
         let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
         assert_eq!(format_time_hhmm(&midnight), "00:00");
+    }
+
+    #[test]
+    fn test_blend_current_time_highlight() {
+        // Test with a dark background
+        let dark_bg = Color32::from_rgb(40, 40, 50);
+        let highlighted = blend_current_time_highlight(dark_bg);
+        // Should be slightly lighter with blue tint
+        assert!(highlighted.r() > dark_bg.r() || highlighted.g() > dark_bg.g() || highlighted.b() > dark_bg.b());
+        
+        // Test with a light background
+        let light_bg = Color32::from_rgb(240, 240, 240);
+        let highlighted_light = blend_current_time_highlight(light_bg);
+        // Should have a blue tint
+        assert!(highlighted_light.b() > highlighted_light.r());
     }
 }
