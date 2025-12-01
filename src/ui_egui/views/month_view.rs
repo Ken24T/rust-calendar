@@ -2,7 +2,7 @@ use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
-use super::utils::{days_in_month, dim_past_color, get_event_color, get_short_day_names, is_event_past, DIMMED_WHITE_TEXT};
+use super::utils::{days_in_month, dim_past_color, format_time_hhmm, get_event_color, get_short_day_names, is_event_past, DIMMED_WHITE_TEXT};
 use super::week_shared::DeleteConfirmRequest;
 use super::filter_events_by_category;
 use crate::models::event::Event;
@@ -551,7 +551,7 @@ impl MonthView {
                         let time_str = if event.all_day {
                             "All day".to_string()
                         } else {
-                            event.start.format("%H:%M").to_string()
+                            format_time_hhmm(&event.start)
                         };
                         ui.label(format!("• {} - {}", time_str, event.title));
                     }

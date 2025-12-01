@@ -12,8 +12,8 @@ use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 // Re-export utility functions for backward compatibility
 pub use super::utils::{
     dim_past_color, dim_past_continuation_color, format_event_tooltip, format_short_date,
-    get_event_color, get_week_start, hours_since_midnight, is_event_past, DEFAULT_EVENT_COLOR,
-    DIMMED_WHITE_TEXT,
+    format_time_hhmm, get_event_color, get_week_start, hours_since_midnight, is_event_past,
+    DEFAULT_EVENT_COLOR, DIMMED_WHITE_TEXT,
 };
 
 // Re-export types for backward compatibility

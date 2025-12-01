@@ -62,6 +62,17 @@ pub fn hours_since_midnight(time: NaiveTime) -> f32 {
     time.hour() as f32 + (time.minute() as f32 / 60.0)
 }
 
+/// Format a time in 24-hour HH:MM format.
+///
+/// # Arguments
+/// * `time` - The time to format (NaiveTime, DateTime, etc.)
+///
+/// # Returns
+/// A string like "14:30" or "09:00"
+pub fn format_time_hhmm<T: Timelike>(time: &T) -> String {
+    format!("{:02}:{:02}", time.hour(), time.minute())
+}
+
 /// Calculate the start of the week containing the given date.
 ///
 /// # Arguments
@@ -330,5 +341,17 @@ mod tests {
         let dimmed = dim_past_continuation_color(color);
         // 100 * 0.25 = 25, 200 * 0.25 = 50, 100 * 0.25 = 25, alpha = 120
         assert_eq!(dimmed, Color32::from_rgba_unmultiplied(25, 50, 25, 120));
+    }
+
+    #[test]
+    fn test_format_time_hhmm() {
+        let time = NaiveTime::from_hms_opt(14, 30, 0).unwrap();
+        assert_eq!(format_time_hhmm(&time), "14:30");
+        
+        let time_morning = NaiveTime::from_hms_opt(9, 5, 0).unwrap();
+        assert_eq!(format_time_hhmm(&time_morning), "09:05");
+        
+        let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        assert_eq!(format_time_hhmm(&midnight), "00:00");
     }
 }

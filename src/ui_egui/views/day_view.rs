@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use super::palette::{DayStripPalette, TimeGridPalette};
 use super::week_shared::{
     maybe_focus_slot, get_event_color, dim_past_color, dim_past_continuation_color,
-    is_event_past, hours_since_midnight, DeleteConfirmRequest, EventInteractionResult,
+    is_event_past, hours_since_midnight, format_time_hhmm, DeleteConfirmRequest, EventInteractionResult,
     DEFAULT_EVENT_COLOR,
 };
 use super::{AutoFocusRequest, CountdownRequest};
@@ -959,8 +959,8 @@ impl DayView {
         // Time range
         let time_str = format!(
             "{} - {}",
-            event.start.format("%H:%M"),
-            event.end.format("%H:%M")
+            format_time_hhmm(&event.start),
+            format_time_hhmm(&event.end)
         );
         ui.painter().text(
             Pos2::new(text_rect.left(), text_rect.top() + 2.0),
