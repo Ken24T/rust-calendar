@@ -46,3 +46,6 @@ $RECYCLE.BIN/
 # Testing
 /test_output/
 /coverage/
+
+# Archive (internal docs/planning files)
+/archive/
