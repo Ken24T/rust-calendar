@@ -74,20 +74,19 @@ Purpose: Close out the current branch cleanly and start the next one.
 Behaviour (local-first, remote-safe):
 
 1. **Assess whether a SHIP is needed** on the current branch.
-
-  - If there are uncommitted changes or commits since the last `vX.Y.Z` tag, recommend SHIP.
+   - If there are uncommitted changes or commits since the last `vX.Y.Z` tag, recommend SHIP.
    - If agreed, run the full SHIP workflow **before** branching.
 
-2. **Merge current branch into local \ ****************main****************.**
+1. **Merge current branch into local `main`.**
 
    - Ensure working tree is clean.
    - Checkout `main`.
    - Merge using a non-destructive merge (no rebase).
    - Stop on conflicts.
 
-3. **Create and switch to the new branch** from updated local `main`.
+1. **Create and switch to the new branch** from updated local `main`.
 
-4. **Remote safety**
+1. **Remote safety**
 
    - Any push requires explicit approval.
 
@@ -106,35 +105,35 @@ Purpose: Cleanly sync work so development can continue on another computer.
 Behaviour (safe, deterministic):
 
 1. **Preflight**
-  - Report current branch explicitly.
-  - Confirm working tree state.
+   - Report current branch explicitly.
+   - Confirm working tree state.
 
-2. **Stage everything**
-  - Stage all local changes (tracked + new files).
+1. **Stage everything**
+   - Stage all local changes (tracked + new files).
 
-3. **Test gate**
-  - Run the repo test command(s) from the Project Profile.
-  - Proceed only if tests pass at 100%.
-  - Stop immediately on failure and report.
+1. **Test gate**
+   - Run the repo test command(s) from the Project Profile.
+   - Proceed only if tests pass at 100%.
+   - Stop immediately on failure and report.
 
-4. **Commit everything**
-  - If staged changes exist, commit them automatically with a clear message.
+1. **Commit everything**
+   - If staged changes exist, commit them automatically with a clear message.
 
-5. **Ship if needed**
-  - If release policy says SHIP is required (or versions are out of sync), run the full SHIP/TCTBP workflow.
-  - If changes are **docs-only or infrastructure-only** (plans, runbooks, internal guidance), skip bump/tag and continue.
-  - Otherwise continue without bump/tag when SHIP is not required.
+1. **Ship if needed**
+   - If release policy says SHIP is required (or versions are out of sync), run the full SHIP/TCTBP workflow.
+   - If changes are **docs-only or infrastructure-only** (plans, runbooks, internal guidance), skip bump/tag and continue.
+   - Otherwise continue without bump/tag when SHIP is not required.
 
-6. **Merge to local main**
-  - Checkout `main` and merge the current branch using a non-destructive merge (no rebase).
-  - Stop on conflicts.
+1. **Merge to local main**
+   - Checkout `main` and merge the current branch using a non-destructive merge (no rebase).
+   - Stop on conflicts.
 
-7. **Push**
-  - Push `main` to origin.
-  - Push tags (if a SHIP occurred or tags exist).
+1. **Push**
+   - Push `main` to origin.
+   - Push tags (if a SHIP occurred or tags exist).
 
-8. **Summary**
-  - Summarise: branch, commits created, tests run, merge result, and pushes performed.
+1. **Summary**
+   - Summarise: branch, commits created, tests run, merge result, and pushes performed.
 
 Approval rules:
 
@@ -145,7 +144,7 @@ Approval rules:
 
 ## SHIP / TCTBP Workflow
 
-**SHIP = Preflight → Test → Problems → Bump → Commit → Tag → Push**
+> SHIP = Preflight → Test → Problems → Bump → Commit → Tag → Push
 
 ### 1. Preflight
 
@@ -207,7 +206,7 @@ During SHIP, the agent may proceed through **Bump → Commit → Tag** without p
 
 ## Permissions Expectations (Authoritative)
 
-**Allowed by Default**
+### Allowed by Default
 
 - Local file operations
 - Tests, lint, build
@@ -215,7 +214,7 @@ During SHIP, the agent may proceed through **Bump → Commit → Tag** without p
 - Branch switching and merging
 - **Non-destructive remote reads** (`fetch`, logs, diffs)
 
-**Require Explicit Approval**
+### Require Explicit Approval
 
 - Push (any remote)
 - Delete branches
