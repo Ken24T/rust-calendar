@@ -88,6 +88,22 @@ impl<'a> EventSyncMapService<'a> {
         Ok(())
     }
 
+    pub fn list_by_source_id(&self, source_id: i64) -> Result<Vec<EventSyncMap>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, source_id, external_uid, local_event_id,
+                        external_last_modified, external_etag_hash, last_seen_at
+                 FROM event_sync_map
+                 WHERE source_id = ?1",
+            )
+            .context("Failed to prepare event_sync_map list query")?;
+
+        let rows = stmt.query_map([source_id], Self::row_to_mapping)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .context("Failed to list event sync map rows by source")
+    }
+
     pub fn delete_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<()> {
         let rows_affected = self
             .conn
@@ -274,5 +290,30 @@ mod tests {
             .get_by_source_and_uid(source_id, "uid-del")
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn test_list_by_source_id() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+        let local_event_id = create_event(conn);
+        let service = EventSyncMapService::new(conn);
+
+        let mapping = EventSyncMap {
+            id: None,
+            source_id,
+            external_uid: "uid-list".to_string(),
+            local_event_id,
+            external_last_modified: None,
+            external_etag_hash: None,
+            last_seen_at: None,
+        };
+        service.create(mapping).unwrap();
+
+        let listed = service.list_by_source_id(source_id).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].external_uid, "uid-list");
     }
 }

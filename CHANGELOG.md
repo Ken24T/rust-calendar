@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-02-27
+
+### Added
+- Stage 1 S4 sync engine foundations:
+  - New `CalendarSyncEngine` orchestration for per-source sync runs and batch sync across enabled sources.
+  - Source-scoped upsert by (`source_id`, `external_uid`) using `event_sync_map` identity mapping.
+  - Deletion reconciliation for mapped events not present in the latest feed payload.
+  - Sync run result counters for created/updated/deleted/skipped events.
+
+### Changed
+- Extended mapping service with source listing support used by reconciliation (`list_by_source_id`).
+
 ## [1.4.1] - 2026-02-27
 
 ### Added
