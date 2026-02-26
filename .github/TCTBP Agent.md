@@ -103,15 +103,18 @@ Behaviour (local-first, remote-safe):
    - If the user declines SHIP, run tests at minimum to confirm the codebase is not broken.
    - Stop on test failure — do not create a branch from broken code.
 
-3. **Merge current branch into local `main`.**
+3. **Merge current branch into the default branch.**
    - Ensure working tree is clean.
-   - Checkout `main`.
+   - Checkout the default branch (e.g. `main`, read from `TCTBP.json`).
    - Merge using a non-destructive merge (no rebase).
    - Stop on conflicts.
 
-4. **Create and switch to the new branch** from updated local `main`.
+4. **Create and switch to the new branch** from the updated default branch.
 
-5. **Remote safety**
+5. **Cleanup (Optional)**
+   - Ask the user if they want to delete the old feature branch locally and remotely.
+
+6. **Remote safety**
    - Any push requires explicit approval.
 
 Versioning interaction:
@@ -149,18 +152,18 @@ Behaviour (safe, deterministic):
    - If changes are **docs-only or infrastructure-only** (plans, runbooks, internal guidance), skip bump/tag and continue.
    - Otherwise continue without bump/tag when SHIP is not required.
 
-6. **Merge to local main**
-   - Checkout `main` and merge the current branch using a non-destructive merge (no rebase).
+6. **Merge to default branch**
+   - Checkout the default branch (e.g. `main`) and merge the current branch using a non-destructive merge (no rebase).
    - Stop on conflicts.
 
-7. **Push (all three: feature branch, main, tags)**
+7. **Push (all three: feature branch, default branch, tags)**
    - Push the **current feature branch** to origin.
-   - Push `main` to origin.
+   - Push the default branch to origin.
    - Push tags (if a SHIP occurred or tags exist).
    - All three pushes must succeed. Report any failures immediately.
 
 8. **Verify sync**
-   - Confirm local `main` matches `origin/main` (same commit SHA).
+   - Confirm local default branch matches `origin/<default-branch>` (same commit SHA).
    - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
    - If either is out of sync, stop and report.
 
@@ -169,11 +172,11 @@ Behaviour (safe, deterministic):
 
 10. **Summary**
     - Summarise: branch, commits created, tests run, merge result, and pushes performed.
-    - Explicitly confirm: feature branch, main, and tags are all synced to origin.
+    - Explicitly confirm: feature branch, default branch, and tags are all synced to origin.
 
 Approval rules:
 
-- Using the `handoff` trigger grants approval to push the **feature branch**, `main`, and tags **for this workflow only**.
+- Using the `handoff` trigger grants approval to push the **feature branch**, the default branch, and tags **for this workflow only**.
 - Any other remote push still requires explicit approval.
 
 ---
@@ -195,19 +198,20 @@ Behaviour (read-only, never pushes):
    - Run `git fetch --all --prune --tags` to sync all remote state.
 
 3. **Detect and checkout the active feature branch**
-   - Auto-detect the branch from the last handoff: inspect remote branches sorted by most recent commit (`git branch -r --sort=-committerdate`), filter out `origin/main` and `origin/HEAD`, and select the top result.
+   - Auto-detect the branch from the last handoff: inspect remote branches sorted by most recent commit (`git branch -r --sort=-committerdate`), filter out `origin/<default-branch>` and `origin/HEAD`, and select the top result.
+   - **Confirmation:** Explicitly state the detected branch and its last commit date, and ask the user to confirm before checking it out (mitigates the "committer date vs push date" edge case).
    - If already on the correct branch, skip checkout.
-   - If on `main` or a different branch, checkout the detected feature branch and set up tracking.
-   - If detection is ambiguous (e.g. multiple branches updated at the same timestamp), ask the user which branch to resume.
+   - If on the default branch or a different branch, checkout the detected feature branch and set up tracking.
+   - If detection is ambiguous, ask the user which branch to resume.
 
 4. **Pull latest**
    - Fast-forward the feature branch to match the remote (`git pull --ff-only`).
-   - Also update local `main` to match `origin/main` (`git checkout main && git pull --ff-only && git checkout <feature-branch>`).
+   - Also update the local default branch to match its remote counterpart (`git checkout <default-branch> && git pull --ff-only && git checkout <feature-branch>`).
    - Stop on merge conflicts or non-fast-forward situations.
 
 5. **Verify sync**
    - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
-   - Confirm local `main` matches `origin/main` (same commit SHA).
+   - Confirm local default branch matches `origin/<default-branch>` (same commit SHA).
    - If either is out of sync, stop and report the discrepancy before proceeding.
 
 6. **Verification gate**
@@ -219,7 +223,7 @@ Behaviour (read-only, never pushes):
 
 7. **Summary**
    - Report: branch checked out, commits pulled in (with short log of new commits since local was last updated), verification results.
-   - Explicitly confirm: feature branch and main are both in sync with origin.
+   - Explicitly confirm: feature branch and default branch are both in sync with origin.
    - Confirm: "Ready to continue where you left off."
 
 Approval rules:
@@ -243,8 +247,8 @@ Behaviour:
 2. **Report**
    - Current branch.
    - Working tree state (clean / number of uncommitted changes).
-   - Current version (from `Cargo.toml`) and last tag.
-   - Sync state: local vs remote SHA for current branch and `main`.
+   - Current version (from `versionFiles` in `TCTBP.json`) and last tag.
+   - Sync state: local vs remote SHA for current branch and the default branch.
    - Commits ahead/behind for both branches.
    - Whether a SHIP is needed (uncommitted changes or unshipped commits since last tag).
 
@@ -316,10 +320,10 @@ Ensure lint, build, and test diagnostics are clean (zero warnings if enforced).
 
 - **Z (patch)** increments on **every SHIP**, **except** when the change set is **docs-only or infrastructure-only** (plans, runbooks, internal guidance).
 - **Y (minor)** increments on the **first SHIP of a new work branch**, resetting Z to 0.
-  - Operational definition: "first SHIP on a branch" means no prior shipped tag (`vX.Y.Z`) exists on commits unique to the current branch since it diverged from `main`.
+  - Operational definition: "first SHIP on a branch" means no prior shipped tag (`vX.Y.Z`) exists on commits unique to the current branch since it diverged from the default branch.
 - **X (major)** only by explicit instruction
 
-The bump must be applied **before committing**, so the resulting commit contains the new version.
+The bump must be applied to all files listed in `versionFiles` in `TCTBP.json` **before committing**, so the resulting commit contains the new version.
 
 ---
 
@@ -334,11 +338,11 @@ During SHIP, the agent may proceed through **Bump → Commit → Tag** without p
 
 ### 5a. CHANGELOG (Optional)
 
-If `CHANGELOG.md` exists in the repo:
+If `CHANGELOG.md` exists in the repo and `changelogFormat` is specified in `TCTBP.json`:
 
 - Propose an entry for the new version based on commits since the last tag.
 - Use the conventional commit messages to categorise changes (e.g. feat, fix, docs, refactor).
-- Insert the entry under the new version heading at the top of the changelog.
+- If format is `keep-a-changelog`, move items from the `[Unreleased]` section to a new `[vX.Y.Z]` heading.
 - Include the entry in the same commit as the version bump.
 
 If `CHANGELOG.md` does not exist, skip this step silently.
@@ -395,6 +399,8 @@ On any failure:
 - Never rewrite history without approval
 - Suggest using `abort` trigger for guided recovery if the failure left partial state
 
+**Merge Conflicts:** If a workflow stops due to a merge conflict (e.g. during Handoff or Branch creation), instruct the user to resolve the conflict manually, commit the resolution, and then re-trigger the workflow to complete the remaining steps.
+
 ---
 
 ## Appendix: `TCTBP.json` (Canonical Reference)
@@ -403,10 +409,15 @@ The authoritative JSON configuration is in `TCTBP.json` at the repo root's `.git
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "governance": {
     "sourceOfTruth": "TCTBP.json",
     "fallbackDocument": "TCTBP Agent.md"
+  },
+  "project": {
+    "defaultBranch": "main",
+    "versionFiles": ["Cargo.toml"],
+    "changelogFormat": "keep-a-changelog"
   },
   "activation": {
     "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please", "status", "status please", "abort"],
