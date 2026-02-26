@@ -1,8 +1,13 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "governance": {
     "sourceOfTruth": "TCTBP.json",
     "fallbackDocument": "TCTBP Agent.md"
+  },
+  "project": {
+    "defaultBranch": "main",
+    "versionFiles": ["Cargo.toml"],
+    "changelogFormat": "keep-a-changelog"
   },
   "activation": {
     "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please", "status", "status please", "abort"],
