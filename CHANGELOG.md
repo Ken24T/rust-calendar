@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-02-27
+
+### Added
+- Stage 1 S5 settings UI controls for Google Calendar read-only sync:
+  - Add source form (name, private ICS URL, poll interval).
+  - Per-source update/delete actions.
+  - Manual “Sync now” action with sync result feedback.
+  - Status display for last sync outcome and last error.
+
+### Changed
+- Added persistent settings dialog UI state so source drafts can be edited safely across frames.
+
+## [1.4.2] - 2026-02-27
+
+### Added
+- Stage 1 S4 sync engine foundations:
+  - New `CalendarSyncEngine` orchestration for per-source sync runs and batch sync across enabled sources.
+  - Source-scoped upsert by (`source_id`, `external_uid`) using `event_sync_map` identity mapping.
+  - Deletion reconciliation for mapped events not present in the latest feed payload.
+  - Sync run result counters for created/updated/deleted/skipped events.
+
+### Changed
+- Extended mapping service with source listing support used by reconciliation (`list_by_source_id`).
+
+## [1.4.1] - 2026-02-27
+
+### Added
+- Stage 1 S3 sync pipeline improvements:
+  - New cross-platform ICS fetcher (`reqwest` + `rustls`) with timeout, retries, payload size guard, and URL redaction for logs.
+  - Metadata-aware ICS import path that captures event `UID` and raw `LAST-MODIFIED` while preserving existing event import APIs.
+
+### Changed
+- Improved iCalendar datetime parsing to better handle UTC (`Z`) and `TZID` forms, reducing timezone interpretation issues across Windows and Linux.
+
+## [1.4.0] - 2026-02-27
+
+### Added
+- Stage 1 Google Calendar read-only sync foundations:
+  - New `calendar_sources` persistence model, validation, and CRUD service for managing multiple Google ICS feeds.
+  - New `event_sync_map` model and table with unique (`source_id`, `external_uid`) mapping for deterministic external identity tracking.
+  - New `EventSyncMapService` methods for mapping create/lookup/touch/delete operations.
+- New schema coverage and service tests for `calendar_sources` and `event_sync_map` tables and mapping behaviour.
+
 ## [1.3.0] - 2026-02-27
 
 ### Changed

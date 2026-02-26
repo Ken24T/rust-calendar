@@ -151,4 +151,34 @@ mod tests {
         assert_eq!(end, "2025-11-07T11:00:00Z");
         assert_eq!(all_day, 0);
     }
+
+    #[test]
+    fn test_calendar_sources_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='calendar_sources'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(result.unwrap(), 1, "calendar_sources table should exist");
+    }
+
+    #[test]
+    fn test_event_sync_map_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='event_sync_map'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(result.unwrap(), 1, "event_sync_map table should exist");
+    }
 }

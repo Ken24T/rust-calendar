@@ -273,6 +273,7 @@ impl CalendarApp {
             ctx,
             &mut self.settings,
             self.context.database(),
+            &mut self.state.settings_dialog_state,
             &mut self.show_settings_dialog,
         );
 

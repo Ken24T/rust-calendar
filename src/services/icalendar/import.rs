@@ -2,25 +2,41 @@ use crate::models::event::Event;
 use anyhow::Result;
 use chrono::Local;
 
-use super::utils::{parse_date, parse_datetime, unescape_text};
+use super::utils::{parse_date, parse_datetime_with_tzid, unescape_text};
+
+#[derive(Debug, Clone)]
+pub struct ImportedIcsEvent {
+    pub event: Event,
+    pub uid: Option<String>,
+    pub raw_last_modified: Option<String>,
+}
 
 pub fn from_str(ics_content: &str) -> Result<Vec<Event>> {
+    let imported = from_str_with_metadata(ics_content)?;
+    Ok(imported.into_iter().map(|item| item.event).collect())
+}
+
+pub fn from_str_with_metadata(ics_content: &str) -> Result<Vec<ImportedIcsEvent>> {
     let mut events = Vec::new();
     let lines: Vec<&str> = ics_content.lines().collect();
 
     let mut in_event = false;
-    let mut current_event: Option<Event> = None;
+    let mut current_event: Option<ImportedIcsEvent> = None;
 
     for line in lines {
         let line = line.trim();
 
         if line == "BEGIN:VEVENT" {
             in_event = true;
-            current_event = Some(blank_event());
+            current_event = Some(ImportedIcsEvent {
+                event: blank_event(),
+                uid: None,
+                raw_last_modified: None,
+            });
         } else if line == "END:VEVENT" {
             in_event = false;
             if let Some(event) = current_event.take() {
-                if !event.title.is_empty() {
+                if !event.event.title.is_empty() {
                     events.push(event);
                 }
             }
@@ -34,10 +50,11 @@ pub fn from_str(ics_content: &str) -> Result<Vec<Event>> {
     Ok(events)
 }
 
-fn parse_event_property(line: &str, event: &mut Event) -> Result<()> {
+fn parse_event_property(line: &str, imported: &mut ImportedIcsEvent) -> Result<()> {
     if let Some(colon_pos) = line.find(':') {
         let (key_part, value) = line.split_at(colon_pos);
         let value = &value[1..];
+        let tzid = extract_tzid(key_part);
 
         let key = if let Some(semicolon) = key_part.find(';') {
             &key_part[..semicolon]
@@ -46,55 +63,68 @@ fn parse_event_property(line: &str, event: &mut Event) -> Result<()> {
         };
 
         match key {
+            "UID" => {
+                imported.uid = Some(unescape_text(value));
+            }
             "SUMMARY" => {
-                event.title = unescape_text(value);
+                imported.event.title = unescape_text(value);
             }
             "DESCRIPTION" => {
-                event.description = Some(unescape_text(value));
+                imported.event.description = Some(unescape_text(value));
             }
             "LOCATION" => {
-                event.location = Some(unescape_text(value));
+                imported.event.location = Some(unescape_text(value));
             }
             "CATEGORIES" => {
-                event.category = Some(unescape_text(value));
+                imported.event.category = Some(unescape_text(value));
             }
             "X-APPLE-CALENDAR-COLOR" => {
-                event.color = Some(value.to_string());
+                imported.event.color = Some(value.to_string());
             }
             "DTSTART" => {
                 if key_part.contains("VALUE=DATE") {
-                    event.all_day = true;
-                    event.start = parse_date(value)?;
+                    imported.event.all_day = true;
+                    imported.event.start = parse_date(value)?;
                 } else {
-                    event.start = parse_datetime(value)?;
+                    imported.event.start = parse_datetime_with_tzid(value, tzid)?;
                 }
             }
             "DTEND" => {
                 if key_part.contains("VALUE=DATE") {
-                    event.end = parse_date(value)?;
+                    imported.event.end = parse_date(value)?;
                 } else {
-                    event.end = parse_datetime(value)?;
+                    imported.event.end = parse_datetime_with_tzid(value, tzid)?;
                 }
             }
             "RRULE" => {
-                event.recurrence_rule = Some(value.to_string());
+                imported.event.recurrence_rule = Some(value.to_string());
             }
             "EXDATE" => {
                 let dates: Result<Vec<_>> =
-                    value.split(',').map(|s| parse_datetime(s.trim())).collect();
-                event.recurrence_exceptions = Some(dates?);
+                    value
+                        .split(',')
+                        .map(|s| parse_datetime_with_tzid(s.trim(), tzid))
+                        .collect();
+                imported.event.recurrence_exceptions = Some(dates?);
             }
             "CREATED" => {
-                event.created_at = Some(parse_datetime(value)?);
+                imported.event.created_at = Some(parse_datetime_with_tzid(value, tzid)?);
             }
             "LAST-MODIFIED" => {
-                event.updated_at = Some(parse_datetime(value)?);
+                imported.raw_last_modified = Some(value.to_string());
+                imported.event.updated_at = Some(parse_datetime_with_tzid(value, tzid)?);
             }
             _ => {}
         }
     }
 
     Ok(())
+}
+
+fn extract_tzid(key_part: &str) -> Option<&str> {
+    key_part
+        .split(';')
+        .find_map(|part| part.strip_prefix("TZID="))
 }
 
 fn blank_event() -> Event {
@@ -112,5 +142,49 @@ fn blank_event() -> Event {
         recurrence_exceptions: None,
         created_at: None,
         updated_at: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::from_str_with_metadata;
+
+    #[test]
+    fn test_import_with_metadata_uid_and_last_modified() {
+        let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:test-uid-123
+DTSTART:20260227T090000
+DTEND:20260227T100000
+SUMMARY:Test Event
+LAST-MODIFIED:20260227T010203Z
+END:VEVENT
+END:VCALENDAR"#;
+
+        let imported = from_str_with_metadata(ics).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(imported[0].uid.as_deref(), Some("test-uid-123"));
+        assert_eq!(
+            imported[0].raw_last_modified.as_deref(),
+            Some("20260227T010203Z")
+        );
+    }
+
+    #[test]
+    fn test_import_with_tzid_datetime() {
+        let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:test-uid-tz
+DTSTART;TZID=Australia/Sydney:20260227T090000
+DTEND;TZID=Australia/Sydney:20260227T100000
+SUMMARY:TZ Event
+END:VEVENT
+END:VCALENDAR"#;
+
+        let imported = from_str_with_metadata(ics).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(imported[0].event.title, "TZ Event");
     }
 }

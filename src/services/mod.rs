@@ -2,6 +2,7 @@
 // This file will be populated as services are implemented
 
 pub mod backup;
+pub mod calendar_sync;
 pub mod category;
 pub mod countdown;
 pub mod database;
