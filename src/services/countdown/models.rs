@@ -428,9 +428,11 @@ mod tests {
 
     #[test]
     fn test_persisted_state_serialization_with_display_mode() {
-        let mut state = CountdownPersistedState::default();
-        state.display_mode = CountdownDisplayMode::Container;
-        state.next_id = 42;
+        let state = CountdownPersistedState {
+            display_mode: CountdownDisplayMode::Container,
+            next_id: 42,
+            ..CountdownPersistedState::default()
+        };
 
         // Serialize
         let json = serde_json::to_string(&state).unwrap();
@@ -462,13 +464,15 @@ mod tests {
 
     #[test]
     fn test_container_geometry_serialization() {
-        let mut state = CountdownPersistedState::default();
-        state.container_geometry = Some(CountdownCardGeometry {
-            x: 100.0,
-            y: 200.0,
-            width: 800.0,
-            height: 600.0,
-        });
+        let state = CountdownPersistedState {
+            container_geometry: Some(CountdownCardGeometry {
+                x: 100.0,
+                y: 200.0,
+                width: 800.0,
+                height: 600.0,
+            }),
+            ..CountdownPersistedState::default()
+        };
 
         // Serialize
         let json = serde_json::to_string(&state).unwrap();
@@ -485,12 +489,14 @@ mod tests {
 
     #[test]
     fn test_card_order_serialization() {
-        let mut state = CountdownPersistedState::default();
-        state.card_order = vec![
-            CountdownCardId(1),
-            CountdownCardId(3),
-            CountdownCardId(2),
-        ];
+        let state = CountdownPersistedState {
+            card_order: vec![
+                CountdownCardId(1),
+                CountdownCardId(3),
+                CountdownCardId(2),
+            ],
+            ..CountdownPersistedState::default()
+        };
 
         // Serialize
         let json = serde_json::to_string(&state).unwrap();

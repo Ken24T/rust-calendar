@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-27
+
+### Changed
+- TCTBP status workflow now includes explicit next-step recommendations (for example `handback`, `handoff`, `ship`, `abort`, or `none`) based on repo state.
+- Test code was refactored to satisfy strict clippy checks by using struct initialisers with `..Default::default()` instead of field reassignment after default construction.
+
 ## [1.2.0] - 2026-02-27
 
 ### Removed

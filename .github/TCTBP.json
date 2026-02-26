@@ -21,9 +21,20 @@
     "shipOrder": ["preflight", "test", "problems", "bump", "commit", "changelog", "tag", "push"],
     "handoffOrder": ["preflight", "stage", "test-gate", "commit", "ship-if-needed", "merge", "push", "verify-sync", "checkout-branch", "summary"],
     "handbackOrder": ["preflight", "fetch", "detect-branch", "pull", "verify-sync", "verification-gate", "summary"],
-    "statusOrder": ["fetch", "report"],
+    "statusOrder": ["fetch", "report", "recommend"],
     "abortOrder": ["inspect", "propose", "execute"],
     "requireApproval": ["push"]
+  },
+  "statusRecommendations": {
+    "enabled": true,
+    "suggestions": ["handback", "handoff", "ship", "abort", "none"],
+    "rules": {
+      "handback": "Suggest when local branch SHA does not match origin or default branch is behind remote.",
+      "handoff": "Suggest when working tree has local changes or current branch is ahead of origin and user is moving machines.",
+      "ship": "Suggest when there are unshipped commits since last tag or version/tag drift exists.",
+      "abort": "Suggest when a partial workflow state is detected (e.g. merge in progress, bump/tag mismatch, failed prior workflow).",
+      "none": "Suggest when branch is clean, synced, and no SHIP is needed."
+    }
   },
   "docsInfraPolicy": {
     "skipSteps": ["test", "clippy"],
