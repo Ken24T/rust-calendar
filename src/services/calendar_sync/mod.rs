@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod mapping;
+pub mod fetcher;
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Local;

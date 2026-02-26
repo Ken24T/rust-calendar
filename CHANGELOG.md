@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-02-27
+
+### Added
+- Stage 1 S3 sync pipeline improvements:
+  - New cross-platform ICS fetcher (`reqwest` + `rustls`) with timeout, retries, payload size guard, and URL redaction for logs.
+  - Metadata-aware ICS import path that captures event `UID` and raw `LAST-MODIFIED` while preserving existing event import APIs.
+
+### Changed
+- Improved iCalendar datetime parsing to better handle UTC (`Z`) and `TZID` forms, reducing timezone interpretation issues across Windows and Linux.
+
 ## [1.4.0] - 2026-02-27
 
 ### Added
