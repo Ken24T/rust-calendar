@@ -205,11 +205,15 @@ Approval rules:
 
 Run repo test commands per Project Profile. Stop on failure.
 
+**Skip condition:** If the change set is **docs-only or infrastructure-only**, skip this step entirely (there is no code to test).
+
 ---
 
 ### 3. Problems
 
 Ensure lint, build, and test diagnostics are clean (zero warnings if enforced).
+
+**Docs/infra-only changes:** Skip code-level checks (e.g. `cargo clippy`) but still run editor/IDE diagnostics (e.g. VS Code Problems tab) to catch syntax errors, markdown lint issues, and JSON validation errors in the changed files.
 
 ---
 
