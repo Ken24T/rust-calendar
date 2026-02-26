@@ -130,16 +130,24 @@ Behaviour (safe, deterministic):
    - Checkout `main` and merge the current branch using a non-destructive merge (no rebase).
    - Stop on conflicts.
 
-1. **Push**
+1. **Push (all three: feature branch, main, tags)**
+   - Push the **current feature branch** to origin.
    - Push `main` to origin.
    - Push tags (if a SHIP occurred or tags exist).
+   - All three pushes must succeed. Report any failures immediately.
+
+1. **Verify sync**
+   - Confirm local `main` matches `origin/main` (same commit SHA).
+   - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
+   - If either is out of sync, stop and report.
 
 1. **Summary**
    - Summarise: branch, commits created, tests run, merge result, and pushes performed.
+   - Explicitly confirm: feature branch, main, and tags are all synced to origin.
 
 Approval rules:
 
-- Using the `handoff` trigger grants approval to push `main` and tags **for this workflow only**.
+- Using the `handoff` trigger grants approval to push the **feature branch**, `main`, and tags **for this workflow only**.
 - Any other remote push still requires explicit approval.
 
 ---
@@ -171,6 +179,11 @@ Behaviour (read-only, never pushes):
    - Also update local `main` to match `origin/main` (`git checkout main && git pull --ff-only && git checkout <feature-branch>`).
    - Stop on merge conflicts or non-fast-forward situations.
 
+1. **Verify sync**
+   - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
+   - Confirm local `main` matches `origin/main` (same commit SHA).
+   - If either is out of sync, stop and report the discrepancy before proceeding.
+
 1. **Verification gate**
    - Run the full verification suite per Project Profile:
      - Tests — 100% pass required.
@@ -180,6 +193,7 @@ Behaviour (read-only, never pushes):
 
 1. **Summary**
    - Report: branch checked out, commits pulled in (with short log of new commits since local was last updated), verification results.
+   - Explicitly confirm: feature branch and main are both in sync with origin.
    - Confirm: "Ready to continue where you left off."
 
 Approval rules:
