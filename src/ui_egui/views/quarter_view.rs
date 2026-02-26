@@ -145,6 +145,7 @@ impl QuarterView {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_mini_day_cell(
         ui: &mut egui::Ui,
         day: i32,

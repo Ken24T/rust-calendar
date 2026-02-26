@@ -20,6 +20,7 @@ use super::filter_events_by_category;
 pub struct DayView;
 
 impl DayView {
+    #[allow(clippy::too_many_arguments)]
     pub fn show(
         ui: &mut egui::Ui,
         current_date: &mut NaiveDate,
@@ -140,6 +141,7 @@ impl DayView {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_time_slots(
         ui: &mut egui::Ui,
         date: NaiveDate,
@@ -272,6 +274,7 @@ impl DayView {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_time_slot(
         ui: &mut egui::Ui,
         date: NaiveDate,

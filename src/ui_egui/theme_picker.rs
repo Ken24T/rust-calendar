@@ -3,6 +3,7 @@
 use egui::{Context, Visuals};
 
 /// Render a simple theme picker dialog
+#[allow(dead_code)]
 pub fn render_theme_picker(
     ctx: &Context,
     current_theme: &mut String,
@@ -82,6 +83,7 @@ pub fn render_theme_picker(
 }
 
 /// Apply the theme to the egui context
+#[allow(dead_code)]
 fn apply_theme(ctx: &Context, theme: &str) {
     let visuals = if theme.to_lowercase().contains("dark") {
         Visuals::dark()

@@ -3,6 +3,7 @@
 // Reminder module
 // Implementation pending - Phase 4
 
+#[allow(dead_code)]
 pub struct Reminder {
     pub id: Option<i64>,
     pub event_id: i64,
