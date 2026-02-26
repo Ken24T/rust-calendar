@@ -5,7 +5,7 @@
     "fallbackDocument": "TCTBP Agent.md"
   },
   "activation": {
-    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please"],
+    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please"],
     "caseInsensitive": true,
     "branchCommand": {
       "enabled": true,
@@ -15,6 +15,11 @@
   "workflow": {
     "order": ["preflight", "test", "problems", "bump", "commit", "tag", "push"],
     "requireApproval": ["push"]
+  },
+  "docsInfraPolicy": {
+    "skipSteps": ["test", "clippy"],
+    "keepSteps": ["preflight", "problems-editor", "commit", "push"],
+    "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics (e.g. markdown lint)"
   },
   "versioning": {
     "scheme": "semver",

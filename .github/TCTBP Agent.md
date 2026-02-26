@@ -59,6 +59,8 @@ Activate this agent only when the user explicitly uses a clear cue (case-insensi
 - `prepare release`
 - `handoff`
 - `handoff please`
+- `handback`
+- `handback please`
 - `branch <new-branch-name>`
 
 Do **not** auto-trigger based on context or guesses.
@@ -128,17 +130,76 @@ Behaviour (safe, deterministic):
    - Checkout `main` and merge the current branch using a non-destructive merge (no rebase).
    - Stop on conflicts.
 
-1. **Push**
+1. **Push (all three: feature branch, main, tags)**
+   - Push the **current feature branch** to origin.
    - Push `main` to origin.
    - Push tags (if a SHIP occurred or tags exist).
+   - All three pushes must succeed. Report any failures immediately.
+
+1. **Verify sync**
+   - Confirm local `main` matches `origin/main` (same commit SHA).
+   - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
+   - If either is out of sync, stop and report.
 
 1. **Summary**
    - Summarise: branch, commits created, tests run, merge result, and pushes performed.
+   - Explicitly confirm: feature branch, main, and tags are all synced to origin.
 
 Approval rules:
 
-- Using the `handoff` trigger grants approval to push `main` and tags **for this workflow only**.
+- Using the `handoff` trigger grants approval to push the **feature branch**, `main`, and tags **for this workflow only**.
 - Any other remote push still requires explicit approval.
+
+---
+
+## Handback Workflow (Resume on another machine)
+
+Trigger: `handback` / `handback please`
+
+Purpose: Restore the working environment on a different computer after a handoff, so development continues from exactly where it left off.
+
+Behaviour (read-only, never pushes):
+
+1. **Preflight (dirty tree guard)**
+   - Check working tree status.
+   - If uncommitted changes exist, **stop immediately** and warn the user to deal with local changes before proceeding.
+   - Report current branch.
+
+1. **Fetch**
+   - Run `git fetch --all --prune --tags` to sync all remote state.
+
+1. **Detect and checkout the active feature branch**
+   - Auto-detect the branch from the last handoff: inspect remote branches sorted by most recent commit (`git branch -r --sort=-committerdate`), filter out `origin/main` and `origin/HEAD`, and select the top result.
+   - If already on the correct branch, skip checkout.
+   - If on `main` or a different branch, checkout the detected feature branch and set up tracking.
+   - If detection is ambiguous (e.g. multiple branches updated at the same timestamp), ask the user which branch to resume.
+
+1. **Pull latest**
+   - Fast-forward the feature branch to match the remote (`git pull --ff-only`).
+   - Also update local `main` to match `origin/main` (`git checkout main && git pull --ff-only && git checkout <feature-branch>`).
+   - Stop on merge conflicts or non-fast-forward situations.
+
+1. **Verify sync**
+   - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
+   - Confirm local `main` matches `origin/main` (same commit SHA).
+   - If either is out of sync, stop and report the discrepancy before proceeding.
+
+1. **Verification gate**
+   - Run the full verification suite per Project Profile:
+     - Tests — 100% pass required.
+     - Static checks (e.g. clippy) — zero warnings required.
+     - IDE/editor diagnostics (e.g. VS Code Problems tab) — zero issues required.
+   - Stop immediately on any failure and report.
+
+1. **Summary**
+   - Report: branch checked out, commits pulled in (with short log of new commits since local was last updated), verification results.
+   - Explicitly confirm: feature branch and main are both in sync with origin.
+   - Confirm: "Ready to continue where you left off."
+
+Approval rules:
+
+- Handback is entirely read-only — it fetches, checks out, and pulls but never pushes.
+- No approval is required for any step.
 
 ---
 
@@ -158,11 +219,15 @@ Approval rules:
 
 Run repo test commands per Project Profile. Stop on failure.
 
+**Skip condition:** If the change set is **docs-only or infrastructure-only**, skip this step entirely (there is no code to test).
+
 ---
 
 ### 3. Problems
 
 Ensure lint, build, and test diagnostics are clean (zero warnings if enforced).
+
+**Docs/infra-only changes:** Skip code-level checks (e.g. `cargo clippy`) but still run editor/IDE diagnostics (e.g. VS Code Problems tab) to catch syntax errors, markdown lint issues, and JSON validation errors in the changed files.
 
 ---
 
@@ -213,6 +278,7 @@ During SHIP, the agent may proceed through **Bump → Commit → Tag** without p
 - Commits and local tags
 - Branch switching and merging
 - **Non-destructive remote reads** (`fetch`, logs, diffs)
+- **Handback operations** (fetch, checkout, pull) — entirely read-only, no approval needed
 
 ### Require Explicit Approval
 
