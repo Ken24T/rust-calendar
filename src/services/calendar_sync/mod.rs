@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod mapping;
+
 use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use rusqlite::{params, Connection};

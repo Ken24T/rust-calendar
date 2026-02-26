@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-27
+
+### Added
+- Stage 1 Google Calendar read-only sync foundations:
+  - New `calendar_sources` persistence model, validation, and CRUD service for managing multiple Google ICS feeds.
+  - New `event_sync_map` model and table with unique (`source_id`, `external_uid`) mapping for deterministic external identity tracking.
+  - New `EventSyncMapService` methods for mapping create/lookup/touch/delete operations.
+- New schema coverage and service tests for `calendar_sources` and `event_sync_map` tables and mapping behaviour.
+
 ## [1.3.0] - 2026-02-27
 
 ### Changed
