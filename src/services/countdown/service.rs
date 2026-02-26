@@ -544,10 +544,6 @@ impl CountdownService {
         self.update_visual_flag(id, |visuals| visuals.always_on_top = always_on_top)
     }
 
-    pub fn set_compact_mode(&mut self, id: CountdownCardId, compact_mode: bool) -> bool {
-        self.update_visual_flag(id, |visuals| visuals.compact_mode = compact_mode)
-    }
-
     pub fn set_title_bg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
         self.update_visual_flag(id, |visuals| {
             visuals.title_bg_color = color;

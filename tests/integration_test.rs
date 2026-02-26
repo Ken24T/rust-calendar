@@ -22,8 +22,8 @@ fn test_settings_persistence() {
     // Get default settings
     let mut settings = settings_service.get().expect("Failed to get settings");
     assert_eq!(settings.theme, "light");
-    assert_eq!(settings.show_my_day, false);
-    assert_eq!(settings.show_ribbon, false);
+    assert!(!settings.show_my_day);
+    assert!(!settings.show_ribbon);
     assert_eq!(settings.current_view, "Month");
 
     // Update settings to simulate UI changes
@@ -39,8 +39,8 @@ fn test_settings_persistence() {
     // Verify persistence by reading again
     let loaded_settings = settings_service.get().expect("Failed to load settings");
     assert_eq!(loaded_settings.theme, "dark");
-    assert_eq!(loaded_settings.show_my_day, true);
-    assert_eq!(loaded_settings.show_ribbon, true);
+    assert!(loaded_settings.show_my_day);
+    assert!(loaded_settings.show_ribbon);
     assert_eq!(loaded_settings.current_view, "Week");
 
     // Clean up

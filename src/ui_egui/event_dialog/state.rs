@@ -20,7 +20,6 @@ pub struct LinkedCountdownCard {
     pub card_id: CountdownCardId,
     pub visuals: CountdownCardVisuals,
     pub always_on_top: bool,
-    pub compact_mode: bool,
 }
 
 /// State for the event editing dialog
@@ -191,7 +190,6 @@ impl EventDialogState {
         self.linked_card = Some(LinkedCountdownCard {
             card_id,
             always_on_top: visuals.always_on_top,
-            compact_mode: visuals.compact_mode,
             visuals,
         });
         self.show_card_settings = true;
@@ -471,9 +469,11 @@ mod tests {
 
     #[test]
     fn new_event_uses_settings_defaults() {
-        let mut settings = Settings::default();
-        settings.default_event_start_time = "07:30".to_string();
-        settings.default_event_duration = 30;
+        let settings = Settings {
+            default_event_start_time: "07:30".to_string(),
+            default_event_duration: 30,
+            ..Settings::default()
+        };
 
         let state = EventDialogState::new_event(sample_date(), &settings);
         assert_eq!(state.start_time, NaiveTime::from_hms_opt(7, 30, 0).unwrap());

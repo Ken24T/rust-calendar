@@ -20,7 +20,6 @@ pub struct CountdownCardChanges {
     pub start_date: chrono::NaiveDate,
     pub start_time: chrono::NaiveTime,
     pub always_on_top: bool,
-    pub compact_mode: bool,
     pub title_font_size: f32,
     pub days_font_size: f32,
 }
@@ -641,15 +640,6 @@ fn render_countdown_card_section(ui: &mut egui::Ui, state: &mut EventDialogState
                 }
             });
 
-            indented_row(ui, |ui| {
-                if ui
-                    .checkbox(&mut linked_card.compact_mode, "Compact mode")
-                    .changed()
-                {
-                    linked_card.visuals.compact_mode = linked_card.compact_mode;
-                }
-            });
-
             ui.add_space(8.0);
 
             // Font sizes
@@ -760,7 +750,6 @@ fn render_action_buttons(
             start_date: state.date,
             start_time: state.start_time,
             always_on_top: card.always_on_top,
-            compact_mode: card.compact_mode,
             title_font_size: card.visuals.title_font_size,
             days_font_size: card.visuals.days_font_size,
         })

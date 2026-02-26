@@ -15,7 +15,6 @@ pub(super) enum CountdownSettingsCommand {
     SetTitleOverride(CountdownCardId, Option<String>),
     SetComment(CountdownCardId, Option<String>),
     SetAlwaysOnTop(CountdownCardId, bool),
-    SetCompactMode(CountdownCardId, bool),
     SetDaysFontSize(CountdownCardId, f32),
     SetTitleFontSize(CountdownCardId, f32),
     SetTitleBgColor(CountdownCardId, RgbaColor),
@@ -142,17 +141,6 @@ pub(super) fn render_countdown_settings_ui(
                                 .push(CountdownSettingsCommand::SetAlwaysOnTop(
                                     card.id,
                                     always_on_top,
-                                ));
-                        }
-                    });
-                    field_row(ui, "", |ui| {
-                        let mut compact_mode = card.visuals.compact_mode;
-                        if ui.checkbox(&mut compact_mode, "Compact mode").changed() {
-                            result
-                                .commands
-                                .push(CountdownSettingsCommand::SetCompactMode(
-                                    card.id,
-                                    compact_mode,
                                 ));
                         }
                     });

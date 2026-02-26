@@ -136,7 +136,6 @@ impl CountdownCardGeometry {
 pub struct CountdownCardVisuals {
     pub accent_color: Option<String>,
     pub always_on_top: bool,
-    pub compact_mode: bool,
     #[serde(default = "default_use_default_title_bg")]
     pub use_default_title_bg: bool,
     #[serde(default = "default_title_bg_color")]
@@ -164,7 +163,6 @@ impl Default for CountdownCardVisuals {
         Self {
             accent_color: None,
             always_on_top: false,
-            compact_mode: false,
             use_default_title_bg: false,
             title_bg_color: default_title_bg_color(),
             use_default_title_fg: false,

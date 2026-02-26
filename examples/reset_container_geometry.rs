@@ -30,10 +30,16 @@ fn main() {
     let conn = Connection::open(&db_path).expect("Failed to open database");
 
     // Check current values
-    let result: Result<(Option<f64>, Option<f64>, Option<f64>, Option<f64>), _> = conn.query_row(
+    let result = conn.query_row(
         "SELECT container_geometry_x, container_geometry_y, container_geometry_width, container_geometry_height FROM countdown_settings WHERE id = 1",
         [],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        |row| {
+            let x: Option<f64> = row.get(0)?;
+            let y: Option<f64> = row.get(1)?;
+            let w: Option<f64> = row.get(2)?;
+            let h: Option<f64> = row.get(3)?;
+            Ok((x, y, w, h))
+        },
     );
 
     match result {
