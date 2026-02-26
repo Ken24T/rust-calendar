@@ -1,4 +1,4 @@
-# OpenCode TCTBP Agent – Generic (Draft)
+# OpenCode TCTBP Agent – Generic
 
 ## Purpose
 
@@ -61,9 +61,29 @@ Activate this agent only when the user explicitly uses a clear cue (case-insensi
 - `handoff please`
 - `handback`
 - `handback please`
+- `status`
+- `status please`
+- `abort`
 - `branch <new-branch-name>`
 
 Do **not** auto-trigger based on context or guesses.
+
+---
+
+## Docs/Infra-Only Detection
+
+A changeset is classified as **docs-only or infrastructure-only** when **every** changed file matches one of the following patterns:
+
+- `*.md`, `*.txt`, `*.rst` — documentation
+- `docs/**` — documentation folder
+- `.github/**` — workflow and agent configuration
+- `packaging/**` — packaging and install scripts (no code)
+- `LICENSE*`, `CHANGELOG*`, `CONTRIBUTING*` — project meta
+- `*.toml`, `*.json`, `*.yaml`, `*.yml` in the repo root — configuration files
+
+**Exceptions:** If `Cargo.toml` changes include a version bump alongside code changes (i.e. `.rs` files are also in the changeset), the changeset is **not** docs/infra-only.
+
+When in doubt, treat the changeset as code and run the full verification suite.
 
 ---
 
@@ -79,17 +99,19 @@ Behaviour (local-first, remote-safe):
    - If there are uncommitted changes or commits since the last `vX.Y.Z` tag, recommend SHIP.
    - If agreed, run the full SHIP workflow **before** branching.
 
-1. **Merge current branch into local `main`.**
+2. **Verification gate (if SHIP declined)**
+   - If the user declines SHIP, run tests at minimum to confirm the codebase is not broken.
+   - Stop on test failure — do not create a branch from broken code.
 
+3. **Merge current branch into local `main`.**
    - Ensure working tree is clean.
    - Checkout `main`.
    - Merge using a non-destructive merge (no rebase).
    - Stop on conflicts.
 
-1. **Create and switch to the new branch** from updated local `main`.
+4. **Create and switch to the new branch** from updated local `main`.
 
-1. **Remote safety**
-
+5. **Remote safety**
    - Any push requires explicit approval.
 
 Versioning interaction:
@@ -110,40 +132,44 @@ Behaviour (safe, deterministic):
    - Report current branch explicitly.
    - Confirm working tree state.
 
-1. **Stage everything**
+2. **Stage everything**
    - Stage all local changes (tracked + new files).
 
-1. **Test gate**
+3. **Test gate**
    - Run the repo test command(s) from the Project Profile.
    - Proceed only if tests pass at 100%.
    - Stop immediately on failure and report.
+   - **Skip condition:** If the changeset is docs/infra-only (see Docs/Infra-Only Detection), skip cargo test and clippy. Still run editor/IDE diagnostics.
 
-1. **Commit everything**
+4. **Commit everything**
    - If staged changes exist, commit them automatically with a clear message.
 
-1. **Ship if needed**
+5. **Ship if needed**
    - If release policy says SHIP is required (or versions are out of sync), run the full SHIP/TCTBP workflow.
    - If changes are **docs-only or infrastructure-only** (plans, runbooks, internal guidance), skip bump/tag and continue.
    - Otherwise continue without bump/tag when SHIP is not required.
 
-1. **Merge to local main**
+6. **Merge to local main**
    - Checkout `main` and merge the current branch using a non-destructive merge (no rebase).
    - Stop on conflicts.
 
-1. **Push (all three: feature branch, main, tags)**
+7. **Push (all three: feature branch, main, tags)**
    - Push the **current feature branch** to origin.
    - Push `main` to origin.
    - Push tags (if a SHIP occurred or tags exist).
    - All three pushes must succeed. Report any failures immediately.
 
-1. **Verify sync**
+8. **Verify sync**
    - Confirm local `main` matches `origin/main` (same commit SHA).
    - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
    - If either is out of sync, stop and report.
 
-1. **Summary**
-   - Summarise: branch, commits created, tests run, merge result, and pushes performed.
-   - Explicitly confirm: feature branch, main, and tags are all synced to origin.
+9. **Checkout feature branch**
+   - Switch back to the feature branch so the working directory is on the correct branch for continued development.
+
+10. **Summary**
+    - Summarise: branch, commits created, tests run, merge result, and pushes performed.
+    - Explicitly confirm: feature branch, main, and tags are all synced to origin.
 
 Approval rules:
 
@@ -165,33 +191,33 @@ Behaviour (read-only, never pushes):
    - If uncommitted changes exist, **stop immediately** and warn the user to deal with local changes before proceeding.
    - Report current branch.
 
-1. **Fetch**
+2. **Fetch**
    - Run `git fetch --all --prune --tags` to sync all remote state.
 
-1. **Detect and checkout the active feature branch**
+3. **Detect and checkout the active feature branch**
    - Auto-detect the branch from the last handoff: inspect remote branches sorted by most recent commit (`git branch -r --sort=-committerdate`), filter out `origin/main` and `origin/HEAD`, and select the top result.
    - If already on the correct branch, skip checkout.
    - If on `main` or a different branch, checkout the detected feature branch and set up tracking.
    - If detection is ambiguous (e.g. multiple branches updated at the same timestamp), ask the user which branch to resume.
 
-1. **Pull latest**
+4. **Pull latest**
    - Fast-forward the feature branch to match the remote (`git pull --ff-only`).
    - Also update local `main` to match `origin/main` (`git checkout main && git pull --ff-only && git checkout <feature-branch>`).
    - Stop on merge conflicts or non-fast-forward situations.
 
-1. **Verify sync**
+5. **Verify sync**
    - Confirm local feature branch matches `origin/<feature-branch>` (same commit SHA).
    - Confirm local `main` matches `origin/main` (same commit SHA).
    - If either is out of sync, stop and report the discrepancy before proceeding.
 
-1. **Verification gate**
+6. **Verification gate**
    - Run the full verification suite per Project Profile:
      - Tests — 100% pass required.
      - Static checks (e.g. clippy) — zero warnings required.
      - IDE/editor diagnostics (e.g. VS Code Problems tab) — zero issues required.
    - Stop immediately on any failure and report.
 
-1. **Summary**
+7. **Summary**
    - Report: branch checked out, commits pulled in (with short log of new commits since local was last updated), verification results.
    - Explicitly confirm: feature branch and main are both in sync with origin.
    - Confirm: "Ready to continue where you left off."
@@ -200,6 +226,59 @@ Approval rules:
 
 - Handback is entirely read-only — it fetches, checks out, and pulls but never pushes.
 - No approval is required for any step.
+
+---
+
+## Status Workflow (Quick state check)
+
+Trigger: `status` / `status please`
+
+Purpose: Lightweight read-only report of the current repo state. Does not modify anything.
+
+Behaviour:
+
+1. **Fetch** (non-destructive)
+   - Run `git fetch --all --prune --tags` to ensure remote refs are current.
+
+2. **Report**
+   - Current branch.
+   - Working tree state (clean / number of uncommitted changes).
+   - Current version (from `Cargo.toml`) and last tag.
+   - Sync state: local vs remote SHA for current branch and `main`.
+   - Commits ahead/behind for both branches.
+   - Whether a SHIP is needed (uncommitted changes or unshipped commits since last tag).
+
+No approval required. No changes made.
+
+---
+
+## Abort Workflow (Partial operation recovery)
+
+Trigger: `abort`
+
+Purpose: Inspect and recover from a partially completed SHIP or handoff (e.g. bump committed but push failed, tag created but commit is wrong).
+
+Behaviour:
+
+1. **Inspect state**
+   - Report current branch, working tree, last commit, last tag.
+   - Identify whether a partial operation is in progress (e.g. version bumped but not tagged, tagged but not pushed, merge started but not completed).
+
+2. **Propose recovery**
+   - List specific recovery actions with consequences:
+     - Revert the bump commit (`git revert` or `git reset --soft HEAD~1`).
+     - Delete a local tag (`git tag -d vX.Y.Z`).
+     - Abort a merge (`git merge --abort`).
+   - Never execute recovery actions without explicit user approval.
+
+3. **Execute approved actions**
+   - Perform only the actions the user explicitly approves.
+   - History rewriting (reset, force-push) requires extra confirmation.
+
+Approval rules:
+
+- All recovery actions require explicit approval.
+- Force-push and history rewriting require double confirmation.
 
 ---
 
@@ -253,6 +332,19 @@ During SHIP, the agent may proceed through **Bump → Commit → Tag** without p
 
 ---
 
+### 5a. CHANGELOG (Optional)
+
+If `CHANGELOG.md` exists in the repo:
+
+- Propose an entry for the new version based on commits since the last tag.
+- Use the conventional commit messages to categorise changes (e.g. feat, fix, docs, refactor).
+- Insert the entry under the new version heading at the top of the changelog.
+- Include the entry in the same commit as the version bump.
+
+If `CHANGELOG.md` does not exist, skip this step silently.
+
+---
+
 ### 6. Tag
 
 - Tag format: `vX.Y.Z` (example: `v0.5.27`)
@@ -265,7 +357,8 @@ During SHIP, the agent may proceed through **Bump → Commit → Tag** without p
 
 - Push current branch only
 - Never push to protected branches
-- Exception: `handoff` may push `main` and tags as explicitly authorised in the handoff workflow.
+
+**SHIP within handoff:** When SHIP runs as part of a handoff workflow, the handoff's push rules override this step. The handoff pushes all three (feature branch, main, tags) as a single operation — see Handoff Workflow step 7.
 
 ---
 
@@ -300,16 +393,23 @@ On any failure:
 - Explain the failure
 - Propose safe recovery options (revert bump commit, delete local tag)
 - Never rewrite history without approval
+- Suggest using `abort` trigger for guided recovery if the failure left partial state
 
 ---
 
-## Appendix: `TCTBP.json` (Indicative Template)
+## Appendix: `TCTBP.json` (Canonical Reference)
+
+The authoritative JSON configuration is in `TCTBP.json` at the repo root's `.github/` folder. The template below is kept in sync for reference:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "governance": {
+    "sourceOfTruth": "TCTBP.json",
+    "fallbackDocument": "TCTBP Agent.md"
+  },
   "activation": {
-    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please"],
+    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please", "status", "status please", "abort"],
     "caseInsensitive": true,
     "branchCommand": {
       "enabled": true,
@@ -317,17 +417,30 @@ On any failure:
     }
   },
   "workflow": {
-    "order": ["preflight", "test", "problems", "bump", "commit", "tag", "push"],
+    "shipOrder": ["preflight", "test", "problems", "bump", "commit", "changelog", "tag", "push"],
+    "handoffOrder": ["preflight", "stage", "test-gate", "commit", "ship-if-needed", "merge", "push", "verify-sync", "checkout-branch", "summary"],
+    "handbackOrder": ["preflight", "fetch", "detect-branch", "pull", "verify-sync", "verification-gate", "summary"],
+    "statusOrder": ["fetch", "report"],
+    "abortOrder": ["inspect", "propose", "execute"],
     "requireApproval": ["push"]
+  },
+  "docsInfraPolicy": {
+    "skipSteps": ["test", "clippy"],
+    "keepSteps": ["preflight", "problems-editor", "commit", "push"],
+    "filePatterns": ["*.md", "*.txt", "*.rst", "docs/**", ".github/**", "packaging/**", "LICENSE*", "CHANGELOG*", "CONTRIBUTING*", "*.toml", "*.json", "*.yaml", "*.yml"],
+    "excludeWhenCodePresent": ["*.rs"],
+    "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics (e.g. markdown lint)"
   },
   "versioning": {
     "scheme": "semver",
     "patchEveryShip": true,
+    "skipForChangeTypes": ["docs-only", "infrastructure-only"],
     "minorOnFirstShipOfBranch": true,
     "majorExplicitOnly": true
   },
   "tagging": {
     "policy": "everyCommit",
+    "skipWhenNoBump": true,
     "format": "v{version}"
   }
 }

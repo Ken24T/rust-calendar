@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "governance": {
     "sourceOfTruth": "TCTBP.json",
     "fallbackDocument": "TCTBP Agent.md"
   },
   "activation": {
-    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please"],
+    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please", "status", "status please", "abort"],
     "caseInsensitive": true,
     "branchCommand": {
       "enabled": true,
@@ -13,12 +13,18 @@
     }
   },
   "workflow": {
-    "order": ["preflight", "test", "problems", "bump", "commit", "tag", "push"],
+    "shipOrder": ["preflight", "test", "problems", "bump", "commit", "changelog", "tag", "push"],
+    "handoffOrder": ["preflight", "stage", "test-gate", "commit", "ship-if-needed", "merge", "push", "verify-sync", "checkout-branch", "summary"],
+    "handbackOrder": ["preflight", "fetch", "detect-branch", "pull", "verify-sync", "verification-gate", "summary"],
+    "statusOrder": ["fetch", "report"],
+    "abortOrder": ["inspect", "propose", "execute"],
     "requireApproval": ["push"]
   },
   "docsInfraPolicy": {
     "skipSteps": ["test", "clippy"],
     "keepSteps": ["preflight", "problems-editor", "commit", "push"],
+    "filePatterns": ["*.md", "*.txt", "*.rst", "docs/**", ".github/**", "packaging/**", "LICENSE*", "CHANGELOG*", "CONTRIBUTING*", "*.toml", "*.json", "*.yaml", "*.yml"],
+    "excludeWhenCodePresent": ["*.rs"],
     "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics (e.g. markdown lint)"
   },
   "versioning": {
