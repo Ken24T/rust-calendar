@@ -209,9 +209,9 @@ mod tests {
         assert_eq!(settings.first_day_of_week, 0);
         assert_eq!(settings.time_format, "12h");
         assert_eq!(settings.date_format, "DD/MM/YYYY");
-        assert_eq!(settings.show_my_day, false);
-        assert_eq!(settings.show_ribbon, false);
-        assert_eq!(settings.show_sidebar, true);
+        assert!(!settings.show_my_day);
+        assert!(!settings.show_ribbon);
+        assert!(settings.show_sidebar);
         assert_eq!(settings.current_view, "Month");
     }
 

@@ -222,7 +222,6 @@ impl CalendarApp {
 
         // Update card-specific visuals
         service.set_always_on_top(changes.card_id, changes.always_on_top);
-        service.set_compact_mode(changes.card_id, changes.compact_mode);
         service.set_title_font_size(changes.card_id, changes.title_font_size);
         service.set_days_font_size(changes.card_id, changes.days_font_size);
 

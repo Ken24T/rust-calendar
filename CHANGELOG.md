@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-27
+
+### Removed
+- **Compact mode** from countdown cards — the setting was wired through the UI, database, and service layers but never actually affected rendering. Removed the field from the data model, all SQL queries, the countdown settings dialog, the event editor dialog, and the service API. The database column is retained with its default value to avoid a migration.
+
 ## [1.0.21] - 2025-11-29
 
 ### Added

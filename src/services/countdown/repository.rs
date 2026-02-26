@@ -59,7 +59,7 @@ impl<'a> CountdownRepository<'a> {
                     title_override, auto_title_override,
                     comment, event_color,
                     geometry_x, geometry_y, geometry_width, geometry_height,
-                    accent_color, always_on_top, compact_mode,
+                    accent_color, always_on_top,
                     use_default_title_bg, title_bg_r, title_bg_g, title_bg_b, title_bg_a,
                     use_default_title_fg, title_fg_r, title_fg_g, title_fg_b, title_fg_a,
                     title_font_size,
@@ -89,7 +89,7 @@ impl<'a> CountdownRepository<'a> {
                     title_override, auto_title_override,
                     comment, event_color,
                     geometry_x, geometry_y, geometry_width, geometry_height,
-                    accent_color, always_on_top, compact_mode,
+                    accent_color, always_on_top,
                     use_default_title_bg, title_bg_r, title_bg_g, title_bg_b, title_bg_a,
                     use_default_title_fg, title_fg_r, title_fg_g, title_fg_b, title_fg_a,
                     title_font_size,
@@ -115,7 +115,7 @@ impl<'a> CountdownRepository<'a> {
                     title_override, auto_title_override,
                     comment, event_color,
                     geometry_x, geometry_y, geometry_width, geometry_height,
-                    accent_color, always_on_top, compact_mode,
+                    accent_color, always_on_top,
                     use_default_title_bg, title_bg_r, title_bg_g, title_bg_b, title_bg_a,
                     use_default_title_fg, title_fg_r, title_fg_g, title_fg_b, title_fg_a,
                     title_font_size,
@@ -148,7 +148,7 @@ impl<'a> CountdownRepository<'a> {
                 title_override, auto_title_override,
                 comment, event_color,
                 geometry_x, geometry_y, geometry_width, geometry_height,
-                accent_color, always_on_top, compact_mode,
+                accent_color, always_on_top,
                 use_default_title_bg, title_bg_r, title_bg_g, title_bg_b, title_bg_a,
                 use_default_title_fg, title_fg_r, title_fg_g, title_fg_b, title_fg_a,
                 title_font_size,
@@ -161,15 +161,15 @@ impl<'a> CountdownRepository<'a> {
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
                 ?11, ?12, ?13, ?14,
-                ?15, ?16, ?17,
-                ?18, ?19, ?20, ?21, ?22,
-                ?23, ?24, ?25, ?26, ?27,
-                ?28,
-                ?29, ?30, ?31, ?32, ?33,
-                ?34, ?35, ?36, ?37, ?38,
-                ?39,
-                ?40, ?41, ?42, ?43,
-                ?44, ?45, ?46
+                ?15, ?16,
+                ?17, ?18, ?19, ?20, ?21,
+                ?22, ?23, ?24, ?25, ?26,
+                ?27,
+                ?28, ?29, ?30, ?31, ?32,
+                ?33, ?34, ?35, ?36, ?37,
+                ?38,
+                ?39, ?40, ?41, ?42,
+                ?43, ?44, ?45
             )",
             params![
                 card.id.0 as i64,
@@ -188,7 +188,6 @@ impl<'a> CountdownRepository<'a> {
                 card.geometry.height,
                 card.visuals.accent_color,
                 card.visuals.always_on_top,
-                card.visuals.compact_mode,
                 card.visuals.use_default_title_bg,
                 card.visuals.title_bg_color.r,
                 card.visuals.title_bg_color.g,
@@ -238,16 +237,16 @@ impl<'a> CountdownRepository<'a> {
                 event_id = ?2, event_title = ?3, start_at = ?4, event_start = ?5, event_end = ?6,
                 title_override = ?7, auto_title_override = ?8, comment = ?9, event_color = ?10,
                 geometry_x = ?11, geometry_y = ?12, geometry_width = ?13, geometry_height = ?14,
-                accent_color = ?15, always_on_top = ?16, compact_mode = ?17,
-                use_default_title_bg = ?18, title_bg_r = ?19, title_bg_g = ?20, title_bg_b = ?21, title_bg_a = ?22,
-                use_default_title_fg = ?23, title_fg_r = ?24, title_fg_g = ?25, title_fg_b = ?26, title_fg_a = ?27,
-                title_font_size = ?28,
-                use_default_body_bg = ?29, body_bg_r = ?30, body_bg_g = ?31, body_bg_b = ?32, body_bg_a = ?33,
-                use_default_days_fg = ?34, days_fg_r = ?35, days_fg_g = ?36, days_fg_b = ?37, days_fg_a = ?38,
-                days_font_size = ?39,
-                auto_dismiss_enabled = ?40, auto_dismiss_on_event_start = ?41, auto_dismiss_on_event_end = ?42,
-                auto_dismiss_delay_seconds = ?43,
-                last_computed_days = ?44, last_warning_state = ?45, last_notification_time = ?46,
+                accent_color = ?15, always_on_top = ?16,
+                use_default_title_bg = ?17, title_bg_r = ?18, title_bg_g = ?19, title_bg_b = ?20, title_bg_a = ?21,
+                use_default_title_fg = ?22, title_fg_r = ?23, title_fg_g = ?24, title_fg_b = ?25, title_fg_a = ?26,
+                title_font_size = ?27,
+                use_default_body_bg = ?28, body_bg_r = ?29, body_bg_g = ?30, body_bg_b = ?31, body_bg_a = ?32,
+                use_default_days_fg = ?33, days_fg_r = ?34, days_fg_g = ?35, days_fg_b = ?36, days_fg_a = ?37,
+                days_font_size = ?38,
+                auto_dismiss_enabled = ?39, auto_dismiss_on_event_start = ?40, auto_dismiss_on_event_end = ?41,
+                auto_dismiss_delay_seconds = ?42,
+                last_computed_days = ?43, last_warning_state = ?44, last_notification_time = ?45,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?1",
             params![
@@ -267,7 +266,6 @@ impl<'a> CountdownRepository<'a> {
                 card.geometry.height,
                 card.visuals.accent_color,
                 card.visuals.always_on_top,
-                card.visuals.compact_mode,
                 card.visuals.use_default_title_bg,
                 card.visuals.title_bg_color.r,
                 card.visuals.title_bg_color.g,
@@ -416,7 +414,6 @@ impl<'a> CountdownRepository<'a> {
                     visual_defaults: CountdownCardVisuals {
                         accent_color: None,
                         always_on_top: false,
-                        compact_mode: false,
                         use_default_title_bg: false,
                         title_bg_color: RgbaColor::new(
                             row.get(5)?,
@@ -632,29 +629,28 @@ fn row_to_card_state(row: &Row<'_>) -> rusqlite::Result<CountdownCardState> {
     let visuals = CountdownCardVisuals {
         accent_color: row.get(14)?,
         always_on_top: row.get(15)?,
-        compact_mode: row.get(16)?,
-        use_default_title_bg: row.get(17)?,
-        title_bg_color: RgbaColor::new(row.get(18)?, row.get(19)?, row.get(20)?, row.get(21)?),
-        use_default_title_fg: row.get(22)?,
-        title_fg_color: RgbaColor::new(row.get(23)?, row.get(24)?, row.get(25)?, row.get(26)?),
-        title_font_size: row.get(27)?,
-        use_default_body_bg: row.get(28)?,
-        body_bg_color: RgbaColor::new(row.get(29)?, row.get(30)?, row.get(31)?, row.get(32)?),
-        use_default_days_fg: row.get(33)?,
-        days_fg_color: RgbaColor::new(row.get(34)?, row.get(35)?, row.get(36)?, row.get(37)?),
-        days_font_size: row.get(38)?,
+        use_default_title_bg: row.get(16)?,
+        title_bg_color: RgbaColor::new(row.get(17)?, row.get(18)?, row.get(19)?, row.get(20)?),
+        use_default_title_fg: row.get(21)?,
+        title_fg_color: RgbaColor::new(row.get(22)?, row.get(23)?, row.get(24)?, row.get(25)?),
+        title_font_size: row.get(26)?,
+        use_default_body_bg: row.get(27)?,
+        body_bg_color: RgbaColor::new(row.get(28)?, row.get(29)?, row.get(30)?, row.get(31)?),
+        use_default_days_fg: row.get(32)?,
+        days_fg_color: RgbaColor::new(row.get(33)?, row.get(34)?, row.get(35)?, row.get(36)?),
+        days_font_size: row.get(37)?,
     };
 
     let auto_dismiss = CountdownAutoDismissConfig {
-        enabled: row.get(39)?,
-        on_event_start: row.get(40)?,
-        on_event_end: row.get(41)?,
-        delay_seconds: row.get(42)?,
+        enabled: row.get(38)?,
+        on_event_start: row.get(39)?,
+        on_event_end: row.get(40)?,
+        delay_seconds: row.get(41)?,
     };
 
-    let last_computed_days: Option<i64> = row.get(43)?;
-    let last_warning_str: Option<String> = row.get(44)?;
-    let last_notification_str: Option<String> = row.get(45)?;
+    let last_computed_days: Option<i64> = row.get(42)?;
+    let last_warning_str: Option<String> = row.get(43)?;
+    let last_notification_str: Option<String> = row.get(44)?;
 
     let last_warning_state = last_warning_str.and_then(|s| string_to_warning_state(&s));
     let last_notification_time = last_notification_str.and_then(|s| {

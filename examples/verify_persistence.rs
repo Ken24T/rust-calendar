@@ -50,7 +50,7 @@ fn main() {
 
         // Verify persistence
         assert_eq!(settings.theme, "dark", "Theme should persist");
-        assert_eq!(settings.show_my_day, true, "My Day state should persist");
+        assert!(settings.show_my_day, "My Day state should persist");
         assert_eq!(settings.current_view, "Week", "View should persist");
     }
 

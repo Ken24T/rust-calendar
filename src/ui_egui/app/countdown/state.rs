@@ -592,10 +592,6 @@ impl CountdownUiState {
                 service.set_always_on_top(id, value);
                 false
             }
-            CountdownSettingsCommand::SetCompactMode(id, value) => {
-                service.set_compact_mode(id, value);
-                false
-            }
             CountdownSettingsCommand::SetDaysFontSize(id, size) => {
                 service.set_days_font_size(id, size);
                 false
