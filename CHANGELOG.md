@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-02-27
+
+### Added
+- Stage 1 S5 settings UI controls for Google Calendar read-only sync:
+  - Add source form (name, private ICS URL, poll interval).
+  - Per-source update/delete actions.
+  - Manual “Sync now” action with sync result feedback.
+  - Status display for last sync outcome and last error.
+
+### Changed
+- Added persistent settings dialog UI state so source drafts can be edited safely across frames.
+
 ## [1.4.2] - 2026-02-27
 
 ### Added

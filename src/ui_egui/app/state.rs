@@ -1,4 +1,5 @@
 use crate::services::countdown::CountdownCardGeometry;
+use crate::ui_egui::settings_dialog::SettingsDialogState;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::dialogs::category_manager::CategoryManagerState;
 use crate::ui_egui::dialogs::export_dialog::ExportDialogState;
@@ -42,6 +43,7 @@ pub struct AppState {
     pub theme_dialog_state: ThemeDialogState,
     pub theme_creator_state: ThemeCreatorState,
     pub search_dialog_state: SearchDialogState,
+    pub settings_dialog_state: SettingsDialogState,
     pub template_manager_state: TemplateManagerState,
     pub show_search_dialog: bool,
     pub show_about_dialog: bool,
@@ -66,6 +68,7 @@ impl AppState {
             theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
             search_dialog_state: SearchDialogState::default(),
+            settings_dialog_state: SettingsDialogState::new(),
             template_manager_state: TemplateManagerState::default(),
             show_search_dialog: false,
             show_about_dialog: false,
