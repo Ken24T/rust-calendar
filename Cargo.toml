@@ -3,10 +3,10 @@ name = "rust-calendar"
 version = "1.0.32"
 edition = "2021"
 authors = ["Ken24T"]
-description = "A modern Windows desktop calendar application with theming and event management"
+description = "A modern cross-platform desktop calendar application with theming and event management"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Ken24T/rust-calendar"
-keywords = ["calendar", "gui", "desktop", "events", "windows"]
+keywords = ["calendar", "gui", "desktop", "events", "cross-platform"]
 categories = ["gui", "date-and-time"]
 
 [lib]
@@ -38,12 +38,7 @@ chrono-tz = "0.8"
 # Recurrence rules (RFC 5545)
 rrule = "0.11"
 
-# Windows notifications
-windows = { version = "0.54", features = [
-    "Win32_UI_Notifications",
-    "Win32_UI_Shell",
-    "Win32_Foundation"
-] }
+# Cross-platform desktop notifications
 notify-rust = "4.10"
 
 # iCalendar support
@@ -106,6 +101,13 @@ strip = true
 
 # Hide console window on Windows for release builds
 [target.'cfg(windows)'.build-dependencies]
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.54", features = [
+    "Win32_UI_Notifications",
+    "Win32_UI_Shell",
+    "Win32_Foundation"
+] }
 
 [profile.dev]
 opt-level = 0

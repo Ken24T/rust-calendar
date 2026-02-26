@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Rust Calendar
+Comment=A modern cross-platform desktop calendar application
+Exec=rust-calendar
+Icon=rust-calendar
+Terminal=false
+Categories=Office;Calendar;
+Keywords=calendar;events;schedule;planner;
+StartupWMClass=rust-calendar
