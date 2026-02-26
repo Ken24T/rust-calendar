@@ -14,6 +14,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     run_countdown_migrations(conn)?;
     create_event_templates_table(conn)?;
     create_categories_table(conn)?;
+    create_calendar_sources_table(conn)?;
     initialize_default_categories(conn)?;
     Ok(())
 }
@@ -549,6 +550,29 @@ fn create_categories_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create categories table")?;
+
+    Ok(())
+}
+
+fn create_calendar_sources_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS calendar_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            source_type TEXT NOT NULL DEFAULT 'google_ics',
+            ics_url TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            poll_interval_minutes INTEGER NOT NULL DEFAULT 15 CHECK (poll_interval_minutes > 0),
+            last_sync_at TEXT,
+            last_sync_status TEXT,
+            last_error TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(name)
+        )",
+        [],
+    )
+    .context("Failed to create calendar_sources table")?;
 
     Ok(())
 }

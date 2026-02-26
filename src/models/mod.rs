@@ -2,6 +2,7 @@
 // This file will be populated as modules are implemented
 
 pub mod category;
+pub mod calendar_source;
 pub mod event;
 pub mod recurrence;
 pub mod reminder;
