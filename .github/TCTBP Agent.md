@@ -252,6 +252,17 @@ Behaviour:
    - Commits ahead/behind for both branches.
    - Whether a SHIP is needed (uncommitted changes or unshipped commits since last tag).
 
+3. **Recommend next step(s)**
+   - Provide 1–3 actionable recommendations with a one-line reason for each.
+   - Use this priority order when multiple are valid: `abort` → `handback` → `ship` → `handoff` → `none`.
+   - Recommendation rules:
+     - `abort`: partial workflow state detected (e.g. merge in progress, bump/tag mismatch, previous workflow failed mid-way).
+     - `handback`: local/remote branch SHA mismatch or default branch not synced with origin.
+     - `ship`: unshipped commits since last tag, or version/tag drift detected.
+     - `handoff`: branch is ahead or working tree is dirty and user likely needs to move machines.
+     - `none`: repo is clean, synced, and no SHIP is needed.
+   - Never execute recommended actions automatically from `status`; only report recommendations.
+
 No approval required. No changes made.
 
 ---
