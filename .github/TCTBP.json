@@ -5,7 +5,7 @@
     "fallbackDocument": "TCTBP Agent.md"
   },
   "activation": {
-    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please"],
+    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please"],
     "caseInsensitive": true,
     "branchCommand": {
       "enabled": true,

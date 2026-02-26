@@ -59,6 +59,8 @@ Activate this agent only when the user explicitly uses a clear cue (case-insensi
 - `prepare release`
 - `handoff`
 - `handoff please`
+- `handback`
+- `handback please`
 - `branch <new-branch-name>`
 
 Do **not** auto-trigger based on context or guesses.
@@ -142,6 +144,51 @@ Approval rules:
 
 ---
 
+## Handback Workflow (Resume on another machine)
+
+Trigger: `handback` / `handback please`
+
+Purpose: Restore the working environment on a different computer after a handoff, so development continues from exactly where it left off.
+
+Behaviour (read-only, never pushes):
+
+1. **Preflight (dirty tree guard)**
+   - Check working tree status.
+   - If uncommitted changes exist, **stop immediately** and warn the user to deal with local changes before proceeding.
+   - Report current branch.
+
+1. **Fetch**
+   - Run `git fetch --all --prune --tags` to sync all remote state.
+
+1. **Detect and checkout the active feature branch**
+   - Auto-detect the branch from the last handoff: inspect remote branches sorted by most recent commit (`git branch -r --sort=-committerdate`), filter out `origin/main` and `origin/HEAD`, and select the top result.
+   - If already on the correct branch, skip checkout.
+   - If on `main` or a different branch, checkout the detected feature branch and set up tracking.
+   - If detection is ambiguous (e.g. multiple branches updated at the same timestamp), ask the user which branch to resume.
+
+1. **Pull latest**
+   - Fast-forward the feature branch to match the remote (`git pull --ff-only`).
+   - Also update local `main` to match `origin/main` (`git checkout main && git pull --ff-only && git checkout <feature-branch>`).
+   - Stop on merge conflicts or non-fast-forward situations.
+
+1. **Verification gate**
+   - Run the full verification suite per Project Profile:
+     - Tests — 100% pass required.
+     - Static checks (e.g. clippy) — zero warnings required.
+     - IDE/editor diagnostics (e.g. VS Code Problems tab) — zero issues required.
+   - Stop immediately on any failure and report.
+
+1. **Summary**
+   - Report: branch checked out, commits pulled in (with short log of new commits since local was last updated), verification results.
+   - Confirm: "Ready to continue where you left off."
+
+Approval rules:
+
+- Handback is entirely read-only — it fetches, checks out, and pulls but never pushes.
+- No approval is required for any step.
+
+---
+
 ## SHIP / TCTBP Workflow
 
 > SHIP = Preflight → Test → Problems → Bump → Commit → Tag → Push
@@ -213,6 +260,7 @@ During SHIP, the agent may proceed through **Bump → Commit → Tag** without p
 - Commits and local tags
 - Branch switching and merging
 - **Non-destructive remote reads** (`fetch`, logs, diffs)
+- **Handback operations** (fetch, checkout, pull) — entirely read-only, no approval needed
 
 ### Require Explicit Approval
 
