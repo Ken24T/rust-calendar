@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "governance": {
+    "sourceOfTruth": "TCTBP.json",
+    "fallbackDocument": "TCTBP Agent.md"
+  },
+  "activation": {
+    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please"],
+    "caseInsensitive": true,
+    "branchCommand": {
+      "enabled": true,
+      "pattern": "^branch\\s+(.+)$"
+    }
+  },
+  "workflow": {
+    "order": ["preflight", "test", "problems", "bump", "commit", "tag", "push"],
+    "requireApproval": ["push"]
+  },
+  "versioning": {
+    "scheme": "semver",
+    "patchEveryShip": true,
+    "skipForChangeTypes": ["docs-only", "infrastructure-only"],
+    "minorOnFirstShipOfBranch": true,
+    "majorExplicitOnly": true
+  },
+  "tagging": {
+    "policy": "everyCommit",
+    "skipWhenNoBump": true,
+    "format": "v{version}"
+  }
+}
