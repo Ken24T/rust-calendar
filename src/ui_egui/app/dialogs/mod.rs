@@ -423,7 +423,7 @@ impl CalendarApp {
                 // Use native file dialog to save
                 if let Some(path) = rfd::FileDialog::new()
                     .set_title("Export Theme")
-                    .set_file_name(&format!("{}.toml", name))
+                    .set_file_name(format!("{}.toml", name))
                     .add_filter("TOML files", &["toml"])
                     .save_file()
                 {

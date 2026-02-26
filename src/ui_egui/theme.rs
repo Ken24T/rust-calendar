@@ -155,7 +155,7 @@ impl ThemePreset {
     }
 
     /// Create a CalendarTheme from this preset
-    pub fn to_theme(&self) -> CalendarTheme {
+    pub fn as_theme(&self) -> CalendarTheme {
         match self {
             ThemePreset::Light => CalendarTheme::light(),
             ThemePreset::Dark => CalendarTheme::dark(),
@@ -383,7 +383,7 @@ impl CalendarTheme {
 
     /// Get a theme by preset name
     pub fn from_preset_name(name: &str) -> Option<Self> {
-        ThemePreset::from_name(name).map(|p| p.to_theme())
+        ThemePreset::from_name(name).map(|p| p.as_theme())
     }
 
     /// Check if this theme name is a built-in preset
@@ -637,7 +637,7 @@ mod tests {
     #[test]
     fn test_preset_themes() {
         for preset in ThemePreset::all() {
-            let theme = preset.to_theme();
+            let theme = preset.as_theme();
             assert!(!theme.name.is_empty());
             // Just verify they can be created without panicking
         }

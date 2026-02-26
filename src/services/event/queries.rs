@@ -18,7 +18,7 @@ impl<'a> EventService<'a> {
         )?;
 
         let events = stmt
-            .query_map([], |row| map_event_row(row))?
+            .query_map([], map_event_row)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         Ok(events)
@@ -44,7 +44,7 @@ impl<'a> EventService<'a> {
         )?;
 
         let events = stmt
-            .query_map([&search_pattern], |row| map_event_row(row))?
+            .query_map([&search_pattern], map_event_row)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         Ok(events)
@@ -69,7 +69,7 @@ impl<'a> EventService<'a> {
         let events = stmt
             .query_map(
                 [end.to_rfc3339(), start.to_rfc3339(), end.to_rfc3339()],
-                |row| map_event_row(row),
+                map_event_row,
             )?
             .collect::<rusqlite::Result<Vec<_>>>()?;
 

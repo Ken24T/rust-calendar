@@ -96,10 +96,7 @@ pub(super) fn viewport_info(
 pub(super) fn geometry_from_viewport_info(
     info: &egui::ViewportInfo,
 ) -> Option<CountdownCardGeometry> {
-    let inner = match info.inner_rect {
-        Some(rect) => rect,
-        None => return None,
-    };
+    let inner = info.inner_rect?;
     let (outer_left, outer_top) = info
         .outer_rect
         .map(|outer| (outer.left(), outer.top()))

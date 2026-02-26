@@ -362,7 +362,7 @@ impl MonthView {
         );
         
         let pointer_pos = ui.input(|i| i.pointer.hover_pos());
-        let day_number_hovered = pointer_pos.map_or(false, |pos| day_number_rect.contains(pos));
+        let day_number_hovered = pointer_pos.is_some_and(|pos| day_number_rect.contains(pos));
         let day_number_clicked = response.clicked() && day_number_hovered;
         
         // Underline on hover to indicate clickability
@@ -515,7 +515,7 @@ impl MonthView {
             
             // Check hover/click via pointer position (don't use allocate_rect as it breaks Grid)
             let pointer_pos = ui.input(|i| i.pointer.hover_pos());
-            let is_hovered = pointer_pos.map_or(false, |pos| more_rect.contains(pos));
+            let is_hovered = pointer_pos.is_some_and(|pos| more_rect.contains(pos));
             
             // Highlight on hover
             if is_hovered {
@@ -674,7 +674,7 @@ impl MonthView {
                         ui.separator();
                         ui.menu_button("📋 From Template", |ui| {
                             for template in &templates {
-                                let label = format!("{}", template.name);
+                                let label = template.name.to_string();
                                 if ui.button(&label).on_hover_text(format!(
                                     "Create '{}' event\nDuration: {}",
                                     template.title,

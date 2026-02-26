@@ -12,7 +12,6 @@ use crate::services::countdown::{
 };
 use chrono::Local;
 use egui::{self, Context};
-use log;
 use std::collections::{HashMap, HashSet};
 
 use super::super::geometry::{geometry_changed, geometry_from_viewport_info, viewport_info};

@@ -143,15 +143,14 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
         
         // Show "Open in Maps" button if location is not empty
         let location_trimmed = state.location.trim();
-        if !location_trimmed.is_empty() {
-            if ui.button("🗺").on_hover_text("Open in Google Maps").clicked() {
+        if !location_trimmed.is_empty()
+            && ui.button("🗺").on_hover_text("Open in Google Maps").clicked() {
                 let encoded = urlencoding::encode(location_trimmed);
                 let url = format!("https://www.google.com/maps/search/?api=1&query={}", encoded);
                 if let Err(e) = webbrowser::open(&url) {
                     log::error!("Failed to open maps URL: {}", e);
                 }
             }
-        }
     });
 
     // Category dropdown
@@ -326,7 +325,7 @@ fn render_date_time_section(ui: &mut egui::Ui, state: &mut EventDialogState) {
                 state.end_date = state.end_date.succ_opt().unwrap_or(state.end_date);
             }
             if ui.button("+1 week").clicked() {
-                state.end_date = state.end_date + chrono::Duration::days(7);
+                state.end_date += chrono::Duration::days(7);
             }
         });
     }
@@ -553,11 +552,12 @@ fn render_byday_section(ui: &mut egui::Ui, state: &mut EventDialogState, setting
 }
 
 fn render_weekday_shortcuts(ui: &mut egui::Ui, state: &mut EventDialogState, settings: &Settings) {
-    let mut shortcuts = Vec::new();
-    shortcuts.push(("First Week Day", settings.first_day_of_week));
-    shortcuts.push(("Last Week Day", (settings.first_day_of_week + 6) % 7));
-    shortcuts.push(("First Work Week Day", settings.first_day_of_work_week % 7));
-    shortcuts.push(("Last Work Week Day", settings.last_day_of_work_week % 7));
+    let shortcuts = vec![
+        ("First Week Day", settings.first_day_of_week),
+        ("Last Week Day", (settings.first_day_of_week + 6) % 7),
+        ("First Work Week Day", settings.first_day_of_work_week % 7),
+        ("Last Work Week Day", settings.last_day_of_work_week % 7),
+    ];
 
     ui.add_space(6.0);
     labeled_row(ui, "Quick picks:", |ui| {

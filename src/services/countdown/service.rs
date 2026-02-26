@@ -33,6 +33,12 @@ pub struct CountdownService {
     card_order: Vec<CountdownCardId>,
 }
 
+impl Default for CountdownService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CountdownService {
     pub fn new() -> Self {
         Self::from_snapshot(CountdownPersistedState::default())
@@ -369,6 +375,7 @@ impl CountdownService {
         self.last_geometry_update = None;
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_card(
         &mut self,
         event_id: Option<i64>,
@@ -522,6 +529,7 @@ impl CountdownService {
         false
     }
 
+    #[allow(dead_code)]
     pub fn set_auto_title_override(&mut self, id: CountdownCardId, title: Option<String>) -> bool {
         if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
             card.title_override = title;
@@ -697,6 +705,7 @@ impl CountdownService {
         }
     }
 
+    #[allow(dead_code)]
     pub fn sync_title_override_for_event(&mut self, event_id: i64, label: Option<String>) {
         let mut changed = false;
         for card in self
@@ -900,11 +909,10 @@ impl CountdownService {
     /// available monitor bounds. If empty, a default 1920x1080 monitor at (0,0) is assumed.
     pub fn sanitize_all_geometries(&mut self, monitors: &[(f32, f32, f32, f32)]) {
         let default_offset = 50.0;
-        let mut card_index = 0;
         let mut any_changed = false;
         
         // Sanitize individual card geometries
-        for card in &mut self.cards {
+        for (card_index, card) in self.cards.iter_mut().enumerate() {
             // Stagger default positions for multiple cards
             let default_x = 100.0 + (card_index as f32 * default_offset);
             let default_y = 100.0 + (card_index as f32 * default_offset);
@@ -922,7 +930,6 @@ impl CountdownService {
                 card.geometry = sanitized;
                 any_changed = true;
             }
-            card_index += 1;
         }
         
         // Sanitize container geometry

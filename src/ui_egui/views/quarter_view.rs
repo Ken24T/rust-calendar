@@ -74,6 +74,7 @@ impl QuarterView {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_mini_calendar(
         ui: &mut egui::Ui,
         month_date: NaiveDate,

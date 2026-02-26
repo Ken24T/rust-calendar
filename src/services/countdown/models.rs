@@ -3,8 +3,10 @@ use serde::{Deserialize, Serialize};
 
 /// Warning state for countdown cards based on time remaining
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum CountdownWarningState {
     /// More than 1 day remaining
+    #[default]
     Normal,
     /// 1 day or less, but more than 1 hour
     Approaching,
@@ -16,11 +18,6 @@ pub enum CountdownWarningState {
     Starting,
 }
 
-impl Default for CountdownWarningState {
-    fn default() -> Self {
-        Self::Normal
-    }
-}
 
 /// Configuration for countdown card notifications
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -127,8 +124,8 @@ impl CountdownCardGeometry {
         Self {
             x: default_pos.0.max(0.0),
             y: default_pos.1.max(0.0),
-            width: self.width.max(100.0).min(800.0),
-            height: self.height.max(100.0).min(600.0),
+            width: self.width.clamp(100.0, 800.0),
+            height: self.height.clamp(100.0, 600.0),
         }
     }
 }
@@ -360,18 +357,15 @@ impl CountdownCardState {
 
 /// Display mode for countdown cards
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum CountdownDisplayMode {
     /// Each card in its own separate window
+    #[default]
     IndividualWindows,
     /// All cards in a single container window
     Container,
 }
 
-impl Default for CountdownDisplayMode {
-    fn default() -> Self {
-        Self::IndividualWindows
-    }
-}
 
 /// Serializable container for persisting card state between sessions.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -9,21 +9,13 @@ use crate::services::event::EventService;
 use crate::ui_egui::theme::CalendarTheme;
 
 /// State for the search dialog
+#[derive(Default)]
 pub struct SearchDialogState {
     pub query: String,
     pub results: Vec<Event>,
     pub selected_event: Option<i64>,
 }
 
-impl Default for SearchDialogState {
-    fn default() -> Self {
-        Self {
-            query: String::new(),
-            results: Vec::new(),
-            selected_event: None,
-        }
-    }
-}
 
 /// Action result from the search dialog
 pub enum SearchDialogAction {

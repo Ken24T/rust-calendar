@@ -17,7 +17,7 @@ use crate::ui_egui::views::CountdownRequest;
 use chrono::Local;
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 impl CalendarApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -260,7 +260,7 @@ fn load_settings_or_default(settings_service: &SettingsService) -> Settings {
     }
 }
 
-fn load_countdown_service(path: &PathBuf, database: &Database) -> CountdownService {
+fn load_countdown_service(path: &Path, database: &Database) -> CountdownService {
     // First, try to migrate from JSON to database if JSON file exists
     if path.exists() {
         match CountdownService::migrate_json_to_database(path, database.connection()) {

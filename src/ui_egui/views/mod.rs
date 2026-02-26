@@ -18,6 +18,7 @@ pub struct CountdownRequest {
     pub end_at: DateTime<Local>,
     pub color: Option<String>,
     pub body: Option<String>,
+    #[allow(dead_code)]
     pub display_label: Option<String>,
 }
 

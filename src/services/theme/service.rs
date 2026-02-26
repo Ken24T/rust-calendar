@@ -67,7 +67,7 @@ impl<'a> ThemeService<'a> {
                     text_primary, text_secondary, header_background, header_text
              FROM custom_themes WHERE name = ?1",
             [name],
-            |row| Ok(row_to_theme(row)?),
+            row_to_theme,
         )?;
         Ok(theme)
     }

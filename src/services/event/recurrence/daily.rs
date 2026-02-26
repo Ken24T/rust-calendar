@@ -44,7 +44,7 @@ pub(super) fn generate(
             );
         }
 
-        current_start = current_start + Duration::days(interval);
+        current_start += Duration::days(interval);
 
         if current_start > range_end + Duration::days(365) {
             break;

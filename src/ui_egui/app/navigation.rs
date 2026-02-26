@@ -41,7 +41,7 @@ impl CalendarApp {
 }
 
 fn shift_month_preserving_day(current: NaiveDate, delta_months: i32) -> NaiveDate {
-    let total_months = (current.year() * 12) as i32 + (current.month() as i32 - 1) + delta_months;
+    let total_months = (current.year() * 12) + (current.month() as i32 - 1) + delta_months;
     let new_year = total_months.div_euclid(12);
     let new_month = total_months.rem_euclid(12) + 1;
     clamp_day(new_year, new_month as u32, current.day())

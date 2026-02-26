@@ -159,8 +159,7 @@ impl<'a> EventService<'a> {
             occurrence_date
                 .date_naive()
                 .and_hms_opt(0, 0, 0)
-                .map(|dt| Local.from_local_datetime(&dt).single())
-                .flatten()
+                .and_then(|dt| Local.from_local_datetime(&dt).single())
                 .unwrap_or(occurrence_date)
         } else {
             occurrence_date

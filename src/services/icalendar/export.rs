@@ -33,7 +33,7 @@ fn append_event(buffer: &mut String, event: &Event) {
     buffer.push_str("BEGIN:VEVENT\r\n");
     buffer.push_str(&format!("UID:{}\r\n", build_uid(event)));
 
-    let dtstamp = event.created_at.unwrap_or_else(|| Local::now());
+    let dtstamp = event.created_at.unwrap_or_else(Local::now);
     buffer.push_str(&format!("DTSTAMP:{}\r\n", format_datetime(&dtstamp)));
 
     if event.all_day {

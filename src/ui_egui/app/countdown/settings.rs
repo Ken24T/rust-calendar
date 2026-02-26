@@ -205,7 +205,7 @@ pub(super) fn render_countdown_settings_ui(
                         card.event_color,
                         |color| CountdownSettingsCommand::SetTitleBgColor(card.id, color),
                         |flag| CountdownSettingsCommand::SetUseDefaultTitleBg(card.id, flag),
-                        |color| CountdownSettingsCommand::SetDefaultTitleBgColor(color),
+                        CountdownSettingsCommand::SetDefaultTitleBgColor,
                         CountdownSettingsCommand::ResetDefaultTitleBgColor,
                         &mut result,
                     );
@@ -218,7 +218,7 @@ pub(super) fn render_countdown_settings_ui(
                         card.event_color,
                         |color| CountdownSettingsCommand::SetTitleFgColor(card.id, color),
                         |flag| CountdownSettingsCommand::SetUseDefaultTitleFg(card.id, flag),
-                        |color| CountdownSettingsCommand::SetDefaultTitleFgColor(color),
+                        CountdownSettingsCommand::SetDefaultTitleFgColor,
                         CountdownSettingsCommand::ResetDefaultTitleFgColor,
                         &mut result,
                     );
@@ -267,7 +267,7 @@ pub(super) fn render_countdown_settings_ui(
                         card.event_color,
                         |color| CountdownSettingsCommand::SetBodyBgColor(card.id, color),
                         |flag| CountdownSettingsCommand::SetUseDefaultBodyBg(card.id, flag),
-                        |color| CountdownSettingsCommand::SetDefaultBodyBgColor(color),
+                        CountdownSettingsCommand::SetDefaultBodyBgColor,
                         CountdownSettingsCommand::ResetDefaultBodyBgColor,
                         &mut result,
                     );
@@ -280,7 +280,7 @@ pub(super) fn render_countdown_settings_ui(
                         card.event_color,
                         |color| CountdownSettingsCommand::SetDaysFgColor(card.id, color),
                         |flag| CountdownSettingsCommand::SetUseDefaultDaysFg(card.id, flag),
-                        |color| CountdownSettingsCommand::SetDefaultDaysFgColor(color),
+                        CountdownSettingsCommand::SetDefaultDaysFgColor,
                         CountdownSettingsCommand::ResetDefaultDaysFgColor,
                         &mut result,
                     );
@@ -349,6 +349,7 @@ pub(super) fn render_countdown_settings_ui(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_color_setting<F, G, H>(
     ui: &mut egui::Ui,
     card_id: CountdownCardId,

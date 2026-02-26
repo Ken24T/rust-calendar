@@ -106,6 +106,7 @@ pub fn render_ribbon_event(
 
 /// Extended ribbon event renderer with resize handle support.
 /// Returns (EventInteractionResult, Option<Rect>) where Rect is the event's bounding box.
+#[allow(clippy::too_many_arguments)]
 pub fn render_ribbon_event_with_handles(
     ui: &mut egui::Ui,
     event: &Event,
@@ -279,7 +280,7 @@ pub fn render_ribbon_event_with_handles(
 
         if ui.button("📤 Export this event").clicked() {
             if let Some(path) = rfd::FileDialog::new()
-                .set_file_name(&format!("{}.ics", event.title.replace(' ', "_")))
+                .set_file_name(format!("{}.ics", event.title.replace(' ', "_")))
                 .add_filter("iCalendar", &["ics"])
                 .save_file()
             {
@@ -423,7 +424,7 @@ pub fn render_event_in_cell(
     
     // Add location icon if event has a location
     if event.location.as_ref().map(|l| !l.is_empty()).unwrap_or(false) {
-        title_text.push_str("📍");
+        title_text.push('📍');
     }
     
     title_text.push_str(&event.title);
@@ -1035,7 +1036,7 @@ pub fn render_time_cell(
 
                 if ui.button("📤 Export this event").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
-                        .set_file_name(&format!("{}.ics", event.title.replace(' ', "_")))
+                        .set_file_name(format!("{}.ics", event.title.replace(' ', "_")))
                         .add_filter("iCalendar", &["ics"])
                         .save_file()
                     {
@@ -1084,7 +1085,7 @@ pub fn render_time_cell(
                     ui.separator();
                     ui.menu_button("📋 From Template", |ui| {
                         for template in &templates {
-                            let label = format!("{}", template.name);
+                            let label = template.name.to_string();
                             if ui.button(&label).on_hover_text(format!(
                                 "Create '{}' event\nDuration: {}",
                                 template.title,

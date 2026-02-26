@@ -76,7 +76,7 @@ pub(super) fn viewport_builder_for_settings(
             .with_position(egui::pos2(geometry.x, geometry.y))
             .with_inner_size(egui::vec2(
                 geometry.width.max(COUNTDOWN_SETTINGS_MIN_WIDTH),
-                geometry.height.max(400.0).min(COUNTDOWN_SETTINGS_HEIGHT),
+                geometry.height.clamp(400.0, COUNTDOWN_SETTINGS_HEIGHT),
             ));
     } else {
         builder = builder.with_inner_size(egui::vec2(
@@ -88,6 +88,7 @@ pub(super) fn viewport_builder_for_settings(
     builder
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_countdown_card_ui(
     ctx: &egui::Context,
     class: ViewportClass,
@@ -258,7 +259,7 @@ pub(super) fn render_countdown_card_ui(
                     let total_hours = duration.num_hours();
                     
                     // Show HH:MM if less than 24 hours, otherwise show days
-                    let countdown_text = if total_hours < 24 && total_hours >= 0 {
+                    let countdown_text = if (0..24).contains(&total_hours) {
                         let hours = total_hours;
                         let minutes = (duration.num_minutes() % 60).max(0);
                         format!("{:02}:{:02}", hours, minutes)
@@ -303,12 +304,11 @@ pub(super) fn render_countdown_card_ui(
         });
 
         inner.response.context_menu(|ui| {
-            if card.event_id.is_some() {
-                if ui.button("📝 Edit event...").clicked() {
+            if card.event_id.is_some()
+                && ui.button("📝 Edit event...").clicked() {
                     action = CountdownCardUiAction::OpenEventDialog;
                     ui.close_menu();
                 }
-            }
             if ui.button("⚙ Card settings...").clicked() {
                 action = CountdownCardUiAction::OpenSettings;
                 ui.close_menu();

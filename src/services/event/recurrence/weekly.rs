@@ -76,7 +76,7 @@ pub(super) fn generate(
             week_count += 1;
         }
 
-        current_week_start = current_week_start + Duration::weeks(interval);
+        current_week_start += Duration::weeks(interval);
 
         if current_week_start > range_end.date_naive() + Duration::days(365) {
             break;
