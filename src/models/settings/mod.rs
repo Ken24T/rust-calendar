@@ -223,37 +223,47 @@ mod tests {
 
     #[test]
     fn test_validate_invalid_theme() {
-        let mut settings = Settings::default();
-        settings.theme = "invalid".to_string();
+        let settings = Settings {
+            theme: "invalid".to_string(),
+            ..Settings::default()
+        };
         assert!(settings.validate().is_err());
     }
 
     #[test]
     fn test_validate_invalid_first_day_of_week() {
-        let mut settings = Settings::default();
-        settings.first_day_of_week = 7;
+        let settings = Settings {
+            first_day_of_week: 7,
+            ..Settings::default()
+        };
         assert!(settings.validate().is_err());
     }
 
     #[test]
     fn test_validate_invalid_time_format() {
-        let mut settings = Settings::default();
-        settings.time_format = "invalid".to_string();
+        let settings = Settings {
+            time_format: "invalid".to_string(),
+            ..Settings::default()
+        };
         assert!(settings.validate().is_err());
     }
 
     #[test]
     fn test_validate_invalid_view() {
-        let mut settings = Settings::default();
-        settings.current_view = "Invalid".to_string();
+        let settings = Settings {
+            current_view: "Invalid".to_string(),
+            ..Settings::default()
+        };
         assert!(settings.validate().is_err());
     }
 
     #[test]
     fn test_validate_all_valid_themes() {
         for theme in ["light", "dark"] {
-            let mut settings = Settings::default();
-            settings.theme = theme.to_string();
+            let settings = Settings {
+                theme: theme.to_string(),
+                ..Settings::default()
+            };
             assert!(
                 settings.validate().is_ok(),
                 "Theme '{}' should be valid",
@@ -265,8 +275,10 @@ mod tests {
     #[test]
     fn test_validate_all_valid_views() {
         for view in ["Day", "WorkWeek", "Week", "Month", "Quarter"] {
-            let mut settings = Settings::default();
-            settings.current_view = view.to_string();
+            let settings = Settings {
+                current_view: view.to_string(),
+                ..Settings::default()
+            };
             assert!(
                 settings.validate().is_ok(),
                 "View '{}' should be valid",
