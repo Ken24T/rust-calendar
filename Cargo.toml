@@ -1,6 +1,6 @@
 [package]
 name = "rust-calendar"
-version = "1.0.32"
+version = "1.1.0"
 edition = "2021"
 authors = ["Ken24T"]
 description = "A modern cross-platform desktop calendar application with theming and event management"

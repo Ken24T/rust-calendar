@@ -1,81 +1,142 @@
-# Home Linux App – Copilot Instructions
+# Rust Calendar – Copilot Instructions
 
 ## Project Overview
 
-This repository is a local-first Linux desktop app project built with Python and GTK4.
+A modern, feature-rich cross-platform desktop calendar application built with Rust.
 
-Current app:
+- **GUI**: egui/eframe (immediate-mode, cross-platform)
+- **Database**: SQLite via rusqlite (bundled)
+- **Platforms**: Linux (primary development), Windows, macOS (untested)
+- **Persistence**: Local-first, using `directories` crate for XDG/AppData paths
 
-- TaskPad (notes/tasks desktop app)
-- GUI layer in GTK
-- Local persistence (JSON now, SQLite planned)
-
-Primary goal: learn native Linux desktop development with pragmatic, incremental delivery.
+Primary goal: a polished, performant calendar app that runs natively on Linux and Windows from a single codebase.
 
 ## Repository Structure
 
 | Folder | Purpose |
 |--------|---------|
-| `/src/taskpad` | Application code (app lifecycle, UI, models, repository, storage) |
-| `/data` | Desktop integration metadata (`.desktop`, metainfo) |
-| `/tests` | Unit/integration tests (create as project grows) |
-| `/.github` | Automation, Copilot guidance, and SHIP/TCTBP workflow files |
+| `/src/main.rs` | Binary entry point |
+| `/src/lib.rs` | Library root (re-exports modules) |
+| `/src/models/` | Domain entities: event, recurrence, reminder, settings, category, template, UI state |
+| `/src/services/` | Business logic: event CRUD, database, backup, countdown, iCalendar, notifications, PDF, settings, theme |
+| `/src/ui_egui/` | egui UI layer: app lifecycle, views, dialogs, event editor, theme, resize, drag |
+| `/src/ui_egui/app/` | App shell: lifecycle, menu, navigation, sidebar, shortcuts, state, countdown, dialogs, views |
+| `/src/ui_egui/views/` | Calendar views: day, week, workweek, month, quarter |
+| `/src/ui_egui/dialogs/` | Modal dialogs: settings, themes, backup, categories, export, search |
+| `/src/ui/` | Legacy GTK UI layer (retained, not actively developed) |
+| `/src/utils/` | Shared utilities (date helpers) |
+| `/tests/` | Integration tests, unit test modules, property tests, fixtures |
+| `/benches/` | Criterion benchmarks (recurrence performance) |
+| `/assets/themes/` | Theme definitions (TOML: dark, light) |
+| `/packaging/` | Linux desktop integration (`.desktop` file) |
+| `/docs/` | Architecture, feature, and planning documentation |
+| `/.github/` | Copilot guidance and SHIP/TCTBP workflow files |
 
 ## Development Commands
 
 ```bash
-# Environment setup
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+# Build (debug)
+cargo build
 
-# Run app
-taskpad
+# Build (release, optimised)
+cargo build --release
 
-# Baseline validation
-python3 -m compileall src
+# Run the application
+cargo run
 
-# Tests (when present)
-pytest
+# Run all tests (unit + integration + doc-tests)
+cargo test
+
+# Lint (must produce zero warnings before SHIP)
+cargo clippy
+
+# Auto-fix simple clippy warnings
+cargo clippy --fix --lib --bin rust-calendar --allow-dirty --allow-staged
+
+# Format code
+cargo fmt
+
+# Run benchmarks
+cargo bench
+
+# Code coverage (requires cargo-tarpaulin)
+cargo tarpaulin --out Html
 ```
 
 ## Environment and Dependencies
 
-- Target runtime: Python 3.10+
-- Linux desktop stack: GTK4 via PyGObject (`python3-gi`, `gir1.2-gtk-4.0`)
-- No hard-coded machine-specific paths; use XDG paths or user-home-safe defaults
+- **Rust toolchain**: Stable (managed via `rust-toolchain.toml`), components: rustfmt, clippy, rust-analyzer
+- **Minimum Rust version**: 1.75+
+- **Linux build dependencies**: `build-essential libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev`
+- **Windows build dependencies**: Visual Studio Build Tools with C++ development tools
+- **No hard-coded paths**: Use `directories::ProjectDirs` for data/config paths; never hard-code `/home/user` or `C:\Users\`
+
+## Cross-Platform Guidelines
+
+This is a unified codebase targeting Linux and Windows from a single source tree.
+
+- **Platform-specific code**: Use `#[cfg(target_os = "...")]` or `cfg!()` for conditional compilation
+- **Platform-specific dependencies**: Place under `[target.'cfg(windows)'.dependencies]` etc. in `Cargo.toml`
+- **Fonts**: Use generic family names (`sans-serif`, `monospace`) rather than platform-specific fonts (`Segoe UI`, `Ubuntu`)
+- **File paths**: Use `std::path::Path`/`PathBuf` and the `directories` crate; never assume path separators
+- **Notifications**: `notify-rust` handles Linux; `windows` crate for Windows toast notifications
+- **Desktop integration**: Linux `.desktop` file in `/packaging/`; Windows gets console hiding via `#![windows_subsystem = "windows"]`
+- **Always test changes compile on the current platform**; cross-compilation is not required but code must not break other targets
 
 ## Architecture and Code Patterns
 
-### Application Layers
+### Layer Separation
 
-- `app.py`: Gtk.Application lifecycle and startup wiring
-- `window.py`: UI composition, actions, and user interaction flow
-- `models.py`: domain entities and shared value logic
-- `repository.py`: business-level data operations and ordering rules
-- `storage_*.py`: persistence adapters (JSON now; SQLite adapter in phase 2)
+| Layer | Location | Responsibility |
+|-------|----------|---------------|
+| **Models** | `src/models/` | Domain entities, value types, serialisation |
+| **Services** | `src/services/` | Business logic, database access, import/export |
+| **UI** | `src/ui_egui/` | Presentation, user interaction, egui rendering |
+| **Utils** | `src/utils/` | Shared helpers (date arithmetic) |
+
+### Key Architectural Rules
+
+- **Models are UI-agnostic** — no egui types in `models/`
+- **Services are UI-agnostic** — no egui types in `services/`
+- **UI calls services, never the reverse**
+- **Database access** is exclusively through `services/database/`
+- **Theme system**: TOML-based themes in `assets/themes/`, loaded by `services/theme/`
 
 ### Coding Style
 
-- Prefer clear, typed Python (`from __future__ import annotations`, dataclasses, explicit types)
+- Use idiomatic Rust: `Result<T, E>`, `Option<T>`, pattern matching, iterators
+- Prefer `anyhow::Result` for application-level errors, `thiserror` for library-level error types
+- Use `log` macros (`log::info!`, `log::warn!`, `log::error!`) for runtime diagnostics
 - Keep files under approximately 300 lines; split by responsibility
-- Keep UI logic and persistence logic separate
-- Handle empty, loading-like, and error states explicitly where relevant
+- Prefer `&Path` over `&PathBuf` in function signatures
+- Use `.clamp()` instead of `.min().max()` chains
+- Use `#[derive(...)]` where appropriate (Default, Clone, Debug, Serialize, Deserialize)
 - Keep language in Australian English for user-facing text
 
 ## Testing
 
-- Baseline verification gate: run `python3 -m compileall src` and ensure diagnostics are zero before SHIP
-- Unit tests: use `pytest`, with test files under `tests/` named `test_*.py`
-- Prioritise tests for non-UI logic first (`models`, `repository`, persistence adapters)
-- Keep GTK UI tests lightweight (smoke-level), unless a UI bug requires deeper coverage
+- **Test command**: `cargo test` (runs unit, integration, and doc-tests)
+- **Test location**: Unit tests as `#[cfg(test)] mod tests` within source files or under `tests/unit/`; integration tests under `tests/`
+- **Property tests**: `proptest` under `tests/property/`
+- **Benchmarks**: `criterion` under `benches/`
+- **Test utilities**: `tempfile` for temporary directories, `mockall` for mocking, `pretty_assertions` for readable diffs
+- **Prioritise tests** for models, services, and recurrence logic over UI code
+- **All tests must pass** before any SHIP
+
+## Quality Gates (Enforced Before SHIP)
+
+1. `cargo test` — 100% pass rate
+2. `cargo clippy` — zero warnings
+3. VS Code Problems tab — zero issues (includes markdown lint)
+4. `cargo build` — clean compilation
 
 ## Security and Safety Rules
 
 1. Never commit secrets, tokens, or credentials
-2. Use only local data paths and configuration suitable for desktop apps
-3. Do not introduce remote services without explicit user instruction
-4. Keep version declarations in sync across relevant project files
+2. Use only local data paths via `directories::ProjectDirs`
+3. Do not introduce remote services or network calls without explicit user instruction
+4. Keep version declarations in sync (`Cargo.toml` is the single source of truth for version)
+5. SQLite database is local-only; no cloud sync
 
 ## Shipping Workflow
 
@@ -84,12 +145,12 @@ For SHIP/TCTBP activation, order, versioning, tagging, and approval rules, follo
 - `.github/TCTBP.json` (authoritative)
 - `.github/TCTBP Agent.md` (behavioural guidance)
 
-Tag convention for SHIP is `vX.Y.Z`.
+Tag convention: `vX.Y.Z`
 
-SHIP cadence for this project:
+SHIP cadence:
 
-- SHIP is required after each completed implementation slice by default.
-- Docs-only/infrastructure-only slices are committed without version bump/tag.
+- SHIP is required after each completed implementation slice by default
+- Docs-only/infrastructure-only slices are committed without version bump/tag
 
 ## Branch Naming
 
@@ -101,7 +162,9 @@ SHIP cadence for this project:
 ## When Generating Code
 
 - Prefer small, focused changes over broad rewrites
-- Maintain clear boundaries between UI, domain, and storage
+- Maintain clear boundaries between models, services, and UI
 - Add tests alongside new non-trivial logic where practical
 - Preserve local-first behaviour unless requirements change
 - Keep logging and errors actionable for debugging
+- Respect cross-platform compatibility — avoid platform-specific APIs without `#[cfg]` guards
+- Run `cargo clippy` mentally — avoid patterns that trigger common lints
