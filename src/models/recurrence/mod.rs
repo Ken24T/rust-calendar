@@ -7,6 +7,7 @@ use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Weekday};
 use std::collections::HashSet;
 
 /// Frequency of recurrence per RFC 5545
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Frequency {
     Daily,
@@ -17,9 +18,10 @@ pub enum Frequency {
     Yearly,
 }
 
+#[allow(dead_code)]
 impl Frequency {
     /// Parse frequency from RRULE string (e.g., "DAILY", "WEEKLY")
-    pub fn from_str(s: &str) -> Result<Self, String> {
+    pub fn parse(s: &str) -> Result<Self, String> {
         match s.to_uppercase().as_str() {
             "DAILY" => Ok(Frequency::Daily),
             "WEEKLY" => Ok(Frequency::Weekly),
@@ -32,7 +34,7 @@ impl Frequency {
     }
 
     /// Convert to RFC 5545 FREQ value
-    pub fn to_rrule_string(&self) -> &'static str {
+    pub fn rrule_string(&self) -> &'static str {
         match self {
             Frequency::Daily => "DAILY",
             Frequency::Weekly => "WEEKLY",
@@ -54,6 +56,7 @@ impl Frequency {
 }
 
 /// Recurrence rule parser and calculator
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RecurrenceRule {
     pub frequency: Frequency,
@@ -65,6 +68,7 @@ pub struct RecurrenceRule {
     pub by_month: Vec<u32>,
 }
 
+#[allow(dead_code)]
 impl RecurrenceRule {
     /// Create a simple recurrence rule
     pub fn new(frequency: Frequency) -> Self {
@@ -98,7 +102,7 @@ impl RecurrenceRule {
 
             match parts[0] {
                 "FREQ" => {
-                    frequency = Some(Frequency::from_str(parts[1])?);
+                    frequency = Some(Frequency::parse(parts[1])?);
                 }
                 "INTERVAL" => {
                     interval = parts[1]
@@ -151,7 +155,7 @@ impl RecurrenceRule {
 
     /// Convert to RRULE string
     pub fn to_rrule(&self) -> String {
-        let mut parts = vec![format!("FREQ={}", self.frequency.to_rrule_string())];
+        let mut parts = vec![format!("FREQ={}", self.frequency.rrule_string())];
 
         if self.interval != self.frequency.default_interval() {
             parts.push(format!("INTERVAL={}", self.interval));
@@ -255,24 +259,18 @@ impl RecurrenceRule {
     /// Check if a date matches all filter criteria
     fn matches_filters(&self, date: &DateTime<Local>) -> bool {
         // Check BYDAY filter
-        if !self.by_weekday.is_empty() {
-            if !self.by_weekday.contains(&date.weekday()) {
-                return false;
-            }
+        if !self.by_weekday.is_empty() && !self.by_weekday.contains(&date.weekday()) {
+            return false;
         }
 
         // Check BYMONTHDAY filter
-        if !self.by_month_day.is_empty() {
-            if !self.by_month_day.contains(&(date.day() as i32)) {
-                return false;
-            }
+        if !self.by_month_day.is_empty() && !self.by_month_day.contains(&(date.day() as i32)) {
+            return false;
         }
 
         // Check BYMONTH filter
-        if !self.by_month.is_empty() {
-            if !self.by_month.contains(&date.month()) {
-                return false;
-            }
+        if !self.by_month.is_empty() && !self.by_month.contains(&date.month()) {
+            return false;
         }
 
         true
@@ -373,21 +371,21 @@ mod tests {
     use chrono::TimeZone;
 
     #[test]
-    fn test_frequency_from_str() {
-        assert_eq!(Frequency::from_str("DAILY").unwrap(), Frequency::Daily);
-        assert_eq!(Frequency::from_str("weekly").unwrap(), Frequency::Weekly);
-        assert_eq!(Frequency::from_str("MONTHLY").unwrap(), Frequency::Monthly);
-        assert!(Frequency::from_str("INVALID").is_err());
+    fn test_frequency_parse() {
+        assert_eq!(Frequency::parse("DAILY").unwrap(), Frequency::Daily);
+        assert_eq!(Frequency::parse("weekly").unwrap(), Frequency::Weekly);
+        assert_eq!(Frequency::parse("MONTHLY").unwrap(), Frequency::Monthly);
+        assert!(Frequency::parse("INVALID").is_err());
     }
 
     #[test]
-    fn test_frequency_to_rrule_string() {
-        assert_eq!(Frequency::Daily.to_rrule_string(), "DAILY");
-        assert_eq!(Frequency::Weekly.to_rrule_string(), "WEEKLY");
-        assert_eq!(Frequency::Fortnightly.to_rrule_string(), "WEEKLY");
-        assert_eq!(Frequency::Monthly.to_rrule_string(), "MONTHLY");
-        assert_eq!(Frequency::Quarterly.to_rrule_string(), "MONTHLY");
-        assert_eq!(Frequency::Yearly.to_rrule_string(), "YEARLY");
+    fn test_frequency_rrule_string() {
+        assert_eq!(Frequency::Daily.rrule_string(), "DAILY");
+        assert_eq!(Frequency::Weekly.rrule_string(), "WEEKLY");
+        assert_eq!(Frequency::Fortnightly.rrule_string(), "WEEKLY");
+        assert_eq!(Frequency::Monthly.rrule_string(), "MONTHLY");
+        assert_eq!(Frequency::Quarterly.rrule_string(), "MONTHLY");
+        assert_eq!(Frequency::Yearly.rrule_string(), "YEARLY");
     }
 
     #[test]

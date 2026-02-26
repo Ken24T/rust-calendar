@@ -74,7 +74,7 @@ impl<'a> CountdownRepository<'a> {
         )?;
 
         let cards = stmt
-            .query_map([], |row| Ok(row_to_card_state(row)?))?
+            .query_map([], row_to_card_state)?
             .collect::<Result<Vec<_>, _>>()
             .context("Failed to fetch countdown cards")?;
 
@@ -102,7 +102,7 @@ impl<'a> CountdownRepository<'a> {
              FROM countdown_cards WHERE id = ?",
         )?;
 
-        stmt.query_row([id.0 as i64], |row| Ok(row_to_card_state(row)?))
+        stmt.query_row([id.0 as i64], row_to_card_state)
             .optional()
             .context("Failed to fetch countdown card")
     }
@@ -128,7 +128,7 @@ impl<'a> CountdownRepository<'a> {
              FROM countdown_cards WHERE event_id = ?",
         )?;
 
-        stmt.query_row([event_id], |row| Ok(row_to_card_state(row)?))
+        stmt.query_row([event_id], row_to_card_state)
             .optional()
             .context("Failed to fetch countdown card by event_id")
     }

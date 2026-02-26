@@ -3,6 +3,7 @@
 // Enables resizing events by dragging handles on event borders.
 // - Top/Bottom handles: Adjust start/end time (Day/Week views)
 // - Left/Right handles: Adjust start/end date (multi-day events)
+#![allow(dead_code)]
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
 use egui::{Context, Id, Pos2, Rect, Vec2};
@@ -240,7 +241,7 @@ impl ResizeManager {
 
     /// Check if resizing a specific event
     pub fn is_resizing_event(ctx: &Context, event_id: i64) -> bool {
-        Self::active(ctx).map_or(false, |c| c.event_id == event_id)
+        Self::active(ctx).is_some_and(|c| c.event_id == event_id)
     }
 
     /// Update hover position during resize
@@ -420,13 +421,13 @@ impl HandleRects {
 
     /// Check if a point hits any handle and return which one
     pub fn hit_test(&self, pos: Pos2) -> Option<ResizeHandle> {
-        if self.top.map_or(false, |r| r.contains(pos)) {
+        if self.top.is_some_and(|r| r.contains(pos)) {
             Some(ResizeHandle::Top)
-        } else if self.bottom.map_or(false, |r| r.contains(pos)) {
+        } else if self.bottom.is_some_and(|r| r.contains(pos)) {
             Some(ResizeHandle::Bottom)
-        } else if self.left.map_or(false, |r| r.contains(pos)) {
+        } else if self.left.is_some_and(|r| r.contains(pos)) {
             Some(ResizeHandle::Left)
-        } else if self.right.map_or(false, |r| r.contains(pos)) {
+        } else if self.right.is_some_and(|r| r.contains(pos)) {
             Some(ResizeHandle::Right)
         } else {
             None
@@ -559,6 +560,7 @@ pub fn draw_handles(
 /// - `slot_end_time`: The end time of the current slot  
 /// - `event_color`: The color of the event (will be made translucent)
 /// - `left_margin`: Left margin for the event rect within the slot
+#[allow(clippy::too_many_arguments)]
 pub fn draw_resize_preview(
     ui: &mut egui::Ui,
     resize_ctx: &ResizeContext,

@@ -27,7 +27,7 @@ impl<'a> SettingsService<'a> {
                     auto_create_countdown_on_import, edit_before_import, sidebar_width
              FROM settings WHERE id = 1",
                 [],
-                |row| Ok(row_to_settings(row)?),
+                row_to_settings,
             )
             .context("Failed to load settings")?;
 

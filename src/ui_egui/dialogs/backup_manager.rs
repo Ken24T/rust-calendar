@@ -233,7 +233,7 @@ fn render_backup_item(
     let is_delete_confirm = confirm_delete_index == Some(index);
 
     egui::Frame::none()
-        .fill(if index % 2 == 0 {
+        .fill(if index.is_multiple_of(2) {
             ui.visuals().faint_bg_color
         } else {
             ui.visuals().extreme_bg_color

@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 
 /// Service for importing and exporting iCalendar (.ics) files
+#[derive(Default)]
 pub struct ICalendarService;
 
 impl ICalendarService {

@@ -135,7 +135,7 @@ pub fn render_inline_date_picker(
                         let is_selected = current == current_date;
                         
                         // Check if date is constrained (for end date, can't be before start)
-                        let is_disabled = constraint_date.map_or(false, |min| current < min);
+                        let is_disabled = constraint_date.is_some_and(|min| current < min);
 
                         let day_str = format!("{}", current.day());
 
@@ -172,7 +172,7 @@ pub fn render_inline_date_picker(
         ui.horizontal(|ui| {
             if ui.button("Today").clicked() {
                 // Only select today if it's not disabled
-                if constraint_date.map_or(true, |min| today >= min) {
+                if constraint_date.is_none_or(|min| today >= min) {
                     action = DatePickerAction::Selected(today);
                 } else {
                     // Jump to view today but don't select
@@ -190,7 +190,7 @@ pub fn render_inline_date_picker(
 
 /// Shift a date by the given number of months
 fn shift_month(date: NaiveDate, delta: i32) -> NaiveDate {
-    let total_months = (date.year() * 12) as i32 + (date.month() as i32 - 1) + delta;
+    let total_months = (date.year() * 12) + (date.month() as i32 - 1) + delta;
     let new_year = total_months.div_euclid(12);
     let new_month = (total_months.rem_euclid(12) + 1) as u32;
     let max_day = days_in_month(new_year, new_month);

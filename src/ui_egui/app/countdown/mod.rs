@@ -50,7 +50,7 @@ impl CalendarApp {
                 end_at,
                 color,
                 body,
-                display_label,
+                display_label: _,
             } = request;
 
             let target_at = if start_at > now {

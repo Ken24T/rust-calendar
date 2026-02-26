@@ -18,7 +18,7 @@ impl RecurrenceFrequency {
         }
     }
 
-    pub fn to_rrule_freq(&self) -> &'static str {
+    pub fn as_rrule_freq(&self) -> &'static str {
         match self {
             Self::Daily => "DAILY",
             Self::Weekly => "WEEKLY",
@@ -88,7 +88,7 @@ impl Weekday {
         }
     }
 
-    pub fn to_rrule_day(&self) -> &'static str {
+    pub fn as_rrule_day(&self) -> &'static str {
         match self {
             Self::Sunday => "SU",
             Self::Monday => "MO",
@@ -285,7 +285,7 @@ impl RRuleBuilder {
             return None;
         }
 
-        let mut parts = vec![format!("FREQ={}", self.frequency.to_rrule_freq())];
+        let mut parts = vec![format!("FREQ={}", self.frequency.as_rrule_freq())];
 
         if self.interval > 1 {
             parts.push(format!("INTERVAL={}", self.interval));
@@ -303,10 +303,10 @@ impl RRuleBuilder {
                     parts.push("BYMONTHDAY=-1".to_string());
                 }
                 RecurrencePattern::FirstWeekdayOfPeriod(weekday) => {
-                    parts.push(format!("BYDAY=1{}", weekday.to_rrule_day()));
+                    parts.push(format!("BYDAY=1{}", weekday.as_rrule_day()));
                 }
                 RecurrencePattern::LastWeekdayOfPeriod(weekday) => {
-                    parts.push(format!("BYDAY=-1{}", weekday.to_rrule_day()));
+                    parts.push(format!("BYDAY=-1{}", weekday.as_rrule_day()));
                 }
                 RecurrencePattern::None => self.append_standard_byday(&mut parts),
             }

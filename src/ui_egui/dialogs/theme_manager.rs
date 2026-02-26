@@ -5,16 +5,19 @@
 use egui::{Align, Context, Layout, RichText, Window};
 
 /// State for the theme manager dialog
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct ThemeManagerState {
     pub is_open: bool,
 }
 
 impl ThemeManagerState {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self { is_open: false }
     }
 
+    #[allow(dead_code)]
     pub fn open(&mut self) {
         self.is_open = true;
     }
@@ -25,6 +28,7 @@ impl ThemeManagerState {
 }
 
 /// Result of rendering the theme manager dialog
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum ThemeManagerAction {
     None,
@@ -36,6 +40,7 @@ pub enum ThemeManagerAction {
 }
 
 /// Render the theme manager dialog
+#[allow(dead_code)]
 pub fn render_theme_manager(
     ctx: &Context,
     state: &mut ThemeManagerState,

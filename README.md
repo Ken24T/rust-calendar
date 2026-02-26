@@ -1,14 +1,15 @@
 # Rust Calendar
 
-A modern, feature-rich Windows desktop calendar application built with Rust.
+A modern, feature-rich cross-platform desktop calendar application built with Rust.
 
 ## Features
 
 🎨 **Modern UI with Theming**
+
 - Light and Dark mode support
 - Customizable themes
 - Smooth transitions and animations
-- Native Windows look and feel
+- Native look and feel on each platform
 - **Multiple calendar views**:
   - Day view - Detailed hourly schedule
   - Work week - Monday through Friday
@@ -36,6 +37,7 @@ A modern, feature-rich Windows desktop calendar application built with Rust.
   - All preferences saved between sessions
 
 📅 **Powerful Event Management**
+
 - Create single and repeating events
 - Support for complex recurrence patterns:
   - Daily, Weekly, **Fortnightly**, Monthly, **Quarterly**, Yearly
@@ -47,12 +49,14 @@ A modern, feature-rich Windows desktop calendar application built with Rust.
 - Drag and drop .ics files to import events
 
 ⏰ **Smart Reminders**
+
 - Multiple configurable reminders per event
-- Windows native notifications
+- Cross-platform desktop notifications
 - Snooze functionality
 - Custom reminder times
 
 💾 **Reliable Data Storage**
+
 - Local SQLite database
 - Import/Export iCalendar (.ics) format
 - **Drag-and-drop .ics file import**
@@ -60,6 +64,7 @@ A modern, feature-rich Windows desktop calendar application built with Rust.
 - UI preferences persistence
 
 ⌨️ **Keyboard Shortcuts**
+
 - `Ctrl+N` - Create new event
 - `Ctrl+T` - Navigate to today
 - `Ctrl+S` - Open settings
@@ -76,22 +81,30 @@ This project is in active development. See `docs/PROJECT_PLAN.md` for the detail
 
 ## Requirements
 
-- Windows 10/11
-- Rust 1.75 or later
-- Visual Studio Build Tools (for compilation)
+- **Linux**: X11 or Wayland desktop environment, Rust 1.75+
+- **Windows**: Windows 10/11, Rust 1.75+, Visual Studio Build Tools
+- **macOS**: macOS 11+, Rust 1.75+ (untested but should work)
 
 ## Getting Started
 
 ### Prerequisites
 
 1. Install Rust from [rustup.rs](https://rustup.rs/)
-2. Install Visual Studio Build Tools with C++ development tools
+2. **Linux**: Install system dependencies:
+
+   ```bash
+   # Debian/Ubuntu/Mint
+   sudo apt install build-essential libgtk-3-dev libxcb-render0-dev \
+     libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+   ```
+
+3. **Windows**: Install Visual Studio Build Tools with C++ development tools
 
 ### Building from Source
 
-```powershell
+```bash
 # Clone the repository
-git clone https://github.com/yourusername/rust-calendar.git
+git clone https://github.com/Ken24T/rust-calendar.git
 cd rust-calendar
 
 # Build the project
@@ -103,7 +116,7 @@ cargo run --release
 
 ### Running Tests
 
-```powershell
+```bash
 # Run all tests
 cargo test
 
@@ -117,7 +130,7 @@ cargo bench
 
 ## Project Structure
 
-```
+```text
 rust-calendar/
 ├── src/              # Source code (modular, small files <300 lines)
 │   ├── ui/           # User interface components
@@ -138,11 +151,13 @@ rust-calendar/
 ## Design Principles
 
 🎯 **Modularity First**
+
 - Small, focused files (max 300 lines)
 - Single responsibility per module
 - Highly composable architecture
 
 🧪 **Comprehensive Testing**
+
 - >90% code coverage requirement
 - Unit, integration, and property-based tests
 - Every module has corresponding tests
@@ -159,11 +174,12 @@ rust-calendar/
 
 ## Technology Stack
 
-- **GUI Framework**: [iced](https://github.com/iced-rs/iced) - Modern reactive UI
-- **Database**: SQLite via [rusqlite](https://github.com/rusqlite/rusqlite)
+- **GUI Framework**: [egui/eframe](https://github.com/emilk/egui) - Cross-platform immediate-mode UI
+- **Database**: SQLite via [rusqlite](https://github.com/rusqlite/rusqlite) (bundled)
 - **Date/Time**: [chrono](https://github.com/chronotope/chrono)
 - **Recurrence**: [rrule](https://github.com/fmeringdal/rust-rrule) - RFC 5545 compliant
-- **Notifications**: Windows native notifications
+- **Notifications**: [notify-rust](https://github.com/hoodie/notify-rust) - Cross-platform desktop notifications
+- **Data Paths**: [directories](https://github.com/dirs-dev/directories-rs) - XDG/AppData path resolution
 
 ## Contributing
 
@@ -176,35 +192,41 @@ This project is dual-licensed under MIT OR Apache-2.0.
 ## Roadmap
 
 ### Phase 1: Foundation ✅
+
 - [x] Project structure setup
 - [x] Dependencies configuration
 - [ ] Database schema implementation
 - [ ] Core data models
 
 ### Phase 2: Event Management 🚧
+
 - [ ] Event CRUD operations
 - [ ] Recurrence rule engine
 - [ ] iCalendar import/export
 
 ### Phase 3: User Interface 📋
+
 - [ ] Main application window
 - [ ] Calendar views (month/week/day)
 - [ ] Event creation and editing
 
 ### Phase 4: Reminders 📋
+
 - [ ] Reminder scheduling
-- [ ] Windows notifications
+- [ ] Cross-platform desktop notifications
 - [ ] Background reminder service
 
 ### Phase 5: Theming 📋
+
 - [ ] Theme system
 - [ ] Light/Dark modes
 - [ ] Theme customization
 
 ### Phase 6: Polish 📋
+
 - [ ] Testing and optimization
 - [ ] Documentation
-- [ ] Windows installer
+- [ ] Linux .desktop integration and packaging
 
 ## Acknowledgments
 

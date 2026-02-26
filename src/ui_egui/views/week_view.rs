@@ -29,6 +29,7 @@ fn blend_header_weekend(header_bg: Color32, is_dark: bool) -> Color32 {
 pub struct WeekView;
 
 impl WeekView {
+    #[allow(clippy::too_many_arguments)]
     pub fn show(
         ui: &mut egui::Ui,
         current_date: &mut NaiveDate,

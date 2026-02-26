@@ -298,11 +298,10 @@ pub fn render_category_manager_dialog(
                             }
                         }
 
-                        if is_editing {
-                            if ui.button("Cancel").clicked() {
+                        if is_editing
+                            && ui.button("Cancel").clicked() {
                                 state.start_new();
                             }
-                        }
                     });
 
                     // Delete confirmation

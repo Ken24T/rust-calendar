@@ -45,7 +45,7 @@ event_holiday = "#ff8c00"
 event_birthday = "#e81123"
 
 [typography]
-font_family = "Segoe UI"
+font_family = "sans-serif"
 font_size_small = 12
 font_size_normal = 14
 font_size_large = 16

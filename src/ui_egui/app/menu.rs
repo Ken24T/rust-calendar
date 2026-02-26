@@ -60,7 +60,7 @@ impl CalendarApp {
         
         if let Some(path) = rfd::FileDialog::new()
             .set_title("Export Month View to PDF")
-            .set_file_name(&format!("calendar_{}.pdf", month_name))
+            .set_file_name(format!("calendar_{}.pdf", month_name))
             .add_filter("PDF files", &["pdf"])
             .save_file()
         {
@@ -90,7 +90,7 @@ impl CalendarApp {
         
         if let Some(path) = rfd::FileDialog::new()
             .set_title("Export Week View to PDF")
-            .set_file_name(&format!("calendar_week_{}.pdf", week_num))
+            .set_file_name(format!("calendar_week_{}.pdf", week_num))
             .add_filter("PDF files", &["pdf"])
             .save_file()
         {
@@ -469,11 +469,9 @@ impl CalendarApp {
                         self.export_all_events_ics();
                         ui.close_menu();
                     }
-                } else {
-                    if ui.button("Export All Events...").clicked() {
-                        self.export_all_events_ics();
-                        ui.close_menu();
-                    }
+                } else if ui.button("Export All Events...").clicked() {
+                    self.export_all_events_ics();
+                    ui.close_menu();
                 }
                 if ui.button("Export Date Range...").clicked() {
                     self.state.show_export_range_dialog = true;
@@ -783,8 +781,8 @@ impl CalendarApp {
 
         let safe_category = category.replace(' ', "_").replace('/', "-");
         if let Some(path) = rfd::FileDialog::new()
-            .set_title(&format!("Export '{}' Events", category))
-            .set_file_name(&format!("{}_events.ics", safe_category))
+            .set_title(format!("Export '{}' Events", category))
+            .set_file_name(format!("{}_events.ics", safe_category))
             .add_filter("iCalendar", &["ics"])
             .save_file()
         {

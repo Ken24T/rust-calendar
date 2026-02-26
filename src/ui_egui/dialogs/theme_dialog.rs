@@ -82,7 +82,7 @@ fn render_color_swatches(ui: &mut egui::Ui, colors: [Color32; 4]) {
 
 /// Get preview colors for a preset theme
 fn get_preset_colors(preset: ThemePreset) -> [Color32; 4] {
-    preset.to_theme().preview_colors()
+    preset.as_theme().preview_colors()
 }
 
 /// Render the unified theme dialog
@@ -161,11 +161,10 @@ pub fn render_theme_dialog(
                     }
                 });
                 
-                if !name_valid && !state.duplicate_name.is_empty() {
-                    if CalendarTheme::is_builtin(&state.duplicate_name) {
+                if !name_valid && !state.duplicate_name.is_empty()
+                    && CalendarTheme::is_builtin(&state.duplicate_name) {
                         ui.colored_label(ui.visuals().error_fg_color, "Cannot use a built-in theme name");
                     }
-                }
             });
         if !show_duplicate {
             state.duplicate_source = None;

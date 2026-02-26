@@ -20,6 +20,7 @@ use super::filter_events_by_category;
 pub struct DayView;
 
 impl DayView {
+    #[allow(clippy::too_many_arguments)]
     pub fn show(
         ui: &mut egui::Ui,
         current_date: &mut NaiveDate,
@@ -140,6 +141,7 @@ impl DayView {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_time_slots(
         ui: &mut egui::Ui,
         date: NaiveDate,
@@ -272,6 +274,7 @@ impl DayView {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_time_slot(
         ui: &mut egui::Ui,
         date: NaiveDate,
@@ -685,24 +688,22 @@ impl DayView {
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
-                        } else {
-                            if ui.button("🗑 Delete").clicked() {
-                                if let Some(id) = event.id {
-                                    result.delete_confirm_request = Some(DeleteConfirmRequest {
-                                        event_id: id,
-                                        event_title: event.title.clone(),
-                                        occurrence_only: false,
-                                        occurrence_date: None,
-                                    });
-                                }
-                                ui.memory_mut(|mem| mem.close_popup());
+                        } else if ui.button("🗑 Delete").clicked() {
+                            if let Some(id) = event.id {
+                                result.delete_confirm_request = Some(DeleteConfirmRequest {
+                                    event_id: id,
+                                    event_title: event.title.clone(),
+                                    occurrence_only: false,
+                                    occurrence_date: None,
+                                });
                             }
+                            ui.memory_mut(|mem| mem.close_popup());
                         }
 
                         if ui.button("📤 Export this event").clicked() {
                             // Export event to ICS file
                             if let Some(path) = rfd::FileDialog::new()
-                                .set_file_name(&format!("{}.ics", event.title.replace(' ', "_")))
+                                .set_file_name(format!("{}.ics", event.title.replace(' ', "_")))
                                 .add_filter("iCalendar", &["ics"])
                                 .save_file()
                             {
@@ -751,7 +752,7 @@ impl DayView {
                             ui.separator();
                             ui.menu_button("📋 From Template", |ui| {
                                 for template in &templates {
-                                    let label = format!("{}", template.name);
+                                    let label = template.name.to_string();
                                     if ui.button(&label).on_hover_text(format!(
                                         "Create '{}' event\nDuration: {}",
                                         template.title,

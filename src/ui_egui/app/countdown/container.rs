@@ -56,18 +56,15 @@ pub fn format_card_tooltip(card: &CountdownCardState, now: DateTime<Local>) -> S
 
 /// Layout orientation for cards within the container
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum LayoutOrientation {
     /// Cards stacked vertically (tall/narrow container)
+    #[default]
     Vertical,
     /// Cards arranged horizontally (wide container)
     Horizontal,
 }
 
-impl Default for LayoutOrientation {
-    fn default() -> Self {
-        Self::Vertical
-    }
-}
 
 /// Minimum dimensions for container (absolute minimums for usability)
 pub const CONTAINER_MIN_WIDTH: f32 = 80.0;
@@ -328,8 +325,10 @@ impl DragState {
 
 /// Actions that can result from container UI interactions
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub enum ContainerAction {
     /// No action needed
+    #[default]
     None,
     /// Reorder cards to the specified order
     ReorderCards(Vec<CountdownCardId>),
@@ -349,11 +348,6 @@ pub enum ContainerAction {
     Closed,
 }
 
-impl Default for ContainerAction {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 /// Action from rendering a single card within the container
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -565,7 +559,7 @@ pub fn render_card_content(
                 let total_hours = duration.num_hours();
                 
                 // Show HH:MM if less than 24 hours, otherwise show days
-                let countdown_text = if total_hours < 24 && total_hours >= 0 {
+                let countdown_text = if (0..24).contains(&total_hours) {
                     let hours = total_hours;
                     let minutes = (duration.num_minutes() % 60).max(0);
                     format!("{:02}:{:02}", hours, minutes)
@@ -608,12 +602,11 @@ pub fn render_card_content(
 
     // Context menu for the card
     inner.response.context_menu(|ui| {
-        if card.event_id.is_some() {
-            if ui.button("📝 Edit event...").clicked() {
+        if card.event_id.is_some()
+            && ui.button("📝 Edit event...").clicked() {
                 action = CardUiAction::OpenEventDialog;
                 ui.close_menu();
             }
-        }
         if ui.button("⚙ Card settings...").clicked() {
             action = CardUiAction::OpenSettings;
             ui.close_menu();
@@ -638,6 +631,7 @@ pub fn render_card_content(
 
 /// Render all countdown cards within a container viewport.
 /// Returns any actions that need to be handled by the caller.
+#[allow(clippy::too_many_arguments)]
 pub fn render_container_window(
     ctx: &egui::Context,
     cards: &[CountdownCardState],
