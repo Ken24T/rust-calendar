@@ -3,6 +3,7 @@
 pub mod mapping;
 pub mod fetcher;
 pub mod engine;
+pub mod scheduler;
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Local;

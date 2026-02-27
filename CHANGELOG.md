@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] - 2026-02-27
+
+### Added
+- Stage 1 S7 scheduler and hardening:
+  - New background calendar sync scheduler with per-source poll interval handling.
+  - Per-source failure isolation so one failing source does not block others.
+  - Retry/backoff policy for failing sources with capped delay.
+  - Scheduler diagnostics and tests covering interval behaviour, failure isolation, and redaction.
+
+### Changed
+- Wired scheduler execution into the app update loop for automatic periodic sync.
+- Hardened sync error handling to redact source ICS URLs from stored/propagated error messages.
+
 ## [1.4.4] - 2026-02-27
 
 ### Added

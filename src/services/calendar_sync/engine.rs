@@ -53,11 +53,14 @@ impl<'a> CalendarSyncEngine<'a> {
             .fetch_ics(&source.ics_url)
             .and_then(|ics| self.sync_source_from_ics(source_id, &ics));
 
-        if let Err(err) = &result {
-            let _ = source_service.update_sync_status(source_id, Some("failed"), Some(&err.to_string()));
+        match result {
+            Ok(success) => Ok(success),
+            Err(err) => {
+                let redacted_error = Self::sanitize_error_message(&err.to_string(), &source.ics_url);
+                let _ = source_service.update_sync_status(source_id, Some("failed"), Some(&redacted_error));
+                Err(anyhow!(redacted_error))
+            }
         }
-
-        result
     }
 
     pub fn sync_source_from_ics(&self, source_id: i64, ics_content: &str) -> Result<SyncRunResult> {
@@ -197,6 +200,14 @@ impl<'a> CalendarSyncEngine<'a> {
         source_service.update_sync_status(source_id, Some("success"), None)?;
 
         Ok(result)
+    }
+
+    fn sanitize_error_message(message: &str, source_url: &str) -> String {
+        if source_url.is_empty() {
+            return message.to_string();
+        }
+
+        message.replace(source_url, "***redacted-url***")
     }
 }
 

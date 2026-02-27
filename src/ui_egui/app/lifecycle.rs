@@ -75,6 +75,7 @@ impl CalendarApp {
             confirm_dialog: ConfirmDialogState::new(),
             active_category_filter: None,
             undo_manager: UndoManager::new(),
+            calendar_sync_scheduler: crate::services::calendar_sync::scheduler::CalendarSyncScheduler::new(),
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);
@@ -205,6 +206,7 @@ impl CalendarApp {
 
         // Refresh countdown timers and check for notifications
         self.refresh_countdowns(ctx);
+        self.run_calendar_sync_scheduler(ctx);
         self.check_and_show_countdown_notifications(ctx);
 
         self.persist_countdowns_if_needed();
