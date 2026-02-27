@@ -6,9 +6,11 @@ use crate::services::calendar_sync::mapping::EventSyncMapService;
 use crate::services::database::Database;
 
 pub mod day_view;
+mod event_rendering;
 pub mod month_view;
 mod palette;
 pub mod quarter_view;
+mod time_grid;
 pub mod week_shared;
 pub mod week_view;
 pub mod workweek_view;
