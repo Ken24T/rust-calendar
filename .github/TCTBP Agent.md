@@ -119,7 +119,7 @@ Behaviour (local-first, remote-safe):
 
 Versioning interaction:
 
-- **Minor (Y) bump occurs on the first SHIP on the new branch**, not at branch creation.
+- **Minor (Y) bump occurs on the first SHIP on the new branch**, not at branch creation — **only for `feature/` branches** (governed by `minorBranchPrefixes`). Other branch types (e.g. `fix/`, `docs/`) receive a patch bump.
 
 ---
 
@@ -330,8 +330,9 @@ Ensure lint, build, and test diagnostics are clean (zero warnings if enforced).
 **Versioning rules:**
 
 - **Z (patch)** increments on **every SHIP**, **except** when the change set is **docs-only or infrastructure-only** (plans, runbooks, internal guidance).
-- **Y (minor)** increments on the **first SHIP of a new work branch**, resetting Z to 0.
+- **Y (minor)** increments on the **first SHIP of a new work branch**, resetting Z to 0, **only when the branch prefix matches `minorBranchPrefixes`** (default: `feature/`).
   - Operational definition: "first SHIP on a branch" means no prior shipped tag (`vX.Y.Z`) exists on commits unique to the current branch since it diverged from the default branch.
+  - Branches with non-feature prefixes (e.g. `fix/`, `docs/`, `infrastructure/`) receive a **patch** bump on their first SHIP, not a minor bump.
 - **X (major)** only by explicit instruction
 
 The bump must be applied to all files listed in `versionFiles` in `TCTBP.json` **before committing**, so the resulting commit contains the new version.
@@ -365,6 +366,14 @@ If `CHANGELOG.md` does not exist, skip this step silently.
 - Tag format: `vX.Y.Z` (example: `v0.5.27`)
 - One tag per shipped commit
 - Tag must point at the commit that introduced the version
+
+---
+
+### Build Profile
+
+Builds performed during or after a SHIP use the **dev (debug) profile** by default (`cargo build`). A **release build** (`cargo build --release`) is only performed when the user explicitly requests it (e.g. "release build", "build release", "deploy release").
+
+This keeps iteration fast during development and avoids unnecessary long compilation times.
 
 ---
 
@@ -453,11 +462,17 @@ The authoritative JSON configuration is in `TCTBP.json` at the repo root's `.git
     "excludeWhenCodePresent": ["*.rs"],
     "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics (e.g. markdown lint)"
   },
+  "build": {
+    "defaultProfile": "dev",
+    "releaseOnlyWhenRequested": true,
+    "comment": "Default to dev (debug) builds. Release builds only when user explicitly requests."
+  },
   "versioning": {
     "scheme": "semver",
     "patchEveryShip": true,
     "skipForChangeTypes": ["docs-only", "infrastructure-only"],
     "minorOnFirstShipOfBranch": true,
+    "minorBranchPrefixes": ["feature/"],
     "majorExplicitOnly": true
   },
   "tagging": {

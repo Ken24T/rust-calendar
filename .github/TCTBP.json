@@ -43,11 +43,17 @@
     "excludeWhenCodePresent": ["*.rs"],
     "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics (e.g. markdown lint)"
   },
+  "build": {
+    "defaultProfile": "dev",
+    "releaseOnlyWhenRequested": true,
+    "comment": "Default to dev (debug) builds. Release builds only when user explicitly requests."
+  },
   "versioning": {
     "scheme": "semver",
     "patchEveryShip": true,
     "skipForChangeTypes": ["docs-only", "infrastructure-only"],
     "minorOnFirstShipOfBranch": true,
+    "minorBranchPrefixes": ["feature/"],
     "majorExplicitOnly": true
   },
   "tagging": {
