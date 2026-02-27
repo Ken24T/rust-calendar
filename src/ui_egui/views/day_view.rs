@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use super::palette::{DayStripPalette, TimeGridPalette};
 use super::week_shared::{maybe_focus_slot, parse_color, DeleteConfirmRequest, EventInteractionResult};
-use super::{AutoFocusRequest, CountdownRequest};
+use super::{AutoFocusRequest, CountdownMenuState, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::models::template::EventTemplate;
@@ -15,7 +15,10 @@ use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::resize::{HandleRects, ResizeContext, ResizeHandle, ResizeManager, ResizeView, draw_handles, draw_resize_preview};
 use crate::ui_egui::theme::CalendarTheme;
 
-use super::{filter_events_by_category, is_synced_event, load_synced_event_ids};
+use super::{
+    countdown_menu_state, filter_events_by_category, filter_events_by_sync_scope,
+    is_synced_event, load_synced_event_ids,
+};
 
 pub struct DayView;
 
@@ -36,6 +39,7 @@ impl DayView {
         focus_request: &mut Option<AutoFocusRequest>,
         category_filter: Option<&str>,
         synced_only: bool,
+        synced_source_id: Option<i64>,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -47,15 +51,8 @@ impl DayView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_day(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
-        let synced_event_ids = load_synced_event_ids(database);
-        let events = if synced_only {
-            events
-                .into_iter()
-                .filter(|event| is_synced_event(event.id, &synced_event_ids))
-                .collect()
-        } else {
-            events
-        };
+        let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
+        let synced_event_ids = load_synced_event_ids(database, None);
 
         // Day header
         let day_name = current_date.format("%A").to_string();
@@ -680,23 +677,24 @@ impl DayView {
                         }
 
                         // Show countdown option prominently for future events
-                        if event.start > Local::now() {
-                            let timer_exists = event
-                                .id
-                                .map(|id| active_countdown_events.contains(&id))
-                                .unwrap_or(false);
-                            if timer_exists {
+                        match countdown_menu_state(&event, active_countdown_events, Local::now()) {
+                            CountdownMenuState::Hidden => {}
+                            CountdownMenuState::Active => {
                                 ui.label(
                                     egui::RichText::new("⏱ Countdown active")
                                         .italics()
                                         .color(Color32::from_rgb(100, 200, 100))
                                         .size(11.0),
                                 );
-                            } else if ui.button("⏱ Create Countdown").clicked() {
-                                countdown_requests.push(CountdownRequest::from_event(&event));
-                                ui.memory_mut(|mem| mem.close_popup());
+                                ui.separator();
                             }
-                            ui.separator();
+                            CountdownMenuState::Available => {
+                                if ui.button("⏱ Create Countdown").clicked() {
+                                    countdown_requests.push(CountdownRequest::from_event(&event));
+                                    ui.memory_mut(|mem| mem.close_popup());
+                                }
+                                ui.separator();
+                            }
                         }
 
                         // Delete options - different for recurring events

@@ -323,6 +323,27 @@ impl CalendarApp {
                 }
                 self.state.show_search_dialog = false;
             }
+            SearchDialogAction::CreateCountdown(event_id) => {
+                match self.context.event_service().get(event_id) {
+                    Ok(Some(event)) => {
+                        self.consume_countdown_requests(vec![CountdownRequest::from_event(&event)]);
+                    }
+                    Ok(None) => {
+                        log::warn!(
+                            "Search dialog requested countdown for missing event {}",
+                            event_id
+                        );
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "Failed to load event {} for countdown from search dialog: {}",
+                            event_id,
+                            err
+                        );
+                    }
+                }
+                self.state.show_search_dialog = false;
+            }
             SearchDialogAction::Close => {
                 self.state.show_search_dialog = false;
             }

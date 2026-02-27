@@ -14,7 +14,7 @@ use crate::ui_egui::commands::UndoManager;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::CountdownRequest;
-use chrono::Local;
+use chrono::{Duration, Local};
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
 use std::path::{Path, PathBuf};
@@ -54,6 +54,7 @@ impl CalendarApp {
 
         let backup_manager_state = BackupManagerState::new(resolve_backup_db_path());
         let show_ribbon = settings.show_ribbon;
+        let sync_startup_delay = Duration::minutes(settings.sync_startup_delay_minutes.max(0));
 
         let mut app = Self {
             context,
@@ -76,6 +77,7 @@ impl CalendarApp {
             confirm_dialog: ConfirmDialogState::new(),
             active_category_filter: None,
             show_synced_events_only: false,
+            selected_synced_source_id: None,
             calendar_sync_status_message: None,
             calendar_sync_status_is_error: false,
             calendar_sync_next_due_in: None,
@@ -84,7 +86,9 @@ impl CalendarApp {
             calendar_sync_in_progress: false,
             undo_manager: UndoManager::new(),
             calendar_sync_scheduler: Arc::new(Mutex::new(
-                crate::services::calendar_sync::scheduler::CalendarSyncScheduler::new(),
+                crate::services::calendar_sync::scheduler::CalendarSyncScheduler::with_startup_delay(
+                    sync_startup_delay,
+                ),
             )),
         };
 

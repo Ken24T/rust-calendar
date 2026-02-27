@@ -26,6 +26,7 @@ pub struct Settings {
     pub auto_create_countdown_on_import: bool,
     pub edit_before_import: bool,
     pub sidebar_width: f32,
+    pub sync_startup_delay_minutes: i64,
 }
 
 impl Default for Settings {
@@ -52,6 +53,7 @@ impl Default for Settings {
             auto_create_countdown_on_import: false,
             edit_before_import: false,
             sidebar_width: 180.0,
+            sync_startup_delay_minutes: 15,
         }
     }
 }
@@ -113,6 +115,13 @@ impl Settings {
             return Err("Invalid default_event_start_time format".to_string());
         }
 
+        if !(0..=1440).contains(&self.sync_startup_delay_minutes) {
+            return Err(format!(
+                "Invalid sync_startup_delay_minutes: {}",
+                self.sync_startup_delay_minutes
+            ));
+        }
+
         Self::validate_card_dimensions(self.default_card_width, self.default_card_height)?;
 
         Ok(())
@@ -168,6 +177,13 @@ impl Settings {
             return Err("Invalid default_event_start_time format".to_string());
         }
 
+        if !(0..=1440).contains(&self.sync_startup_delay_minutes) {
+            return Err(format!(
+                "Invalid sync_startup_delay_minutes: {}",
+                self.sync_startup_delay_minutes
+            ));
+        }
+
         Self::validate_card_dimensions(self.default_card_width, self.default_card_height)?;
 
         Ok(())
@@ -213,6 +229,16 @@ mod tests {
         assert!(!settings.show_ribbon);
         assert!(settings.show_sidebar);
         assert_eq!(settings.current_view, "Month");
+        assert_eq!(settings.sync_startup_delay_minutes, 15);
+    }
+
+    #[test]
+    fn test_validate_invalid_sync_startup_delay() {
+        let settings = Settings {
+            sync_startup_delay_minutes: -1,
+            ..Settings::default()
+        };
+        assert!(settings.validate_without_theme().is_err());
     }
 
     #[test]

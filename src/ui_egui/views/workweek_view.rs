@@ -7,7 +7,10 @@ use super::week_shared::{
     format_short_date, get_week_start, render_ribbon_event, render_ribbon_event_with_handles,
     render_time_grid, EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
-use super::{filter_events_by_category, load_synced_event_ids, AutoFocusRequest, CountdownRequest};
+use super::{
+    filter_events_by_category, filter_events_by_sync_scope, load_synced_event_ids,
+    AutoFocusRequest, CountdownRequest,
+};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -47,6 +50,7 @@ impl WorkWeekView {
         focus_request: &mut Option<AutoFocusRequest>,
         category_filter: Option<&str>,
         synced_only: bool,
+        synced_source_id: Option<i64>,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -61,15 +65,8 @@ impl WorkWeekView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_dates(&event_service, &work_week_dates);
         let events = filter_events_by_category(events, category_filter);
-        let synced_event_ids = load_synced_event_ids(database);
-        let events = if synced_only {
-            events
-                .into_iter()
-                .filter(|event| super::is_synced_event(event.id, &synced_event_ids))
-                .collect()
-        } else {
-            events
-        };
+        let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
+        let synced_event_ids = load_synced_event_ids(database, None);
 
         // Calculate column width accounting for scrollbar (16px typical)
         let scrollbar_width = 16.0;

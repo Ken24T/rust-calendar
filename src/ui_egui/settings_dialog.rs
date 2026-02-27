@@ -511,6 +511,25 @@ pub fn render_settings_dialog(
                 ui.heading("Google Calendar Sync (Read-Only)");
                 ui.add_space(4.0);
 
+                ui.horizontal(|ui| {
+                    ui.allocate_ui_with_layout(
+                        egui::Vec2::new(label_width, 20.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            ui.label("Startup delay:");
+                        },
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut settings.sync_startup_delay_minutes)
+                            .range(0..=1440)
+                            .speed(1)
+                            .suffix(" min"),
+                    );
+                    ui.label("(applies on app launch)");
+                });
+
+                ui.add_space(6.0);
+
                 if let Some(message) = &dialog_state.source_status_message {
                     ui.colored_label(Color32::LIGHT_GREEN, message);
                 }

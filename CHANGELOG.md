@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.13] - 2026-02-27
+
+### Changed
+- Constrained month-view event chip titles to a single line with width-aware truncation to prevent text overflow across cells.
+- Improved month-view right-click interaction so event context menus reliably target the clicked event chip.
+- Normalised countdown creation timing for non-recurring multi-day events by resolving canonical event start/end from persistence at countdown-consumption time, ensuring countdowns begin from the first day regardless of where the event was clicked in month/week/workweek views.
+
+## [1.4.12] - 2026-02-27
+
+### Added
+- Added a configurable Google sync startup delay setting (default 15 minutes) in Settings, persisted in the database and applied when creating the sync scheduler on app launch.
+
+### Changed
+- Extended synced-event filtering to support source-scoped behaviour across day/week/workweek/month views.
+- Updated filtering semantics so selecting a source with synced-only disabled shows that source's synced events plus local non-synced events (for example, Den + local).
+- Added source-scoped synced ID lookup support in sync mapping services to back view-level filtering and lock/read-only guard behaviour.
+
+## [1.4.11] - 2026-02-27
+
+### Changed
+- Unified countdown creation behaviour across day/week/workweek/month/search event surfaces via shared countdown menu-state logic and request handling.
+- Added synced-event metadata enrichment for countdown cards by composing description, location, and synced source labels through the existing countdown request pipeline.
+- Added one-click countdown creation in Search dialog flows and made synced search results countdown-first (read-only edit disabled, countdown action surfaced directly).
+- Extended sync mapping lookups to resolve source names by local event for consistent synced countdown labelling.
+
 ## [1.4.10] - 2026-02-27
 
 ### Changed

@@ -7,7 +7,10 @@ use egui::{Align, Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::TimeGridPalette;
-use super::{event_time_segment_for_date, is_synced_event, AutoFocusRequest, CountdownRequest};
+use super::{
+    countdown_menu_state, event_time_segment_for_date, is_synced_event, AutoFocusRequest,
+    CountdownMenuState, CountdownRequest,
+};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
@@ -251,23 +254,24 @@ pub fn render_ribbon_event_with_handles(
         }
 
         // Show countdown option prominently for future events
-        if event.start > Local::now() {
-            let timer_exists = event
-                .id
-                .map(|id| active_countdown_events.contains(&id))
-                .unwrap_or(false);
-            if timer_exists {
+        match countdown_menu_state(event, active_countdown_events, Local::now()) {
+            CountdownMenuState::Hidden => {}
+            CountdownMenuState::Active => {
                 ui.label(
                     egui::RichText::new("⏱ Countdown active")
                         .italics()
                         .color(Color32::from_rgb(100, 200, 100))
                         .size(11.0),
                 );
-            } else if ui.button("⏱ Create Countdown").clicked() {
-                countdown_requests.push(CountdownRequest::from_event(event));
-                ui.close_menu();
+                ui.separator();
             }
-            ui.separator();
+            CountdownMenuState::Available => {
+                if ui.button("⏱ Create Countdown").clicked() {
+                    countdown_requests.push(CountdownRequest::from_event(event));
+                    ui.close_menu();
+                }
+                ui.separator();
+            }
         }
 
         if is_synced {
@@ -1048,23 +1052,24 @@ pub fn render_time_cell(
                 }
 
                 // Show countdown option prominently for future events
-                if event.start > Local::now() {
-                    let timer_exists = event
-                        .id
-                        .map(|id| active_countdown_events.contains(&id))
-                        .unwrap_or(false);
-                    if timer_exists {
+                match countdown_menu_state(&event, active_countdown_events, Local::now()) {
+                    CountdownMenuState::Hidden => {}
+                    CountdownMenuState::Active => {
                         ui.label(
                             egui::RichText::new("⏱ Countdown active")
                                 .italics()
                                 .color(Color32::from_rgb(100, 200, 100))
                                 .size(11.0),
                         );
-                    } else if ui.button("⏱ Create Countdown").clicked() {
-                        countdown_requests.push(CountdownRequest::from_event(&event));
-                        ui.memory_mut(|mem| mem.close_popup());
+                        ui.separator();
                     }
-                    ui.separator();
+                    CountdownMenuState::Available => {
+                        if ui.button("⏱ Create Countdown").clicked() {
+                            countdown_requests.push(CountdownRequest::from_event(&event));
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+                        ui.separator();
+                    }
                 }
 
                 if event_is_synced {

@@ -14,6 +14,48 @@ use chrono::Local;
 use directories::ProjectDirs;
 use std::path::PathBuf;
 
+fn normalized_non_empty(value: Option<String>) -> Option<String> {
+    value.and_then(|text| {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_owned())
+        }
+    })
+}
+
+fn compose_countdown_body(
+    body: Option<String>,
+    display_label: Option<String>,
+    sync_source_name: Option<String>,
+) -> Option<String> {
+    let mut sections = Vec::new();
+
+    if let Some(description) = normalized_non_empty(body) {
+        sections.push(description);
+    }
+
+    if let Some(label) = normalized_non_empty(display_label) {
+        sections.push(format!("Location: {}", label));
+    }
+
+    if let Some(source_name) = normalized_non_empty(sync_source_name) {
+        sections.push(format!("Synced source: {}", source_name));
+    }
+
+    if sections.is_empty() {
+        None
+    } else {
+        Some(sections.join("\n\n"))
+    }
+}
+
+fn has_recurrence_rule(rule: Option<&str>) -> bool {
+    rule.map(str::trim)
+        .is_some_and(|value| !value.is_empty() && value != "None")
+}
+
 impl CalendarApp {
     pub(super) fn resolve_countdown_storage_path() -> PathBuf {
         if let Some(dirs) = ProjectDirs::from("com", "RustCalendar", "CalendarApp") {
@@ -50,20 +92,33 @@ impl CalendarApp {
                 end_at,
                 color,
                 body,
-                display_label: _,
+                display_label,
             } = request;
 
-            let target_at = if start_at > now {
-                start_at
-            } else if end_at > now {
-                end_at
+            let (effective_start_at, effective_end_at) = event_id
+                .and_then(|id| self.context.event_service().get(id).ok().flatten())
+                .and_then(|event| {
+                    let is_non_recurring = !has_recurrence_rule(event.recurrence_rule.as_deref());
+                    let is_multi_day = event.start.date_naive() != event.end.date_naive();
+                    if is_non_recurring && is_multi_day {
+                        Some((event.start, event.end))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or((start_at, end_at));
+
+            let target_at = if effective_start_at > now {
+                effective_start_at
+            } else if effective_end_at > now {
+                effective_end_at
             } else {
                 log::info!(
                     "Skipping countdown for finished event {:?} ({}): start {:?}, end {:?}",
                     event_id,
                     title,
-                    start_at,
-                    end_at
+                    effective_start_at,
+                    effective_end_at
                 );
                 continue;
             };
@@ -95,14 +150,8 @@ impl CalendarApp {
             }
 
             let event_color = color.as_deref().and_then(RgbaColor::from_hex_str);
-            let event_body = body.and_then(|text| {
-                let trimmed = text.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(trimmed.to_owned())
-                }
-            });
+            let sync_source_name = event_id.and_then(|id| self.synced_event_source_name(id));
+            let event_body = compose_countdown_body(body, display_label, sync_source_name);
 
             log::info!(
                 "Creating countdown card with dimensions from settings: width={}, height={}",
@@ -113,8 +162,8 @@ impl CalendarApp {
                 event_id,
                 title,
                 target_at,
-                Some(start_at),
-                Some(end_at),
+                Some(effective_start_at),
+                Some(effective_end_at),
                 event_color,
                 event_body,
                 self.settings.default_card_width,
@@ -138,5 +187,35 @@ impl CalendarApp {
             self.countdown_ui.mark_card_pending(card_id, geometry);
             log::info!("created countdown card {:?}", card_id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compose_countdown_body;
+
+    #[test]
+    fn compose_countdown_body_merges_description_location_and_source() {
+        let result = compose_countdown_body(
+            Some("Bring projector".to_string()),
+            Some("Room 4".to_string()),
+            Some("Google Work".to_string()),
+        );
+
+        assert_eq!(
+            result.as_deref(),
+            Some("Bring projector\n\nLocation: Room 4\n\nSynced source: Google Work")
+        );
+    }
+
+    #[test]
+    fn compose_countdown_body_ignores_empty_segments() {
+        let result = compose_countdown_body(
+            Some("   ".to_string()),
+            Some("Office".to_string()),
+            None,
+        );
+
+        assert_eq!(result.as_deref(), Some("Location: Office"));
     }
 }
