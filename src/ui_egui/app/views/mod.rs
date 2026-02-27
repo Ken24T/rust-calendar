@@ -8,7 +8,10 @@ use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
 use crate::ui_egui::views::week_shared::DeleteConfirmRequest;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
-use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
+use crate::ui_egui::views::{
+    filter_events_by_category, is_ribbon_event, is_synced_event, load_synced_event_ids,
+    AutoFocusRequest, CountdownRequest,
+};
 use chrono::{Datelike, Local, NaiveDate};
 use std::collections::HashSet;
 
@@ -264,12 +267,23 @@ impl CalendarApp {
                 .single()
                 .unwrap();
 
-            event_service
+            let all_events = event_service
                 .expand_recurring_events(start_datetime, end_datetime)
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|e| e.all_day)
-                .collect::<Vec<_>>()
+                .filter(is_ribbon_event)
+                .collect::<Vec<_>>();
+
+            let all_events = filter_events_by_category(all_events, self.active_category_filter.as_deref());
+            if self.show_synced_events_only {
+                let synced_event_ids = load_synced_event_ids(self.context.database());
+                all_events
+                    .into_iter()
+                    .filter(|event| is_synced_event(event.id, &synced_event_ids))
+                    .collect::<Vec<_>>()
+            } else {
+                all_events
+            }
         } else {
             Vec::new()
         };
@@ -360,12 +374,23 @@ impl CalendarApp {
                     .single()
                     .unwrap();
 
-                event_service
+                let all_events = event_service
                     .expand_recurring_events(start_datetime, end_datetime)
                     .unwrap_or_default()
                     .into_iter()
-                    .filter(|e| e.all_day)
-                    .collect::<Vec<_>>()
+                    .filter(is_ribbon_event)
+                    .collect::<Vec<_>>();
+
+                let all_events = filter_events_by_category(all_events, self.active_category_filter.as_deref());
+                if self.show_synced_events_only {
+                    let synced_event_ids = load_synced_event_ids(self.context.database());
+                    all_events
+                        .into_iter()
+                        .filter(|event| is_synced_event(event.id, &synced_event_ids))
+                        .collect::<Vec<_>>()
+                } else {
+                    all_events
+                }
             } else {
                 Vec::new()
             }

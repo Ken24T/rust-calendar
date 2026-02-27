@@ -205,7 +205,7 @@ impl WorkWeekView {
 
                                 for event in all_day_events {
                                     let start_date = event.start.date_naive();
-                                    let end_date = event.end.date_naive();
+                                    let end_date = super::event_display_end_date(event);
 
                                     if start_date != end_date {
                                         if start_date <= *date && end_date >= *date {
@@ -222,7 +222,7 @@ impl WorkWeekView {
                                 for event in &multi_day_events {
                                     // For multi-day events, show handles on first/last days
                                     let event_start_date = event.start.date_naive();
-                                    let event_end_date = event.end.date_naive();
+                                    let event_end_date = super::event_display_end_date(event);
                                     let is_first_day = event_start_date == *date;
                                     let is_last_day = event_end_date == *date;
                                     
@@ -406,7 +406,7 @@ impl WorkWeekView {
             .expand_recurring_events(start, end)
             .unwrap_or_default()
             .into_iter()
-            .filter(|e| !e.all_day)
+            .filter(|e| !super::is_ribbon_event(e))
             .collect()
     }
 

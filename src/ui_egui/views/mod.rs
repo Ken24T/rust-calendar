@@ -147,6 +147,22 @@ pub fn filter_events_by_category(events: Vec<Event>, filter: Option<&str>) -> Ve
     }
 }
 
+pub fn is_ribbon_event(event: &Event) -> bool {
+    event.all_day
+}
+
+pub fn event_display_end_date(event: &Event) -> NaiveDate {
+    let start_date = event.start.date_naive();
+    let end_date = event.end.date_naive();
+
+    let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+    if event.all_day && event.end.time() == midnight && end_date > start_date {
+        end_date.pred_opt().unwrap_or(end_date)
+    } else {
+        end_date
+    }
+}
+
 pub fn load_synced_event_ids(database: &'static Database) -> HashSet<i64> {
     let service = EventSyncMapService::new(database.connection());
     match service.list_synced_local_event_ids_for_enabled_sources() {
@@ -242,5 +258,112 @@ mod tests {
         assert!(is_synced_event(Some(42), &synced));
         assert!(!is_synced_event(Some(7), &synced));
         assert!(!is_synced_event(None, &synced));
+    }
+
+    #[test]
+    fn test_is_ribbon_event_for_all_day_event() {
+        let mut event = make_event("All Day", Some("Work"));
+        event.all_day = true;
+
+        assert!(is_ribbon_event(&event));
+    }
+
+    #[test]
+    fn test_is_ribbon_event_false_for_multi_day_timed_event() {
+        let start = Local.with_ymd_and_hms(2025, 1, 15, 22, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2025, 1, 16, 23, 0, 0).unwrap();
+        let event = Event {
+            id: None,
+            title: "Overnight".to_string(),
+            description: None,
+            location: None,
+            start,
+            end,
+            all_day: false,
+            category: Some("Work".to_string()),
+            color: None,
+            recurrence_rule: None,
+            recurrence_exceptions: None,
+            created_at: None,
+            updated_at: None,
+        };
+
+        assert!(!is_ribbon_event(&event));
+    }
+
+    #[test]
+    fn test_is_ribbon_event_false_for_short_overnight_event() {
+        let start = Local.with_ymd_and_hms(2025, 1, 15, 22, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2025, 1, 16, 2, 0, 0).unwrap();
+        let event = Event {
+            id: None,
+            title: "Short Overnight".to_string(),
+            description: None,
+            location: None,
+            start,
+            end,
+            all_day: false,
+            category: Some("Work".to_string()),
+            color: None,
+            recurrence_rule: None,
+            recurrence_exceptions: None,
+            created_at: None,
+            updated_at: None,
+        };
+
+        assert!(!is_ribbon_event(&event));
+    }
+
+    #[test]
+    fn test_is_ribbon_event_false_for_single_day_timed_event() {
+        let event = make_event("Single Day", Some("Work"));
+
+        assert!(!is_ribbon_event(&event));
+    }
+
+    #[test]
+    fn test_event_display_end_date_treats_all_day_midnight_end_as_exclusive() {
+        let start = Local.with_ymd_and_hms(2026, 2, 23, 0, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2026, 2, 24, 0, 0, 0).unwrap();
+        let event = Event {
+            id: None,
+            title: "All-day one day".to_string(),
+            description: None,
+            location: None,
+            start,
+            end,
+            all_day: true,
+            category: None,
+            color: None,
+            recurrence_rule: None,
+            recurrence_exceptions: None,
+            created_at: None,
+            updated_at: None,
+        };
+
+        assert_eq!(event_display_end_date(&event), start.date_naive());
+    }
+
+    #[test]
+    fn test_event_display_end_date_keeps_timed_event_end_date() {
+        let start = Local.with_ymd_and_hms(2026, 2, 23, 22, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2026, 2, 24, 2, 0, 0).unwrap();
+        let event = Event {
+            id: None,
+            title: "Timed overnight".to_string(),
+            description: None,
+            location: None,
+            start,
+            end,
+            all_day: false,
+            category: None,
+            color: None,
+            recurrence_rule: None,
+            recurrence_exceptions: None,
+            created_at: None,
+            updated_at: None,
+        };
+
+        assert_eq!(event_display_end_date(&event), end.date_naive());
     }
 }
