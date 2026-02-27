@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-02-28
+
+### Refactored
+
+- Extracted countdown service into focused modules, reducing `service.rs` from 1472 to 346 lines:
+  - `palette.rs` (159 lines) — event-derived colour palette for countdown cards.
+  - `visuals.rs` (266 lines) — per-card and default visual setters.
+  - `storage.rs` (234 lines) — JSON snapshot and SQLite persistence.
+  - `sync.rs` (177 lines) — event synchronisation to countdown cards.
+  - `notifications.rs` (129 lines) — notification triggers and auto-dismiss logic.
+  - `layout.rs` (270 lines) — geometry, display mode, ordering, and position management.
+
 ## [2.0.0] - 2026-02-28
 
 ### Summary
