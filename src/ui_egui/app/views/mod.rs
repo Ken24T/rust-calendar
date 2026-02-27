@@ -3,7 +3,6 @@ use super::state::ViewType;
 use super::CalendarApp;
 use crate::models::event::Event;
 use crate::ui_egui::commands::UpdateEventCommand;
-use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
 use crate::ui_egui::views::week_shared::DeleteConfirmRequest;
@@ -16,6 +15,11 @@ use std::collections::HashSet;
 impl CalendarApp {
     /// Handle a delete confirmation request from a view
     fn handle_delete_confirm_request(&mut self, request: DeleteConfirmRequest) {
+        if self.is_synced_event_id(request.event_id) {
+            self.notify_synced_event_read_only();
+            return;
+        }
+
         let action = if request.occurrence_only {
             if let Some(date) = request.occurrence_date {
                 ConfirmAction::DeleteEventOccurrence {
@@ -197,9 +201,14 @@ impl CalendarApp {
         
         // Handle clicked event - open edit dialog
         if let Some(clicked_event) = view_result.event_to_edit {
-            self.event_dialog_state =
-                Some(EventDialogState::from_event(&clicked_event, &self.settings));
-            self.show_event_dialog = true;
+            if let Some(event_id) = clicked_event.id {
+                if self.is_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only();
+                } else {
+                    self.event_to_edit = Some(event_id);
+                    self.show_event_dialog = true;
+                }
+            }
         }
         
         // Handle delete confirmation request
@@ -286,9 +295,14 @@ impl CalendarApp {
         
         // Handle clicked event - open edit dialog
         if let Some(clicked_event) = view_result.event_to_edit {
-            self.event_dialog_state =
-                Some(EventDialogState::from_event(&clicked_event, &self.settings));
-            self.show_event_dialog = true;
+            if let Some(event_id) = clicked_event.id {
+                if self.is_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only();
+                } else {
+                    self.event_to_edit = Some(event_id);
+                    self.show_event_dialog = true;
+                }
+            }
         }
         
         // Handle delete confirmation request
@@ -379,9 +393,14 @@ impl CalendarApp {
         
         // Handle clicked event - open edit dialog
         if let Some(clicked_event) = view_result.event_to_edit {
-            self.event_dialog_state =
-                Some(EventDialogState::from_event(&clicked_event, &self.settings));
-            self.show_event_dialog = true;
+            if let Some(event_id) = clicked_event.id {
+                if self.is_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only();
+                } else {
+                    self.event_to_edit = Some(event_id);
+                    self.show_event_dialog = true;
+                }
+            }
         }
         
         // Handle delete confirmation request

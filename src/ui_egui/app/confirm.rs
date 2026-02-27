@@ -244,6 +244,11 @@ impl CalendarApp {
     fn execute_confirmed_action(&mut self, action: ConfirmAction) {
         match action {
             ConfirmAction::DeleteEvent { event_id, event_title } => {
+                if self.is_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only();
+                    return;
+                }
+
                 let event_service = self.context.event_service();
                 
                 // Fetch the full event before deleting (for undo)
@@ -267,6 +272,11 @@ impl CalendarApp {
                 }
             }
             ConfirmAction::DeleteEventOccurrence { event_id, event_title, occurrence_date } => {
+                if self.is_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only();
+                    return;
+                }
+
                 let event_service = self.context.event_service();
                 if let Err(e) = event_service.delete_occurrence(event_id, occurrence_date) {
                     log::error!("Failed to delete occurrence: {}", e);

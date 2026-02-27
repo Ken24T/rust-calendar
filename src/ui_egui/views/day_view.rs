@@ -15,7 +15,7 @@ use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::resize::{HandleRects, ResizeContext, ResizeHandle, ResizeManager, ResizeView, draw_handles, draw_resize_preview};
 use crate::ui_egui::theme::CalendarTheme;
 
-use super::filter_events_by_category;
+use super::{filter_events_by_category, is_synced_event, load_synced_event_ids};
 
 pub struct DayView;
 
@@ -46,6 +46,7 @@ impl DayView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_day(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
+        let synced_event_ids = load_synced_event_ids(database);
 
         // Day header
         let day_name = current_date.format("%A").to_string();
@@ -124,6 +125,7 @@ impl DayView {
                     ui,
                     *current_date,
                     &events,
+                    &synced_event_ids,
                     settings,
                     database,
                     show_event_dialog,
@@ -146,6 +148,7 @@ impl DayView {
         ui: &mut egui::Ui,
         date: NaiveDate,
         events: &[Event],
+        synced_event_ids: &HashSet<i64>,
         _settings: &Settings,
         database: &'static Database,
         show_event_dialog: &mut bool,
@@ -215,6 +218,7 @@ impl DayView {
                     is_hour_start,
                     &starting_events,
                     &continuing_events,
+                    synced_event_ids,
                     database,
                     show_event_dialog,
                     event_dialog_date,
@@ -284,6 +288,7 @@ impl DayView {
         is_hour_start: bool,
         starting_events: &[&Event],   // Events that start in this slot
         continuing_events: &[&Event], // Events continuing through this slot
+        synced_event_ids: &HashSet<i64>,
         database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
@@ -385,7 +390,8 @@ impl DayView {
 
             // Draw starting events (full details)
             for event in starting_events {
-                let event_rect = Self::render_event_in_slot(ui, rect, event);
+                let event_rect =
+                    Self::render_event_in_slot(ui, rect, event, is_synced_event(event.id, synced_event_ids));
                 // Check if event ends in this slot
                 let event_end = event.end.time();
                 let is_ending = event_end > time && event_end <= slot_end;
@@ -437,6 +443,9 @@ impl DayView {
                         if event.end < now {
                             return None;
                         }
+                        if is_synced_event(event.id, synced_event_ids) {
+                            return None;
+                        }
                         handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
                     })
             });
@@ -478,7 +487,10 @@ impl DayView {
                 if let Some((hit_rect, hovered_event, is_starting, is_ending)) = &pointer_hit {
                     // Only show handles for non-recurring events and non-past events
                     let is_past_event = hovered_event.end < now;
-                    if hovered_event.recurrence_rule.is_none() && !is_past_event {
+                    if hovered_event.recurrence_rule.is_none()
+                        && !is_past_event
+                        && !is_synced_event(hovered_event.id, synced_event_ids)
+                    {
                         // Use slot-aware handles: only show handles that are active in this slot
                         let handles = HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
                         let hovered_h = hovered_handle.as_ref().map(|(h, _, _)| *h);
@@ -498,7 +510,10 @@ impl DayView {
                     && hit_rect.contains(pointer_pos.unwrap_or_default())
                     && hovered_handle.is_none()
                 {
-                    let tooltip_text = super::week_shared::format_event_tooltip(hovered_event);
+                    let tooltip_text = super::week_shared::format_event_tooltip(
+                        hovered_event,
+                        is_synced_event(hovered_event.id, synced_event_ids),
+                    );
                     response.clone().on_hover_ui_at_pointer(|ui| {
                         ui.label(tooltip_text);
                     });
@@ -550,6 +565,9 @@ impl DayView {
             let primary_released = ui.input(|i| i.pointer.primary_released());
             if primary_released && ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Day) {
                 if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), ResizeView::Day) {
+                    if is_synced_event(Some(resize_ctx.event_id), synced_event_ids) {
+                        return;
+                    }
                     log::info!(
                         "Resize finished: handle={:?}, hovered_time={:?}, original_start={}, original_end={}",
                         resize_ctx.handle,
@@ -636,10 +654,18 @@ impl DayView {
                         .or_else(|| single_event_fallback.clone());
 
                     if let Some(event) = popup_event {
+                        let event_is_synced = is_synced_event(event.id, synced_event_ids);
                         ui.label(format!("Event: {}", event.title));
                         ui.separator();
 
-                        if ui.button("✏ Edit").clicked() {
+                        if event_is_synced {
+                            ui.label(
+                                egui::RichText::new("🔒 Synced read-only event")
+                                    .italics()
+                                    .size(11.0),
+                            );
+                            ui.add_enabled(false, egui::Button::new("✏ Edit"));
+                        } else if ui.button("✏ Edit").clicked() {
                             context_clicked_event = Some(event.clone());
                             ui.memory_mut(|mem| mem.close_popup());
                         }
@@ -665,7 +691,14 @@ impl DayView {
                         }
 
                         // Delete options - different for recurring events
-                        if event.recurrence_rule.is_some() {
+                        if event_is_synced {
+                            if event.recurrence_rule.is_some() {
+                                ui.add_enabled(false, egui::Button::new("🗑 Delete This Occurrence"));
+                                ui.add_enabled(false, egui::Button::new("🗑 Delete All Occurrences"));
+                            } else {
+                                ui.add_enabled(false, egui::Button::new("🗑 Delete"));
+                            }
+                        } else if event.recurrence_rule.is_some() {
                             if ui.button("🗑 Delete This Occurrence").clicked() {
                                 if let Some(id) = event.id {
                                     result.delete_confirm_request = Some(DeleteConfirmRequest {
@@ -805,6 +838,9 @@ impl DayView {
                             if event.end < now {
                                 return None;
                             }
+                            if is_synced_event(event.id, synced_event_ids) {
+                                return None;
+                            }
                             handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
                         })
                 });
@@ -812,17 +848,17 @@ impl DayView {
                 // First check if we're starting a resize operation
                 if let Some((handle, _hit_rect, event)) = drag_handle {
                     // Start resize instead of drag
-                    if let Some(resize_context) = ResizeContext::from_event(
-                        &event,
-                        handle,
-                        ResizeView::Day,
-                    ) {
-                        ResizeManager::begin(ui.ctx(), resize_context);
-                        ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+                    if !is_synced_event(event.id, synced_event_ids) {
+                        if let Some(resize_context) =
+                            ResizeContext::from_event(&event, handle, ResizeView::Day)
+                        {
+                            ResizeManager::begin(ui.ctx(), resize_context);
+                            ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+                        }
                     }
                 } else if let Some((hit_rect, event, _, _)) = pointer_hit.clone() {
                     // Otherwise start a drag operation
-                    if event.recurrence_rule.is_none() {
+                    if event.recurrence_rule.is_none() && !is_synced_event(event.id, synced_event_ids) {
                         if let Some(drag_context) = DragContext::from_event(
                             &event,
                             pointer_pos
@@ -841,7 +877,8 @@ impl DayView {
             if response.double_clicked() {
                 if let Some(event) = pointer_event.clone() {
                     // Double-click on event - edit it
-                    if result.event_to_edit.is_none() {
+                    if result.event_to_edit.is_none() && !is_synced_event(event.id, synced_event_ids)
+                    {
                         result.event_to_edit = Some(event);
                     }
                 } else {
@@ -870,6 +907,9 @@ impl DayView {
                 
                 // Handle drag completion
                 if let Some(drag_context) = DragManager::finish_for_view(ui.ctx(), DragView::Day) {
+                    if is_synced_event(Some(drag_context.event_id), synced_event_ids) {
+                        return;
+                    }
                     if let Some(target_start) = drag_context
                         .hovered_start()
                         .or_else(|| date.and_time(time).and_local_timezone(Local).single())
@@ -902,7 +942,7 @@ impl DayView {
         result
     }
 
-    fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
+    fn render_event_in_slot(ui: &mut egui::Ui, slot_rect: Rect, event: &Event, is_synced: bool) -> Rect {
         let now = Local::now();
         let is_past = event.end < now;
         
@@ -957,7 +997,11 @@ impl DayView {
         };
 
         let layout_job = egui::text::LayoutJob::simple(
-            event.title.clone(),
+            if is_synced {
+                format!("🔒 {}", event.title)
+            } else {
+                event.title.clone()
+            },
             font_id.clone(),
             text_color,
             available_width,

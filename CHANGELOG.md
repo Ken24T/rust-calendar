@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2026-02-27
+
+### Added
+- Stage 1 S6 synced event read-only protections and visual marking:
+  - Synced events now show a lock marker (`🔒`) in day/week/workweek/month event rendering.
+  - Synced events now include explicit read-only tooltip/context-menu messaging.
+  - Added shared synced-event lookup helpers for UI enforcement paths.
+
+### Changed
+- Blocked local edit/delete/move/resize operations for synced events across day/week/workweek/month interactions.
+- Added app-level guardrails so synced events cannot be opened for editing from alternate entry points (search, dialog flows, confirmations).
+- Added save-time protection and regression tests to prevent synced event updates from dialog state.
+
 ## [1.4.3] - 2026-02-27
 
 ### Added

@@ -11,6 +11,7 @@ mod navigation;
 mod notifications;
 mod shortcuts;
 mod sidebar;
+mod sync_guard;
 mod state;
 mod status_bar;
 mod toast;
