@@ -714,7 +714,6 @@ pub fn render_settings_dialog(
                                 .add_enabled(!any_sync_in_progress, egui::Button::new(sync_button_text))
                                 .clicked()
                             {
-                                dialog_state.source_status_message = None;
                                 dialog_state.source_error_message = None;
                                 dialog_state.source_sync_in_progress_id = Some(source_id);
 
