@@ -1,6 +1,6 @@
 use crate::models::event::Event;
 use anyhow::Result;
-use chrono::Local;
+use chrono::{Duration, Local};
 
 use super::utils::{parse_date, parse_datetime_with_tzid, unescape_text};
 
@@ -9,6 +9,8 @@ pub struct ImportedIcsEvent {
     pub event: Event,
     pub uid: Option<String>,
     pub raw_last_modified: Option<String>,
+    pub has_start: bool,
+    pub has_end: bool,
 }
 
 pub fn from_str(ics_content: &str) -> Result<Vec<Event>> {
@@ -32,10 +34,13 @@ pub fn from_str_with_metadata(ics_content: &str) -> Result<Vec<ImportedIcsEvent>
                 event: blank_event(),
                 uid: None,
                 raw_last_modified: None,
+                has_start: false,
+                has_end: false,
             });
         } else if line == "END:VEVENT" {
             in_event = false;
-            if let Some(event) = current_event.take() {
+            if let Some(mut event) = current_event.take() {
+                finalize_event_times(&mut event);
                 if !event.event.title.is_empty() {
                     events.push(event);
                 }
@@ -88,6 +93,7 @@ fn parse_event_property(line: &str, imported: &mut ImportedIcsEvent) -> Result<(
                 } else {
                     imported.event.start = parse_datetime_with_tzid(value, tzid)?;
                 }
+                imported.has_start = true;
             }
             "DTEND" => {
                 if key_part.contains("VALUE=DATE") {
@@ -95,6 +101,7 @@ fn parse_event_property(line: &str, imported: &mut ImportedIcsEvent) -> Result<(
                 } else {
                     imported.event.end = parse_datetime_with_tzid(value, tzid)?;
                 }
+                imported.has_end = true;
             }
             "RRULE" => {
                 imported.event.recurrence_rule = Some(value.to_string());
@@ -131,6 +138,29 @@ fn extract_tzid(key_part: &str) -> Option<&str> {
     key_part
         .split(';')
         .find_map(|part| part.strip_prefix("TZID="))
+}
+
+fn finalize_event_times(imported: &mut ImportedIcsEvent) {
+    if !imported.has_start {
+        return;
+    }
+
+    if !imported.has_end {
+        imported.event.end = if imported.event.all_day {
+            imported.event.start + Duration::days(1)
+        } else {
+            imported.event.start + Duration::hours(1)
+        };
+        return;
+    }
+
+    if imported.event.end <= imported.event.start {
+        imported.event.end = if imported.event.all_day {
+            imported.event.start + Duration::days(1)
+        } else {
+            imported.event.start + Duration::hours(1)
+        };
+    }
 }
 
 fn blank_event() -> Event {
@@ -216,5 +246,44 @@ END:VCALENDAR"#;
             .as_ref()
             .expect("EXDATE should be parsed");
         assert_eq!(exdates.len(), 1);
+    }
+
+    #[test]
+    fn test_import_missing_dtend_defaults_to_one_hour_for_timed_event() {
+        let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:test-no-end-timed
+DTSTART:20260227T090000
+SUMMARY:No End Timed
+END:VEVENT
+END:VCALENDAR"#;
+
+        let imported = from_str_with_metadata(ics).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(
+            imported[0].event.end,
+            imported[0].event.start + chrono::Duration::hours(1)
+        );
+    }
+
+    #[test]
+    fn test_import_missing_dtend_defaults_to_one_day_for_all_day_event() {
+        let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:test-no-end-allday
+DTSTART;VALUE=DATE:20260227
+SUMMARY:No End All Day
+END:VEVENT
+END:VCALENDAR"#;
+
+        let imported = from_str_with_metadata(ics).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert!(imported[0].event.all_day);
+        assert_eq!(
+            imported[0].event.end,
+            imported[0].event.start + chrono::Duration::days(1)
+        );
     }
 }

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.10] - 2026-02-27
+
+### Changed
+- Reworked week/workweek ribbon layout into stable lane-based rendering so all-day event rows stay consistently aligned across day columns.
+- Fixed week view column width calculation to account for scrollbar width, keeping ribbon/header column boundaries aligned with the time grid.
+- Constrained ribbon event title rendering to lane width with truncation to prevent long titles from overflowing columns and shifting neighbouring event blocks.
+- Normalised ribbon lane slot sizing and top anchoring to remove vertical baseline drift introduced by mixed text/content sizing.
+
+## [1.4.9] - 2026-02-27
+
+### Changed
+- Aligned week/workweek ribbon rules to show only all-day events (single-day and multi-day), removing timed-event spillover from the ribbon row.
+- Normalised all-day display end-date handling in week/workweek ribbon rendering so exclusive ICS `DTEND` values do not render one extra day.
+- Fixed ICS import for events missing `DTEND` by deriving sane defaults from `DTSTART` (timed: +1 hour, all-day: +1 day), preventing malformed multi-year spans from appearing in current weeks.
+
 ## [1.4.8] - 2026-02-27
 
 ### Changed
