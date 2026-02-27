@@ -104,7 +104,7 @@ pub fn render_ribbon_event(
 ) -> EventInteractionResult {
     render_ribbon_event_with_handles(
         ui, event, countdown_requests, active_countdown_events, _database, synced_event_ids,
-        false, false, None,
+        true, true, None,
     ).0
 }
 
@@ -157,9 +157,22 @@ pub fn render_ribbon_event_with_handles(
 
     // Frame has 6.0 horizontal margin on each side (12.0 total)
     let frame_margin = 12.0;
+
+    // Use directional rounding to visually distinguish multi-day spans from
+    // separate single-day events in adjacent columns.
+    //   - show_left_handle=true  → this is the first (or only) day: round left corners
+    //   - show_right_handle=true → this is the last (or only) day: round right corners
+    //   - Middle days of multi-day events: no rounding (flat sides = continuous bar)
+    let corner_radius = 4.0;
+    let rounding = egui::Rounding {
+        nw: if show_left_handle { corner_radius } else { 0.0 },
+        sw: if show_left_handle { corner_radius } else { 0.0 },
+        ne: if show_right_handle { corner_radius } else { 0.0 },
+        se: if show_right_handle { corner_radius } else { 0.0 },
+    };
     let event_frame = egui::Frame::none()
         .fill(event_color)
-        .rounding(egui::Rounding::same(4.0))
+        .rounding(rounding)
         .inner_margin(egui::Margin::symmetric(6.0, 1.0));
 
     let response = event_frame

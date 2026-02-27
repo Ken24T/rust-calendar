@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-02-28
+
+### Fixed
+
+- Fixed ribbon event span bug where single-day all-day events appeared to span across extra days in week and workweek views.
+- Added directional corner rounding to ribbon events: first day rounds left, last day rounds right, middle days flat — making multi-day spans visually distinct from adjacent single-day events.
+- Normalised all-day event storage to use midnight times and iCal exclusive-end convention, ensuring consistent span calculation across locally created and synced events.
+- Fixed event dialog round-trip: loading an all-day event and re-saving no longer adds an extra day to the end date.
+- Fixed ribbon resize for all-day events to correctly apply exclusive-end convention.
+- Added one-shot database migration to normalise existing all-day events with non-midnight times.
+
 ## [1.4.14] - 2026-02-28
 
 ### Fixed
