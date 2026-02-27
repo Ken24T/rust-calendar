@@ -32,20 +32,26 @@ pub(super) fn parse_until(rrule: &str) -> Option<NaiveDate> {
     rrule.find("UNTIL=").and_then(|idx| {
         let slice = &rrule[idx + 6..];
         let end = slice.find(';').unwrap_or(slice.len());
-        let date_str = &slice[..end];
-        if date_str.len() == 8 {
-            match (
-                date_str[0..4].parse::<i32>(),
-                date_str[4..6].parse::<u32>(),
-                date_str[6..8].parse::<u32>(),
-            ) {
-                (Ok(year), Ok(month), Ok(day)) => NaiveDate::from_ymd_opt(year, month, day),
-                _ => None,
-            }
-        } else {
-            None
-        }
+        let value = &slice[..end];
+        parse_until_date(value)
     })
+}
+
+fn parse_until_date(value: &str) -> Option<NaiveDate> {
+    let digits: String = value.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.len() < 8 {
+        return None;
+    }
+
+    let date_str = &digits[..8];
+    match (
+        date_str[0..4].parse::<i32>(),
+        date_str[4..6].parse::<u32>(),
+        date_str[6..8].parse::<u32>(),
+    ) {
+        (Ok(year), Ok(month), Ok(day)) => NaiveDate::from_ymd_opt(year, month, day),
+        _ => None,
+    }
 }
 
 pub(super) fn parse_interval(rrule: &str, default: i64) -> i64 {
@@ -108,5 +114,29 @@ fn weekday_from_code(code: &str) -> Option<Weekday> {
         "FR" => Some(Weekday::Fri),
         "SA" => Some(Weekday::Sat),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_until;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn parse_until_supports_date_only_value() {
+        let parsed = parse_until("FREQ=DAILY;UNTIL=20260227;INTERVAL=1");
+        assert_eq!(parsed, NaiveDate::from_ymd_opt(2026, 2, 27));
+    }
+
+    #[test]
+    fn parse_until_supports_datetime_utc_value() {
+        let parsed = parse_until("FREQ=WEEKLY;UNTIL=20210608T135959Z;BYDAY=TU");
+        assert_eq!(parsed, NaiveDate::from_ymd_opt(2021, 6, 8));
+    }
+
+    #[test]
+    fn parse_until_supports_datetime_local_value() {
+        let parsed = parse_until("FREQ=MONTHLY;UNTIL=20241012T090000;BYDAY=2SA");
+        assert_eq!(parsed, NaiveDate::from_ymd_opt(2024, 10, 12));
     }
 }

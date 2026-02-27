@@ -135,6 +135,28 @@ impl<'a> EventSyncMapService<'a> {
         Ok(ids.into_iter().collect())
     }
 
+    pub fn list_synced_local_event_ids_for_enabled_sources(&self) -> Result<HashSet<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT DISTINCT esm.local_event_id
+                 FROM event_sync_map esm
+                 JOIN calendar_sources cs ON cs.id = esm.source_id
+                 WHERE cs.enabled = 1",
+            )
+            .context("Failed to prepare synced local event ids query for enabled sources")?;
+
+        let rows = stmt
+            .query_map([], |row| row.get::<_, i64>(0))
+            .context("Failed to execute synced local event ids query for enabled sources")?;
+
+        let ids = rows
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect synced local event ids for enabled sources")?;
+
+        Ok(ids.into_iter().collect())
+    }
+
     pub fn delete_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<()> {
         let rows_affected = self
             .conn
@@ -176,11 +198,15 @@ mod tests {
     use rusqlite::{params, Connection};
 
     fn create_source(conn: &Connection) -> i64 {
+        create_source_named(conn, "Test Source")
+    }
+
+    fn create_source_named(conn: &Connection, name: &str) -> i64 {
         conn.execute(
             "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
              VALUES (?1, ?2, ?3, 1, 15)",
             params![
-                "Test Source",
+                name,
                 "google_ics",
                 "https://calendar.google.com/calendar/ical/test%40gmail.com/private-token/basic.ics"
             ],
@@ -375,5 +401,56 @@ mod tests {
         let ids = service.list_synced_local_event_ids().unwrap();
         assert!(ids.contains(&local_event_id));
         assert!(!ids.contains(&other_event_id));
+    }
+
+    #[test]
+    fn test_list_synced_ids_for_enabled_sources_only() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        let enabled_source_id = create_source_named(conn, "Enabled Source");
+        let disabled_source_id = create_source_named(conn, "Disabled Source");
+
+        conn.execute(
+            "UPDATE calendar_sources SET enabled = 0 WHERE id = ?1",
+            [disabled_source_id],
+        )
+        .unwrap();
+
+        let enabled_event_id = create_event(conn);
+        let disabled_event_id = create_event(conn);
+        let service = EventSyncMapService::new(conn);
+
+        service
+            .create(EventSyncMap {
+                id: None,
+                source_id: enabled_source_id,
+                external_uid: "uid-enabled".to_string(),
+                local_event_id: enabled_event_id,
+                external_last_modified: None,
+                external_etag_hash: None,
+                last_seen_at: None,
+            })
+            .unwrap();
+
+        service
+            .create(EventSyncMap {
+                id: None,
+                source_id: disabled_source_id,
+                external_uid: "uid-disabled".to_string(),
+                local_event_id: disabled_event_id,
+                external_last_modified: None,
+                external_etag_hash: None,
+                last_seen_at: None,
+            })
+            .unwrap();
+
+        let enabled_ids = service
+            .list_synced_local_event_ids_for_enabled_sources()
+            .unwrap();
+
+        assert!(enabled_ids.contains(&enabled_event_id));
+        assert!(!enabled_ids.contains(&disabled_event_id));
     }
 }
