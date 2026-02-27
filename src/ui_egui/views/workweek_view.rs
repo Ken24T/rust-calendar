@@ -195,10 +195,10 @@ impl WorkWeekView {
                     ui.add_space(COLUMN_SPACING);
 
                     for (i, date) in work_week_dates.iter().enumerate() {
-                        // Use allocate_ui_with_layout with Center alignment to match header
+                        // Use Min alignment so ribbon events fill the full column width
                         let col_response = ui.allocate_ui_with_layout(
                             Vec2::new(col_width, ribbon_height),
-                            egui::Layout::top_down(egui::Align::Center),
+                            egui::Layout::top_down(egui::Align::Min),
                             |day_ui| {
                                 day_ui.spacing_mut().item_spacing.y = 0.0;
 
@@ -284,10 +284,24 @@ impl WorkWeekView {
                                 resize_ctx.hovered_date
                             );
                             // Calculate new dates based on handle
-                            if let (Some(new_start), Some(new_end)) = (resize_ctx.calculate_new_start(), resize_ctx.calculate_new_end()) {
-                                log::info!("New dates: start={}, end={}", new_start, new_end);
+                            if let (Some(new_start), Some(mut new_end)) = (resize_ctx.calculate_new_start(), resize_ctx.calculate_new_end()) {
                                 let event_service = EventService::new(database.connection());
                                 if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
+                                    // For all-day events, convert hovered inclusive
+                                    // end date to exclusive end (iCal convention).
+                                    if event.all_day {
+                                        if let Some(next) = new_end.date_naive().succ_opt() {
+                                            let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+                                            if let Some(dt) = next
+                                                .and_time(midnight)
+                                                .and_local_timezone(Local)
+                                                .single()
+                                            {
+                                                new_end = dt;
+                                            }
+                                        }
+                                    }
+                                    log::info!("New dates: start={}, end={}", new_start, new_end);
                                     event.start = new_start;
                                     event.end = new_end;
                                     if let Err(err) = event_service.update(&event) {

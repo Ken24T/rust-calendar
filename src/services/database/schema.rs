@@ -17,6 +17,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_calendar_sources_table(conn)?;
     create_event_sync_map_table(conn)?;
     initialize_default_categories(conn)?;
+    normalize_all_day_event_times(conn)?;
     Ok(())
 }
 
@@ -621,5 +622,101 @@ fn initialize_default_categories(conn: &Connection) -> Result<()> {
     let service = CategoryService::new(conn);
     service.initialize_defaults()?;
     
+    Ok(())
+}
+
+/// One-shot migration: normalise all-day events so start/end times are midnight
+/// and the end date uses the iCal exclusive-end convention (one day past the last
+/// visible day).  Events that already have midnight times are left untouched.
+fn normalize_all_day_event_times(conn: &Connection) -> Result<()> {
+    use chrono::{DateTime, Local, NaiveTime};
+
+    let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, start_datetime, end_datetime
+             FROM events
+             WHERE is_all_day = 1",
+        )
+        .context("Failed to query all-day events for normalisation")?;
+
+    let rows: Vec<(i64, String, String)> = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .context("Failed to read all-day event rows")?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut update_stmt = conn
+        .prepare(
+            "UPDATE events SET start_datetime = ?1, end_datetime = ?2
+             WHERE id = ?3",
+        )
+        .context("Failed to prepare all-day event update")?;
+
+    for (id, start_str, end_str) in &rows {
+        let Ok(start_dt) = DateTime::parse_from_rfc3339(start_str) else {
+            continue;
+        };
+        let Ok(end_dt) = DateTime::parse_from_rfc3339(end_str) else {
+            continue;
+        };
+
+        let start_local = start_dt.with_timezone(&Local);
+        let end_local = end_dt.with_timezone(&Local);
+
+        let start_needs_fix = start_local.time() != midnight;
+        let end_needs_fix = end_local.time() != midnight;
+
+        if !start_needs_fix && !end_needs_fix {
+            continue;
+        }
+
+        // Normalise start to midnight of same date
+        let new_start = start_local
+            .date_naive()
+            .and_time(midnight)
+            .and_local_timezone(Local)
+            .single()
+            .unwrap_or(start_local);
+
+        // For the end, treat the stored end_date as the user-intended inclusive
+        // last day, then add one day (iCal exclusive-end convention).
+        let inclusive_end_date = end_local.date_naive();
+        let exclusive_end_date = inclusive_end_date
+            .succ_opt()
+            .unwrap_or(inclusive_end_date);
+        let new_end = exclusive_end_date
+            .and_time(midnight)
+            .and_local_timezone(Local)
+            .single()
+            .unwrap_or(end_local);
+
+        update_stmt
+            .execute(rusqlite::params![
+                new_start.to_rfc3339(),
+                new_end.to_rfc3339(),
+                id,
+            ])
+            .with_context(|| {
+                format!("Failed to normalise all-day event id={}", id)
+            })?;
+
+        log::info!(
+            "Normalised all-day event id={}: start {} → {}, end {} → {}",
+            id,
+            start_str,
+            new_start.to_rfc3339(),
+            end_str,
+            new_end.to_rfc3339()
+        );
+    }
+
     Ok(())
 }

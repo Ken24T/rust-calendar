@@ -142,6 +142,23 @@ impl EventDialogState {
         let end_time = event.end.time();
         let is_past = event.end < Local::now();
 
+        // For all-day events stored with iCal exclusive-end convention
+        // (end = midnight of day AFTER the last visible day), convert back
+        // to inclusive end date for display in the dialog.
+        let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let end_date = if event.all_day
+            && end_time == midnight
+            && event.end.date_naive() > date
+        {
+            event
+                .end
+                .date_naive()
+                .pred_opt()
+                .unwrap_or_else(|| event.end.date_naive())
+        } else {
+            event.end.date_naive()
+        };
+
         let parsed = event
             .recurrence_rule
             .as_ref()
@@ -154,7 +171,7 @@ impl EventDialogState {
             description: event.description.clone().unwrap_or_default(),
             location: event.location.clone().unwrap_or_default(),
             date,
-            end_date: event.end.date_naive(),
+            end_date,
             start_time,
             end_time,
             all_day: event.all_day,
@@ -224,8 +241,23 @@ impl EventDialogState {
     fn start_end_datetimes(
         &self,
     ) -> Result<(chrono::DateTime<Local>, chrono::DateTime<Local>), String> {
-        let start_naive = NaiveDateTime::new(self.date, self.start_time);
-        let end_naive = NaiveDateTime::new(self.end_date, self.end_time);
+        // For all-day events, normalise times to midnight and use exclusive end
+        // date (iCal convention): a single-day event on Mar 14 is stored as
+        // start=Mar 14 00:00, end=Mar 15 00:00.  This keeps local and imported
+        // events consistent so event_display_end_date works uniformly.
+        let (start_time, end_date, end_time) = if self.all_day {
+            let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+            let exclusive_end = self
+                .end_date
+                .succ_opt()
+                .unwrap_or(self.end_date);
+            (midnight, exclusive_end, midnight)
+        } else {
+            (self.start_time, self.end_date, self.end_time)
+        };
+
+        let start_naive = NaiveDateTime::new(self.date, start_time);
+        let end_naive = NaiveDateTime::new(end_date, end_time);
 
         let start = match start_naive.and_local_timezone(Local) {
             LocalResult::Single(dt) => dt,
