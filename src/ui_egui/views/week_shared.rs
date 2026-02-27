@@ -155,9 +155,6 @@ pub fn render_ribbon_event_with_handles(
 
     let available_width = ui.available_width();
 
-    // Frame has 6.0 horizontal margin on each side (12.0 total)
-    let frame_margin = 12.0;
-
     // Use directional rounding to visually distinguish multi-day spans from
     // separate single-day events in adjacent columns.
     //   - show_left_handle=true  → this is the first (or only) day: round left corners
@@ -170,10 +167,27 @@ pub fn render_ribbon_event_with_handles(
         ne: if show_right_handle { corner_radius } else { 0.0 },
         se: if show_right_handle { corner_radius } else { 0.0 },
     };
+
+    // Adjust horizontal inner margin so multi-day ribbons extend to column
+    // edges, creating a visually continuous bar across adjacent day columns.
+    //   - First day: left padding for text inset, zero right padding (extends to edge)
+    //   - Last day: zero left padding (extends from edge), right padding for text inset
+    //   - Middle day: zero both sides (full bleed)
+    //   - Single day (both handles): normal padding on both sides
+    let h_pad = 6.0;
+    let left_pad = if show_left_handle { h_pad } else { 0.0 };
+    let right_pad = if show_right_handle { h_pad } else { 0.0 };
+    let frame_margin = left_pad + right_pad;
+
     let event_frame = egui::Frame::none()
         .fill(event_color)
         .rounding(rounding)
-        .inner_margin(egui::Margin::symmetric(6.0, 1.0));
+        .inner_margin(egui::Margin {
+            left: left_pad,
+            right: right_pad,
+            top: 1.0,
+            bottom: 1.0,
+        });
 
     let response = event_frame
         .show(ui, |ui| {

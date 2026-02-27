@@ -195,10 +195,10 @@ impl WorkWeekView {
                     ui.add_space(COLUMN_SPACING);
 
                     for (i, date) in work_week_dates.iter().enumerate() {
-                        // Use allocate_ui_with_layout with Center alignment to match header
+                        // Use Min alignment so ribbon events fill the full column width
                         let col_response = ui.allocate_ui_with_layout(
                             Vec2::new(col_width, ribbon_height),
-                            egui::Layout::top_down(egui::Align::Center),
+                            egui::Layout::top_down(egui::Align::Min),
                             |day_ui| {
                                 day_ui.spacing_mut().item_spacing.y = 0.0;
 

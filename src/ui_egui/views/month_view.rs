@@ -320,9 +320,7 @@ impl MonthView {
                                 .iter()
                                 .filter(|e| {
                                     if e.all_day {
-                                        let start_date = e.start.date_naive();
-                                        let end_date = e.end.date_naive();
-                                        date >= start_date && date <= end_date
+                                        super::event_covers_date(e, date)
                                     } else {
                                         e.start.date_naive() == date
                                     }
