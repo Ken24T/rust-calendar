@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-02-28
+
+### Refactored
+
+- Extracted container UI into focused modules, reducing `container.rs` from 1305 to 462 lines:
+  - `card_rendering.rs` (302 lines) — individual card rendering, tooltip formatting, colour calculations.
+  - `container_layout.rs` (427 lines) — layout computation, drag-and-drop state, insertion indicators, 11 unit tests.
+
 ## [2.0.1] - 2026-02-28
 
 ### Refactored
