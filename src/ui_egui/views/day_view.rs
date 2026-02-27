@@ -15,7 +15,10 @@ use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::resize::{HandleRects, ResizeContext, ResizeHandle, ResizeManager, ResizeView, draw_handles, draw_resize_preview};
 use crate::ui_egui::theme::CalendarTheme;
 
-use super::{countdown_menu_state, filter_events_by_category, is_synced_event, load_synced_event_ids};
+use super::{
+    countdown_menu_state, filter_events_by_category, filter_events_by_sync_scope,
+    is_synced_event, load_synced_event_ids,
+};
 
 pub struct DayView;
 
@@ -36,6 +39,7 @@ impl DayView {
         focus_request: &mut Option<AutoFocusRequest>,
         category_filter: Option<&str>,
         synced_only: bool,
+        synced_source_id: Option<i64>,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -47,15 +51,8 @@ impl DayView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_day(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
-        let synced_event_ids = load_synced_event_ids(database);
-        let events = if synced_only {
-            events
-                .into_iter()
-                .filter(|event| is_synced_event(event.id, &synced_event_ids))
-                .collect()
-        } else {
-            events
-        };
+        let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
+        let synced_event_ids = load_synced_event_ids(database, None);
 
         // Day header
         let day_name = current_date.format("%A").to_string();

@@ -176,6 +176,31 @@ impl<'a> EventSyncMapService<'a> {
         Ok(ids.into_iter().collect())
     }
 
+    pub fn list_synced_local_event_ids_for_enabled_source(
+        &self,
+        source_id: i64,
+    ) -> Result<HashSet<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT DISTINCT esm.local_event_id
+                 FROM event_sync_map esm
+                 JOIN calendar_sources cs ON cs.id = esm.source_id
+                 WHERE cs.enabled = 1 AND esm.source_id = ?1",
+            )
+            .context("Failed to prepare synced local event ids query for enabled source")?;
+
+        let rows = stmt
+            .query_map([source_id], |row| row.get::<_, i64>(0))
+            .context("Failed to execute synced local event ids query for enabled source")?;
+
+        let ids = rows
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect synced local event ids for enabled source")?;
+
+        Ok(ids.into_iter().collect())
+    }
+
     pub fn delete_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<()> {
         let rows_affected = self
             .conn
@@ -502,5 +527,51 @@ mod tests {
 
         assert!(enabled_ids.contains(&enabled_event_id));
         assert!(!enabled_ids.contains(&disabled_event_id));
+    }
+
+    #[test]
+    fn test_list_synced_ids_for_single_enabled_source_only() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        let source_a = create_source_named(conn, "Source A");
+        let source_b = create_source_named(conn, "Source B");
+
+        let event_a = create_event(conn);
+        let event_b = create_event(conn);
+
+        let service = EventSyncMapService::new(conn);
+
+        service
+            .create(EventSyncMap {
+                id: None,
+                source_id: source_a,
+                external_uid: "uid-source-a".to_string(),
+                local_event_id: event_a,
+                external_last_modified: None,
+                external_etag_hash: None,
+                last_seen_at: None,
+            })
+            .unwrap();
+
+        service
+            .create(EventSyncMap {
+                id: None,
+                source_id: source_b,
+                external_uid: "uid-source-b".to_string(),
+                local_event_id: event_b,
+                external_last_modified: None,
+                external_etag_hash: None,
+                last_seen_at: None,
+            })
+            .unwrap();
+
+        let source_a_ids = service
+            .list_synced_local_event_ids_for_enabled_source(source_a)
+            .unwrap();
+
+        assert!(source_a_ids.contains(&event_a));
+        assert!(!source_a_ids.contains(&event_b));
     }
 }

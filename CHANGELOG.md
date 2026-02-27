@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.12] - 2026-02-27
+
+### Added
+- Added a configurable Google sync startup delay setting (default 15 minutes) in Settings, persisted in the database and applied when creating the sync scheduler on app launch.
+
+### Changed
+- Extended synced-event filtering to support source-scoped behaviour across day/week/workweek/month views.
+- Updated filtering semantics so selecting a source with synced-only disabled shows that source's synced events plus local non-synced events (for example, Den + local).
+- Added source-scoped synced ID lookup support in sync mapping services to back view-level filtering and lock/read-only guard behaviour.
+
 ## [1.4.11] - 2026-02-27
 
 ### Changed

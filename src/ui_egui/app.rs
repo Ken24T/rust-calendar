@@ -64,6 +64,8 @@ pub struct CalendarApp {
     active_category_filter: Option<String>,
     /// When true, only show events imported via calendar sync mappings
     show_synced_events_only: bool,
+    /// Optional selected calendar source when synced-only filtering is enabled
+    selected_synced_source_id: Option<i64>,
     /// Latest scheduler sync status text for status bar display
     calendar_sync_status_message: Option<String>,
     /// Whether the latest scheduler status indicates an error condition

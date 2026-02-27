@@ -237,9 +237,17 @@ pub fn build_ribbon_lanes(events: &[Event]) -> Vec<Vec<&Event>> {
     lanes
 }
 
-pub fn load_synced_event_ids(database: &'static Database) -> HashSet<i64> {
+pub fn load_synced_event_ids(
+    database: &'static Database,
+    source_id: Option<i64>,
+) -> HashSet<i64> {
     let service = EventSyncMapService::new(database.connection());
-    match service.list_synced_local_event_ids_for_enabled_sources() {
+    let ids_result = match source_id {
+        Some(source_id) => service.list_synced_local_event_ids_for_enabled_source(source_id),
+        None => service.list_synced_local_event_ids_for_enabled_sources(),
+    };
+
+    match ids_result {
         Ok(ids) => ids,
         Err(err) => {
             log::warn!("Failed to load synced event IDs: {}", err);
@@ -254,9 +262,39 @@ pub fn is_synced_event(event_id: Option<i64>, synced_event_ids: &HashSet<i64>) -
         .unwrap_or(false)
 }
 
+pub fn filter_events_by_sync_scope(
+    events: Vec<Event>,
+    database: &'static Database,
+    synced_only: bool,
+    synced_source_id: Option<i64>,
+) -> Vec<Event> {
+    if !synced_only && synced_source_id.is_none() {
+        return events;
+    }
+
+    let selected_synced_ids = load_synced_event_ids(database, synced_source_id);
+
+    if synced_only {
+        return events
+            .into_iter()
+            .filter(|event| is_synced_event(event.id, &selected_synced_ids))
+            .collect();
+    }
+
+    let all_synced_ids = load_synced_event_ids(database, None);
+    events
+        .into_iter()
+        .filter(|event| {
+            is_synced_event(event.id, &selected_synced_ids)
+                || !is_synced_event(event.id, &all_synced_ids)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::params;
     use chrono::TimeZone;
 
     fn make_event(title: &str, category: Option<&str>) -> Event {
@@ -332,6 +370,84 @@ mod tests {
         assert!(is_synced_event(Some(42), &synced));
         assert!(!is_synced_event(Some(7), &synced));
         assert!(!is_synced_event(None, &synced));
+    }
+
+    #[test]
+    fn test_filter_events_by_sync_scope_selected_source_plus_local() {
+        let db = Box::leak(Box::new(Database::new(":memory:").unwrap()));
+        db.initialize_schema().unwrap();
+
+        let conn = db.connection();
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
+             VALUES (?1, ?2, ?3, 1, 15)",
+            params![
+                "Den",
+                "google_ics",
+                "https://calendar.google.com/calendar/ical/den/basic.ics"
+            ],
+        )
+        .unwrap();
+        let den_source_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
+             VALUES (?1, ?2, ?3, 1, 15)",
+            params![
+                "Birthdays",
+                "google_ics",
+                "https://calendar.google.com/calendar/ical/birthdays/basic.ics"
+            ],
+        )
+        .unwrap();
+        let birthday_source_id = conn.last_insert_rowid();
+
+        let mut den_event = make_event("Den synced", None);
+        den_event.id = Some(101);
+        let mut birthday_event = make_event("Birthday synced", None);
+        birthday_event.id = Some(102);
+        let mut local_event = make_event("Local", None);
+        local_event.id = Some(103);
+
+        for (id, title) in [(101_i64, "Den synced"), (102_i64, "Birthday synced"), (103_i64, "Local")]
+        {
+            conn.execute(
+                "INSERT INTO events (id, title, start_datetime, end_datetime, is_all_day)
+                 VALUES (?1, ?2, ?3, ?4, 0)",
+                params![
+                    id,
+                    title,
+                    "2026-02-27T09:00:00+10:00",
+                    "2026-02-27T10:00:00+10:00"
+                ],
+            )
+            .unwrap();
+        }
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id)
+             VALUES (?1, ?2, ?3)",
+            params![den_source_id, "uid-den", 101_i64],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id)
+             VALUES (?1, ?2, ?3)",
+            params![birthday_source_id, "uid-bday", 102_i64],
+        )
+        .unwrap();
+
+        let filtered = filter_events_by_sync_scope(
+            vec![den_event, birthday_event, local_event],
+            db,
+            false,
+            Some(den_source_id),
+        );
+
+        let ids: HashSet<i64> = filtered.into_iter().filter_map(|event| event.id).collect();
+        assert!(ids.contains(&101));
+        assert!(ids.contains(&103));
+        assert!(!ids.contains(&102));
     }
 
     #[test]

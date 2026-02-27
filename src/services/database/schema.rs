@@ -134,6 +134,13 @@ fn run_settings_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE settings ADD COLUMN sidebar_width REAL NOT NULL DEFAULT 180.0",
     )?;
 
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "sync_startup_delay_minutes",
+        "ALTER TABLE settings ADD COLUMN sync_startup_delay_minutes INTEGER NOT NULL DEFAULT 15",
+    )?;
+
     let had_time_slot = migrations::column_exists(conn, "settings", "time_slot_interval")?;
     let has_default_duration =
         migrations::column_exists(conn, "settings", "default_event_duration")?;
@@ -235,9 +242,10 @@ fn insert_default_settings(conn: &Connection) -> Result<()> {
             id, theme, first_day_of_week, time_format, date_format,
             show_my_day, my_day_position_right, show_ribbon, current_view,
             default_event_duration, first_day_of_work_week, last_day_of_work_week,
-            default_event_start_time, default_card_width, default_card_height
+            default_event_start_time, default_card_width, default_card_height,
+            sync_startup_delay_minutes
         )
-        VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 0, 0, 0, 'Month', 60, 1, 5, '08:00', 120.0, 110.0)",
+        VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 0, 0, 0, 'Month', 60, 1, 5, '08:00', 120.0, 110.0, 15)",
         [],
     )
     .context("Failed to insert default settings")?;

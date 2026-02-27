@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use super::palette::{CalendarCellPalette, DayStripPalette};
 use super::week_shared::DeleteConfirmRequest;
 use super::{
-    countdown_menu_state, filter_events_by_category, is_synced_event, load_synced_event_ids,
+    countdown_menu_state, filter_events_by_category, filter_events_by_sync_scope, is_synced_event,
     CountdownMenuState, CountdownRequest,
 };
 use crate::models::event::Event;
@@ -76,6 +76,7 @@ impl MonthView {
         active_countdown_events: &HashSet<i64>,
         category_filter: Option<&str>,
         synced_only: bool,
+        synced_source_id: Option<i64>,
     ) -> MonthViewResult {
         let today = Local::now().date_naive();
         let mut result = MonthViewResult::default();
@@ -84,15 +85,8 @@ impl MonthView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_month(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
-        let synced_event_ids = load_synced_event_ids(database);
-        let events = if synced_only {
-            events
-                .into_iter()
-                .filter(|event| super::is_synced_event(event.id, &synced_event_ids))
-                .collect()
-        } else {
-            events
-        };
+        let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
+        let synced_event_ids = super::load_synced_event_ids(database, synced_source_id);
 
         // Day of week headers - use Grid to match column widths below
         let day_names = Self::get_day_names(settings.first_day_of_week);

@@ -2,6 +2,7 @@ use super::confirm::ConfirmAction;
 use super::state::ViewType;
 use super::CalendarApp;
 use crate::models::event::Event;
+use crate::services::calendar_sync::CalendarSourceService;
 use crate::ui_egui::commands::UpdateEventCommand;
 use crate::ui_egui::views::day_view::DayView;
 use crate::ui_egui::views::month_view::{MonthView, MonthViewAction};
@@ -68,6 +69,28 @@ impl CalendarApp {
         egui::CentralPanel::default()
             .frame(panel_frame)
             .show(ctx, |ui| {
+            let mut enabled_synced_sources: Vec<(i64, String)> = CalendarSourceService::new(
+                self.context.database().connection(),
+            )
+            .list_all()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|source| source.enabled)
+            .filter_map(|source| source.id.map(|id| (id, source.name)))
+            .collect();
+            enabled_synced_sources.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
+
+            if self
+                .selected_synced_source_id
+                .is_some_and(|selected_id| {
+                    !enabled_synced_sources
+                        .iter()
+                        .any(|(source_id, _)| *source_id == selected_id)
+                })
+            {
+                self.selected_synced_source_id = None;
+            }
+
             // Clickable heading - double-click to go to today
             let heading_text = format!(
                 "{} View - {}",
@@ -145,10 +168,50 @@ impl CalendarApp {
                 ui.separator();
 
                 ui.checkbox(&mut self.show_synced_events_only, "🔒 Synced only")
-                    .on_hover_text("Show only read-only events imported from calendar sync sources");
+                    .on_hover_text("Show only synced events (optionally scoped to a selected synced calendar)");
+
+                ui.label("Calendar:");
+                egui::ComboBox::from_id_source("synced_source_filter")
+                    .selected_text(
+                        self.selected_synced_source_id
+                            .and_then(|selected_id| {
+                                enabled_synced_sources
+                                    .iter()
+                                    .find(|(source_id, _)| *source_id == selected_id)
+                                    .map(|(_, name)| name.clone())
+                            })
+                            .unwrap_or_else(|| "All synced".to_string()),
+                    )
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.selected_synced_source_id,
+                            None,
+                            "All synced",
+                        );
+                        for (source_id, name) in &enabled_synced_sources {
+                            ui.selectable_value(
+                                &mut self.selected_synced_source_id,
+                                Some(*source_id),
+                                name,
+                            );
+                        }
+                    });
+
+                if !self.show_synced_events_only && self.selected_synced_source_id.is_some() {
+                    ui.label(
+                        egui::RichText::new("(selected source + local events)")
+                            .small()
+                            .italics(),
+                    )
+                    .on_hover_text(
+                        "With Synced only off, a selected calendar source shows that source plus local events.",
+                    );
+                }
             });
 
             ui.separator();
+
+            let synced_source_filter = self.selected_synced_source_id;
 
             let mut focus_request = self.pending_focus.take();
             match self.current_view {
@@ -157,6 +220,7 @@ impl CalendarApp {
                     countdown_requests,
                     &active_countdown_events,
                     &mut focus_request,
+                    synced_source_filter,
                 ),
                 ViewType::Week => self.render_week_view(
                     ui,
@@ -164,15 +228,22 @@ impl CalendarApp {
                     &active_countdown_events,
                     self.show_ribbon,
                     &mut focus_request,
+                    synced_source_filter,
                 ),
                 ViewType::WorkWeek => self.render_workweek_view(
                     ui,
                     countdown_requests,
                     &active_countdown_events,
                     &mut focus_request,
+                    synced_source_filter,
                 ),
                 ViewType::Month => {
-                    self.render_month_view(ui, countdown_requests, &active_countdown_events)
+                    self.render_month_view(
+                        ui,
+                        countdown_requests,
+                        &active_countdown_events,
+                        synced_source_filter,
+                    )
                 }
             }
             self.pending_focus = focus_request;
@@ -185,6 +256,7 @@ impl CalendarApp {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         focus_request: &mut Option<AutoFocusRequest>,
+        synced_source_id: Option<i64>,
     ) {
         let view_result = DayView::show(
             ui,
@@ -201,6 +273,7 @@ impl CalendarApp {
             focus_request,
             self.active_category_filter.as_deref(),
             self.show_synced_events_only,
+            synced_source_id,
         );
         
         // Handle clicked event - open edit dialog
@@ -250,6 +323,7 @@ impl CalendarApp {
         active_countdown_events: &HashSet<i64>,
         show_ribbon: bool,
         focus_request: &mut Option<AutoFocusRequest>,
+        synced_source_id: Option<i64>,
     ) {
         let all_day_events = if show_ribbon {
             use chrono::TimeZone;
@@ -278,7 +352,7 @@ impl CalendarApp {
 
             let all_events = filter_events_by_category(all_events, self.active_category_filter.as_deref());
             if self.show_synced_events_only {
-                let synced_event_ids = load_synced_event_ids(self.context.database());
+                let synced_event_ids = load_synced_event_ids(self.context.database(), synced_source_id);
                 all_events
                     .into_iter()
                     .filter(|event| is_synced_event(event.id, &synced_event_ids))
@@ -307,6 +381,7 @@ impl CalendarApp {
             focus_request,
             self.active_category_filter.as_deref(),
             self.show_synced_events_only,
+            synced_source_id,
         );
         
         // Handle clicked event - open edit dialog
@@ -355,6 +430,7 @@ impl CalendarApp {
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
         focus_request: &mut Option<AutoFocusRequest>,
+        synced_source_id: Option<i64>,
     ) {
         let all_day_events = if self.show_ribbon {
             use chrono::TimeZone;
@@ -385,7 +461,7 @@ impl CalendarApp {
 
                 let all_events = filter_events_by_category(all_events, self.active_category_filter.as_deref());
                 if self.show_synced_events_only {
-                    let synced_event_ids = load_synced_event_ids(self.context.database());
+                    let synced_event_ids = load_synced_event_ids(self.context.database(), synced_source_id);
                     all_events
                         .into_iter()
                         .filter(|event| is_synced_event(event.id, &synced_event_ids))
@@ -417,6 +493,7 @@ impl CalendarApp {
             focus_request,
             self.active_category_filter.as_deref(),
             self.show_synced_events_only,
+            synced_source_id,
         );
         
         // Handle clicked event - open edit dialog
@@ -464,6 +541,7 @@ impl CalendarApp {
         ui: &mut egui::Ui,
         countdown_requests: &mut Vec<CountdownRequest>,
         active_countdown_events: &HashSet<i64>,
+        synced_source_id: Option<i64>,
     ) {
         let result = MonthView::show(
             ui,
@@ -479,6 +557,7 @@ impl CalendarApp {
             active_countdown_events,
             self.active_category_filter.as_deref(),
             self.show_synced_events_only,
+            synced_source_id,
         );
         
         // Handle month view actions
