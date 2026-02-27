@@ -1,4 +1,5 @@
 mod models;
+mod palette;
 mod persistence;
 pub mod repository;
 mod service;
