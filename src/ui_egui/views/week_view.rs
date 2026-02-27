@@ -46,6 +46,7 @@ impl WeekView {
         all_day_events: &[Event],
         focus_request: &mut Option<AutoFocusRequest>,
         category_filter: Option<&str>,
+        synced_only: bool,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -61,6 +62,14 @@ impl WeekView {
         let events = Self::get_events_for_week(&event_service, week_start);
         let events = filter_events_by_category(events, category_filter);
         let synced_event_ids = load_synced_event_ids(database);
+        let events = if synced_only {
+            events
+                .into_iter()
+                .filter(|event| super::is_synced_event(event.id, &synced_event_ids))
+                .collect()
+        } else {
+            events
+        };
 
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns

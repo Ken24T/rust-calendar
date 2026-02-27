@@ -58,14 +58,6 @@ impl CalendarApp {
                 self.render_sidebar_content(ui);
             });
         
-        // DEBUG: Log panel rect info
-        let panel_rect = response.response.rect;
-        let screen_rect = ctx.screen_rect();
-        log::info!(
-            "SIDEBAR DEBUG: panel_rect={:?}, screen_rect={:?}, sidebar_position_right={}, width_setting={}",
-            panel_rect, screen_rect, self.settings.my_day_position_right, width
-        );
-        
         // Manual resize handle on the panel edge
         let panel_rect = response.response.rect;
         let resize_grab_width = 4.0; // Fixed grab width

@@ -100,11 +100,17 @@ fn parse_event_property(line: &str, imported: &mut ImportedIcsEvent) -> Result<(
                 imported.event.recurrence_rule = Some(value.to_string());
             }
             "EXDATE" => {
-                let dates: Result<Vec<_>> =
-                    value
-                        .split(',')
-                        .map(|s| parse_datetime_with_tzid(s.trim(), tzid))
-                        .collect();
+                let dates: Result<Vec<_>> = value
+                    .split(',')
+                    .map(|s| {
+                        let exdate = s.trim();
+                        if key_part.contains("VALUE=DATE") {
+                            parse_date(exdate)
+                        } else {
+                            parse_datetime_with_tzid(exdate, tzid)
+                        }
+                    })
+                    .collect();
                 imported.event.recurrence_exceptions = Some(dates?);
             }
             "CREATED" => {
@@ -186,5 +192,29 @@ END:VCALENDAR"#;
         let imported = from_str_with_metadata(ics).unwrap();
         assert_eq!(imported.len(), 1);
         assert_eq!(imported[0].event.title, "TZ Event");
+    }
+
+    #[test]
+    fn test_import_exdate_value_date() {
+        let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:test-uid-exdate
+DTSTART;VALUE=DATE:20260227
+DTEND;VALUE=DATE:20260228
+SUMMARY:All-day recurring event
+RRULE:FREQ=DAILY;COUNT=3
+EXDATE;VALUE=DATE:20260228
+END:VEVENT
+END:VCALENDAR"#;
+
+        let imported = from_str_with_metadata(ics).unwrap();
+        assert_eq!(imported.len(), 1);
+        let exdates = imported[0]
+            .event
+            .recurrence_exceptions
+            .as_ref()
+            .expect("EXDATE should be parsed");
+        assert_eq!(exdates.len(), 1);
     }
 }

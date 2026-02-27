@@ -33,6 +33,7 @@ impl SchedulerTickResult {
 pub struct CalendarSyncScheduler {
     source_state: HashMap<i64, SourceScheduleState>,
     max_backoff_minutes: i64,
+    startup_sync_ready_at: Option<DateTime<Local>>,
 }
 
 impl Default for CalendarSyncScheduler {
@@ -43,9 +44,20 @@ impl Default for CalendarSyncScheduler {
 
 impl CalendarSyncScheduler {
     pub fn new() -> Self {
+        Self::with_startup_delay(Duration::seconds(20))
+    }
+
+    pub fn with_startup_delay(startup_delay: Duration) -> Self {
+        let startup_sync_ready_at = if startup_delay <= Duration::zero() {
+            None
+        } else {
+            Some(Local::now() + startup_delay)
+        };
+
         Self {
             source_state: HashMap::new(),
             max_backoff_minutes: 60,
+            startup_sync_ready_at,
         }
     }
 
@@ -64,6 +76,20 @@ impl CalendarSyncScheduler {
     where
         F: FnMut(i64) -> Result<SyncRunResult>,
     {
+        if let Some(ready_at) = self.startup_sync_ready_at {
+            if now < ready_at {
+                let wait = (ready_at - now)
+                    .to_std()
+                    .unwrap_or_else(|_| StdDuration::from_secs(0));
+                return Ok(SchedulerTickResult {
+                    next_due_in: Some(wait),
+                    ..SchedulerTickResult::default()
+                });
+            }
+
+            self.startup_sync_ready_at = None;
+        }
+
         let source_service = CalendarSourceService::new(conn);
         let sources = source_service.list_all()?;
 
@@ -185,7 +211,7 @@ mod tests {
         let s1 = create_source(conn, "source1", 15, true);
         let s2 = create_source(conn, "source2", 30, true);
 
-        let mut scheduler = CalendarSyncScheduler::new();
+        let mut scheduler = CalendarSyncScheduler::with_startup_delay(chrono::Duration::zero());
         let now = Local.with_ymd_and_hms(2026, 2, 27, 10, 0, 0).unwrap();
 
         let first = scheduler
@@ -232,7 +258,7 @@ mod tests {
         let failing = create_source(conn, "failing", 10, true);
         let healthy = create_source(conn, "healthy", 10, true);
 
-        let mut scheduler = CalendarSyncScheduler::new();
+        let mut scheduler = CalendarSyncScheduler::with_startup_delay(chrono::Duration::zero());
         let now = Local.with_ymd_and_hms(2026, 2, 27, 11, 0, 0).unwrap();
 
         let first = scheduler
@@ -281,5 +307,37 @@ mod tests {
 
         assert!(!redacted.contains(source_url));
         assert!(redacted.contains("***redacted-url***"));
+    }
+
+    #[test]
+    fn tick_defers_initial_sync_until_startup_delay_elapses() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        let source_id = create_source(conn, "source1", 15, true);
+
+        let mut scheduler = CalendarSyncScheduler::with_startup_delay(chrono::Duration::seconds(20));
+        let now = Local.with_ymd_and_hms(2026, 2, 27, 12, 0, 0).unwrap();
+
+        scheduler.startup_sync_ready_at = Some(now + chrono::Duration::seconds(20));
+
+        let before_ready = scheduler
+            .tick_with_runner_at(conn, now, |_source_id| Ok(SyncRunResult::default()))
+            .unwrap();
+
+        assert_eq!(before_ready.attempted_count(), 0);
+        assert!(before_ready.next_due_in.is_some());
+
+        let after_ready = scheduler
+            .tick_with_runner_at(conn, now + chrono::Duration::seconds(21), |sid| {
+                Ok(SyncRunResult {
+                    source_id: sid,
+                    ..SyncRunResult::default()
+                })
+            })
+            .unwrap();
+
+        assert_eq!(after_ready.attempted_source_ids, vec![source_id]);
     }
 }

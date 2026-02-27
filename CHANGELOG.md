@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.7] - 2026-02-27
+
+### Changed
+- Made scheduled Google Calendar sync fully non-blocking for the UI by running scheduler ticks on a background worker with async result polling.
+- Made manual `Sync Now` in Settings non-blocking with worker-thread execution and in-dialog progress/result handling.
+- Reduced UI-thread overhead by removing high-frequency layout debug logs and throttling scheduler polling/repaint cadence to improve responsiveness.
+
+## [1.4.6] - 2026-02-27
+
+### Added
+- New view-level `🔒 Synced only` toggle to show only read-only events imported from calendar sync sources, improving parity checks against Google Calendar during QA.
+
+### Changed
+- Improved ICS import robustness for Google feeds by correctly parsing date-only `EXDATE;VALUE=DATE` entries.
+- Improved startup UX by delaying the first automatic background sync shortly after app launch, reducing perceived startup lag.
+
 ## [1.4.5] - 2026-02-27
 
 ### Added

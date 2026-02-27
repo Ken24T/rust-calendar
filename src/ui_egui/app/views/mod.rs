@@ -65,13 +65,6 @@ impl CalendarApp {
         egui::CentralPanel::default()
             .frame(panel_frame)
             .show(ctx, |ui| {
-            // DEBUG: Log central panel rect
-            let panel_rect = ui.max_rect();
-            let available_rect = ui.available_rect_before_wrap();
-            log::info!(
-                "CENTRAL PANEL DEBUG: max_rect={:?}, available_rect={:?}",
-                panel_rect, available_rect
-            );
             // Clickable heading - double-click to go to today
             let heading_text = format!(
                 "{} View - {}",
@@ -145,6 +138,11 @@ impl CalendarApp {
                 {
                     self.current_view = ViewType::Month;
                 }
+
+                ui.separator();
+
+                ui.checkbox(&mut self.show_synced_events_only, "🔒 Synced only")
+                    .on_hover_text("Show only read-only events imported from calendar sync sources");
             });
 
             ui.separator();
@@ -197,6 +195,7 @@ impl CalendarApp {
             active_countdown_events,
             focus_request,
             self.active_category_filter.as_deref(),
+            self.show_synced_events_only,
         );
         
         // Handle clicked event - open edit dialog
@@ -291,6 +290,7 @@ impl CalendarApp {
             &all_day_events,
             focus_request,
             self.active_category_filter.as_deref(),
+            self.show_synced_events_only,
         );
         
         // Handle clicked event - open edit dialog
@@ -389,6 +389,7 @@ impl CalendarApp {
             &all_day_events,
             focus_request,
             self.active_category_filter.as_deref(),
+            self.show_synced_events_only,
         );
         
         // Handle clicked event - open edit dialog
@@ -443,6 +444,7 @@ impl CalendarApp {
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
             self.active_category_filter.as_deref(),
+            self.show_synced_events_only,
         );
         
         // Handle month view actions
