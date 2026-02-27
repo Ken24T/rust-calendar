@@ -149,7 +149,7 @@ pub fn filter_events_by_category(events: Vec<Event>, filter: Option<&str>) -> Ve
 
 pub fn load_synced_event_ids(database: &'static Database) -> HashSet<i64> {
     let service = EventSyncMapService::new(database.connection());
-    match service.list_synced_local_event_ids() {
+    match service.list_synced_local_event_ids_for_enabled_sources() {
         Ok(ids) => ids,
         Err(err) => {
             log::warn!("Failed to load synced event IDs: {}", err);
