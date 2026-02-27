@@ -3,6 +3,7 @@ mod palette;
 mod persistence;
 pub mod repository;
 mod service;
+mod visuals;
 
 pub use models::{
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,

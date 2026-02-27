@@ -1,7 +1,7 @@
-/// Event-derived colour palette for countdown cards.
-///
-/// Generates a coordinated set of title/body/text colours from
-/// a single base event colour, ensuring readable contrast.
+//! Event-derived colour palette for countdown cards.
+//!
+//! Generates a coordinated set of title/body/text colours from
+//! a single base event colour, ensuring readable contrast.
 
 use super::models::{CountdownCardState, RgbaColor};
 

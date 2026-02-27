@@ -8,11 +8,10 @@ use chrono::{DateTime, Local};
 use rusqlite::Connection;
 
 use super::models::{
-    default_body_bg_color, default_days_fg_color, default_days_font_size, default_title_bg_color,
-    default_title_fg_color, default_title_font_size, CountdownAutoDismissConfig,
-    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownDisplayMode, CountdownNotificationConfig, CountdownPersistedState,
-    CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
+    CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardState,
+    CountdownCardVisuals, CountdownDisplayMode, CountdownNotificationConfig,
+    CountdownPersistedState, CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
+    MIN_DAYS_FONT_SIZE,
 };
 use super::palette::apply_event_palette_if_needed;
 use super::persistence::{load_snapshot, save_snapshot};
@@ -20,18 +19,18 @@ use super::repository::{CountdownGlobalSettings, CountdownRepository};
 
 /// Manages active countdown cards while the calendar app is running.
 pub struct CountdownService {
-    cards: Vec<CountdownCardState>,
-    next_id: u64,
-    dirty: bool,
-    pending_geometry: Vec<(CountdownCardId, CountdownCardGeometry)>,
-    last_geometry_update: Option<Instant>,
-    visual_defaults: CountdownCardVisuals,
-    app_window_geometry: Option<CountdownCardGeometry>,
-    notification_config: CountdownNotificationConfig,
-    auto_dismiss_defaults: CountdownAutoDismissConfig,
-    display_mode: CountdownDisplayMode,
-    container_geometry: Option<CountdownCardGeometry>,
-    card_order: Vec<CountdownCardId>,
+    pub(super) cards: Vec<CountdownCardState>,
+    pub(super) next_id: u64,
+    pub(super) dirty: bool,
+    pub(super) pending_geometry: Vec<(CountdownCardId, CountdownCardGeometry)>,
+    pub(super) last_geometry_update: Option<Instant>,
+    pub(super) visual_defaults: CountdownCardVisuals,
+    pub(super) app_window_geometry: Option<CountdownCardGeometry>,
+    pub(super) notification_config: CountdownNotificationConfig,
+    pub(super) auto_dismiss_defaults: CountdownAutoDismissConfig,
+    pub(super) display_mode: CountdownDisplayMode,
+    pub(super) container_geometry: Option<CountdownCardGeometry>,
+    pub(super) card_order: Vec<CountdownCardId>,
 }
 
 impl Default for CountdownService {
@@ -541,122 +540,9 @@ impl CountdownService {
         false
     }
 
-    pub fn set_always_on_top(&mut self, id: CountdownCardId, always_on_top: bool) -> bool {
-        self.update_visual_flag(id, |visuals| visuals.always_on_top = always_on_top)
-    }
 
-    pub fn set_title_bg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| {
-            visuals.title_bg_color = color;
-            visuals.use_default_title_bg = false;
-        })
-    }
 
-    pub fn set_title_fg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| {
-            visuals.title_fg_color = color;
-            visuals.use_default_title_fg = false;
-        })
-    }
 
-    pub fn set_body_bg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| {
-            visuals.body_bg_color = color;
-            visuals.use_default_body_bg = false;
-        })
-    }
-
-    pub fn set_days_fg_color(&mut self, id: CountdownCardId, color: RgbaColor) -> bool {
-        self.update_visual_flag(id, |visuals| {
-            visuals.days_fg_color = color;
-            visuals.use_default_days_fg = false;
-        })
-    }
-
-    pub fn set_use_default_title_bg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
-        let fallback = self.visual_defaults.title_bg_color;
-        let updated = self.update_card_state(id, |card| {
-            card.visuals.use_default_title_bg = use_default;
-            if use_default {
-                card.visuals.title_bg_color = fallback;
-            } else {
-                apply_event_palette_if_needed(card);
-            }
-        });
-        if updated {
-            self.visual_defaults.use_default_title_bg = use_default;
-        }
-        updated
-    }
-
-    pub fn set_use_default_title_fg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
-        let fallback = self.visual_defaults.title_fg_color;
-        let updated = self.update_card_state(id, |card| {
-            card.visuals.use_default_title_fg = use_default;
-            if use_default {
-                card.visuals.title_fg_color = fallback;
-            } else {
-                apply_event_palette_if_needed(card);
-            }
-        });
-        if updated {
-            self.visual_defaults.use_default_title_fg = use_default;
-        }
-        updated
-    }
-
-    pub fn set_use_default_body_bg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
-        let fallback = self.visual_defaults.body_bg_color;
-        let updated = self.update_card_state(id, |card| {
-            card.visuals.use_default_body_bg = use_default;
-            if use_default {
-                card.visuals.body_bg_color = fallback;
-            } else {
-                apply_event_palette_if_needed(card);
-            }
-        });
-        if updated {
-            self.visual_defaults.use_default_body_bg = use_default;
-        }
-        updated
-    }
-
-    pub fn set_use_default_days_fg(&mut self, id: CountdownCardId, use_default: bool) -> bool {
-        let fallback = self.visual_defaults.days_fg_color;
-        let updated = self.update_card_state(id, |card| {
-            card.visuals.use_default_days_fg = use_default;
-            if use_default {
-                card.visuals.days_fg_color = fallback;
-            } else {
-                apply_event_palette_if_needed(card);
-            }
-        });
-        if updated {
-            self.visual_defaults.use_default_days_fg = use_default;
-        }
-        updated
-    }
-
-    pub fn set_days_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
-        self.update_visual_flag(id, |visuals| {
-            visuals.days_font_size = size.clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE)
-        })
-    }
-
-    pub fn set_title_font_size(&mut self, id: CountdownCardId, size: f32) -> bool {
-        self.update_visual_flag(id, |visuals| {
-            visuals.title_font_size = size.clamp(10.0, 64.0)
-        })
-    }
-
-    pub fn set_comment(&mut self, id: CountdownCardId, comment: Option<String>) -> bool {
-        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
-            card.comment = comment;
-            self.dirty = true;
-            return true;
-        }
-        false
-    }
 
     /// Synchronize stored card titles with the latest event label.
     /// Only updates cards that are still using the automatic event title (no override).
@@ -785,18 +671,7 @@ impl CountdownService {
         false
     }
 
-    pub fn apply_visual_defaults(&mut self, id: CountdownCardId) -> bool {
-        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
-            card.visuals = self.visual_defaults.clone();
-            self.dirty = true;
-            return true;
-        }
-        false
-    }
 
-    pub fn defaults(&self) -> &CountdownCardVisuals {
-        &self.visual_defaults
-    }
 
     pub fn app_window_geometry(&self) -> Option<CountdownCardGeometry> {
         self.app_window_geometry
@@ -962,83 +837,9 @@ impl CountdownService {
         }
     }
 
-    pub fn set_default_title_bg_color(&mut self, color: RgbaColor) {
-        self.visual_defaults.title_bg_color = color;
-        self.dirty = true;
-    }
 
-    pub fn reset_default_title_bg_color(&mut self) {
-        self.set_default_title_bg_color(default_title_bg_color());
-    }
 
-    pub fn set_default_title_fg_color(&mut self, color: RgbaColor) {
-        self.visual_defaults.title_fg_color = color;
-        self.dirty = true;
-    }
 
-    pub fn reset_default_title_fg_color(&mut self) {
-        self.set_default_title_fg_color(default_title_fg_color());
-    }
-
-    pub fn set_default_body_bg_color(&mut self, color: RgbaColor) {
-        self.visual_defaults.body_bg_color = color;
-        self.dirty = true;
-    }
-
-    pub fn reset_default_body_bg_color(&mut self) {
-        self.set_default_body_bg_color(default_body_bg_color());
-    }
-
-    pub fn set_default_days_fg_color(&mut self, color: RgbaColor) {
-        self.visual_defaults.days_fg_color = color;
-        self.dirty = true;
-    }
-
-    pub fn reset_default_days_fg_color(&mut self) {
-        self.set_default_days_fg_color(default_days_fg_color());
-    }
-
-    pub fn set_default_days_font_size(&mut self, size: f32) {
-        self.visual_defaults.days_font_size = size.clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
-        self.dirty = true;
-    }
-
-    pub fn reset_default_days_font_size(&mut self) {
-        self.set_default_days_font_size(default_days_font_size());
-    }
-
-    pub fn set_default_title_font_size(&mut self, size: f32) {
-        self.visual_defaults.title_font_size = size.clamp(10.0, 64.0);
-        self.dirty = true;
-    }
-
-    pub fn reset_default_title_font_size(&mut self) {
-        self.set_default_title_font_size(default_title_font_size());
-    }
-
-    fn update_visual_flag<F>(&mut self, id: CountdownCardId, mut update: F) -> bool
-    where
-        F: FnMut(&mut CountdownCardVisuals),
-    {
-        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
-            update(&mut card.visuals);
-            self.dirty = true;
-            return true;
-        }
-        false
-    }
-
-    fn update_card_state<F>(&mut self, id: CountdownCardId, mut update: F) -> bool
-    where
-        F: FnMut(&mut CountdownCardState),
-    {
-        if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
-            update(card);
-            self.dirty = true;
-            return true;
-        }
-        false
-    }
 
     /// Recomputes days remaining for every card, returning the ones that
     /// changed so the UI can re-render or animate them.
