@@ -171,7 +171,9 @@ impl CalendarApp {
                     &active_countdown_events,
                     &mut focus_request,
                 ),
-                ViewType::Month => self.render_month_view(ui),
+                ViewType::Month => {
+                    self.render_month_view(ui, countdown_requests, &active_countdown_events)
+                }
             }
             self.pending_focus = focus_request;
         });
@@ -457,7 +459,12 @@ impl CalendarApp {
         }
     }
 
-    pub(super) fn render_month_view(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn render_month_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &HashSet<i64>,
+    ) {
         let result = MonthView::show(
             ui,
             &mut self.current_date,
@@ -468,6 +475,8 @@ impl CalendarApp {
             &mut self.event_dialog_date,
             &mut self.event_dialog_recurrence,
             &mut self.event_to_edit,
+            countdown_requests,
+            active_countdown_events,
             self.active_category_filter.as_deref(),
             self.show_synced_events_only,
         );

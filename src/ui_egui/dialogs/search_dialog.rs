@@ -4,9 +4,11 @@ use chrono::NaiveDate;
 use egui::{Color32, Margin, RichText, Stroke, Vec2};
 
 use crate::models::event::Event;
+use crate::services::calendar_sync::mapping::EventSyncMapService;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::theme::CalendarTheme;
+use crate::ui_egui::views::is_synced_event;
 
 /// State for the search dialog
 #[derive(Default)]
@@ -25,6 +27,8 @@ pub enum SearchDialogAction {
     NavigateToDate(NaiveDate),
     /// Edit the selected event
     EditEvent(i64),
+    /// Create a countdown card from the selected event
+    CreateCountdown(i64),
     /// Close the dialog
     Close,
 }
@@ -39,6 +43,9 @@ pub fn render_search_dialog(
 ) -> SearchDialogAction {
     let mut action = SearchDialogAction::None;
     let mut dialog_open = *open;
+    let synced_event_ids = EventSyncMapService::new(database.connection())
+        .list_synced_local_event_ids_for_enabled_sources()
+        .unwrap_or_default();
 
     egui::Window::new("🔍 Search Events")
         .open(&mut dialog_open)
@@ -100,6 +107,7 @@ pub fn render_search_dialog(
                 .show(ui, |ui| {
                     for event in &state.results {
                         let is_selected = state.selected_event == event.id;
+                        let event_is_synced = is_synced_event(event.id, &synced_event_ids);
                         
                         let frame_bg = if is_selected {
                             theme.today_background
@@ -174,7 +182,11 @@ pub fn render_search_dialog(
 
                         if response.double_clicked() {
                             if let Some(id) = event.id {
-                                action = SearchDialogAction::EditEvent(id);
+                                action = if event_is_synced {
+                                    SearchDialogAction::CreateCountdown(id)
+                                } else {
+                                    SearchDialogAction::EditEvent(id)
+                                };
                             }
                         }
 
@@ -186,9 +198,22 @@ pub fn render_search_dialog(
                                 );
                                 ui.close_menu();
                             }
-                            if ui.button("✏ Edit event").clicked() {
+                            if event_is_synced {
+                                ui.label(
+                                    RichText::new("🔒 Synced read-only event")
+                                        .italics()
+                                        .size(11.0),
+                                );
+                                ui.add_enabled(false, egui::Button::new("✏ Edit event"));
+                            } else if ui.button("✏ Edit event").clicked() {
                                 if let Some(id) = event.id {
                                     action = SearchDialogAction::EditEvent(id);
+                                }
+                                ui.close_menu();
+                            }
+                            if ui.button("⏱ Create Countdown").clicked() {
+                                if let Some(id) = event.id {
+                                    action = SearchDialogAction::CreateCountdown(id);
                                 }
                                 ui.close_menu();
                             }
@@ -203,16 +228,27 @@ pub fn render_search_dialog(
 
             // Action buttons
             ui.horizontal(|ui| {
-                if let Some(_event_id) = state.selected_event {
+                if let Some(event_id) = state.selected_event {
+                    let selected_is_synced = is_synced_event(Some(event_id), &synced_event_ids);
+
                     if ui.button("📅 Go to date").clicked() {
                         if let Some(event) = state.results.iter().find(|e| e.id == state.selected_event) {
                             action = SearchDialogAction::NavigateToDate(event.start.date_naive());
                         }
                     }
 
-                    if ui.button("✏ Edit").clicked() {
+                    if ui
+                        .add_enabled(!selected_is_synced, egui::Button::new("✏ Edit"))
+                        .clicked()
+                    {
                         if let Some(id) = state.selected_event {
                             action = SearchDialogAction::EditEvent(id);
+                        }
+                    }
+
+                    if ui.button("⏱ Create Countdown").clicked() {
+                        if let Some(id) = state.selected_event {
+                            action = SearchDialogAction::CreateCountdown(id);
                         }
                     }
                 }
@@ -233,7 +269,11 @@ pub fn render_search_dialog(
 
             if ui.input(|i| i.key_pressed(egui::Key::Enter)) && state.selected_event.is_some() {
                 if let Some(id) = state.selected_event {
-                    action = SearchDialogAction::EditEvent(id);
+                    action = if is_synced_event(Some(id), &synced_event_ids) {
+                        SearchDialogAction::CreateCountdown(id)
+                    } else {
+                        SearchDialogAction::EditEvent(id)
+                    };
                 }
             }
         });

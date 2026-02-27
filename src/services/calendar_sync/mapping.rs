@@ -118,6 +118,25 @@ impl<'a> EventSyncMapService<'a> {
         Ok(count > 0)
     }
 
+    pub fn get_source_name_for_local_event(&self, local_event_id: i64) -> Result<Option<String>> {
+        let result = self.conn.query_row(
+            "SELECT cs.name
+             FROM event_sync_map esm
+             JOIN calendar_sources cs ON cs.id = esm.source_id
+             WHERE esm.local_event_id = ?1
+             ORDER BY esm.id DESC
+             LIMIT 1",
+            [local_event_id],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(name) => Ok(Some(name)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err).context("Failed to fetch source name for local event"),
+        }
+    }
+
     pub fn list_synced_local_event_ids(&self) -> Result<HashSet<i64>> {
         let mut stmt = self
             .conn
@@ -320,6 +339,37 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(fetched.last_seen_at.is_some());
+    }
+
+    #[test]
+    fn test_get_source_name_for_local_event() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        let source_id = create_source_named(conn, "Google Work");
+        let local_event_id = create_event(conn);
+        let service = EventSyncMapService::new(conn);
+
+        service
+            .create(EventSyncMap {
+                id: None,
+                source_id,
+                external_uid: "uid-source-name".to_string(),
+                local_event_id,
+                external_last_modified: None,
+                external_etag_hash: None,
+                last_seen_at: None,
+            })
+            .unwrap();
+
+        let source_name = service
+            .get_source_name_for_local_event(local_event_id)
+            .unwrap();
+        assert_eq!(source_name.as_deref(), Some("Google Work"));
+
+        let missing = service.get_source_name_for_local_event(9999).unwrap();
+        assert!(missing.is_none());
     }
 
     #[test]

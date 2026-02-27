@@ -14,6 +14,43 @@ use chrono::Local;
 use directories::ProjectDirs;
 use std::path::PathBuf;
 
+fn normalized_non_empty(value: Option<String>) -> Option<String> {
+    value.and_then(|text| {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_owned())
+        }
+    })
+}
+
+fn compose_countdown_body(
+    body: Option<String>,
+    display_label: Option<String>,
+    sync_source_name: Option<String>,
+) -> Option<String> {
+    let mut sections = Vec::new();
+
+    if let Some(description) = normalized_non_empty(body) {
+        sections.push(description);
+    }
+
+    if let Some(label) = normalized_non_empty(display_label) {
+        sections.push(format!("Location: {}", label));
+    }
+
+    if let Some(source_name) = normalized_non_empty(sync_source_name) {
+        sections.push(format!("Synced source: {}", source_name));
+    }
+
+    if sections.is_empty() {
+        None
+    } else {
+        Some(sections.join("\n\n"))
+    }
+}
+
 impl CalendarApp {
     pub(super) fn resolve_countdown_storage_path() -> PathBuf {
         if let Some(dirs) = ProjectDirs::from("com", "RustCalendar", "CalendarApp") {
@@ -50,7 +87,7 @@ impl CalendarApp {
                 end_at,
                 color,
                 body,
-                display_label: _,
+                display_label,
             } = request;
 
             let target_at = if start_at > now {
@@ -95,14 +132,8 @@ impl CalendarApp {
             }
 
             let event_color = color.as_deref().and_then(RgbaColor::from_hex_str);
-            let event_body = body.and_then(|text| {
-                let trimmed = text.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(trimmed.to_owned())
-                }
-            });
+            let sync_source_name = event_id.and_then(|id| self.synced_event_source_name(id));
+            let event_body = compose_countdown_body(body, display_label, sync_source_name);
 
             log::info!(
                 "Creating countdown card with dimensions from settings: width={}, height={}",
@@ -138,5 +169,35 @@ impl CalendarApp {
             self.countdown_ui.mark_card_pending(card_id, geometry);
             log::info!("created countdown card {:?}", card_id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compose_countdown_body;
+
+    #[test]
+    fn compose_countdown_body_merges_description_location_and_source() {
+        let result = compose_countdown_body(
+            Some("Bring projector".to_string()),
+            Some("Room 4".to_string()),
+            Some("Google Work".to_string()),
+        );
+
+        assert_eq!(
+            result.as_deref(),
+            Some("Bring projector\n\nLocation: Room 4\n\nSynced source: Google Work")
+        );
+    }
+
+    #[test]
+    fn compose_countdown_body_ignores_empty_segments() {
+        let result = compose_countdown_body(
+            Some("   ".to_string()),
+            Some("Office".to_string()),
+            None,
+        );
+
+        assert_eq!(result.as_deref(), Some("Location: Office"));
     }
 }

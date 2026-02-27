@@ -1,9 +1,13 @@
 use chrono::{Datelike, Local, NaiveDate};
 use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
+use std::collections::HashSet;
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
 use super::week_shared::DeleteConfirmRequest;
-use super::{filter_events_by_category, is_synced_event, load_synced_event_ids};
+use super::{
+    countdown_menu_state, filter_events_by_category, is_synced_event, load_synced_event_ids,
+    CountdownMenuState, CountdownRequest,
+};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::models::template::EventTemplate;
@@ -68,6 +72,8 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
+        countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &HashSet<i64>,
         category_filter: Option<&str>,
         synced_only: bool,
     ) -> MonthViewResult {
@@ -287,6 +293,8 @@ impl MonthView {
                                 event_dialog_date,
                                 event_dialog_recurrence,
                                 event_to_edit,
+                                countdown_requests,
+                                active_countdown_events,
                                 palette,
                                 col_width,
                             );
@@ -324,6 +332,8 @@ impl MonthView {
         event_dialog_date: &mut Option<NaiveDate>,
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
+        countdown_requests: &mut Vec<CountdownRequest>,
+        active_countdown_events: &HashSet<i64>,
         palette: CalendarCellPalette,
         col_width: f32,
     ) -> (MonthViewAction, Option<Event>, Option<DeleteConfirmRequest>) {
@@ -675,6 +685,27 @@ impl MonthView {
                             *event_dialog_date = Some(date);
                         }
                         ui.memory_mut(|mem| mem.close_popup());
+                    }
+
+                    // Show countdown option prominently for future events
+                    match countdown_menu_state(&event, active_countdown_events, Local::now()) {
+                        CountdownMenuState::Hidden => {}
+                        CountdownMenuState::Active => {
+                            ui.label(
+                                egui::RichText::new("⏱ Countdown active")
+                                    .italics()
+                                    .color(Color32::from_rgb(100, 200, 100))
+                                    .size(11.0),
+                            );
+                            ui.separator();
+                        }
+                        CountdownMenuState::Available => {
+                            if ui.button("⏱ Create Countdown").clicked() {
+                                countdown_requests.push(CountdownRequest::from_event(&event));
+                                ui.memory_mut(|mem| mem.close_popup());
+                            }
+                            ui.separator();
+                        }
                     }
 
                     if event_is_synced {

@@ -25,6 +25,13 @@ pub struct CountdownRequest {
     pub display_label: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CountdownMenuState {
+    Hidden,
+    Active,
+    Available,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct AutoFocusRequest {
     pub date: NaiveDate,
@@ -131,6 +138,27 @@ impl CountdownRequest {
             body: event.description.clone(),
             display_label: location_label,
         }
+    }
+}
+
+pub fn countdown_menu_state(
+    event: &Event,
+    active_countdown_events: &HashSet<i64>,
+    now: DateTime<Local>,
+) -> CountdownMenuState {
+    if event.start <= now {
+        return CountdownMenuState::Hidden;
+    }
+
+    let timer_exists = event
+        .id
+        .map(|id| active_countdown_events.contains(&id))
+        .unwrap_or(false);
+
+    if timer_exists {
+        CountdownMenuState::Active
+    } else {
+        CountdownMenuState::Available
     }
 }
 
@@ -304,6 +332,46 @@ mod tests {
         assert!(is_synced_event(Some(42), &synced));
         assert!(!is_synced_event(Some(7), &synced));
         assert!(!is_synced_event(None, &synced));
+    }
+
+    #[test]
+    fn test_countdown_menu_state_hidden_for_non_future_event() {
+        let event = make_event("Past Event", Some("Work"));
+        let active = HashSet::new();
+
+        let now = event.start + Duration::minutes(1);
+        assert_eq!(
+            countdown_menu_state(&event, &active, now),
+            CountdownMenuState::Hidden
+        );
+    }
+
+    #[test]
+    fn test_countdown_menu_state_active_when_existing_card_found() {
+        let mut event = make_event("Future Event", Some("Work"));
+        event.id = Some(9);
+
+        let mut active = HashSet::new();
+        active.insert(9);
+
+        let now = event.start - Duration::minutes(1);
+        assert_eq!(
+            countdown_menu_state(&event, &active, now),
+            CountdownMenuState::Active
+        );
+    }
+
+    #[test]
+    fn test_countdown_menu_state_available_for_future_without_card() {
+        let mut event = make_event("Future Event", Some("Work"));
+        event.id = Some(9);
+
+        let active = HashSet::new();
+        let now = event.start - Duration::minutes(1);
+        assert_eq!(
+            countdown_menu_state(&event, &active, now),
+            CountdownMenuState::Available
+        );
     }
 
     #[test]

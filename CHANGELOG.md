@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.11] - 2026-02-27
+
+### Changed
+- Unified countdown creation behaviour across day/week/workweek/month/search event surfaces via shared countdown menu-state logic and request handling.
+- Added synced-event metadata enrichment for countdown cards by composing description, location, and synced source labels through the existing countdown request pipeline.
+- Added one-click countdown creation in Search dialog flows and made synced search results countdown-first (read-only edit disabled, countdown action surfaced directly).
+- Extended sync mapping lookups to resolve source names by local event for consistent synced countdown labelling.
+
 ## [1.4.10] - 2026-02-27
 
 ### Changed
