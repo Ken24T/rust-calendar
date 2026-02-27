@@ -69,6 +69,7 @@ impl MonthView {
         event_dialog_recurrence: &mut Option<String>,
         event_to_edit: &mut Option<i64>,
         category_filter: Option<&str>,
+        synced_only: bool,
     ) -> MonthViewResult {
         let today = Local::now().date_naive();
         let mut result = MonthViewResult::default();
@@ -78,6 +79,14 @@ impl MonthView {
         let events = Self::get_events_for_month(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
         let synced_event_ids = load_synced_event_ids(database);
+        let events = if synced_only {
+            events
+                .into_iter()
+                .filter(|event| super::is_synced_event(event.id, &synced_event_ids))
+                .collect()
+        } else {
+            events
+        };
 
         // Day of week headers - use Grid to match column widths below
         let day_names = Self::get_day_names(settings.first_day_of_week);

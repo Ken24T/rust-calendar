@@ -35,6 +35,7 @@ impl DayView {
         active_countdown_events: &HashSet<i64>,
         focus_request: &mut Option<AutoFocusRequest>,
         category_filter: Option<&str>,
+        synced_only: bool,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -47,6 +48,14 @@ impl DayView {
         let events = Self::get_events_for_day(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
         let synced_event_ids = load_synced_event_ids(database);
+        let events = if synced_only {
+            events
+                .into_iter()
+                .filter(|event| is_synced_event(event.id, &synced_event_ids))
+                .collect()
+        } else {
+            events
+        };
 
         // Day header
         let day_name = current_date.format("%A").to_string();

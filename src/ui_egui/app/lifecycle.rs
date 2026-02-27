@@ -74,6 +74,7 @@ impl CalendarApp {
             toast_manager: ToastManager::new(),
             confirm_dialog: ConfirmDialogState::new(),
             active_category_filter: None,
+            show_synced_events_only: false,
             undo_manager: UndoManager::new(),
             calendar_sync_scheduler: crate::services::calendar_sync::scheduler::CalendarSyncScheduler::new(),
         };

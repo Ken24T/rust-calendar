@@ -61,6 +61,8 @@ pub struct CalendarApp {
     confirm_dialog: ConfirmDialogState,
     /// Active category filter (None = show all categories)
     active_category_filter: Option<String>,
+    /// When true, only show events imported via calendar sync mappings
+    show_synced_events_only: bool,
     /// Undo/Redo manager for event operations
     undo_manager: UndoManager,
     /// Background scheduler for periodic calendar source sync

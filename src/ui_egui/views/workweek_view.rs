@@ -46,6 +46,7 @@ impl WorkWeekView {
         all_day_events: &[Event],
         focus_request: &mut Option<AutoFocusRequest>,
         category_filter: Option<&str>,
+        synced_only: bool,
     ) -> EventInteractionResult {
         let mut result = EventInteractionResult::default();
         let today = Local::now().date_naive();
@@ -61,6 +62,14 @@ impl WorkWeekView {
         let events = Self::get_events_for_dates(&event_service, &work_week_dates);
         let events = filter_events_by_category(events, category_filter);
         let synced_event_ids = load_synced_event_ids(database);
+        let events = if synced_only {
+            events
+                .into_iter()
+                .filter(|event| super::is_synced_event(event.id, &synced_event_ids))
+                .collect()
+        } else {
+            events
+        };
 
         // Calculate column width accounting for scrollbar (16px typical)
         let scrollbar_width = 16.0;
