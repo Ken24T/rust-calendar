@@ -30,6 +30,7 @@ use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::theme::CalendarTheme;
 use crate::ui_egui::views::AutoFocusRequest;
 use chrono::NaiveDate;
+use std::sync::{Arc, Mutex};
 
 pub struct CalendarApp {
     /// Shared access to leaked database and supporting services
@@ -63,10 +64,26 @@ pub struct CalendarApp {
     active_category_filter: Option<String>,
     /// When true, only show events imported via calendar sync mappings
     show_synced_events_only: bool,
+    /// Latest scheduler sync status text for status bar display
+    calendar_sync_status_message: Option<String>,
+    /// Whether the latest scheduler status indicates an error condition
+    calendar_sync_status_is_error: bool,
+    /// Next scheduled sync delay from the latest scheduler tick
+    calendar_sync_next_due_in: Option<std::time::Duration>,
+    /// Wall-clock due time for next scheduler run
+    calendar_sync_poll_due_at: Option<std::time::Instant>,
+    /// Receiver for in-flight background scheduler result
+    calendar_sync_result_rx: Option<
+        std::sync::mpsc::Receiver<
+            Result<crate::services::calendar_sync::scheduler::SchedulerTickResult, String>,
+        >,
+    >,
+    /// True while a background scheduled sync run is active
+    calendar_sync_in_progress: bool,
     /// Undo/Redo manager for event operations
     undo_manager: UndoManager,
     /// Background scheduler for periodic calendar source sync
-    calendar_sync_scheduler: CalendarSyncScheduler,
+    calendar_sync_scheduler: Arc<Mutex<CalendarSyncScheduler>>,
 }
 
 impl eframe::App for CalendarApp {

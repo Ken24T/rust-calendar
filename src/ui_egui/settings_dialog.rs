@@ -1,11 +1,14 @@
 use crate::models::settings::Settings;
 use crate::models::{calendar_source::GOOGLE_ICS_SOURCE_TYPE, calendar_source::CalendarSource};
-use crate::services::calendar_sync::engine::CalendarSyncEngine;
+use crate::services::calendar_sync::engine::{CalendarSyncEngine, SyncRunResult};
 use crate::services::calendar_sync::CalendarSourceService;
 use crate::services::database::Database;
 use crate::services::settings::SettingsService;
 use egui::{Color32, RichText};
 use std::collections::BTreeMap;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::thread;
+use std::time::Duration;
 
 const MIN_CARD_DIMENSION: f32 = 20.0;
 const MAX_CARD_DIMENSION: f32 = 600.0;
@@ -31,6 +34,8 @@ pub struct SettingsDialogState {
     new_source_poll_interval: i64,
     source_status_message: Option<String>,
     source_error_message: Option<String>,
+    source_sync_in_progress_id: Option<i64>,
+    source_sync_result_rx: Option<Receiver<Result<(String, SyncRunResult), String>>>,
 }
 
 impl SettingsDialogState {
@@ -62,6 +67,36 @@ pub fn render_settings_dialog(
     let mut saved = false;
     let mut error_message: Option<String> = None;
     let mut show_ribbon_changed = false;
+
+    if let Some(rx) = &dialog_state.source_sync_result_rx {
+        match rx.try_recv() {
+            Ok(Ok((source_name, summary))) => {
+                dialog_state.source_sync_result_rx = None;
+                dialog_state.source_sync_in_progress_id = None;
+                dialog_state.source_error_message = None;
+                dialog_state.source_status_message = Some(format!(
+                    "Sync complete for '{}': +{} ~{} -{}",
+                    source_name, summary.created, summary.updated, summary.deleted
+                ));
+            }
+            Ok(Err(err)) => {
+                dialog_state.source_sync_result_rx = None;
+                dialog_state.source_sync_in_progress_id = None;
+                dialog_state.source_status_message = None;
+                dialog_state.source_error_message = Some(format!("Sync failed: {}", err));
+            }
+            Err(TryRecvError::Empty) => {
+                ctx.request_repaint_after(Duration::from_millis(200));
+            }
+            Err(TryRecvError::Disconnected) => {
+                dialog_state.source_sync_result_rx = None;
+                dialog_state.source_sync_in_progress_id = None;
+                dialog_state.source_status_message = None;
+                dialog_state.source_error_message =
+                    Some("Sync worker disconnected unexpectedly".to_string());
+            }
+        }
+    }
 
     let mut dialog_open = *show_dialog;
 
@@ -647,27 +682,44 @@ pub fn render_settings_dialog(
                                 }
                             }
 
-                            if ui.button("Sync Now").clicked() {
+                            let sync_in_progress =
+                                dialog_state.source_sync_in_progress_id == Some(source_id);
+                            let any_sync_in_progress = dialog_state.source_sync_in_progress_id.is_some();
+                            let sync_button_text = if sync_in_progress {
+                                "Syncing..."
+                            } else {
+                                "Sync Now"
+                            };
+
+                            if ui
+                                .add_enabled(!any_sync_in_progress, egui::Button::new(sync_button_text))
+                                .clicked()
+                            {
                                 dialog_state.source_status_message = None;
                                 dialog_state.source_error_message = None;
+                                dialog_state.source_sync_in_progress_id = Some(source_id);
 
-                                match CalendarSyncEngine::new(database.connection())
-                                    .and_then(|engine| engine.sync_source(source_id))
-                                {
-                                    Ok(summary) => {
-                                        dialog_state.source_status_message = Some(format!(
-                                            "Sync complete for '{}': +{} ~{} -{}",
-                                            draft.name,
-                                            summary.created,
-                                            summary.updated,
-                                            summary.deleted
-                                        ));
-                                    }
-                                    Err(err) => {
-                                        dialog_state.source_error_message =
-                                            Some(format!("Sync failed: {}", err));
-                                    }
-                                }
+                                let source_name = draft.name.clone();
+                                dialog_state.source_status_message = Some(format!(
+                                    "Syncing '{}'...",
+                                    source_name
+                                ));
+
+                                let db_path = database.path().to_string();
+                                let (tx, rx) = mpsc::channel();
+                                dialog_state.source_sync_result_rx = Some(rx);
+
+                                thread::spawn(move || {
+                                    let result = (|| -> Result<(String, SyncRunResult), String> {
+                                        let db = Database::new(&db_path).map_err(|err| err.to_string())?;
+                                        let engine =
+                                            CalendarSyncEngine::new(db.connection()).map_err(|err| err.to_string())?;
+                                        let summary = engine.sync_source(source_id).map_err(|err| err.to_string())?;
+                                        Ok((source_name, summary))
+                                    })();
+
+                                    let _ = tx.send(result);
+                                });
                             }
 
                             if ui.button("Delete").clicked() {

@@ -158,6 +158,13 @@ impl CalendarApp {
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
+
+        // Calendar sync scheduler status
+        self.render_calendar_sync_status(ui, is_dark);
+
+        ui.add_space(SEPARATOR_WIDTH);
+        ui.separator();
+        ui.add_space(SEPARATOR_WIDTH);
         
         // Next upcoming event
         self.render_next_event(ui, is_dark);
@@ -210,6 +217,48 @@ impl CalendarApp {
             let response = ui.label(RichText::new("✓ Saved").small().color(saved_color));
             response.on_hover_text("All changes saved");
         }
+    }
+
+    /// Render calendar sync scheduler status and next-run countdown.
+    fn render_calendar_sync_status(&self, ui: &mut egui::Ui, is_dark: bool) {
+        let neutral_color = secondary_text_color(is_dark);
+        let info_color = if is_dark {
+            Color32::from_rgb(110, 180, 255)
+        } else {
+            Color32::from_rgb(50, 110, 190)
+        };
+        let error_color = if is_dark {
+            Color32::from_rgb(255, 150, 150)
+        } else {
+            Color32::from_rgb(190, 60, 60)
+        };
+
+        let countdown_text = self
+            .calendar_sync_next_due_in
+            .map(format_scheduler_countdown);
+
+        let (status_text, color) = if let Some(message) = &self.calendar_sync_status_message {
+            let with_countdown = if let Some(wait) = countdown_text {
+                format!("{} · next {}", message, wait)
+            } else {
+                message.clone()
+            };
+
+            let color = if self.calendar_sync_status_is_error {
+                error_color
+            } else {
+                info_color
+            };
+
+            (with_countdown, color)
+        } else if let Some(wait) = countdown_text {
+            (format!("↻ Calendar sync in {}", wait), neutral_color)
+        } else {
+            ("↻ Calendar sync idle".to_string(), neutral_color)
+        };
+
+        let response = ui.label(RichText::new(status_text).small().color(color));
+        response.on_hover_text("Google Calendar sync status and next scheduled run");
     }
     
     /// Render next upcoming event with countdown
@@ -338,6 +387,13 @@ impl CalendarApp {
         
         Some((next_event.title.clone(), countdown))
     }
+}
+
+fn format_scheduler_countdown(duration: std::time::Duration) -> String {
+    let total_secs = duration.as_secs();
+    let minutes = total_secs / 60;
+    let seconds = total_secs % 60;
+    format!("{:02}:{:02}", minutes, seconds)
 }
 
 /// Format a duration into a short human-readable string

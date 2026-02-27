@@ -18,6 +18,7 @@ use chrono::Local;
 #[cfg(not(debug_assertions))]
 use directories::ProjectDirs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 impl CalendarApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -75,8 +76,16 @@ impl CalendarApp {
             confirm_dialog: ConfirmDialogState::new(),
             active_category_filter: None,
             show_synced_events_only: false,
+            calendar_sync_status_message: None,
+            calendar_sync_status_is_error: false,
+            calendar_sync_next_due_in: None,
+            calendar_sync_poll_due_at: None,
+            calendar_sync_result_rx: None,
+            calendar_sync_in_progress: false,
             undo_manager: UndoManager::new(),
-            calendar_sync_scheduler: crate::services::calendar_sync::scheduler::CalendarSyncScheduler::new(),
+            calendar_sync_scheduler: Arc::new(Mutex::new(
+                crate::services::calendar_sync::scheduler::CalendarSyncScheduler::new(),
+            )),
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);

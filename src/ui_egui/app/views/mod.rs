@@ -65,13 +65,6 @@ impl CalendarApp {
         egui::CentralPanel::default()
             .frame(panel_frame)
             .show(ctx, |ui| {
-            // DEBUG: Log central panel rect
-            let panel_rect = ui.max_rect();
-            let available_rect = ui.available_rect_before_wrap();
-            log::info!(
-                "CENTRAL PANEL DEBUG: max_rect={:?}, available_rect={:?}",
-                panel_rect, available_rect
-            );
             // Clickable heading - double-click to go to today
             let heading_text = format!(
                 "{} View - {}",
