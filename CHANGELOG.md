@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.13] - 2026-02-27
+
+### Changed
+- Constrained month-view event chip titles to a single line with width-aware truncation to prevent text overflow across cells.
+- Improved month-view right-click interaction so event context menus reliably target the clicked event chip.
+- Normalised countdown creation timing for non-recurring multi-day events by resolving canonical event start/end from persistence at countdown-consumption time, ensuring countdowns begin from the first day regardless of where the event was clicked in month/week/workweek views.
+
 ## [1.4.12] - 2026-02-27
 
 ### Added

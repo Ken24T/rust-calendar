@@ -61,6 +61,61 @@ fn blend_header_weekend(header_bg: Color32, is_dark: bool) -> Color32 {
 pub struct MonthView;
 
 impl MonthView {
+    fn truncate_single_line_to_width(
+        ui: &egui::Ui,
+        text: &str,
+        font_id: &egui::FontId,
+        color: Color32,
+        max_width: f32,
+    ) -> String {
+        if max_width <= 0.0 {
+            return String::new();
+        }
+
+        let measure_width = |candidate: &str| {
+            let layout_job = egui::text::LayoutJob::simple(
+                candidate.to_string(),
+                font_id.clone(),
+                color,
+                f32::INFINITY,
+            );
+            ui.fonts(|f| f.layout_job(layout_job).size().x)
+        };
+
+        if measure_width(text) <= max_width {
+            return text.to_string();
+        }
+
+        let ellipsis = "…";
+        if measure_width(ellipsis) > max_width {
+            return String::new();
+        }
+
+        let mut char_boundaries: Vec<usize> = text.char_indices().map(|(idx, _)| idx).collect();
+        char_boundaries.push(text.len());
+
+        let mut low = 0usize;
+        let mut high = char_boundaries.len().saturating_sub(1);
+
+        while low < high {
+            let mid = (low + high).div_ceil(2);
+            let prefix = &text[..char_boundaries[mid]];
+            let candidate = format!("{}{}", prefix, ellipsis);
+
+            if measure_width(&candidate) <= max_width {
+                low = mid;
+            } else {
+                high = mid.saturating_sub(1);
+            }
+        }
+
+        if low == 0 {
+            ellipsis.to_string()
+        } else {
+            format!("{}{}", &text[..char_boundaries[low]], ellipsis)
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn show(
         ui: &mut egui::Ui,
@@ -471,22 +526,25 @@ impl MonthView {
                 )
             };
 
-            // Event title with truncation
+            // Event title constrained to a single truncated line
             let font_id = egui::FontId::proportional(11.0);
             let available_width = event_rect.width() - 6.0;
-            let layout_job = egui::text::LayoutJob::simple(
-                title_text,
-                font_id.clone(),
+            let single_line_title = Self::truncate_single_line_to_width(
+                ui,
+                &title_text,
+                &font_id,
                 text_color,
                 available_width,
             );
-            let galley = ui.fonts(|f| f.layout_job(layout_job));
-            ui.painter().galley(
+
+            ui.painter().text(
                 Pos2::new(
                     event_rect.left() + 3.0,
-                    event_rect.center().y - galley.size().y / 2.0,
+                    event_rect.center().y,
                 ),
-                galley,
+                egui::Align2::LEFT_CENTER,
+                single_line_title,
+                font_id,
                 text_color,
             );
 
@@ -610,13 +668,13 @@ impl MonthView {
 
         // Manual context menu handling
         let popup_id = response.id.with(format!("month_context_menu_{}", date));
+        let popup_event_id_key = popup_id.with("context_event_id");
         let mut popup_anchor_response = response.clone();
         popup_anchor_response.rect = Rect::from_min_size(
             Pos2::new(rect.left() + 5.0, rect.top()),
             Vec2::new(200.0, 30.0),
         );
 
-        let mut context_menu_event: Option<Event> = None;
         let mut delete_confirm_request: Option<DeleteConfirmRequest> = None;
         
         // Check for pending delete request from previous frame
@@ -638,7 +696,24 @@ impl MonthView {
         });
         
         if response.secondary_clicked() {
-            context_menu_event = pointer_event.clone();
+            if let Some(event_id) = pointer_event
+                .as_ref()
+                .and_then(|event| event.id)
+                .or_else(|| single_event_fallback.as_ref().and_then(|event| event.id))
+            {
+                ui.ctx().memory_mut(|mem| {
+                    mem.data.insert_temp(popup_event_id_key, event_id);
+                });
+            } else {
+                ui.ctx().memory_mut(|mem| {
+                    mem.data.remove_temp::<i64>(popup_event_id_key);
+                });
+            }
+
+            if let Some((hit_rect, _)) = pointer_hit {
+                popup_anchor_response.rect = hit_rect;
+            }
+
             ui.memory_mut(|mem| mem.open_popup(popup_id));
         }
         
@@ -656,8 +731,15 @@ impl MonthView {
             |ui| {
                 ui.set_width(190.0);
 
-                let popup_event = context_menu_event
-                    .clone()
+                let popup_event_id = ui.ctx().memory(|mem| mem.data.get_temp::<i64>(popup_event_id_key));
+                let popup_event = popup_event_id
+                    .and_then(|selected_id| {
+                        events
+                            .iter()
+                            .find(|event| event.id == Some(selected_id))
+                            .map(|event| (*event).clone())
+                    })
+                    .or_else(|| pointer_event.clone())
                     .or_else(|| single_event_fallback.clone());
 
                 if let Some(event) = popup_event {
@@ -678,6 +760,9 @@ impl MonthView {
                             *show_event_dialog = true;
                             *event_dialog_date = Some(date);
                         }
+                        ui.ctx().memory_mut(|mem| {
+                            mem.data.remove_temp::<i64>(popup_event_id_key);
+                        });
                         ui.memory_mut(|mem| mem.close_popup());
                     }
 
@@ -695,7 +780,13 @@ impl MonthView {
                         }
                         CountdownMenuState::Available => {
                             if ui.button("⏱ Create Countdown").clicked() {
-                                countdown_requests.push(CountdownRequest::from_event(&event));
+                                countdown_requests.push(Self::countdown_request_for_month_event(
+                                    &event,
+                                    database,
+                                ));
+                                ui.ctx().memory_mut(|mem| {
+                                    mem.data.remove_temp::<i64>(popup_event_id_key);
+                                });
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
                             ui.separator();
@@ -709,6 +800,7 @@ impl MonthView {
                             // Store delete request in temp memory for next frame
                             ui.ctx().memory_mut(|mem| {
                                 mem.data.insert_temp(popup_id.with("pending_delete"), (id, event.title.clone()));
+                                mem.data.remove_temp::<i64>(popup_event_id_key);
                             });
                         }
                         ui.memory_mut(|mem| mem.close_popup());
@@ -767,6 +859,13 @@ impl MonthView {
                 }
             },
         );
+
+        let popup_open = ui.memory(|mem| mem.is_popup_open(popup_id));
+        if !popup_open {
+            ui.ctx().memory_mut(|mem| {
+                mem.data.remove_temp::<i64>(popup_event_id_key);
+            });
+        }
         
         // Handle pending template selection (return action)
         if let Some(template_id) = pending_template {
@@ -866,5 +965,29 @@ impl MonthView {
         let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
 
         Some(Color32::from_rgb(r, g, b))
+    }
+
+    fn countdown_request_for_month_event(event: &Event, database: &'static Database) -> CountdownRequest {
+        let canonical_event = event
+            .id
+            .and_then(|event_id| {
+                let has_recurrence = event
+                    .recurrence_rule
+                    .as_deref()
+                    .map(str::trim)
+                    .is_some_and(|rule| !rule.is_empty() && rule != "None");
+
+                if has_recurrence {
+                    None
+                } else {
+                    EventService::new(database.connection())
+                        .get(event_id)
+                        .ok()
+                        .flatten()
+                }
+            })
+            .unwrap_or_else(|| event.clone());
+
+        CountdownRequest::from_event(&canonical_event)
     }
 }

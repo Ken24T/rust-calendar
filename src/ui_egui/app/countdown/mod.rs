@@ -51,6 +51,11 @@ fn compose_countdown_body(
     }
 }
 
+fn has_recurrence_rule(rule: Option<&str>) -> bool {
+    rule.map(str::trim)
+        .is_some_and(|value| !value.is_empty() && value != "None")
+}
+
 impl CalendarApp {
     pub(super) fn resolve_countdown_storage_path() -> PathBuf {
         if let Some(dirs) = ProjectDirs::from("com", "RustCalendar", "CalendarApp") {
@@ -90,17 +95,30 @@ impl CalendarApp {
                 display_label,
             } = request;
 
-            let target_at = if start_at > now {
-                start_at
-            } else if end_at > now {
-                end_at
+            let (effective_start_at, effective_end_at) = event_id
+                .and_then(|id| self.context.event_service().get(id).ok().flatten())
+                .and_then(|event| {
+                    let is_non_recurring = !has_recurrence_rule(event.recurrence_rule.as_deref());
+                    let is_multi_day = event.start.date_naive() != event.end.date_naive();
+                    if is_non_recurring && is_multi_day {
+                        Some((event.start, event.end))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or((start_at, end_at));
+
+            let target_at = if effective_start_at > now {
+                effective_start_at
+            } else if effective_end_at > now {
+                effective_end_at
             } else {
                 log::info!(
                     "Skipping countdown for finished event {:?} ({}): start {:?}, end {:?}",
                     event_id,
                     title,
-                    start_at,
-                    end_at
+                    effective_start_at,
+                    effective_end_at
                 );
                 continue;
             };
@@ -144,8 +162,8 @@ impl CalendarApp {
                 event_id,
                 title,
                 target_at,
-                Some(start_at),
-                Some(end_at),
+                Some(effective_start_at),
+                Some(effective_end_at),
                 event_color,
                 event_body,
                 self.settings.default_card_width,
