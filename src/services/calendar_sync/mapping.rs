@@ -3,6 +3,7 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use rusqlite::{params, Connection};
+use std::collections::HashSet;
 
 use crate::models::event_sync_map::EventSyncMap;
 
@@ -102,6 +103,36 @@ impl<'a> EventSyncMapService<'a> {
         let rows = stmt.query_map([source_id], Self::row_to_mapping)?;
         rows.collect::<Result<Vec<_>, _>>()
             .context("Failed to list event sync map rows by source")
+    }
+
+    pub fn is_synced_local_event(&self, local_event_id: i64) -> Result<bool> {
+        let count: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_sync_map WHERE local_event_id = ?1",
+                [local_event_id],
+                |row| row.get(0),
+            )
+            .context("Failed to check synced status for local event")?;
+
+        Ok(count > 0)
+    }
+
+    pub fn list_synced_local_event_ids(&self) -> Result<HashSet<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT local_event_id FROM event_sync_map")
+            .context("Failed to prepare synced local event ids query")?;
+
+        let rows = stmt
+            .query_map([], |row| row.get::<_, i64>(0))
+            .context("Failed to execute synced local event ids query")?;
+
+        let ids = rows
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect synced local event ids")?;
+
+        Ok(ids.into_iter().collect())
     }
 
     pub fn delete_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<()> {
@@ -315,5 +346,34 @@ mod tests {
         let listed = service.list_by_source_id(source_id).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].external_uid, "uid-list");
+    }
+
+    #[test]
+    fn test_is_synced_local_event_and_list_ids() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+        let local_event_id = create_event(conn);
+        let other_event_id = create_event(conn);
+        let service = EventSyncMapService::new(conn);
+
+        let mapping = EventSyncMap {
+            id: None,
+            source_id,
+            external_uid: "uid-synced".to_string(),
+            local_event_id,
+            external_last_modified: None,
+            external_etag_hash: None,
+            last_seen_at: None,
+        };
+        service.create(mapping).unwrap();
+
+        assert!(service.is_synced_local_event(local_event_id).unwrap());
+        assert!(!service.is_synced_local_event(other_event_id).unwrap());
+
+        let ids = service.list_synced_local_event_ids().unwrap();
+        assert!(ids.contains(&local_event_id));
+        assert!(!ids.contains(&other_event_id));
     }
 }

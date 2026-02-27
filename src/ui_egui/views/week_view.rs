@@ -7,7 +7,7 @@ use super::week_shared::{
     self, format_short_date, get_week_start, render_ribbon_event, render_ribbon_event_with_handles,
     render_time_grid, EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
-use super::{filter_events_by_category, AutoFocusRequest, CountdownRequest};
+use super::{filter_events_by_category, load_synced_event_ids, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -60,6 +60,7 @@ impl WeekView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_week(&event_service, week_start);
         let events = filter_events_by_category(events, category_filter);
+        let synced_event_ids = load_synced_event_ids(database);
 
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns
@@ -222,6 +223,7 @@ impl WeekView {
                                         countdown_requests,
                                         active_countdown_events,
                                         database,
+                                        &synced_event_ids,
                                         is_first_day,  // show left handle
                                         is_last_day,   // show right handle
                                         Some(*date),
@@ -236,6 +238,7 @@ impl WeekView {
                                         countdown_requests,
                                         active_countdown_events,
                                         database,
+                                        &synced_event_ids,
                                     );
                                     result.merge(ribbon_result);
                                 }
@@ -335,6 +338,7 @@ impl WeekView {
                     event_dialog_recurrence,
                     countdown_requests,
                     active_countdown_events,
+                    &synced_event_ids,
                     &grid_palette,
                     focus_request,
                     &config,

@@ -1,6 +1,9 @@
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use std::collections::HashSet;
 
 use crate::models::event::Event;
+use crate::services::calendar_sync::mapping::EventSyncMapService;
+use crate::services::database::Database;
 
 pub mod day_view;
 pub mod month_view;
@@ -144,6 +147,23 @@ pub fn filter_events_by_category(events: Vec<Event>, filter: Option<&str>) -> Ve
     }
 }
 
+pub fn load_synced_event_ids(database: &'static Database) -> HashSet<i64> {
+    let service = EventSyncMapService::new(database.connection());
+    match service.list_synced_local_event_ids() {
+        Ok(ids) => ids,
+        Err(err) => {
+            log::warn!("Failed to load synced event IDs: {}", err);
+            HashSet::new()
+        }
+    }
+}
+
+pub fn is_synced_event(event_id: Option<i64>, synced_event_ids: &HashSet<i64>) -> bool {
+    event_id
+        .map(|id| synced_event_ids.contains(&id))
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,5 +232,15 @@ mod tests {
         
         let result = filter_events_by_category(events, Some("Work"));
         assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_is_synced_event_detects_membership() {
+        let mut synced = HashSet::new();
+        synced.insert(42);
+
+        assert!(is_synced_event(Some(42), &synced));
+        assert!(!is_synced_event(Some(7), &synced));
+        assert!(!is_synced_event(None, &synced));
     }
 }

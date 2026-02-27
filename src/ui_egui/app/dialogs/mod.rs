@@ -57,6 +57,14 @@ impl CalendarApp {
         }
 
         if let Some(event_id) = self.event_to_edit {
+            if self.is_synced_event_id(event_id) {
+                self.notify_synced_event_read_only();
+                self.show_event_dialog = false;
+                self.event_to_edit = None;
+                self.event_dialog_state = None;
+                return;
+            }
+
             let service = self.context.event_service();
             if let Ok(Some(event)) = service.get(event_id) {
                 let mut state = EventDialogState::from_event(&event, &self.settings);
@@ -251,6 +259,11 @@ impl CalendarApp {
             }
         };
 
+        if self.is_synced_event_id(request.event_id) {
+            self.notify_synced_event_read_only();
+            return;
+        }
+
         // Create event dialog state from the event
         let mut state = EventDialogState::from_event(&event, &self.settings);
 
@@ -302,8 +315,12 @@ impl CalendarApp {
                 self.state.show_search_dialog = false;
             }
             SearchDialogAction::EditEvent(event_id) => {
-                self.event_to_edit = Some(event_id);
-                self.show_event_dialog = true;
+                if self.is_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only();
+                } else {
+                    self.event_to_edit = Some(event_id);
+                    self.show_event_dialog = true;
+                }
                 self.state.show_search_dialog = false;
             }
             SearchDialogAction::Close => {

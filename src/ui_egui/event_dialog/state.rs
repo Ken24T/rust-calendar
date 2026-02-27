@@ -1,5 +1,6 @@
 use crate::models::event::Event;
 use crate::models::settings::Settings;
+use crate::services::calendar_sync::mapping::EventSyncMapService;
 use crate::services::countdown::{CountdownCardId, CountdownCardVisuals};
 use crate::services::database::Database;
 use crate::services::event::EventService;
@@ -198,8 +199,16 @@ impl EventDialogState {
     pub fn save(&self, database: &Database) -> Result<Event, String> {
         let mut event = self.to_event()?;
         let service = EventService::new(database.connection());
+        let sync_map_service = EventSyncMapService::new(database.connection());
 
         if let Some(id) = self.event_id {
+            if sync_map_service
+                .is_synced_local_event(id)
+                .map_err(|e| format!("Failed to check sync status: {}", e))?
+            {
+                return Err("Synced events are read-only and cannot be edited".to_string());
+            }
+
             event.id = Some(id);
             service
                 .update(&event)
@@ -452,9 +461,11 @@ impl EventDialogState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::event::Event;
     use crate::models::settings::Settings;
+    use crate::services::database::Database;
     use crate::ui_egui::event_dialog::recurrence::{ParsedRRule, Weekday};
-    use chrono::{NaiveDate, NaiveTime};
+    use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 
     fn sample_date() -> NaiveDate {
         NaiveDate::from_ymd_opt(2025, 1, 15).unwrap()
@@ -588,5 +599,50 @@ mod tests {
             event.recurrence_rule,
             Some("FREQ=WEEKLY;BYDAY=TU".to_string())
         );
+    }
+
+    #[test]
+    fn save_blocks_updates_for_synced_events() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
+             VALUES (?1, ?2, ?3, 1, 15)",
+            rusqlite::params![
+                "Test Source",
+                "google_ics",
+                "https://example.com/calendar.ics"
+            ],
+        )
+        .unwrap();
+        let source_id = conn.last_insert_rowid();
+
+        let start = Local.with_ymd_and_hms(2026, 2, 27, 9, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2026, 2, 27, 10, 0, 0).unwrap();
+        let event = Event::new("Synced Event".to_string(), start, end).unwrap();
+        let event_service = EventService::new(conn);
+        let created = event_service.create(event.clone()).unwrap();
+        let event_id = created.id.unwrap();
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                source_id,
+                "uid-test",
+                event_id,
+                "2026-02-27T00:00:00Z",
+                "2026-02-27T00:00:00Z"
+            ],
+        )
+        .unwrap();
+
+        let mut state = EventDialogState::from_event(&created, &Settings::default());
+        state.title = "Changed".to_string();
+
+        let err = state.save(&db).unwrap_err();
+        assert!(err.contains("read-only"));
     }
 }

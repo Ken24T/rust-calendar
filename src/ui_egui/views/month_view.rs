@@ -3,7 +3,7 @@ use egui::{Color32, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
 use super::week_shared::DeleteConfirmRequest;
-use super::filter_events_by_category;
+use super::{filter_events_by_category, is_synced_event, load_synced_event_ids};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::models::template::EventTemplate;
@@ -77,6 +77,7 @@ impl MonthView {
         let event_service = EventService::new(database.connection());
         let events = Self::get_events_for_month(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
+        let synced_event_ids = load_synced_event_ids(database);
 
         // Day of week headers - use Grid to match column widths below
         let day_names = Self::get_day_names(settings.first_day_of_week);
@@ -271,6 +272,7 @@ impl MonthView {
                                 is_today,
                                 is_weekend,
                                 &day_events,
+                                &synced_event_ids,
                                 database,
                                 show_event_dialog,
                                 event_dialog_date,
@@ -307,6 +309,7 @@ impl MonthView {
         is_today: bool,
         is_weekend: bool,
         events: &[&Event],
+        synced_event_ids: &std::collections::HashSet<i64>,
         database: &'static Database,
         show_event_dialog: &mut bool,
         event_dialog_date: &mut Option<NaiveDate>,
@@ -394,6 +397,7 @@ impl MonthView {
         let now = Local::now();
         
         for &event in events.iter().take(3) {
+            let event_is_synced = is_synced_event(event.id, synced_event_ids);
             let is_past = event.end < now;
             
             let base_color = event
@@ -438,9 +442,20 @@ impl MonthView {
             };
             
             let title_text = if let Some(category) = &event.category {
-                format!("{}{} [{}]", location_icon, event.title, category)
+                format!(
+                    "{}{}{} [{}]",
+                    if event_is_synced { "🔒 " } else { "" },
+                    location_icon,
+                    event.title,
+                    category
+                )
             } else {
-                format!("{}{}", location_icon, event.title)
+                format!(
+                    "{}{}{}",
+                    if event_is_synced { "🔒 " } else { "" },
+                    location_icon,
+                    event.title
+                )
             };
 
             // Event title with truncation
@@ -494,7 +509,10 @@ impl MonthView {
                 // Show pointer cursor
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 
-                let tooltip_text = super::week_shared::format_event_tooltip(hovered_event);
+                let tooltip_text = super::week_shared::format_event_tooltip(
+                    hovered_event,
+                    is_synced_event(hovered_event.id, synced_event_ids),
+                );
                 response.clone().on_hover_ui_at_pointer(|ui| {
                     ui.label(tooltip_text);
                 });
@@ -630,10 +648,18 @@ impl MonthView {
                     .or_else(|| single_event_fallback.clone());
 
                 if let Some(event) = popup_event {
+                    let event_is_synced = is_synced_event(event.id, synced_event_ids);
                     ui.label(format!("Event: {}", event.title));
                     ui.separator();
 
-                    if ui.button("✏ Edit").clicked() {
+                    if event_is_synced {
+                        ui.label(
+                            egui::RichText::new("🔒 Synced read-only event")
+                                .italics()
+                                .size(11.0),
+                        );
+                        ui.add_enabled(false, egui::Button::new("✏ Edit"));
+                    } else if ui.button("✏ Edit").clicked() {
                         if let Some(id) = event.id {
                             *event_to_edit = Some(id);
                             *show_event_dialog = true;
@@ -642,7 +668,9 @@ impl MonthView {
                         ui.memory_mut(|mem| mem.close_popup());
                     }
 
-                    if ui.button("🗑 Delete").clicked() {
+                    if event_is_synced {
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete"));
+                    } else if ui.button("🗑 Delete").clicked() {
                         if let Some(id) = event.id {
                             // Store delete request in temp memory for next frame
                             ui.ctx().memory_mut(|mem| {
@@ -716,6 +744,9 @@ impl MonthView {
             if let Some(event) = pointer_event.clone() {
                 // Double-click on event - edit it
                 if let Some(id) = event.id {
+                    if is_synced_event(Some(id), synced_event_ids) {
+                        return (MonthViewAction::None, Some(event), delete_confirm_request);
+                    }
                     *show_event_dialog = true;
                     *event_to_edit = Some(id);
                     *event_dialog_date = Some(date);

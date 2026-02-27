@@ -7,7 +7,7 @@ use egui::{Align, Color32, CursorIcon, Pos2, Rect, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::TimeGridPalette;
-use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
+use super::{event_time_segment_for_date, is_synced_event, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
@@ -97,9 +97,10 @@ pub fn render_ribbon_event(
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
     _database: &'static Database,
+    synced_event_ids: &HashSet<i64>,
 ) -> EventInteractionResult {
     render_ribbon_event_with_handles(
-        ui, event, countdown_requests, active_countdown_events, _database,
+        ui, event, countdown_requests, active_countdown_events, _database, synced_event_ids,
         false, false, None,
     ).0
 }
@@ -113,11 +114,13 @@ pub fn render_ribbon_event_with_handles(
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
     _database: &'static Database,
+    synced_event_ids: &HashSet<i64>,
     show_left_handle: bool,
     show_right_handle: bool,
     _current_date: Option<NaiveDate>,
 ) -> (EventInteractionResult, Option<Rect>) {
     let mut result = EventInteractionResult::default();
+    let is_synced = is_synced_event(event.id, synced_event_ids);
     
     let now = Local::now();
     let is_past = event.end < now;
@@ -186,11 +189,13 @@ pub fn render_ribbon_event_with_handles(
                     );
                 }
                 
-                ui.label(
-                    egui::RichText::new(&event.title)
-                        .color(text_color)
-                        .size(11.0),
-                );
+                let display_title = if is_synced {
+                    format!("🔒 {}", event.title)
+                } else {
+                    event.title.clone()
+                };
+
+                ui.label(egui::RichText::new(display_title).color(text_color).size(11.0));
 
             });
         })
@@ -208,9 +213,19 @@ pub fn render_ribbon_event_with_handles(
         } else {
             format!("{}\n{} days from now", event.title, days_until)
         };
+        let tooltip = if is_synced {
+            format!("{}\n🔒 Synced read-only event", tooltip)
+        } else {
+            tooltip
+        };
         response.interact(Sense::click_and_drag()).on_hover_text(tooltip)
     } else {
-        response.interact(Sense::click_and_drag())
+        let response = response.interact(Sense::click_and_drag());
+        if is_synced {
+            response.on_hover_text("🔒 Synced read-only event")
+        } else {
+            response
+        }
     };
 
     interactive_response.context_menu(|ui| {
@@ -218,7 +233,14 @@ pub fn render_ribbon_event_with_handles(
         ui.label(format!("Event: {}", event.title));
         ui.separator();
 
-        if ui.button("✏ Edit").clicked() {
+        if is_synced {
+            ui.label(
+                egui::RichText::new("🔒 Synced read-only event")
+                    .italics()
+                    .size(11.0),
+            );
+            ui.add_enabled(false, egui::Button::new("✏ Edit"));
+        } else if ui.button("✏ Edit").clicked() {
             result.event_to_edit = Some(event.clone());
             ui.close_menu();
         }
@@ -243,7 +265,14 @@ pub fn render_ribbon_event_with_handles(
             ui.separator();
         }
 
-        if event.recurrence_rule.is_some() {
+        if is_synced {
+            if event.recurrence_rule.is_some() {
+                ui.add_enabled(false, egui::Button::new("🗑 Delete This Occurrence"));
+                ui.add_enabled(false, egui::Button::new("🗑 Delete All Occurrences"));
+            } else {
+                ui.add_enabled(false, egui::Button::new("🗑 Delete"));
+            }
+        } else if event.recurrence_rule.is_some() {
             if ui.button("🗑 Delete This Occurrence").clicked() {
                 if let Some(id) = event.id {
                     result.delete_confirm_request = Some(DeleteConfirmRequest {
@@ -303,7 +332,7 @@ pub fn render_ribbon_event_with_handles(
     });
 
     // Double-click to edit event
-    if interactive_response.double_clicked() {
+    if interactive_response.double_clicked() && !is_synced {
         result.event_to_edit = Some(event.clone());
     }
 
@@ -311,7 +340,10 @@ pub fn render_ribbon_event_with_handles(
     let event_rect = interactive_response.rect;
     
     // Draw resize handles if applicable (not past, not recurring, handles enabled)
-    let can_resize = !is_past && event.recurrence_rule.is_none() && (show_left_handle || show_right_handle);
+    let can_resize = !is_synced
+        && !is_past
+        && event.recurrence_rule.is_none()
+        && (show_left_handle || show_right_handle);
     
     let mut on_resize_handle = false;
     if can_resize {
@@ -372,6 +404,7 @@ pub fn render_event_in_cell(
     cell_rect: Rect, 
     event: &Event,
     has_countdown: bool,
+    is_synced: bool,
     continues_to_next_slot: bool,
 ) -> Rect {
     let now = Local::now();
@@ -420,6 +453,10 @@ pub fn render_event_in_cell(
     // Add countdown indicator
     if has_countdown {
         title_text.push_str("⏱ ");
+    }
+
+    if is_synced {
+        title_text.push_str("🔒 ");
     }
     
     // Add location icon if event has a location
@@ -514,7 +551,7 @@ pub fn render_event_continuation(
 
 /// Generate a rich tooltip string for an event.
 /// Shows title, time range, location, and description preview.
-pub fn format_event_tooltip(event: &Event) -> String {
+pub fn format_event_tooltip(event: &Event, is_synced: bool) -> String {
     let mut lines = Vec::new();
     
     // Title (bold via unicode)
@@ -549,6 +586,10 @@ pub fn format_event_tooltip(event: &Event) -> String {
     if event.recurrence_rule.is_some() {
         lines.push("🔄 Recurring event".to_string());
     }
+
+    if is_synced {
+        lines.push("🔒 Synced read-only event".to_string());
+    }
     
     // Description preview (truncated)
     if let Some(ref description) = event.description {
@@ -563,7 +604,11 @@ pub fn format_event_tooltip(event: &Event) -> String {
     }
     
     // Add interaction hint
-    lines.push("\n💡 Double-click to edit, right-click for more options".to_string());
+    if is_synced {
+        lines.push("\n💡 Right-click for details and export".to_string());
+    } else {
+        lines.push("\n💡 Double-click to edit, right-click for more options".to_string());
+    }
     
     lines.join("\n")
 }
@@ -672,6 +717,7 @@ pub fn render_time_cell(
     event_dialog_recurrence: &mut Option<String>,
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
+    synced_event_ids: &HashSet<i64>,
     palette: &TimeGridPalette,
     focus_request: &mut Option<AutoFocusRequest>,
     config: &TimeCellConfig,
@@ -768,6 +814,7 @@ pub fn render_time_cell(
             .id
             .map(|id| active_countdown_events.contains(&id))
             .unwrap_or(false);
+        let event_is_synced = is_synced_event(event.id, synced_event_ids);
         
         // Check if event ends in this slot
         let segment_end = event_time_segment_for_date(event, date)
@@ -776,7 +823,8 @@ pub fn render_time_cell(
         let is_ending = segment_end > slot_start_dt && segment_end <= slot_end_dt;
         let continues_to_next_slot = segment_end > slot_end_dt;
         
-        let event_rect = render_event_in_cell(ui, rect, event, has_countdown, continues_to_next_slot);
+        let event_rect =
+            render_event_in_cell(ui, rect, event, has_countdown, event_is_synced, continues_to_next_slot);
         // Starting events always show top handle
         event_hitboxes.push((event_rect, (*event).clone(), true, is_ending));
     }
@@ -825,6 +873,9 @@ pub fn render_time_cell(
                 if event.end < now {
                     return None;
                 }
+                if is_synced_event(event.id, synced_event_ids) {
+                    return None;
+                }
                 handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
             })
     });
@@ -866,7 +917,10 @@ pub fn render_time_cell(
         if let Some((hit_rect, hovered_event, is_starting, is_ending)) = &pointer_hit {
             // Only show handles for non-recurring events and non-past events
             let is_past_event = hovered_event.end < now;
-            if hovered_event.recurrence_rule.is_none() && !is_past_event {
+            if hovered_event.recurrence_rule.is_none()
+                && !is_past_event
+                && !is_synced_event(hovered_event.id, synced_event_ids)
+            {
                 // Use slot-aware handles: only show handles that are active in this slot
                 let handles = HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
                 let hovered_h = hovered_handle.as_ref().map(|(h, _, _)| *h);
@@ -896,7 +950,8 @@ pub fn render_time_cell(
             && hit_rect.contains(pointer_pos.unwrap_or_default())
             && hovered_handle.is_none()
         {
-            let tooltip_text = format_event_tooltip(hovered_event);
+            let tooltip_text =
+                format_event_tooltip(hovered_event, is_synced_event(hovered_event.id, synced_event_ids));
             response.clone().on_hover_ui_at_pointer(|ui| {
                 ui.label(tooltip_text);
             });
@@ -971,10 +1026,18 @@ pub fn render_time_cell(
                 .or_else(|| single_event_fallback.clone());
 
             if let Some(event) = popup_event {
+                let event_is_synced = is_synced_event(event.id, synced_event_ids);
                 ui.label(format!("Event: {}", event.title));
                 ui.separator();
 
-                if ui.button("✏ Edit").clicked() {
+                if event_is_synced {
+                    ui.label(
+                        egui::RichText::new("🔒 Synced read-only event")
+                            .italics()
+                            .size(11.0),
+                    );
+                    ui.add_enabled(false, egui::Button::new("✏ Edit"));
+                } else if ui.button("✏ Edit").clicked() {
                     context_clicked_event = Some(event.clone());
                     ui.memory_mut(|mem| mem.close_popup());
                 }
@@ -999,7 +1062,14 @@ pub fn render_time_cell(
                     ui.separator();
                 }
 
-                if event.recurrence_rule.is_some() {
+                if event_is_synced {
+                    if event.recurrence_rule.is_some() {
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete This Occurrence"));
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete All Occurrences"));
+                    } else {
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete"));
+                    }
+                } else if event.recurrence_rule.is_some() {
                     if ui.button("🗑 Delete This Occurrence").clicked() {
                         if let Some(id) = event.id {
                             result.delete_confirm_request = Some(DeleteConfirmRequest {
@@ -1145,17 +1215,17 @@ pub fn render_time_cell(
         // First check if we're starting a resize operation
         if let Some((handle, _hit_rect, event)) = drag_handle {
             // Start resize instead of drag
-            if let Some(resize_context) = ResizeContext::from_event(
-                &event,
-                handle,
-                config.resize_view,
-            ) {
-                ResizeManager::begin(ui.ctx(), resize_context);
-                ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+            if !is_synced_event(event.id, synced_event_ids) {
+                if let Some(resize_context) =
+                    ResizeContext::from_event(&event, handle, config.resize_view)
+                {
+                    ResizeManager::begin(ui.ctx(), resize_context);
+                    ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
+                }
             }
         } else if let Some((hit_rect, event, _, _)) = pointer_hit.clone() {
             // Otherwise start a drag operation
-            if event.recurrence_rule.is_none() {
+            if event.recurrence_rule.is_none() && !is_synced_event(event.id, synced_event_ids) {
                 if let Some(drag_context) = DragContext::from_event(
                     &event,
                     pointer_pos
@@ -1174,7 +1244,7 @@ pub fn render_time_cell(
     if response.double_clicked() {
         if let Some(event) = pointer_event {
             // Double-click on event - edit it
-            if result.event_to_edit.is_none() {
+            if result.event_to_edit.is_none() && !is_synced_event(event.id, synced_event_ids) {
                 result.event_to_edit = Some(event);
             }
         } else {
@@ -1198,6 +1268,9 @@ pub fn render_time_cell(
     let primary_released = ui.input(|i| i.pointer.primary_released());
     if primary_released && ResizeManager::is_active_for_view(ui.ctx(), config.resize_view) {
         if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), config.resize_view) {
+            if is_synced_event(Some(resize_ctx.event_id), synced_event_ids) {
+                return result;
+            }
             if let Some((new_start, new_end)) = resize_ctx.hovered_times() {
                 let event_service = EventService::new(database.connection());
                 if let Ok(Some(event)) = event_service.get(resize_ctx.event_id) {
@@ -1227,6 +1300,9 @@ pub fn render_time_cell(
 
     if response.drag_stopped() {
         if let Some(drag_context) = DragManager::finish_for_view(ui.ctx(), config.drag_view) {
+            if is_synced_event(Some(drag_context.event_id), synced_event_ids) {
+                return result;
+            }
             if let Some(target_start) = drag_context
                 .hovered_start()
                 .or_else(|| date.and_time(time).and_local_timezone(Local).single())
@@ -1269,6 +1345,7 @@ pub fn render_time_grid(
     event_dialog_recurrence: &mut Option<String>,
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
+    synced_event_ids: &HashSet<i64>,
     palette: &TimeGridPalette,
     focus_request: &mut Option<AutoFocusRequest>,
     config: &TimeCellConfig,
@@ -1362,6 +1439,7 @@ pub fn render_time_grid(
                         event_dialog_recurrence,
                         countdown_requests,
                         active_countdown_events,
+                        synced_event_ids,
                         palette,
                         focus_request,
                         config,
