@@ -12,6 +12,7 @@ mod notifications;
 mod shortcuts;
 mod sidebar;
 mod sync_guard;
+mod sync_scheduler;
 mod state;
 mod status_bar;
 mod toast;
@@ -23,6 +24,7 @@ use self::state::{AppState, ViewType};
 use self::toast::ToastManager;
 use self::confirm::ConfirmDialogState;
 use crate::models::settings::Settings;
+use crate::services::calendar_sync::scheduler::CalendarSyncScheduler;
 use crate::ui_egui::commands::UndoManager;
 use crate::ui_egui::event_dialog::EventDialogState;
 use crate::ui_egui::theme::CalendarTheme;
@@ -61,6 +63,8 @@ pub struct CalendarApp {
     active_category_filter: Option<String>,
     /// Undo/Redo manager for event operations
     undo_manager: UndoManager,
+    /// Background scheduler for periodic calendar source sync
+    calendar_sync_scheduler: CalendarSyncScheduler,
 }
 
 impl eframe::App for CalendarApp {
