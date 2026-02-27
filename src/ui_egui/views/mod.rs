@@ -163,6 +163,52 @@ pub fn event_display_end_date(event: &Event) -> NaiveDate {
     }
 }
 
+pub fn event_covers_date(event: &Event, date: NaiveDate) -> bool {
+    let start_date = event.start.date_naive();
+    let end_date = event_display_end_date(event);
+    date >= start_date && date <= end_date
+}
+
+pub fn build_ribbon_lanes(events: &[Event]) -> Vec<Vec<&Event>> {
+    let mut sorted: Vec<&Event> = events.iter().filter(|event| is_ribbon_event(event)).collect();
+
+    sorted.sort_by(|a, b| {
+        let a_start = a.start.date_naive();
+        let b_start = b.start.date_naive();
+        let a_span_days = (event_display_end_date(a) - a_start).num_days();
+        let b_span_days = (event_display_end_date(b) - b_start).num_days();
+
+        a_start
+            .cmp(&b_start)
+            .then_with(|| b_span_days.cmp(&a_span_days))
+            .then_with(|| a.title.cmp(&b.title))
+    });
+
+    let mut lanes: Vec<Vec<&Event>> = Vec::new();
+
+    'place_event: for event in sorted {
+        let start = event.start.date_naive();
+        let end = event_display_end_date(event);
+
+        for lane in &mut lanes {
+            let overlaps = lane.iter().any(|existing| {
+                let existing_start = existing.start.date_naive();
+                let existing_end = event_display_end_date(existing);
+                !(end < existing_start || start > existing_end)
+            });
+
+            if !overlaps {
+                lane.push(event);
+                continue 'place_event;
+            }
+        }
+
+        lanes.push(vec![event]);
+    }
+
+    lanes
+}
+
 pub fn load_synced_event_ids(database: &'static Database) -> HashSet<i64> {
     let service = EventSyncMapService::new(database.connection());
     match service.list_synced_local_event_ids_for_enabled_sources() {
@@ -365,5 +411,48 @@ mod tests {
         };
 
         assert_eq!(event_display_end_date(&event), end.date_naive());
+    }
+
+    #[test]
+    fn test_build_ribbon_lanes_splits_overlapping_events() {
+        let day1 = Local.with_ymd_and_hms(2026, 3, 16, 0, 0, 0).unwrap();
+        let day2 = Local.with_ymd_and_hms(2026, 3, 17, 0, 0, 0).unwrap();
+        let day3 = Local.with_ymd_and_hms(2026, 3, 18, 0, 0, 0).unwrap();
+
+        let event_a = Event {
+            id: None,
+            title: "Event A".to_string(),
+            description: None,
+            location: None,
+            start: day1,
+            end: day3,
+            all_day: true,
+            category: None,
+            color: None,
+            recurrence_rule: None,
+            recurrence_exceptions: None,
+            created_at: None,
+            updated_at: None,
+        };
+
+        let event_b = Event {
+            id: None,
+            title: "Event B".to_string(),
+            description: None,
+            location: None,
+            start: day2,
+            end: day3,
+            all_day: true,
+            category: None,
+            color: None,
+            recurrence_rule: None,
+            recurrence_exceptions: None,
+            created_at: None,
+            updated_at: None,
+        };
+
+        let events = vec![event_a, event_b];
+        let lanes = build_ribbon_lanes(&events);
+        assert_eq!(lanes.len(), 2);
     }
 }

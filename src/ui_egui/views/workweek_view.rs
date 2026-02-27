@@ -183,77 +183,71 @@ impl WorkWeekView {
                 }
             });
 
-            if show_ribbon && !all_day_events.is_empty() {
+            let ribbon_lanes = super::build_ribbon_lanes(all_day_events);
+            if show_ribbon && !ribbon_lanes.is_empty() {
                 strip_ui.add_space(2.0);
 
                 strip_ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
 
+                    let ribbon_height = (ribbon_lanes.len() as f32 * 18.0).max(18.0);
+
                     // Use allocate_exact_size with matching height for consistent spacing
-                    ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, 18.0), egui::Sense::hover());
+                    ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, ribbon_height), egui::Sense::hover());
 
                     ui.add_space(COLUMN_SPACING);
 
                     for (i, date) in work_week_dates.iter().enumerate() {
                         // Use allocate_ui_with_layout with Center alignment to match header
                         let col_response = ui.allocate_ui_with_layout(
-                            Vec2::new(col_width, 18.0),
+                            Vec2::new(col_width, ribbon_height),
                             egui::Layout::top_down(egui::Align::Center),
                             |day_ui| {
-                                let mut multi_day_events = Vec::new();
-                                let mut single_day_events = Vec::new();
+                                day_ui.spacing_mut().item_spacing.y = 0.0;
 
-                                for event in all_day_events {
-                                    let start_date = event.start.date_naive();
-                                    let end_date = super::event_display_end_date(event);
+                                for lane in &ribbon_lanes {
+                                    day_ui.allocate_ui_with_layout(
+                                        Vec2::new(col_width, 18.0),
+                                        egui::Layout::left_to_right(egui::Align::Min),
+                                        |lane_ui| {
+                                            if let Some(event) = lane
+                                                .iter()
+                                                .copied()
+                                                .find(|event| super::event_covers_date(event, *date))
+                                            {
+                                                let event_start_date = event.start.date_naive();
+                                                let event_end_date = super::event_display_end_date(event);
 
-                                    if start_date != end_date {
-                                        if start_date <= *date && end_date >= *date {
-                                            multi_day_events.push(event);
-                                        }
-                                    } else if start_date == *date {
-                                        single_day_events.push(event);
-                                    }
-                                }
+                                                if event_start_date != event_end_date {
+                                                    let is_first_day = event_start_date == *date;
+                                                    let is_last_day = event_end_date == *date;
 
-                                let found_event =
-                                    !multi_day_events.is_empty() || !single_day_events.is_empty();
-
-                                for event in &multi_day_events {
-                                    // For multi-day events, show handles on first/last days
-                                    let event_start_date = event.start.date_naive();
-                                    let event_end_date = super::event_display_end_date(event);
-                                    let is_first_day = event_start_date == *date;
-                                    let is_last_day = event_end_date == *date;
-                                    
-                                    let (ribbon_result, _event_rect) = render_ribbon_event_with_handles(
-                                        day_ui,
-                                        event,
-                                        countdown_requests,
-                                        active_countdown_events,
-                                        database,
-                                        &synced_event_ids,
-                                        is_first_day,  // show left handle
-                                        is_last_day,   // show right handle
-                                        Some(*date),
+                                                    let (ribbon_result, _event_rect) = render_ribbon_event_with_handles(
+                                                        lane_ui,
+                                                        event,
+                                                        countdown_requests,
+                                                        active_countdown_events,
+                                                        database,
+                                                        &synced_event_ids,
+                                                        is_first_day,
+                                                        is_last_day,
+                                                        Some(*date),
+                                                    );
+                                                    result.merge(ribbon_result);
+                                                } else {
+                                                    let ribbon_result = render_ribbon_event(
+                                                        lane_ui,
+                                                        event,
+                                                        countdown_requests,
+                                                        active_countdown_events,
+                                                        database,
+                                                        &synced_event_ids,
+                                                    );
+                                                    result.merge(ribbon_result);
+                                                }
+                                            }
+                                        },
                                     );
-                                    result.merge(ribbon_result);
-                                }
-
-                                for event in single_day_events {
-                                    let ribbon_result = render_ribbon_event(
-                                        day_ui,
-                                        event,
-                                        countdown_requests,
-                                        active_countdown_events,
-                                        database,
-                                        &synced_event_ids,
-                                    );
-                                    result.merge(ribbon_result);
-                                }
-
-                                if !found_event {
-                                    day_ui.allocate_space(Vec2::new(col_width, 18.0));
                                 }
                             },
                         );

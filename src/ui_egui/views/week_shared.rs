@@ -195,7 +195,12 @@ pub fn render_ribbon_event_with_handles(
                     event.title.clone()
                 };
 
-                ui.label(egui::RichText::new(display_title).color(text_color).size(11.0));
+                let title_width = ui.available_width().max(0.0);
+                ui.add_sized(
+                    Vec2::new(title_width, 12.0),
+                    egui::Label::new(egui::RichText::new(display_title).color(text_color).size(11.0))
+                        .truncate(),
+                );
 
             });
         })
