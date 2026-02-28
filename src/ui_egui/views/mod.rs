@@ -5,7 +5,9 @@ use crate::models::event::Event;
 use crate::services::calendar_sync::mapping::EventSyncMapService;
 use crate::services::database::Database;
 
+mod day_context_menu;
 pub mod day_view;
+mod day_event_rendering;
 mod event_rendering;
 pub mod month_view;
 mod palette;
