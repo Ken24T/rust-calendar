@@ -55,6 +55,9 @@ fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
 
 /// Render all countdown cards within a container viewport.
 /// Returns any actions that need to be handled by the caller.
+///
+/// `window_title` controls the viewport title bar text.
+/// `viewport_id_suffix` must be unique per container window (used for the viewport ID hash).
 #[allow(clippy::too_many_arguments)]
 pub fn render_container_window(
     ctx: &egui::Context,
@@ -69,6 +72,8 @@ pub fn render_container_window(
     default_card_width: f32,
     default_card_height: f32,
     categories: &[(CountdownCategoryId, String)],
+    window_title: &str,
+    viewport_id_suffix: &str,
 ) -> Vec<ContainerAction> {
     use std::time::Duration as StdDuration;
 
@@ -147,7 +152,7 @@ pub fn render_container_window(
         }
     };
 
-    let viewport_id = egui::ViewportId::from_hash_of("countdown_container");
+    let viewport_id = egui::ViewportId::from_hash_of(viewport_id_suffix);
 
     // Set position/size on first render OR when card count changes
     let needs_resize = !layout.initialized || card_count_changed;
@@ -165,7 +170,7 @@ pub fn render_container_window(
     // Otherwise, let the OS/user control the window position to prevent shaking during drag
     let builder = if needs_resize {
         egui::ViewportBuilder::default()
-            .with_title("Countdown Cards")
+            .with_title(window_title)
             .with_resizable(true)
             .with_visible(true)
             .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
@@ -173,7 +178,7 @@ pub fn render_container_window(
             .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height))
     } else {
         egui::ViewportBuilder::default()
-            .with_title("Countdown Cards")
+            .with_title(window_title)
             .with_resizable(true)
             .with_visible(true)
             .with_min_inner_size(egui::vec2(container_min_width, container_min_height))

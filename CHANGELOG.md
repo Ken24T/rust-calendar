@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-03-01
+
+### Added
+
+- Category Containers display mode — renders one container window per countdown category.
+  - Each category gets its own resizable, draggable container with independent geometry persistence.
+  - Per-category layout and drag state tracked independently.
+  - Closing any category container switches back to Individual Windows mode.
+  - Container window titles show the category name (e.g. "⏱ General").
+- `render_container_window` now accepts custom `window_title` and `viewport_id_suffix` parameters for reuse across display modes.
+- `update_category_container_geometry` service method for persisting per-category container geometry.
+
 ## [2.1.1] - 2026-03-01
 
 ### Added

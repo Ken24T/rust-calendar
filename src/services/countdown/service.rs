@@ -371,6 +371,27 @@ impl CountdownService {
             .collect()
     }
 
+    /// Update the container geometry for a specific category.
+    #[allow(dead_code)]
+    pub fn update_category_container_geometry(
+        &mut self,
+        category_id: CountdownCategoryId,
+        geometry: CountdownCardGeometry,
+    ) {
+        if let Some(cat) = self.categories.iter_mut().find(|c| c.id == category_id) {
+            if cat.container_geometry != Some(geometry) {
+                log::debug!(
+                    "Category {:?} container geometry updated: {:?} -> {:?}",
+                    category_id,
+                    cat.container_geometry,
+                    geometry
+                );
+                cat.container_geometry = Some(geometry);
+                self.dirty = true;
+            }
+        }
+    }
+
     /// Set the categories list directly (used when loading from database).
     #[allow(dead_code)]
     pub(super) fn set_categories(&mut self, categories: Vec<CountdownCategory>) {

@@ -6,7 +6,7 @@ use super::render::{
     viewport_title_matches, CountdownCardUiAction,
 };
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardId, CountdownCardVisuals,
+    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
     CountdownCategoryId, CountdownDisplayMode, CountdownService,
 };
 use chrono::Local;
@@ -48,6 +48,9 @@ pub(in super::super) struct CountdownUiState {
     // Container mode fields
     container_layout: ContainerLayout,
     container_drag_state: DragState,
+    // Category containers mode — per-category layout and drag state
+    category_layouts: HashMap<CountdownCategoryId, ContainerLayout>,
+    category_drag_states: HashMap<CountdownCategoryId, DragState>,
     // Pending delete requests from settings dialogs
     pub(super) pending_delete_requests: Vec<DeleteCardRequest>,
     // Skip geometry updates for this many frames (used after reset)
@@ -116,6 +119,10 @@ impl CountdownUiState {
         // Reset container drag state
         self.container_drag_state = DragState::default();
         
+        // Reset category container state
+        self.category_layouts.clear();
+        self.category_drag_states.clear();
+        
         // Skip geometry updates for individual cards too
         self.skip_geometry_frames = 30;
     }
@@ -175,8 +182,16 @@ impl CountdownUiState {
             CountdownDisplayMode::IndividualWindows => {
                 self.render_individual_windows(ctx, service)
             }
-            CountdownDisplayMode::Container | CountdownDisplayMode::CategoryContainers => {
+            CountdownDisplayMode::Container => {
                 self.render_container_mode(ctx, service, default_card_width, default_card_height)
+            }
+            CountdownDisplayMode::CategoryContainers => {
+                self.render_category_containers_mode(
+                    ctx,
+                    service,
+                    default_card_width,
+                    default_card_height,
+                )
             }
         }
     }
@@ -224,6 +239,8 @@ impl CountdownUiState {
             default_card_width,
             default_card_height,
             &categories,
+            "Countdown Cards",
+            "countdown_container",
         );
 
         // Collect delete requests
@@ -299,6 +316,211 @@ impl CountdownUiState {
                     service.set_card_category(card_id, cat_id);
                 }
             }
+        }
+
+        CountdownRenderResult {
+            event_dialog_requests,
+            go_to_date_requests,
+            delete_card_requests,
+        }
+    }
+
+    /// Render countdown cards in category containers mode — one container window per category.
+    fn render_category_containers_mode(
+        &mut self,
+        ctx: &Context,
+        service: &mut CountdownService,
+        default_card_width: f32,
+        default_card_height: f32,
+    ) -> CountdownRenderResult {
+        let all_cards = service.cards().to_vec();
+
+        if all_cards.is_empty() {
+            return CountdownRenderResult::default();
+        }
+
+        let now = Local::now();
+        let notification_config = service.notification_config().clone();
+        let visual_defaults = service.visual_defaults().clone();
+        let categories: Vec<(CountdownCategoryId, String)> = service
+            .categories()
+            .iter()
+            .map(|c| (c.id, c.name.clone()))
+            .collect();
+
+        // Snapshot per-category data so we can release the service borrow
+        struct CategorySnapshot {
+            id: CountdownCategoryId,
+            name: String,
+            container_geometry: Option<CountdownCardGeometry>,
+            card_width: f32,
+            card_height: f32,
+        }
+
+        let cat_snapshots: Vec<CategorySnapshot> = service
+            .categories()
+            .iter()
+            .map(|c| CategorySnapshot {
+                id: c.id,
+                name: c.name.clone(),
+                container_geometry: c.container_geometry,
+                card_width: c.default_card_width,
+                card_height: c.default_card_height,
+            })
+            .collect();
+
+        let card_order = service.card_order().to_vec();
+
+        let mut event_dialog_requests = Vec::new();
+        let mut go_to_date_requests = Vec::new();
+        let mut delete_card_requests = Vec::new();
+
+        // Collect deferred actions to apply after rendering all categories
+        let mut category_changes: Vec<(CountdownCardId, CountdownCategoryId)> = Vec::new();
+        let mut geometry_updates: Vec<(CountdownCategoryId, CountdownCardGeometry)> = Vec::new();
+        let mut reorder_updates: Vec<Vec<CountdownCardId>> = Vec::new();
+        let mut closed_categories: Vec<CountdownCategoryId> = Vec::new();
+
+        for cat_snap in &cat_snapshots {
+            // Filter cards for this category
+            let cat_cards: Vec<CountdownCardState> = all_cards
+                .iter()
+                .filter(|c| c.category_id == cat_snap.id)
+                .cloned()
+                .collect();
+
+            // Skip categories with no cards
+            if cat_cards.is_empty() {
+                continue;
+            }
+
+            // Build per-category card order (preserving global ordering, filtered)
+            let cat_card_order: Vec<CountdownCardId> = if card_order.is_empty() {
+                cat_cards.iter().map(|c| c.id).collect()
+            } else {
+                card_order
+                    .iter()
+                    .filter(|id| cat_cards.iter().any(|c| c.id == **id))
+                    .copied()
+                    .collect()
+            };
+
+            // Get or create per-category layout and drag state
+            let layout = self
+                .category_layouts
+                .entry(cat_snap.id)
+                .or_default();
+            let drag_state = self
+                .category_drag_states
+                .entry(cat_snap.id)
+                .or_default();
+
+            let window_title = format!("⏱ {}", cat_snap.name);
+            let viewport_id_suffix = format!("countdown_category_{}", cat_snap.id.0);
+
+            let actions = render_container_window(
+                ctx,
+                &cat_cards,
+                &cat_card_order,
+                layout,
+                drag_state,
+                now,
+                &notification_config,
+                &visual_defaults,
+                cat_snap.container_geometry,
+                cat_snap.card_width.max(default_card_width),
+                cat_snap.card_height.max(default_card_height),
+                &categories,
+                &window_title,
+                &viewport_id_suffix,
+            );
+
+            // Process container actions for this category
+            for action in actions {
+                match action {
+                    ContainerAction::None => {}
+                    ContainerAction::ReorderCards(new_order) => {
+                        reorder_updates.push(new_order);
+                    }
+                    ContainerAction::DeleteCard(card_id) => {
+                        log::info!("Delete requested for card {:?} in category {:?}", card_id, cat_snap.id);
+                        if let Some(card) = cat_cards.iter().find(|c| c.id == card_id) {
+                            delete_card_requests.push(DeleteCardRequest {
+                                card_id,
+                                card_title: card.event_title.clone(),
+                            });
+                        }
+                        self.open_settings.remove(&card_id);
+                        self.settings_geometry.remove(&card_id);
+                        self.settings_needs_layout.remove(&card_id);
+                    }
+                    ContainerAction::OpenSettings(card_id) => {
+                        if let Some(card) = cat_cards.iter().find(|c| c.id == card_id) {
+                            self.open_settings.insert(card_id);
+                            let default_geometry = default_settings_geometry_for(card);
+                            self.settings_geometry
+                                .entry(card_id)
+                                .or_insert(default_geometry);
+                            self.settings_needs_layout.insert(card_id);
+                        }
+                    }
+                    ContainerAction::OpenEventDialog(card_id) => {
+                        if let Some(card) = cat_cards.iter().find(|c| c.id == card_id) {
+                            if let Some(event_id) = card.event_id {
+                                event_dialog_requests.push(OpenEventDialogRequest {
+                                    event_id,
+                                    card_id,
+                                    visuals: card.visuals.clone(),
+                                });
+                            } else {
+                                self.open_settings.insert(card_id);
+                                let default_geometry = default_settings_geometry_for(card);
+                                self.settings_geometry
+                                    .entry(card_id)
+                                    .or_insert(default_geometry);
+                                self.settings_needs_layout.insert(card_id);
+                            }
+                        }
+                    }
+                    ContainerAction::GoToDate(date) => {
+                        go_to_date_requests.push(GoToDateRequest { date });
+                    }
+                    ContainerAction::RefreshCard(_) => {
+                        ctx.request_repaint();
+                    }
+                    ContainerAction::GeometryChanged(geometry) => {
+                        geometry_updates.push((cat_snap.id, geometry));
+                    }
+                    ContainerAction::Closed => {
+                        closed_categories.push(cat_snap.id);
+                    }
+                    ContainerAction::ChangeCategory(card_id, cat_id) => {
+                        log::info!("Change category for card {:?} to {:?}", card_id, cat_id);
+                        category_changes.push((card_id, cat_id));
+                    }
+                }
+            }
+        }
+
+        // Apply deferred mutations
+        for (card_id, cat_id) in category_changes {
+            service.set_card_category(card_id, cat_id);
+        }
+        for (cat_id, geometry) in geometry_updates {
+            service.update_category_container_geometry(cat_id, geometry);
+        }
+        for new_order in reorder_updates {
+            service.reorder_cards(new_order);
+        }
+        // If any category container was closed, switch back to individual windows
+        if !closed_categories.is_empty() {
+            log::info!(
+                "Category container(s) closed, switching to individual windows mode"
+            );
+            service.set_display_mode(CountdownDisplayMode::IndividualWindows);
+            // Reset category layouts so next open will re-apply stored geometry
+            self.category_layouts.clear();
+            self.category_drag_states.clear();
         }
 
         CountdownRenderResult {
