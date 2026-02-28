@@ -7,6 +7,8 @@ mod geometry;
 mod imports;
 mod lifecycle;
 mod menu;
+mod menu_export;
+mod menu_help;
 mod navigation;
 mod notifications;
 mod shortcuts;

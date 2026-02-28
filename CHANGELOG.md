@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.8] - 2026-02-28
+
+### Refactored
+
+- Extracted menu bar into focused modules, reducing `menu.rs` from 858 to 524 lines:
+  - `menu_export.rs` (237 lines) — PDF and ICS export functions (month, week, all events, filtered, date range).
+  - `menu_help.rs` (106 lines) — Help menu and About dialog.
+- Removed unused imports from menu.rs after extraction.
+
 ## [2.0.7] - 2026-02-28
 
 ### Refactored
