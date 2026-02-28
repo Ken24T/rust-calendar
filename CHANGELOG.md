@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.16] - 2026-02-28
+
+### Refactored
+
+- Extracted time slot rendering from `views/day_view.rs` into `views/day_time_slot.rs` (~490 lines), reducing `day_view.rs` from 733 to 305 lines.
+  - Moved `render_time_slot` with all drag/drop, resize handle, context menu, tooltip, and event interaction logic.
+- Extracted event helper functions from `views/mod.rs` into `views/event_helpers.rs` (~520 lines), reducing `mod.rs` from 651 to 83 lines.
+  - Moved `event_time_segment_for_date`, `countdown_menu_state`, `filter_events_by_category`, `is_ribbon_event`, `event_display_end_date`, `event_covers_date`, `build_ribbon_lanes`, `load_synced_event_ids`, `is_synced_event`, `filter_events_by_sync_scope`, `CountdownRequest::from_event` impl, and all associated tests.
+
 ## [2.0.15] - 2026-02-28
 
 ### Refactored
