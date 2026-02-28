@@ -7,7 +7,7 @@ use super::render::{
 };
 use crate::services::countdown::{
     CountdownCardGeometry, CountdownCardId, CountdownCardVisuals,
-    CountdownDisplayMode, CountdownService,
+    CountdownCategoryId, CountdownDisplayMode, CountdownService,
 };
 use chrono::Local;
 use egui::{self, Context};
@@ -201,6 +201,11 @@ impl CountdownUiState {
         let visual_defaults = service.visual_defaults().clone();
         let container_geometry = service.container_geometry();
         let card_order = service.card_order().to_vec();
+        let categories: Vec<(CountdownCategoryId, String)> = service
+            .categories()
+            .iter()
+            .map(|c| (c.id, c.name.clone()))
+            .collect();
 
         let mut event_dialog_requests = Vec::new();
         let mut go_to_date_requests = Vec::new();
@@ -218,6 +223,7 @@ impl CountdownUiState {
             container_geometry,
             default_card_width,
             default_card_height,
+            &categories,
         );
 
         // Collect delete requests
@@ -288,6 +294,10 @@ impl CountdownUiState {
                     // Reset initialized flag so next open will re-apply stored geometry
                     self.container_layout.initialized = false;
                 }
+                ContainerAction::ChangeCategory(card_id, cat_id) => {
+                    log::info!("Change category for card {:?} to {:?}", card_id, cat_id);
+                    service.set_card_category(card_id, cat_id);
+                }
             }
         }
 
@@ -322,6 +332,15 @@ impl CountdownUiState {
         let mut go_to_date_requests = Vec::new();
         let mut delete_card_requests = Vec::new();
 
+        // Build category list for context menus
+        let categories: Vec<(CountdownCategoryId, String)> = service
+            .categories()
+            .iter()
+            .map(|c| (c.id, c.name.clone()))
+            .collect();
+
+        let mut category_changes: Vec<(CountdownCardId, CountdownCategoryId)> = Vec::new();
+
         for card in cards {
             let viewport_id = egui::ViewportId::from_hash_of(("countdown_card", card.id.0));
             let waiting_on_geometry = self.should_hide_card_geometry(card.id);
@@ -349,6 +368,7 @@ impl CountdownUiState {
             let builder = viewport_builder_for_card(&card, waiting_on_geometry);
             let card_clone = card.clone();
             let notification_config = service.notification_config().clone();
+            let categories_clone = categories.clone();
             let action =
                 ctx.show_viewport_immediate(viewport_id, builder, move |child_ctx, class| {
                     render_countdown_card_ui(
@@ -360,6 +380,7 @@ impl CountdownUiState {
                         waiting_on_geometry,
                         target_geometry,
                         &notification_config,
+                        &categories_clone,
                     )
                 });
 
@@ -423,6 +444,10 @@ impl CountdownUiState {
                     log::info!("Refresh action triggered for card {:?}", card.id);
                     ctx.request_repaint();
                 }
+                CountdownCardUiAction::ChangeCategory(cat_id) => {
+                    log::info!("Change category for card {:?} to {:?}", card.id, cat_id);
+                    category_changes.push((card.id, cat_id));
+                }
             }
 
             if queued_close {
@@ -466,6 +491,11 @@ impl CountdownUiState {
             self.clear_geometry_wait_state(&id);
             self.render_log_state.remove(&id);
             self.geometry_samples.remove(&id);
+        }
+
+        // Apply deferred category changes
+        for (card_id, cat_id) in category_changes {
+            service.set_card_category(card_id, cat_id);
         }
 
         service.flush_geometry_updates();

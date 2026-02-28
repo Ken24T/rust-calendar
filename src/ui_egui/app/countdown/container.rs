@@ -11,7 +11,7 @@ pub use super::container_layout::{ContainerLayout, DragState};
 
 use crate::services::countdown::{
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownNotificationConfig,
+    CountdownCategoryId, CountdownNotificationConfig,
 };
 use chrono::{DateTime, Local};
 
@@ -33,6 +33,8 @@ pub enum ContainerAction {
     GoToDate(chrono::NaiveDate),
     /// Refresh a specific card
     RefreshCard(CountdownCardId),
+    /// Change a card's category
+    ChangeCategory(CountdownCardId, CountdownCategoryId),
     /// Container geometry changed
     GeometryChanged(CountdownCardGeometry),
     /// Container was closed
@@ -66,6 +68,7 @@ pub fn render_container_window(
     container_geometry: Option<CountdownCardGeometry>,
     default_card_width: f32,
     default_card_height: f32,
+    categories: &[(CountdownCategoryId, String)],
 ) -> Vec<ContainerAction> {
     use std::time::Duration as StdDuration;
 
@@ -428,6 +431,7 @@ pub fn render_container_window(
                                 now,
                                 notification_config,
                                 is_dragging,
+                                categories,
                             );
 
                             // Convert card action to container action
@@ -447,6 +451,9 @@ pub fn render_container_window(
                                 }
                                 CardUiAction::Refresh => {
                                     actions.push(ContainerAction::RefreshCard(*card_id));
+                                }
+                                CardUiAction::ChangeCategory(cat_id) => {
+                                    actions.push(ContainerAction::ChangeCategory(*card_id, cat_id));
                                 }
                             }
                         }

@@ -1,8 +1,8 @@
 use super::super::geometry::{geometry_changed, geometry_from_viewport_info};
 use super::container::format_card_tooltip;
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardState, CountdownNotificationConfig, CountdownWarningState,
-    RgbaColor, MAX_DAYS_FONT_SIZE,
+    CountdownCardGeometry, CountdownCardState, CountdownCategoryId,
+    CountdownNotificationConfig, CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
 };
 use chrono::{DateTime, Local};
 use egui::{self, ViewportClass, ViewportId};
@@ -31,6 +31,7 @@ pub(super) enum CountdownCardUiAction {
     GeometrySettled,
     Delete,
     Refresh,
+    ChangeCategory(CountdownCategoryId),
 }
 
 pub(super) fn viewport_builder_for_card(
@@ -98,6 +99,7 @@ pub(super) fn render_countdown_card_ui(
     waiting_on_geometry: bool,
     target_geometry: Option<CountdownCardGeometry>,
     notification_config: &CountdownNotificationConfig,
+    categories: &[(CountdownCategoryId, String)],
 ) -> CountdownCardUiAction {
     ctx.request_repaint_after(StdDuration::from_secs(1));
 
@@ -320,6 +322,18 @@ pub(super) fn render_countdown_card_ui(
             if ui.button("🔄 Refresh countdown").clicked() {
                 action = CountdownCardUiAction::Refresh;
                 ui.close_menu();
+            }
+            if categories.len() > 1 {
+                ui.menu_button("📂 Move to category", |ui| {
+                    for (cat_id, cat_name) in categories {
+                        if *cat_id == card.category_id {
+                            ui.label(egui::RichText::new(format!("✓ {cat_name}")).strong());
+                        } else if ui.button(cat_name).clicked() {
+                            action = CountdownCardUiAction::ChangeCategory(*cat_id);
+                            ui.close_menu();
+                        }
+                    }
+                });
             }
             ui.separator();
             if ui.button("🗑 Delete card").clicked() {
