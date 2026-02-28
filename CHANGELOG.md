@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.12] - 2026-02-28
+
+### Refactored
+
+- Extracted drawing functions from `resize.rs` into `resize_drawing.rs` (227 lines), reducing `resize.rs` from 673 to 470 lines.
+  - Moved `draw_handles` and `draw_resize_preview` with re-exports for transparent consumer access.
+- Extracted settings-related methods from countdown `state.rs` into `state_settings.rs` (258 lines), reducing `state.rs` from 845 to 544 lines.
+  - Moved `render_settings_dialogs`, `apply_settings_command`, and `default_settings_geometry_for`.
+
 ## [2.0.11] - 2026-02-28
 
 ### Refactored
