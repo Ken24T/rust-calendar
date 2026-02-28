@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.10] - 2026-02-28
+
+### Removed
+
+- Deleted dead test infrastructure (4 files, 364 lines):
+  - `tests/fixtures/mod.rs` — mock types never imported by any test.
+  - `tests/property/recurrence_properties.rs` — placeholder testing mock functions, not real code.
+  - `tests/unit/models/recurrence_frequency_tests.rs` — testing a local `Frequency` copy, not the real model.
+  - None of these files were compiled or executed by `cargo test` (test count unchanged at 298+3+1).
+
 ## [2.0.9] - 2026-02-28
 
 ### Removed
