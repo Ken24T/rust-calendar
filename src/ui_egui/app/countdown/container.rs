@@ -14,6 +14,7 @@ use crate::services::countdown::{
     CountdownCategoryId, CountdownNotificationConfig,
 };
 use chrono::{DateTime, Local};
+use std::collections::HashMap;
 
 /// Actions that can result from container UI interactions
 #[derive(Debug, Clone, Default)]
@@ -58,6 +59,9 @@ fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
 ///
 /// `window_title` controls the viewport title bar text.
 /// `viewport_id_suffix` must be unique per container window (used for the viewport ID hash).
+/// `effective_defaults_by_category` maps each category to its resolved visual defaults
+/// (accounting for the three-tier Global → Category → Card inheritance).
+/// `global_visual_defaults` is the fallback when a card's category is not in the map.
 #[allow(clippy::too_many_arguments)]
 pub fn render_container_window(
     ctx: &egui::Context,
@@ -67,7 +71,8 @@ pub fn render_container_window(
     drag_state: &mut DragState,
     now: DateTime<Local>,
     notification_config: &CountdownNotificationConfig,
-    visual_defaults: &CountdownCardVisuals,
+    effective_defaults_by_category: &HashMap<CountdownCategoryId, CountdownCardVisuals>,
+    global_visual_defaults: &CountdownCardVisuals,
     container_geometry: Option<CountdownCardGeometry>,
     default_card_width: f32,
     default_card_height: f32,
@@ -427,11 +432,14 @@ pub fn render_container_window(
                                 }
                             }
 
-                            // Render the card content
+                            // Render the card content with per-category effective defaults
+                            let effective_defaults = effective_defaults_by_category
+                                .get(&card.category_id)
+                                .unwrap_or(global_visual_defaults);
                             let card_action = render_card_content(
                                 ui,
                                 card,
-                                visual_defaults,
+                                effective_defaults,
                                 rect,
                                 now,
                                 notification_config,

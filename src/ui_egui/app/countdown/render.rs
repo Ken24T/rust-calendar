@@ -1,7 +1,7 @@
 use super::super::geometry::{geometry_changed, geometry_from_viewport_info};
 use super::container::format_card_tooltip;
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardState, CountdownCategoryId,
+    CountdownCardGeometry, CountdownCardState, CountdownCardVisuals, CountdownCategoryId,
     CountdownNotificationConfig, CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
 };
 use chrono::{DateTime, Local};
@@ -19,6 +19,15 @@ fn resolve_dimension(value: f32, fallback: f32, min: f32) -> f32 {
         value.max(min)
     } else {
         fallback.max(min)
+    }
+}
+
+/// Resolve effective colour: use default if the card's `use_default` flag is set.
+fn resolve_color(card_color: RgbaColor, default_color: RgbaColor, use_default: bool) -> RgbaColor {
+    if use_default {
+        default_color
+    } else {
+        card_color
     }
 }
 
@@ -100,6 +109,7 @@ pub(super) fn render_countdown_card_ui(
     target_geometry: Option<CountdownCardGeometry>,
     notification_config: &CountdownNotificationConfig,
     categories: &[(CountdownCategoryId, String)],
+    effective_visual_defaults: &CountdownCardVisuals,
 ) -> CountdownCardUiAction {
     ctx.request_repaint_after(StdDuration::from_secs(1));
 
@@ -131,19 +141,40 @@ pub(super) fn render_countdown_card_ui(
         CountdownWarningState::Normal
     };
 
-    // Base colors from card visuals
-    let title_bg = rgba_to_color32(card.visuals.title_bg_color);
-    let title_fg = rgba_to_color32(card.visuals.title_fg_color);
+    // Resolve effective colours using three-tier inheritance (Global → Category → Card)
+    let effective_title_bg = resolve_color(
+        card.visuals.title_bg_color,
+        effective_visual_defaults.title_bg_color,
+        card.visuals.use_default_title_bg,
+    );
+    let effective_title_fg = resolve_color(
+        card.visuals.title_fg_color,
+        effective_visual_defaults.title_fg_color,
+        card.visuals.use_default_title_fg,
+    );
+    let effective_body_bg = resolve_color(
+        card.visuals.body_bg_color,
+        effective_visual_defaults.body_bg_color,
+        card.visuals.use_default_body_bg,
+    );
+    let effective_days_fg = resolve_color(
+        card.visuals.days_fg_color,
+        effective_visual_defaults.days_fg_color,
+        card.visuals.use_default_days_fg,
+    );
+
+    let title_bg = rgba_to_color32(effective_title_bg);
+    let title_fg = rgba_to_color32(effective_title_fg);
     let title_font_size = card.visuals.title_font_size.max(12.0);
 
     // Apply warning state color overrides if enabled
     let (body_bg, days_fg, stroke_color, stroke_width) =
         if notification_config.enabled && notification_config.use_visual_warnings {
-            apply_warning_colors(warning_state, card, ctx)
+            apply_warning_colors(warning_state, effective_body_bg, effective_days_fg, ctx)
         } else {
             (
-                rgba_to_color32(card.visuals.body_bg_color),
-                rgba_to_color32(card.visuals.days_fg_color),
+                rgba_to_color32(effective_body_bg),
+                rgba_to_color32(effective_days_fg),
                 egui::Color32::from_gray(40),
                 1.0,
             )
@@ -403,7 +434,8 @@ pub(super) fn color32_to_rgba(color: egui::Color32) -> RgbaColor {
 /// Returns (body_bg, days_fg, stroke_color, stroke_width)
 fn apply_warning_colors(
     warning_state: CountdownWarningState,
-    card: &CountdownCardState,
+    effective_body_bg: RgbaColor,
+    effective_days_fg: RgbaColor,
     ctx: &egui::Context,
 ) -> (egui::Color32, egui::Color32, egui::Color32, f32) {
     match warning_state {
@@ -436,16 +468,16 @@ fn apply_warning_colors(
             (body_bg, days_fg, stroke_color, 5.0)
         }
         CountdownWarningState::Approaching => {
-            // Approaching: Slight yellow tint
-            let body_bg = rgba_to_color32(card.visuals.body_bg_color);
-            let days_fg = rgba_to_color32(card.visuals.days_fg_color);
+            // Approaching: Use effective colours with highlight stroke
+            let body_bg = rgba_to_color32(effective_body_bg);
+            let days_fg = rgba_to_color32(effective_days_fg);
             let stroke_color = egui::Color32::from_rgb(255, 200, 0);
             (body_bg, days_fg, stroke_color, 2.0)
         }
         CountdownWarningState::Normal => {
-            // Normal: Use card's configured colors
-            let body_bg = rgba_to_color32(card.visuals.body_bg_color);
-            let days_fg = rgba_to_color32(card.visuals.days_fg_color);
+            // Normal: Use effective colours
+            let body_bg = rgba_to_color32(effective_body_bg);
+            let days_fg = rgba_to_color32(effective_days_fg);
             let stroke_color = egui::Color32::from_gray(40);
             (body_bg, days_fg, stroke_color, 1.0)
         }

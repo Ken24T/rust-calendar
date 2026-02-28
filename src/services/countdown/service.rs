@@ -85,6 +85,41 @@ impl CountdownService {
         &self.visual_defaults
     }
 
+    /// Resolve effective visual defaults for a specific category.
+    ///
+    /// If the category has `use_global_defaults = true`, the global visual
+    /// defaults are returned. Otherwise, the category's own `visual_defaults`
+    /// are returned. Falls back to global defaults when the category is not
+    /// found.
+    pub fn effective_visual_defaults_for(
+        &self,
+        category_id: CountdownCategoryId,
+    ) -> CountdownCardVisuals {
+        if let Some(cat) = self.categories.iter().find(|c| c.id == category_id) {
+            if cat.use_global_defaults {
+                self.visual_defaults.clone()
+            } else {
+                cat.visual_defaults.clone()
+            }
+        } else {
+            self.visual_defaults.clone()
+        }
+    }
+
+    /// Build a map of effective visual defaults for every category.
+    ///
+    /// This is useful when rendering multiple categories simultaneously (e.g.
+    /// in container mode where cards from different categories share one
+    /// window).
+    pub fn effective_visual_defaults_map(
+        &self,
+    ) -> std::collections::HashMap<CountdownCategoryId, CountdownCardVisuals> {
+        self.categories
+            .iter()
+            .map(|c| (c.id, self.effective_visual_defaults_for(c.id)))
+            .collect()
+    }
+
     /// Find a countdown card by its associated event ID
     pub fn find_card_by_event_id(&self, event_id: i64) -> Option<&CountdownCardState> {
         self.cards.iter().find(|card| card.event_id == Some(event_id))
@@ -520,6 +555,48 @@ mod tests {
             second_card.visuals.body_bg_color,
             service.defaults().body_bg_color
         );
+    }
+
+    #[test]
+    fn effective_visual_defaults_uses_global_when_category_flag_set() {
+        let mut service = CountdownService::new();
+        // Default category (General) has use_global_defaults = true
+        let defaults = service.effective_visual_defaults_for(CountdownCategoryId(DEFAULT_CATEGORY_ID));
+        assert_eq!(defaults.title_bg_color, service.visual_defaults().title_bg_color);
+    }
+
+    #[test]
+    fn effective_visual_defaults_uses_category_when_flag_unset() {
+        let mut service = CountdownService::new();
+        let custom_color = RgbaColor::new(255, 0, 0, 255);
+        let mut cat = CountdownCategory {
+            name: "Custom".to_string(),
+            use_global_defaults: false,
+            ..CountdownCategory::default()
+        };
+        cat.visual_defaults.title_bg_color = custom_color;
+        let added = service.add_category(cat);
+        let cat_id = added.id;
+
+        let defaults = service.effective_visual_defaults_for(cat_id);
+        assert_eq!(defaults.title_bg_color, custom_color);
+        assert_ne!(defaults.title_bg_color, service.visual_defaults().title_bg_color);
+    }
+
+    #[test]
+    fn effective_visual_defaults_map_covers_all_categories() {
+        let mut service = CountdownService::new();
+        let cat = CountdownCategory {
+            name: "Extra".to_string(),
+            ..CountdownCategory::default()
+        };
+        service.add_category(cat);
+
+        let map = service.effective_visual_defaults_map();
+        assert_eq!(map.len(), service.categories().len());
+        for cat in service.categories() {
+            assert!(map.contains_key(&cat.id));
+        }
     }
 
 }

@@ -214,6 +214,7 @@ impl CountdownUiState {
         let now = Local::now();
         let notification_config = service.notification_config().clone();
         let visual_defaults = service.visual_defaults().clone();
+        let effective_defaults_map = service.effective_visual_defaults_map();
         let container_geometry = service.container_geometry();
         let card_order = service.card_order().to_vec();
         let categories: Vec<(CountdownCategoryId, String)> = service
@@ -234,6 +235,7 @@ impl CountdownUiState {
             &mut self.container_drag_state,
             now,
             &notification_config,
+            &effective_defaults_map,
             &visual_defaults,
             container_geometry,
             default_card_width,
@@ -342,6 +344,7 @@ impl CountdownUiState {
         let now = Local::now();
         let notification_config = service.notification_config().clone();
         let visual_defaults = service.visual_defaults().clone();
+        let effective_defaults_map = service.effective_visual_defaults_map();
         let categories: Vec<(CountdownCategoryId, String)> = service
             .categories()
             .iter()
@@ -426,6 +429,7 @@ impl CountdownUiState {
                 drag_state,
                 now,
                 &notification_config,
+                &effective_defaults_map,
                 &visual_defaults,
                 cat_snap.container_geometry,
                 cat_snap.card_width.max(default_card_width),
@@ -561,6 +565,9 @@ impl CountdownUiState {
             .map(|c| (c.id, c.name.clone()))
             .collect();
 
+        // Pre-compute effective visual defaults per category for three-tier inheritance
+        let effective_defaults_map = service.effective_visual_defaults_map();
+
         let mut category_changes: Vec<(CountdownCardId, CountdownCategoryId)> = Vec::new();
 
         for card in cards {
@@ -591,6 +598,10 @@ impl CountdownUiState {
             let card_clone = card.clone();
             let notification_config = service.notification_config().clone();
             let categories_clone = categories.clone();
+            let card_effective_defaults = effective_defaults_map
+                .get(&card.category_id)
+                .cloned()
+                .unwrap_or_else(|| service.visual_defaults().clone());
             let action =
                 ctx.show_viewport_immediate(viewport_id, builder, move |child_ctx, class| {
                     render_countdown_card_ui(
@@ -603,6 +614,7 @@ impl CountdownUiState {
                         target_geometry,
                         &notification_config,
                         &categories_clone,
+                        &card_effective_defaults,
                     )
                 });
 

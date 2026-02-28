@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.3] - 2026-03-01
+
+### Added
+
+- Three-tier visual inheritance: Global → Category → Card.
+  - Cards with `use_default_*` flags now inherit from their category's visual defaults
+    (or the global defaults when the category has `use_global_defaults = true`).
+  - `effective_visual_defaults_for(category_id)` and `effective_visual_defaults_map()`
+    service methods resolve the inheritance chain.
+  - All three display modes (Individual Windows, Container, Category Containers) now
+    honour the three-tier defaults.
+  - Individual windows mode now correctly resolves `use_default_*` flags (previously
+    bypassed defaults entirely).
+- Three new unit tests covering the visual inheritance resolution.
+
 ## [2.1.2] - 2026-03-01
 
 ### Added
