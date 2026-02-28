@@ -16,9 +16,17 @@ This project adheres to a code of conduct that all contributors are expected to 
 ### Prerequisites
 
 - Rust 1.75 or later ([install from rustup.rs](https://rustup.rs/))
-- Visual Studio Build Tools (Windows C++ development tools)
 - Git for version control
 - A code editor (VS Code with rust-analyzer recommended)
+- **Linux**: system dependencies:
+
+  ```bash
+  # Debian/Ubuntu/Mint
+  sudo apt install build-essential libgtk-3-dev libxcb-render0-dev \
+    libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+  ```
+
+- **Windows**: Visual Studio Build Tools with C++ development tools
 
 ### Development Setup
 
@@ -52,8 +60,8 @@ We use a feature branch workflow:
 - `main` - Stable, production-ready code
 - `feature/*` - New features (e.g., `feature/event-crud`)
 - `fix/*` - Bug fixes (e.g., `fix/reminder-crash`)
-- `refactor/*` - Code refactoring (e.g., `refactor/event-service`)
-- `docs/*` - Documentation updates (e.g., `docs/api-guide`)
+- `infrastructure/*` - Refactoring, tooling, documentation (e.g., `infrastructure/documentation`)
+- `docs/*` - Documentation-only updates (e.g., `docs/api-guide`)
 
 ### Making Changes
 
@@ -154,18 +162,12 @@ pub fn create_event(title: &str, start: DateTime<Local>, end: DateTime<Local>) -
 
 ### Testing
 
-**Coverage Requirement**: >90% overall, 100% for critical modules.
+**Coverage Requirement**: All new non-trivial logic should include tests.
 
 See [TESTING.md](docs/TESTING.md) for comprehensive testing guidelines.
 
-**Test Structure**:
-```
-tests/
-├── unit/          # Mirror src/ structure 1:1
-├── integration/   # End-to-end tests
-├── property/      # Property-based tests
-└── fixtures/      # Shared test data
-```
+**Test Organisation**: Unit tests live as `#[cfg(test)] mod tests` blocks within
+the source files they test. Integration tests are in `tests/`.
 
 **Example Test**:
 ```rust
@@ -376,12 +378,12 @@ cargo tarpaulin --out Html
 
 ```
 rust-calendar/
-├── src/              # Source code (max 300 lines per file)
-│   ├── ui/           # User interface components
-│   ├── models/       # Data models
-│   ├── services/     # Business logic
-│   └── utils/        # Utility functions
-├── tests/            # Test suite
+├── src/              # Source code (target: <300 lines per file)
+│   ├── models/       # Domain entities (UI-agnostic)
+│   ├── services/     # Business logic (UI-agnostic)
+│   ├── ui_egui/      # egui presentation layer
+│   └── utils/        # Shared helpers
+├── tests/            # Integration tests
 ├── benches/          # Performance benchmarks
 ├── docs/             # Documentation
 ├── assets/           # Themes, icons, resources
