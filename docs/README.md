@@ -12,6 +12,7 @@ materials for the Rust Calendar project.
 - [TESTING.md](TESTING.md) — Testing philosophy, patterns, and coverage requirements
 - [UI_SYSTEM.md](UI_SYSTEM.md) — UI system overview: views, customisation, shortcuts
 - [FUTURE_ENHANCEMENTS.md](FUTURE_ENHANCEMENTS.md) — Planned future improvements
+
 ## Feature Planning — Google Calendar Sync
 
 - [GOOGLE_CALENDAR_STAGE1_ROADMAP.md](GOOGLE_CALENDAR_STAGE1_ROADMAP.md) — Stage 1 roadmap for read-only ICS feed sync
