@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-28
+
+### Added
+
+- Countdown category manager dialog for creating, editing, and deleting countdown card categories.
+  - Two-column layout: scrollable category list (with card counts) and editor panel.
+  - Create/rename/reorder categories with duplicate name validation.
+  - Delete with confirmation; cards reassigned to the default "General" category.
+  - Accessible from View → Countdown Cards → Manage Categories menu.
+- Data layer for countdown card categories (from prior commit):
+  - `CountdownCategory` model with visual defaults, container geometry, and display ordering.
+  - `countdown_categories` database table with "General" seed row.
+  - `category_id` column on `countdown_cards` table.
+  - Full repository CRUD (`repository_categories.rs`) and service methods.
+  - `CategoryContainers` display mode variant.
+
 ## [2.0.17] - 2026-02-28
 
 ### Refactored

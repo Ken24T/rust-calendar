@@ -2,6 +2,7 @@ use crate::services::countdown::CountdownCardGeometry;
 use crate::ui_egui::settings_dialog::SettingsDialogState;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::dialogs::category_manager::CategoryManagerState;
+use crate::ui_egui::dialogs::countdown_category_manager::CountdownCategoryManagerState;
 use crate::ui_egui::dialogs::export_dialog::ExportDialogState;
 use crate::ui_egui::dialogs::search_dialog::SearchDialogState;
 use crate::ui_egui::dialogs::template_manager::TemplateManagerState;
@@ -40,6 +41,7 @@ impl DatePickerState {
 pub struct AppState {
     pub backup_manager_state: BackupManagerState,
     pub category_manager_state: CategoryManagerState,
+    pub countdown_category_manager_state: CountdownCategoryManagerState,
     pub theme_dialog_state: ThemeDialogState,
     pub theme_creator_state: ThemeCreatorState,
     pub search_dialog_state: SearchDialogState,
@@ -65,6 +67,7 @@ impl AppState {
         Self {
             backup_manager_state,
             category_manager_state: CategoryManagerState::new(),
+            countdown_category_manager_state: CountdownCategoryManagerState::new(),
             theme_dialog_state: ThemeDialogState::new(),
             theme_creator_state: ThemeCreatorState::new(),
             search_dialog_state: SearchDialogState::default(),

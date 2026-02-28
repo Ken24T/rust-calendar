@@ -284,6 +284,13 @@ impl CalendarApp {
                 }
                 
                 ui.separator();
+
+                if ui.button("📂 Manage Categories...").clicked() {
+                    self.state.countdown_category_manager_state.open();
+                    ui.close_menu();
+                }
+
+                ui.separator();
                 
                 // Reset positions option - helpful when cards get lost on disconnected monitors
                 let card_count = self.context.countdown_service().cards().len();
