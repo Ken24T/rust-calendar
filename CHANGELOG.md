@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2026-02-28
+
+### Refactored
+
+- Extracted day view UI into focused modules, reducing `day_view.rs` from 1103 to 733 lines:
+  - `day_event_rendering.rs` (144 lines) — event block and continuation bar painting in day-view time slots.
+  - `day_context_menu.rs` (235 lines) — slot context menu popup (edit, delete, countdown, export, templates).
+
 ## [2.0.3] - 2026-02-28
 
 ### Refactored
