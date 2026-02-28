@@ -4,8 +4,9 @@ use chrono::{DateTime, Local};
 
 use super::models::{
     CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownDisplayMode, CountdownNotificationConfig,
-    CountdownPersistedState, RgbaColor, MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
+    CountdownCardVisuals, CountdownCategory, CountdownCategoryId, CountdownDisplayMode,
+    CountdownNotificationConfig, CountdownPersistedState, RgbaColor, DEFAULT_CATEGORY_ID,
+    MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
 };
 use super::palette::apply_event_palette_if_needed;
 
@@ -23,6 +24,7 @@ pub struct CountdownService {
     pub(super) display_mode: CountdownDisplayMode,
     pub(super) container_geometry: Option<CountdownCardGeometry>,
     pub(super) card_order: Vec<CountdownCardId>,
+    pub(super) categories: Vec<CountdownCategory>,
 }
 
 impl Default for CountdownService {
@@ -71,6 +73,7 @@ impl CountdownService {
             display_mode: snapshot.display_mode,
             container_geometry: snapshot.container_geometry,
             card_order: snapshot.card_order,
+            categories: snapshot.categories,
         }
     }
 
@@ -115,6 +118,35 @@ impl CountdownService {
         event_body: Option<String>,
         default_width: f32,
         default_height: f32,
+    ) -> CountdownCardId {
+        self.create_card_in_category(
+            event_id,
+            event_title,
+            start_at,
+            event_start,
+            event_end,
+            event_color,
+            event_body,
+            default_width,
+            default_height,
+            CountdownCategoryId(DEFAULT_CATEGORY_ID),
+        )
+    }
+
+    /// Create a new countdown card assigned to a specific category.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_card_in_category(
+        &mut self,
+        event_id: Option<i64>,
+        event_title: impl Into<String>,
+        start_at: DateTime<Local>,
+        event_start: Option<DateTime<Local>>,
+        event_end: Option<DateTime<Local>>,
+        event_color: Option<RgbaColor>,
+        event_body: Option<String>,
+        default_width: f32,
+        default_height: f32,
+        category_id: CountdownCategoryId,
     ) -> CountdownCardId {
         const MIN_DIMENSION: f32 = 20.0;
         const MAX_DIMENSION: f32 = 600.0;
@@ -172,6 +204,7 @@ impl CountdownService {
             last_warning_state: None,
             last_notification_time: None,
             auto_dismiss: self.auto_dismiss_defaults.clone(),
+            category_id,
         };
         apply_event_palette_if_needed(&mut card);
         self.cards.push(card);
@@ -255,6 +288,94 @@ impl CountdownService {
         false
     }
 
+    // ========== Category Management ==========
+
+    /// Get all categories.
+    #[allow(dead_code)]
+    pub fn categories(&self) -> &[CountdownCategory] {
+        &self.categories
+    }
+
+    /// Get a mutable reference to a category by ID.
+    #[allow(dead_code)]
+    pub fn category_mut(&mut self, id: CountdownCategoryId) -> Option<&mut CountdownCategory> {
+        self.categories.iter_mut().find(|c| c.id == id)
+    }
+
+    /// Add a new category. Returns the category (with a temporary ID).
+    /// The real ID is assigned by the database on save.
+    #[allow(dead_code)]
+    pub fn add_category(&mut self, mut category: CountdownCategory) -> &CountdownCategory {
+        // Assign a temporary ID (negative to distinguish from DB-assigned)
+        // The real ID will be set when saved to the database
+        let max_id = self
+            .categories
+            .iter()
+            .map(|c| c.id.0)
+            .max()
+            .unwrap_or(0);
+        category.id = CountdownCategoryId(max_id + 1);
+        self.categories.push(category);
+        self.dirty = true;
+        self.categories.last().unwrap()
+    }
+
+    /// Remove a category by ID. Cards in this category are reassigned to
+    /// the default "General" category.
+    #[allow(dead_code)]
+    pub fn remove_category(&mut self, id: CountdownCategoryId) -> bool {
+        if id.0 == DEFAULT_CATEGORY_ID {
+            log::warn!("Cannot remove the default 'General' category");
+            return false;
+        }
+
+        let existed = self.categories.iter().any(|c| c.id == id);
+        if !existed {
+            return false;
+        }
+
+        // Reassign cards to the default category
+        let default_id = CountdownCategoryId(DEFAULT_CATEGORY_ID);
+        for card in &mut self.cards {
+            if card.category_id == id {
+                card.category_id = default_id;
+            }
+        }
+
+        self.categories.retain(|c| c.id != id);
+        self.dirty = true;
+        true
+    }
+
+    /// Change a card's category.
+    #[allow(dead_code)]
+    pub fn set_card_category(
+        &mut self,
+        card_id: CountdownCardId,
+        category_id: CountdownCategoryId,
+    ) -> bool {
+        if let Some(card) = self.cards.iter_mut().find(|c| c.id == card_id) {
+            card.category_id = category_id;
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    /// Get cards belonging to a specific category.
+    #[allow(dead_code)]
+    pub fn cards_in_category(&self, category_id: CountdownCategoryId) -> Vec<&CountdownCardState> {
+        self.cards
+            .iter()
+            .filter(|c| c.category_id == category_id)
+            .collect()
+    }
+
+    /// Set the categories list directly (used when loading from database).
+    #[allow(dead_code)]
+    pub(super) fn set_categories(&mut self, categories: Vec<CountdownCategory>) {
+        self.categories = categories;
+    }
 }
 
 #[cfg(test)]

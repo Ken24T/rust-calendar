@@ -175,7 +175,7 @@ impl CountdownUiState {
             CountdownDisplayMode::IndividualWindows => {
                 self.render_individual_windows(ctx, service)
             }
-            CountdownDisplayMode::Container => {
+            CountdownDisplayMode::Container | CountdownDisplayMode::CategoryContainers => {
                 self.render_container_mode(ctx, service, default_card_width, default_card_height)
             }
         }

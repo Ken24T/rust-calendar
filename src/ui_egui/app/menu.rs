@@ -269,6 +269,20 @@ impl CalendarApp {
                     ui.close_menu();
                 }
                 
+                if ui
+                    .selectable_label(
+                        current_mode == CountdownDisplayMode::CategoryContainers,
+                        "Category Containers",
+                    )
+                    .clicked()
+                {
+                    self.countdown_ui.reset_container_state();
+                    self.context
+                        .countdown_service_mut()
+                        .set_display_mode(CountdownDisplayMode::CategoryContainers);
+                    ui.close_menu();
+                }
+                
                 ui.separator();
                 
                 // Reset positions option - helpful when cards get lost on disconnected monitors

@@ -106,6 +106,7 @@ impl<'a> CountdownRepository<'a> {
                     .map(|s| match s {
                         "IndividualWindows" => CountdownDisplayMode::IndividualWindows,
                         "Container" => CountdownDisplayMode::Container,
+                        "CategoryContainers" => CountdownDisplayMode::CategoryContainers,
                         _ => CountdownDisplayMode::default(),
                     })
                     .unwrap_or_default();
@@ -202,6 +203,7 @@ impl<'a> CountdownRepository<'a> {
         let display_mode_str = match settings.display_mode {
             CountdownDisplayMode::IndividualWindows => "IndividualWindows",
             CountdownDisplayMode::Container => "Container",
+            CountdownDisplayMode::CategoryContainers => "CategoryContainers",
         };
 
         let card_order_str = settings

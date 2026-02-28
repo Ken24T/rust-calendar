@@ -141,6 +141,60 @@ pub(super) fn create_countdown_tables(conn: &Connection) -> Result<()> {
     )
     .context("Failed to insert default countdown settings")?;
 
+    // Countdown categories table for grouping cards
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS countdown_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            display_order INTEGER NOT NULL DEFAULT 0,
+
+            -- Container geometry for CategoryContainers mode
+            container_x REAL,
+            container_y REAL,
+            container_width REAL,
+            container_height REAL,
+
+            -- Category-level visual defaults (three-tier: Global → Category → Card)
+            default_title_bg_r INTEGER NOT NULL DEFAULT 10,
+            default_title_bg_g INTEGER NOT NULL DEFAULT 34,
+            default_title_bg_b INTEGER NOT NULL DEFAULT 145,
+            default_title_bg_a INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_r INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_g INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_b INTEGER NOT NULL DEFAULT 255,
+            default_title_fg_a INTEGER NOT NULL DEFAULT 255,
+            default_title_font_size REAL NOT NULL DEFAULT 20.0,
+            default_body_bg_r INTEGER NOT NULL DEFAULT 103,
+            default_body_bg_g INTEGER NOT NULL DEFAULT 176,
+            default_body_bg_b INTEGER NOT NULL DEFAULT 255,
+            default_body_bg_a INTEGER NOT NULL DEFAULT 255,
+            default_days_fg_r INTEGER NOT NULL DEFAULT 15,
+            default_days_fg_g INTEGER NOT NULL DEFAULT 32,
+            default_days_fg_b INTEGER NOT NULL DEFAULT 70,
+            default_days_fg_a INTEGER NOT NULL DEFAULT 255,
+            default_days_font_size REAL NOT NULL DEFAULT 80.0,
+
+            -- Default card dimensions for new cards in this category
+            default_card_width REAL NOT NULL DEFAULT 120.0,
+            default_card_height REAL NOT NULL DEFAULT 110.0,
+
+            -- When true, category inherits global defaults instead of its own
+            use_global_defaults INTEGER NOT NULL DEFAULT 1,
+
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create countdown_categories table")?;
+
+    // Seed the default "General" category (id = 1)
+    conn.execute(
+        "INSERT OR IGNORE INTO countdown_categories (id, name, display_order) VALUES (1, 'General', 0)",
+        [],
+    )
+    .context("Failed to seed default countdown category")?;
+
     Ok(())
 }
 
@@ -206,6 +260,14 @@ pub(super) fn run_countdown_migrations(conn: &Connection) -> Result<()> {
     // Reset use_default_* flags to 0 for existing cards (one-time migration)
     // This ensures checkboxes start unchecked by default
     migrate_use_default_flags(conn)?;
+
+    // Add category_id column to countdown_cards (defaults to 1 = "General")
+    migrations::ensure_column(
+        conn,
+        "countdown_cards",
+        "category_id",
+        "ALTER TABLE countdown_cards ADD COLUMN category_id INTEGER NOT NULL DEFAULT 1 REFERENCES countdown_categories(id)",
+    )?;
 
     Ok(())
 }

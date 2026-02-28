@@ -31,6 +31,7 @@ impl CountdownService {
             display_mode: self.display_mode,
             container_geometry: self.container_geometry,
             card_order: self.card_order.clone(),
+            categories: self.categories.clone(),
         }
     }
 
@@ -59,6 +60,9 @@ impl CountdownService {
         // Load all cards
         let mut cards = repo.get_all_cards()?;
 
+        // Load categories
+        let categories = repo.get_all_categories()?;
+
         // Clamp font sizes
         for card in &mut cards {
             card.visuals.days_font_size = card
@@ -73,8 +77,8 @@ impl CountdownService {
             .clamp(MIN_DAYS_FONT_SIZE, MAX_DAYS_FONT_SIZE);
 
         log::info!(
-            "Loaded countdown service from database: container_geometry={:?}, display_mode={:?}",
-            settings.container_geometry, settings.display_mode
+            "Loaded countdown service from database: container_geometry={:?}, display_mode={:?}, categories={}",
+            settings.container_geometry, settings.display_mode, categories.len()
         );
 
         Ok(Self {
@@ -90,6 +94,7 @@ impl CountdownService {
             display_mode: settings.display_mode,
             container_geometry: settings.container_geometry,
             card_order: settings.card_order,
+            categories,
         })
     }
 
@@ -97,6 +102,46 @@ impl CountdownService {
     /// This method syncs the in-memory state with the database.
     pub fn save_to_database(&mut self, conn: &Connection) -> Result<()> {
         let repo = CountdownRepository::new(conn);
+
+        // Sync categories first (cards reference categories via FK)
+        let existing_categories = repo.get_all_categories()?;
+        let existing_cat_ids: std::collections::HashSet<i64> =
+            existing_categories.iter().map(|c| c.id.0).collect();
+        let current_cat_ids: std::collections::HashSet<i64> =
+            self.categories.iter().map(|c| c.id.0).collect();
+
+        // Delete removed categories (reassigns cards to General)
+        for id in existing_cat_ids.difference(&current_cat_ids) {
+            use super::models::CountdownCategoryId;
+            if let Err(e) = repo.delete_category(CountdownCategoryId(*id)) {
+                log::warn!("Failed to delete category {}: {}", id, e);
+            }
+        }
+
+        // Insert or update current categories, collecting ID remaps
+        let mut id_remaps: Vec<(super::models::CountdownCategoryId, super::models::CountdownCategoryId)> = Vec::new();
+        for category in &self.categories {
+            if existing_cat_ids.contains(&category.id.0) {
+                repo.update_category(category)?;
+            } else {
+                let new_id = repo.insert_category(category)?;
+                if new_id != category.id {
+                    id_remaps.push((category.id, new_id));
+                }
+            }
+        }
+
+        // Apply any ID remaps from newly-inserted categories
+        for (old_id, new_id) in &id_remaps {
+            for card in &mut self.cards {
+                if card.category_id == *old_id {
+                    card.category_id = *new_id;
+                }
+            }
+            if let Some(cat) = self.categories.iter_mut().find(|c| c.id == *old_id) {
+                cat.id = *new_id;
+            }
+        }
 
         // Update global settings
         let settings = CountdownGlobalSettings {
