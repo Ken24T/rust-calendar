@@ -228,3 +228,40 @@ pub fn parse_hex_color(hex: &str) -> Option<Color32> {
         None
     }
 }
+
+/// Width of the form label column, shared across all event dialog sections.
+pub const FORM_LABEL_WIDTH: f32 = 180.0;
+
+/// Render a horizontal row with a right-aligned label and custom content.
+pub fn labeled_row<F>(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>, add_contents: F)
+where
+    F: FnOnce(&mut egui::Ui),
+{
+    ui.horizontal(|ui| {
+        render_form_label(ui, label);
+        add_contents(ui);
+    });
+}
+
+/// Render a right-aligned form label at `FORM_LABEL_WIDTH`.
+pub fn render_form_label(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>) {
+    let text = label.into();
+    ui.allocate_ui_with_layout(
+        egui::Vec2::new(FORM_LABEL_WIDTH, 24.0),
+        egui::Layout::right_to_left(egui::Align::Center),
+        move |ui| {
+            ui.label(text);
+        },
+    );
+}
+
+/// Render a horizontal row indented by `FORM_LABEL_WIDTH`.
+pub fn indented_row<F>(ui: &mut egui::Ui, add_contents: F)
+where
+    F: FnOnce(&mut egui::Ui),
+{
+    ui.horizontal(|ui| {
+        ui.add_space(FORM_LABEL_WIDTH);
+        add_contents(ui);
+    });
+}

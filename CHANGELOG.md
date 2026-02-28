@@ -5,6 +5,162 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.17] - 2026-02-28
+
+### Refactored
+
+- Extracted single time cell rendering from `views/time_grid.rs` into `views/time_grid_cell.rs` (~490 lines), reducing `time_grid.rs` from 672 to 191 lines.
+  - Moved `render_time_cell` and `TimeCellConfig` with all drag/drop, resize, tooltip, and context menu logic.
+- Extracted individual view rendering methods from `app/views/mod.rs` into `app/views/view_rendering.rs` (~310 lines), reducing `mod.rs` from 574 to 270 lines.
+  - Moved `render_day_view`, `render_week_view`, `render_workweek_view`, `render_month_view`, `handle_timed_view_result`, and `handle_delete_confirm_request`.
+
+## [2.0.16] - 2026-02-28
+
+### Refactored
+
+- Extracted time slot rendering from `views/day_view.rs` into `views/day_time_slot.rs` (~490 lines), reducing `day_view.rs` from 733 to 305 lines.
+  - Moved `render_time_slot` with all drag/drop, resize handle, context menu, tooltip, and event interaction logic.
+- Extracted event helper functions from `views/mod.rs` into `views/event_helpers.rs` (~520 lines), reducing `mod.rs` from 651 to 83 lines.
+  - Moved `event_time_segment_for_date`, `countdown_menu_state`, `filter_events_by_category`, `is_ribbon_event`, `event_display_end_date`, `event_covers_date`, `build_ribbon_lanes`, `load_synced_event_ids`, `is_synced_event`, `filter_events_by_sync_scope`, `CountdownRequest::from_event` impl, and all associated tests.
+
+## [2.0.15] - 2026-02-28
+
+### Refactored
+
+- Extracted validation and persistence methods from `event_dialog/state.rs` into `event_dialog/state_persistence.rs` (234 lines), reducing `state.rs` from 681 to 385 lines.
+  - Moved `save`, `start_end_datetimes`, `build_rrule`, `validate`, `check_warnings`, and `to_event` methods.
+- Extracted day cell rendering from `views/month_view.rs` into `views/month_day_cell.rs` (404 lines), reducing `month_view.rs` from 770 to 323 lines.
+  - Moved `render_day_cell` and `truncate_single_line_to_width` methods.
+
+## [2.0.14] - 2026-02-28
+
+### Refactored
+
+- Extracted countdown schema functions from `database/schema.rs` into `database/schema_countdown.rs` (253 lines), reducing `schema.rs` from 723 to 475 lines.
+  - Moved `create_countdown_tables`, `run_countdown_migrations`, and `migrate_use_default_flags`.
+- Extracted global settings operations from `countdown/repository.rs` into `countdown/repository_settings.rs` (291 lines), reducing `repository.rs` from 702 to 425 lines.
+  - Moved `CountdownGlobalSettings` struct + `Default` impl, `get_global_settings`, `update_global_settings`, and `update_next_card_id`.
+
+## [2.0.13] - 2026-02-28
+
+### Refactored
+
+- Extracted 8 built-in theme preset constructors from `theme.rs` into `theme_presets.rs` (193 lines), reducing `theme.rs` from 674 to 411 lines.
+  - Moved `light()`, `dark()`, `solarized_light()`, `solarized_dark()`, `nord()`, `dracula()`, `high_contrast()`, `sepia()`.
+- Extracted theme dialog and creator handling from `app/dialogs/mod.rs` into `dialogs/theme_handling.rs` (206 lines), reducing `dialogs/mod.rs` from 585 to 352 lines.
+  - Moved `render_theme_dialog` (all `ThemeDialogAction` variants) and `render_theme_creator`.
+
+## [2.0.12] - 2026-02-28
+
+### Refactored
+
+- Extracted drawing functions from `resize.rs` into `resize_drawing.rs` (227 lines), reducing `resize.rs` from 673 to 470 lines.
+  - Moved `draw_handles` and `draw_resize_preview` with re-exports for transparent consumer access.
+- Extracted settings-related methods from countdown `state.rs` into `state_settings.rs` (258 lines), reducing `state.rs` from 845 to 544 lines.
+  - Moved `render_settings_dialogs`, `apply_settings_command`, and `default_settings_geometry_for`.
+
+## [2.0.11] - 2026-02-28
+
+### Refactored
+
+- Extracted time grid context menu into `time_grid_context_menu.rs` (277 lines), reducing `time_grid.rs` from 783 to 620 lines.
+  - Split popup body into focused helpers: `render_event_menu`, `render_delete_buttons`, `render_export_button`, `render_empty_slot_menu`.
+- Extracted date picker popup into `views/date_picker.rs` (173 lines), reducing `app/views/mod.rs` from 782 to 526 lines.
+  - Split into `render_date_picker_header` and `render_date_picker_grid` helper methods.
+  - Moved `shift_month` and `days_in_month` helper functions.
+- DRYed triplicated view-result handling in day/week/workweek views into a single `handle_timed_view_result` helper method (~90 lines eliminated).
+
+## [2.0.10] - 2026-02-28
+
+### Removed
+
+- Deleted dead test infrastructure (4 files, 364 lines):
+  - `tests/fixtures/mod.rs` — mock types never imported by any test.
+  - `tests/property/recurrence_properties.rs` — placeholder testing mock functions, not real code.
+  - `tests/unit/models/recurrence_frequency_tests.rs` — testing a local `Frequency` copy, not the real model.
+  - None of these files were compiled or executed by `cargo test` (test count unchanged at 298+3+1).
+
+## [2.0.9] - 2026-02-28
+
+### Removed
+
+- Deleted legacy `src/ui/` directory (29 files, 5,332 lines of dead code).
+  - Module was commented out in `lib.rs`, not compiled, and not referenced by any active code.
+  - Removed stale reference from copilot instructions.
+
+## [2.0.8] - 2026-02-28
+
+### Refactored
+
+- Extracted menu bar into focused modules, reducing `menu.rs` from 858 to 524 lines:
+  - `menu_export.rs` (237 lines) — PDF and ICS export functions (month, week, all events, filtered, date range).
+  - `menu_help.rs` (106 lines) — Help menu and About dialog.
+- Removed unused imports from menu.rs after extraction.
+
+## [2.0.7] - 2026-02-28
+
+### Refactored
+
+- Extracted event dialog rendering into focused modules, reducing `render.rs` from 872 to 437 lines:
+  - `render_date_time.rs` (202 lines) — date/time pickers, all-day toggle, quick date buttons.
+  - `render_recurrence.rs` (234 lines) — frequency, interval, pattern, BYDAY toggles, weekday shortcuts, end condition.
+- Added shared layout helpers to `widgets.rs`: `labeled_row`, `indented_row`, `render_form_label`, `FORM_LABEL_WIDTH`.
+- Replaced `hex_to_color32` with existing `parse_hex_color` from widgets module.
+
+## [2.0.6] - 2026-02-28
+
+### Refactored
+
+- Extracted calendar sync settings into focused module, reducing `settings_dialog.rs` from 880 to 560 lines:
+  - `settings_calendar_sync.rs` (364 lines) — Google Calendar ICS source management (add/edit/delete/sync).
+- Moved `CalendarSourceDraft`, sync polling, and sync section rendering to dedicated module.
+
+## [2.0.5] - 2026-02-28
+
+### Refactored
+
+- Extracted month view context menu into focused module, reducing `month_view.rs` from 992 to 769 lines:
+  - `month_context_menu.rs` (303 lines) — day-cell context menu popup (edit, delete, countdown, templates).
+- Replaced duplicate `parse_color` in month view with shared version from `week_shared`.
+- Removed duplicate `countdown_request_for_month_event` method.
+
+## [2.0.4] - 2026-02-28
+
+### Refactored
+
+- Extracted day view UI into focused modules, reducing `day_view.rs` from 1103 to 733 lines:
+  - `day_event_rendering.rs` (144 lines) — event block and continuation bar painting in day-view time slots.
+  - `day_context_menu.rs` (235 lines) — slot context menu popup (edit, delete, countdown, export, templates).
+
+## [2.0.3] - 2026-02-28
+
+### Refactored
+
+- Extracted week-shared UI into focused modules, reducing `week_shared.rs` from 1499 to 432 lines:
+  - `event_rendering.rs` (222 lines) — parse_color, individual event block painting, continuation bars, tooltips.
+  - `time_grid.rs` (783 lines) — interactive time-slot grid, cell rendering, drag/drop, resize, context menus.
+- All items re-exported from `week_shared` for API compatibility.
+
+## [2.0.2] - 2026-02-28
+
+### Refactored
+
+- Extracted container UI into focused modules, reducing `container.rs` from 1305 to 462 lines:
+  - `card_rendering.rs` (302 lines) — individual card rendering, tooltip formatting, colour calculations.
+  - `container_layout.rs` (427 lines) — layout computation, drag-and-drop state, insertion indicators, 11 unit tests.
+
+## [2.0.1] - 2026-02-28
+
+### Refactored
+
+- Extracted countdown service into focused modules, reducing `service.rs` from 1472 to 346 lines:
+  - `palette.rs` (159 lines) — event-derived colour palette for countdown cards.
+  - `visuals.rs` (266 lines) — per-card and default visual setters.
+  - `storage.rs` (234 lines) — JSON snapshot and SQLite persistence.
+  - `sync.rs` (177 lines) — event synchronisation to countdown cards.
+  - `notifications.rs` (129 lines) — notification triggers and auto-dismiss logic.
+  - `layout.rs` (270 lines) — geometry, display mode, ordering, and position management.
+
 ## [2.0.0] - 2026-02-28
 
 ### Summary
