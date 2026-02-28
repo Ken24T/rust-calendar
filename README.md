@@ -134,8 +134,9 @@ rust-calendar/
 
 ## Documentation
 
-See [docs/README.md](docs/README.md) for a full index of project documentation,
-including architecture guides, design specifications, and planning documents.
+- [User Guide](docs/USER_GUIDE.md) — how to use the application
+- [Features](docs/FEATURES.md) — concise feature summary
+- [docs/README.md](docs/README.md) — full index of all project documentation
 
 ## Contributing
 
