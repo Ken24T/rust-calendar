@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.14] - 2026-02-28
+
+### Refactored
+
+- Extracted countdown schema functions from `database/schema.rs` into `database/schema_countdown.rs` (253 lines), reducing `schema.rs` from 723 to 475 lines.
+  - Moved `create_countdown_tables`, `run_countdown_migrations`, and `migrate_use_default_flags`.
+- Extracted global settings operations from `countdown/repository.rs` into `countdown/repository_settings.rs` (291 lines), reducing `repository.rs` from 702 to 425 lines.
+  - Moved `CountdownGlobalSettings` struct + `Default` impl, `get_global_settings`, `update_global_settings`, and `update_next_card_id`.
+
 ## [2.0.13] - 2026-02-28
 
 ### Refactored
