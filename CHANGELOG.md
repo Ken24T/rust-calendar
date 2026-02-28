@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.13] - 2026-02-28
+
+### Refactored
+
+- Extracted 8 built-in theme preset constructors from `theme.rs` into `theme_presets.rs` (193 lines), reducing `theme.rs` from 674 to 411 lines.
+  - Moved `light()`, `dark()`, `solarized_light()`, `solarized_dark()`, `nord()`, `dracula()`, `high_contrast()`, `sepia()`.
+- Extracted theme dialog and creator handling from `app/dialogs/mod.rs` into `dialogs/theme_handling.rs` (206 lines), reducing `dialogs/mod.rs` from 585 to 352 lines.
+  - Moved `render_theme_dialog` (all `ThemeDialogAction` variants) and `render_theme_creator`.
+
 ## [2.0.12] - 2026-02-28
 
 ### Refactored

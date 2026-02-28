@@ -9,6 +9,7 @@ mod settings_calendar_sync;
 mod settings_dialog;
 pub mod theme;
 mod theme_picker;
+mod theme_presets;
 mod views;
 
 pub use app::CalendarApp;
