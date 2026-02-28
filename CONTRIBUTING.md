@@ -31,22 +31,26 @@ This project adheres to a code of conduct that all contributors are expected to 
 ### Development Setup
 
 1. **Fork and clone the repository**:
+
    ```powershell
    git clone https://github.com/yourusername/rust-calendar.git
    cd rust-calendar
    ```
 
 2. **Build the project**:
+
    ```powershell
    cargo build
    ```
 
 3. **Run tests**:
+
    ```powershell
    cargo test
    ```
 
 4. **Run the application**:
+
    ```powershell
    cargo run
    ```
@@ -66,6 +70,7 @@ We use a feature branch workflow:
 ### Making Changes
 
 1. **Create a feature branch**:
+
    ```powershell
    git checkout -b feature/your-feature-name
    ```
@@ -75,26 +80,31 @@ We use a feature branch workflow:
 3. **Write tests** for your changes (see TESTING.md)
 
 4. **Run the test suite**:
+
    ```powershell
    cargo test
    ```
 
 5. **Check code formatting**:
+
    ```powershell
    cargo fmt --check
    ```
 
 6. **Run clippy for lints**:
+
    ```powershell
    cargo clippy -- -D warnings
    ```
 
 7. **Commit your changes** with a descriptive message:
+
    ```powershell
    git commit -m "feat: add event recurrence validation"
    ```
 
 8. **Push to your fork**:
+
    ```powershell
    git push origin feature/your-feature-name
    ```
@@ -110,6 +120,7 @@ We use a feature branch workflow:
 **Single Responsibility**: Each module should have one clear purpose.
 
 **Example**:
+
 ```rust
 // Good: Focused module
 // src/services/event/create.rs (150 lines)
@@ -130,6 +141,7 @@ We follow Rust standard style guidelines:
 - Limit nesting to 4 levels
 
 **Example**:
+
 ```rust
 /// Creates a new event with the given parameters.
 ///
@@ -170,6 +182,7 @@ See [TESTING.md](docs/TESTING.md) for comprehensive testing guidelines.
 the source files they test. Integration tests are in `tests/`.
 
 **Example Test**:
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -213,6 +226,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 **Format**: `<type>(<scope>): <description>`
 
 **Types**:
+
 - `feat` - New feature
 - `fix` - Bug fix
 - `docs` - Documentation changes
@@ -222,7 +236,8 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 - `perf` - Performance improvements
 
 **Examples**:
-```
+
+```text
 feat(event): add fortnightly recurrence pattern
 fix(reminder): resolve notification crash on Windows 11
 docs(api): update event creation examples
@@ -294,6 +309,7 @@ Brief description of changes
 **Title**: Clear, concise description
 
 **Template**:
+
 ```markdown
 ## Description
 What happened?
@@ -323,6 +339,7 @@ Screenshots, logs, etc.
 **Title**: `feat: [Feature Name]`
 
 **Template**:
+
 ```markdown
 ## Feature Description
 Clear description of the feature
@@ -376,7 +393,7 @@ cargo tarpaulin --out Html
 
 ## Project Structure
 
-```
+```text
 rust-calendar/
 ├── src/              # Source code (target: <300 lines per file)
 │   ├── models/       # Domain entities (UI-agnostic)
@@ -400,6 +417,7 @@ rust-calendar/
 ## Recognition
 
 Contributors will be recognized in:
+
 - CHANGELOG.md (for significant contributions)
 - README.md (major features)
 - Git commit history (all contributions)

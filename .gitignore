@@ -4,9 +4,10 @@
 *.pdb
 
 # Cargo
-Cargo.lock
-**/*.rs.bk
 *.orig
+
+# Build logs
+build.log
 
 # IDE
 .vscode/
