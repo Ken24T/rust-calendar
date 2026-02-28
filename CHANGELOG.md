@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.5] - 2026-02-28
+
+### Refactored
+
+- Extracted month view context menu into focused module, reducing `month_view.rs` from 992 to 769 lines:
+  - `month_context_menu.rs` (303 lines) — day-cell context menu popup (edit, delete, countdown, templates).
+- Replaced duplicate `parse_color` in month view with shared version from `week_shared`.
+- Removed duplicate `countdown_request_for_month_event` method.
+
 ## [2.0.4] - 2026-02-28
 
 ### Refactored
