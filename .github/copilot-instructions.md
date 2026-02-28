@@ -23,7 +23,6 @@ Primary goal: a polished, performant calendar app that runs natively on Linux an
 | `/src/ui_egui/app/` | App shell: lifecycle, menu, navigation, sidebar, shortcuts, state, countdown, dialogs, views |
 | `/src/ui_egui/views/` | Calendar views: day, week, workweek, month, quarter |
 | `/src/ui_egui/dialogs/` | Modal dialogs: settings, themes, backup, categories, export, search |
-| `/src/ui/` | Legacy GTK UI layer (retained, not actively developed) |
 | `/src/utils/` | Shared utilities (date helpers) |
 | `/tests/` | Integration tests, unit test modules, property tests, fixtures |
 | `/benches/` | Criterion benchmarks (recurrence performance) |
