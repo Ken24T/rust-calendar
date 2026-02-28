@@ -1,5 +1,7 @@
 # Project Update Summary
 
+> **Status: Historical** — This update was applied in early development. Retained for reference only.
+
 ## What Changed
 
 This update enhances the Rust Calendar project plan with a strong focus on **modularity** and **comprehensive testing**, plus adds **fortnightly** and **quarterly** recurrence patterns.

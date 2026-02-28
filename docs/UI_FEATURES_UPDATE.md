@@ -1,5 +1,7 @@
 # UI Features Update Summary
 
+> **Status: Implemented** — These features have been built and shipped. This document is the original design specification, retained for reference. Actual implementation may differ in details.
+
 ## Overview
 
 This update adds comprehensive calendar view options, extensive UI customization capabilities, and drag-and-drop functionality to the Rust Calendar project.

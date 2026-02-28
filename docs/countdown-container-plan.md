@@ -1,5 +1,7 @@
 # Enhanced Countdown Container Implementation Plan
 
+> **Status: Implemented** — The countdown container has been built and shipped. This document is the original implementation plan, retained for reference. Actual implementation may differ in details.
+
 ## Overview
 Implement a container mode for countdown cards that allows users to display all countdown cards in a single resizable window, while preserving the existing individual window mode.
 
