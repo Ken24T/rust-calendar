@@ -9,7 +9,8 @@ Every line of production code should be covered by tests. Testing is not optiona
 ## Testing Hierarchy
 
 ### 1. Unit Tests (Primary Focus)
-**Location**: `tests/unit/` or `#[cfg(test)] mod tests` within source files
+
+**Location**: `#[cfg(test)] mod tests` blocks within source files
 
 **Purpose**: Test individual functions, methods, and modules in isolation
 
@@ -21,26 +22,30 @@ Every line of production code should be covered by tests. Testing is not optiona
 
 **Example**:
 ```rust
-// tests/unit/models/recurrence_frequency_tests.rs
-use rust_calendar::models::recurrence::Frequency;
+// In src/models/recurrence/mod.rs
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_fortnightly_interval() {
-    let freq = Frequency::Fortnightly;
-    let (_, interval) = freq.to_rrule_params();
-    assert_eq!(interval, 2, "Fortnightly should have interval of 2 weeks");
-}
+    #[test]
+    fn test_fortnightly_interval() {
+        let freq = Frequency::Fortnightly;
+        let (_, interval) = freq.to_rrule_params();
+        assert_eq!(interval, 2, "Fortnightly should have interval of 2 weeks");
+    }
 
-#[test]
-fn test_quarterly_interval() {
-    let freq = Frequency::Quarterly;
-    let (_, interval) = freq.to_rrule_params();
-    assert_eq!(interval, 3, "Quarterly should have interval of 3 months");
+    #[test]
+    fn test_quarterly_interval() {
+        let freq = Frequency::Quarterly;
+        let (_, interval) = freq.to_rrule_params();
+        assert_eq!(interval, 3, "Quarterly should have interval of 3 months");
+    }
 }
 ```
 
 ### 2. Integration Tests
-**Location**: `tests/integration/`
+
+**Location**: `tests/`
 
 **Purpose**: Test interactions between multiple components
 
@@ -85,7 +90,12 @@ fn test_create_and_retrieve_event() -> Result<()> {
 ```
 
 ### 3. Property-Based Tests
-**Location**: `tests/property/`
+
+> **Note**: Property-based tests were used during early development and have
+> since been removed. The patterns below remain as guidance if property tests
+> are reintroduced in future.
+
+**Location**: `tests/property/` (if reintroduced)
 
 **Purpose**: Test invariants and properties with random inputs
 
@@ -193,21 +203,36 @@ criterion_group!(benches, bench_fortnightly_calculation, bench_quarterly_calcula
 criterion_main!(benches);
 ```
 
-## Test Organization Rules
+## Test Organisation
 
-### Rule 1: Mirror Source Structure
+### Inline Unit Tests
 
+Unit tests live as `#[cfg(test)] mod tests` blocks within the source file they
+test. This keeps tests close to the code they verify and simplifies navigation.
+
+```rust
+// src/models/recurrence/mod.rs
+pub fn calculate_interval(freq: &Frequency) -> u32 {
+    // ...
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_interval_fortnightly() {
+        assert_eq!(calculate_interval(&Frequency::Fortnightly), 2);
+    }
+}
 ```
-src/models/recurrence/frequency.rs
-↓
-tests/unit/models/recurrence_frequency_tests.rs
-```
 
-### Rule 2: One Test File Per Source File
+### Integration Tests
 
-Each source file gets its own test file, even if it's small.
+Integration tests live in `tests/` and test interactions between multiple
+components, typically using a real in-memory SQLite database.
 
-### Rule 3: Descriptive Test Names
+### Descriptive Test Names
 
 Use the pattern: `test_<what>_<when>_<expected>`
 
@@ -231,9 +256,9 @@ fn test_frequency()
 fn it_works()
 ```
 
-### Rule 4: Use Test Fixtures
+### Reusable Test Helpers
 
-Create reusable test data:
+Create helper functions within `#[cfg(test)]` modules or in test utility files:
 
 ```rust
 // tests/fixtures/mod.rs
@@ -418,9 +443,10 @@ fn test_database_operations() -> Result<()> {
 }
 ```
 
-## Test Coverage Requirements
+## Test Coverage
 
-### Minimum Coverage: 90%
+All new non-trivial logic should include tests. Critical modules (recurrence
+expansion, database operations, date arithmetic) should have thorough coverage.
 
 ```bash
 # Install tarpaulin
@@ -433,9 +459,9 @@ cargo tarpaulin --out Html --output-dir ./coverage
 # Open coverage/index.html in browser
 ```
 
-### Critical Modules: 100% Coverage
+### Critical Modules
 
-These modules must have complete test coverage:
+These modules should have thorough test coverage:
 - `src/models/recurrence/` - All recurrence logic
 - `src/services/database/` - All database operations
 - `src/models/event/validator.rs` - Event validation
@@ -497,7 +523,8 @@ fn test_database_operation_2() {
 
 ## Continuous Integration
 
-Tests must pass before merging:
+> **Note**: CI is not yet configured. The workflow below is a template for
+> future setup.
 
 ```yaml
 # .github/workflows/test.yml

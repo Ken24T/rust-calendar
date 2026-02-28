@@ -10,7 +10,7 @@ materials for the Rust Calendar project.
 - [TESTING.md](TESTING.md) — Testing philosophy, patterns, and coverage requirements
 - [UI_SYSTEM.md](UI_SYSTEM.md) — UI system overview: views, customisation, shortcuts
 - [FUTURE_ENHANCEMENTS.md](FUTURE_ENHANCEMENTS.md) — Planned future improvements
-- [PROJECT_PLAN.md](PROJECT_PLAN.md) — Original project plan and feature roadmap
+- [PROJECT_PLAN.md](PROJECT_PLAN.md) — Original project plan (historical; see ARCHITECTURE.md for current design)
 
 ## Feature Planning — Google Calendar Sync
 
