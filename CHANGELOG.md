@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.17] - 2026-02-28
+
+### Refactored
+
+- Extracted single time cell rendering from `views/time_grid.rs` into `views/time_grid_cell.rs` (~490 lines), reducing `time_grid.rs` from 672 to 191 lines.
+  - Moved `render_time_cell` and `TimeCellConfig` with all drag/drop, resize, tooltip, and context menu logic.
+- Extracted individual view rendering methods from `app/views/mod.rs` into `app/views/view_rendering.rs` (~310 lines), reducing `mod.rs` from 574 to 270 lines.
+  - Moved `render_day_view`, `render_week_view`, `render_workweek_view`, `render_month_view`, `handle_timed_view_result`, and `handle_delete_confirm_request`.
+
 ## [2.0.16] - 2026-02-28
 
 ### Refactored

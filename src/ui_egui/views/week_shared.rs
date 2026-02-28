@@ -20,7 +20,8 @@ use crate::ui_egui::resize::{HandleRects, ResizeContext, ResizeManager, ResizeVi
 
 // Re-export items from extracted modules so existing consumers compile unchanged.
 pub use super::event_rendering::{format_event_tooltip, parse_color};
-pub use super::time_grid::{render_time_grid, TimeCellConfig};
+pub use super::time_grid::render_time_grid;
+pub use super::time_grid_cell::TimeCellConfig;
 
 /// Constants for time grid rendering
 pub const SLOT_INTERVAL: i64 = 15;

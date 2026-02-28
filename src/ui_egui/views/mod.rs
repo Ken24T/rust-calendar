@@ -14,6 +14,7 @@ pub mod month_view;
 mod palette;
 pub mod quarter_view;
 mod time_grid;
+mod time_grid_cell;
 mod time_grid_context_menu;
 pub mod week_shared;
 pub mod week_view;
