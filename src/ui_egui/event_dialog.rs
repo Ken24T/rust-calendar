@@ -3,6 +3,7 @@ mod render;
 mod render_date_time;
 mod render_recurrence;
 pub mod state;
+mod state_persistence;
 mod widgets;
 
 pub use recurrence::RecurrenceFrequency;

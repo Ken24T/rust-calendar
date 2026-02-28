@@ -10,6 +10,7 @@ pub mod day_view;
 mod day_event_rendering;
 mod event_rendering;
 mod month_context_menu;
+mod month_day_cell;
 pub mod month_view;
 mod palette;
 pub mod quarter_view;

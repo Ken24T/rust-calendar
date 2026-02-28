@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.15] - 2026-02-28
+
+### Refactored
+
+- Extracted validation and persistence methods from `event_dialog/state.rs` into `event_dialog/state_persistence.rs` (234 lines), reducing `state.rs` from 681 to 385 lines.
+  - Moved `save`, `start_end_datetimes`, `build_rrule`, `validate`, `check_warnings`, and `to_event` methods.
+- Extracted day cell rendering from `views/month_view.rs` into `views/month_day_cell.rs` (404 lines), reducing `month_view.rs` from 770 to 323 lines.
+  - Moved `render_day_cell` and `truncate_single_line_to_width` methods.
+
 ## [2.0.14] - 2026-02-28
 
 ### Refactored
