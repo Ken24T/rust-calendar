@@ -5,6 +5,7 @@
 ## Overview
 
 Two complementary UI features that enhance calendar usability:
+
 1. **My Day Panel** - A sidebar showing the selected day's events
 2. **Multi-Day Event Ribbon** - A horizontal strip displaying multi-day events
 
@@ -43,7 +44,7 @@ Provides a dedicated, always-visible list of events for the currently selected d
 #### Positioning Options
 
 | Position | Description | Use Case |
-|----------|-------------|----------|
+| ---------- | ------------- | ---------- |
 | **Left** | Panel on left side (default) | Standard layout, right-handed mouse users |
 | **Right** | Panel on right side | Left-handed users, preference |
 | **Hidden** | Panel completely hidden | Maximize calendar space |
@@ -58,7 +59,7 @@ Provides a dedicated, always-visible list of events for the currently selected d
 
 ### Visual Design
 
-```
+```text
 ┌─────────────────────────┐
 │ Thu, May 15, 2025    🗓 │  ← Date header with icon
 ├─────────────────────────┤
@@ -93,11 +94,11 @@ Provides a dedicated, always-visible list of events for the currently selected d
 #### Event Interactions
 
 | Action | Result |
-|--------|--------|
+| -------- | -------- |
 | **Click** | Selects event (highlights in calendar) |
 | **Double-click** | Opens event editor dialog |
-| **Right-click** | Shows context menu:<br>- Edit Event<br>- Delete Event<br>- Duplicate Event<br>- Create Countdown Timer<br>- Copy Event Link |
-| **Drag** | Initiates drag operation:<br>- To calendar: Move/reschedule event<br>- To desktop: Create countdown timer |
+| **Right-click** | Shows context menu: Edit Event, Delete Event, Duplicate Event, Create Countdown Timer, Copy Event Link |
+| **Drag** | Initiates drag operation: To calendar (move/reschedule), To desktop (create countdown) |
 
 #### Panel Controls
 
@@ -123,7 +124,8 @@ Provides a dedicated, always-visible list of events for the currently selected d
 #### Selection Synchronization
 
 **Bidirectional Sync**:
-```
+
+```text
 Calendar → My Day Panel
   User clicks date in calendar
   → Panel updates to show that date's events
@@ -138,7 +140,7 @@ My Day Panel → Calendar
 
 When selected day has no events:
 
-```
+```text
 ┌─────────────────────────┐
 │ Thu, May 15, 2025       │
 ├─────────────────────────┤
@@ -158,7 +160,7 @@ When selected day has no events:
 
 **Preferences Dialog - My Day Tab**:
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │ My Day Panel Settings                       │
 ├─────────────────────────────────────────────┤
@@ -265,7 +267,7 @@ Displays events spanning multiple days in a dedicated horizontal strip, preventi
 Events appear in ribbon if they match **any** condition:
 
 | Condition | Example | Rationale |
-|-----------|---------|-----------|
+| ----------- | --------- | ----------- |
 | **2+ Days** | Conference May 20-21 | Multi-day event |
 | **All-Day Multi-Day** | Vacation May 15-22 | Week-long absence |
 | **Weekend-Crossing** | Project Fri-Mon | Spans work/personal boundary |
@@ -275,7 +277,7 @@ Events appear in ribbon if they match **any** condition:
 
 ### Visual Layout
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────────┐
 │  [Multi-Day Event Ribbon]                         🔽 ⚙ ✕              │
 │                                                   Expand Settings Hide  │
@@ -294,7 +296,7 @@ Events appear in ribbon if they match **any** condition:
 
 #### 1. Compact Mode (Default)
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │ ◀ │ Vacation (5/15-22) │ Conf (5/20-21) │ ... (3 more) │ ▶ │
 └──────────────────────────────────────────────────────────────┘
@@ -307,7 +309,7 @@ Events appear in ribbon if they match **any** condition:
 
 #### 2. Expanded Mode
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Row 1: │ 🏖 Vacation ████████████████████ May 15-22 (8 days)  │
 │ Row 2: │ 📊 Conference ████ May 20-21 (2 days)                 │
@@ -325,7 +327,8 @@ Events appear in ribbon if they match **any** condition:
 #### 3. Auto Mode
 
 **Logic**:
-```
+
+```text
 if event_count <= 3:
     display = Compact
 else:
@@ -333,6 +336,7 @@ else:
 ```
 
 **Behavior**:
+
 - Automatically switches based on event count
 - Smooth transitions between modes
 - Best of both worlds
@@ -341,7 +345,7 @@ else:
 
 #### Card Elements
 
-```
+```text
 ┌──────────────────────────────┐
 │ 🏖 Vacation                  │  ← Icon + Title
 │ May 15-22 (8 days)           │  ← Date range + duration
@@ -353,7 +357,7 @@ else:
 #### Icon Types
 
 | Icon | Meaning |
-|------|---------|
+| ------ | --------- |
 | 🏖 | Vacation/Holiday |
 | 📊 | Conference/Business |
 | 💼 | Project/Work |
@@ -364,6 +368,7 @@ else:
 #### Progress Indicators
 
 **For Ongoing Events**:
+
 - Progress bar shows elapsed/remaining time
 - Text: "Day X of Y" or "X days remaining"
 - Color coding:
@@ -372,11 +377,13 @@ else:
   - Orange: Nearing end (> 75%)
 
 **For Upcoming Events**:
+
 - No progress bar
 - Text: "Starts in X days"
 - Icon: ⏳
 
 **For Past Events**:
+
 - Grayed out (optional auto-hide)
 - Text: "Ended X days ago"
 
@@ -385,16 +392,17 @@ else:
 #### Event Card Actions
 
 | Action | Result |
-|--------|--------|
-| **Click** | Navigate calendar to event start date<br>Highlights event in calendar view |
+| -------- | -------- |
+| **Click** | Navigate calendar to event start date, highlights event in calendar view |
 | **Double-click** | Opens event editor dialog |
-| **Hover** | Shows tooltip with full details:<br>- Complete title<br>- Full date range<br>- Description (first 100 chars)<br>- Location<br>- Attendees count |
-| **Right-click** | Context menu:<br>- Edit Event<br>- Delete Event<br>- Unpin from Ribbon<br>- Create Countdown Timer<br>- View in Calendar<br>- Export to .ics |
+| **Hover** | Shows tooltip with full details: complete title, full date range, description, location, attendees count |
+| **Right-click** | Context menu: Edit Event, Delete Event, Unpin from Ribbon, Create Countdown Timer, View in Calendar, Export to .ics |
 
 #### Ribbon Controls
 
 **Top-Right Controls**:
-```
+
+```text
 🔽  ⚙  ✕
 │   │  └─ Hide Ribbon (keyboard: Ctrl+Shift+R)
 │   └──── Settings (opens ribbon preferences)
@@ -402,7 +410,8 @@ else:
 ```
 
 **Scroll Navigation** (Compact mode):
-```
+
+```text
 ◀                                                 ▶
 └─ Previous events        Next events ──────────┘
 ```
@@ -411,7 +420,7 @@ else:
 
 **Preferences Dialog - Ribbon Tab**:
 
-```
+```text
 ┌──────────────────────────────────────────────────┐
 │ Multi-Day Event Ribbon Settings                  │
 ├──────────────────────────────────────────────────┤
@@ -531,7 +540,7 @@ ribbon_show_icons BOOLEAN NOT NULL DEFAULT 1,
 
 ### Layout Hierarchy
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │  Application Window                                            │
 │  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  │
@@ -551,16 +560,19 @@ ribbon_show_icons BOOLEAN NOT NULL DEFAULT 1,
 ### Responsive Behavior
 
 **Window Width < 800px**:
+
 - My Day panel auto-hides
 - Ribbon switches to compact mode
 - User can manually toggle panel
 
 **Window Width 800-1200px**:
+
 - My Day panel visible at minimum width (180px)
 - Ribbon uses auto mode
 - Comfortable viewing
 
 **Window Width > 1200px**:
+
 - My Day panel at preferred width (250px default)
 - Ribbon uses expanded mode if many events
 - Optimal experience
@@ -568,7 +580,7 @@ ribbon_show_icons BOOLEAN NOT NULL DEFAULT 1,
 ### View-Specific Considerations
 
 | View | My Day Panel | Multi-Day Ribbon |
-|------|--------------|------------------|
+| ------ | -------------- | ------------------ |
 | **Day** | Shows selected day | Shows multi-day events overlapping selected day |
 | **Week** | Shows selected day (click in week) | Shows multi-day events in week range |
 | **Month** | Shows selected day (click in grid) | Shows all multi-day events in month |
@@ -582,7 +594,7 @@ ribbon_show_icons BOOLEAN NOT NULL DEFAULT 1,
 
 ### Module Structure
 
-```
+```text
 src/ui/components/
 ├── my_day_panel.rs      # My Day panel component
 │   ├── header
@@ -680,6 +692,7 @@ impl AppState {
 ### Unit Tests
 
 **My Day Panel**:
+
 - [ ] Event list rendering with various event counts
 - [ ] Empty state display
 - [ ] Width constraints (min/max enforcement)
@@ -687,6 +700,7 @@ impl AppState {
 - [ ] Event time formatting
 
 **Multi-Day Ribbon**:
+
 - [ ] Event filtering logic (2+ days, weekend-crossing)
 - [ ] Progress calculation for ongoing events
 - [ ] Mode switching (compact/expanded/auto)

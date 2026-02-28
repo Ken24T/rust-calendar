@@ -15,12 +15,14 @@ Every line of production code should be covered by tests. Testing is not optiona
 **Purpose**: Test individual functions, methods, and modules in isolation
 
 **Characteristics**:
+
 - Fast (< 1ms per test)
 - No external dependencies (mock everything)
 - Test one thing at a time
 - Should constitute 70-80% of all tests
 
 **Example**:
+
 ```rust
 // In src/models/recurrence/mod.rs
 #[cfg(test)]
@@ -50,12 +52,14 @@ mod tests {
 **Purpose**: Test interactions between multiple components
 
 **Characteristics**:
+
 - Slower (< 100ms per test)
 - May use real database (in-memory or temporary)
 - Test workflows and component interactions
 - Should constitute 15-20% of all tests
 
 **Example**:
+
 ```rust
 // tests/integration/event_workflow_tests.rs
 use rust_calendar::services::event::EventService;
@@ -100,12 +104,14 @@ fn test_create_and_retrieve_event() -> Result<()> {
 **Purpose**: Test invariants and properties with random inputs
 
 **Characteristics**:
+
 - Discovers edge cases automatically
 - Uses `proptest` crate
 - Slower but comprehensive
 - Should constitute 5-10% of all tests
 
 **Example**:
+
 ```rust
 // tests/property/recurrence_properties.rs
 use proptest::prelude::*;
@@ -152,17 +158,20 @@ proptest! {
 ```
 
 ### 4. Benchmark Tests
+
 **Location**: `benches/`
 
 **Purpose**: Measure and track performance
 
 **Characteristics**:
+
 - Uses `criterion` crate
 - Run separately from unit tests
 - Track performance over time
 - Prevent performance regressions
 
 **Example**:
+
 ```rust
 // benches/recurrence_bench.rs
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -237,6 +246,7 @@ components, typically using a real in-memory SQLite database.
 Use the pattern: `test_<what>_<when>_<expected>`
 
 **Good Examples**:
+
 ```rust
 #[test]
 fn test_fortnightly_interval_returns_two()
@@ -247,6 +257,7 @@ fn test_quarterly_occurrences_skip_february_29_on_non_leap_years()
 ```
 
 **Bad Examples**:
+
 ```rust
 #[test]
 fn test1()
@@ -462,6 +473,7 @@ cargo tarpaulin --out Html --output-dir ./coverage
 ### Critical Modules
 
 These modules should have thorough test coverage:
+
 - `src/models/recurrence/` - All recurrence logic
 - `src/services/database/` - All database operations
 - `src/models/event/validator.rs` - Event validation
@@ -470,41 +482,49 @@ These modules should have thorough test coverage:
 ## Test Execution
 
 ### Run All Tests
+
 ```bash
 cargo test --all
 ```
 
 ### Run Unit Tests Only
+
 ```bash
 cargo test --lib
 ```
 
 ### Run Integration Tests Only
+
 ```bash
 cargo test --test '*'
 ```
 
 ### Run Specific Test
+
 ```bash
 cargo test test_fortnightly_interval
 ```
 
 ### Run Tests with Output
+
 ```bash
 cargo test -- --nocapture
 ```
 
 ### Run Tests in Parallel
+
 ```bash
 cargo test -- --test-threads=4
 ```
 
 ### Run Tests Sequentially (for database tests)
+
 ```bash
 cargo test -- --test-threads=1
 ```
 
 Or use `serial_test` crate:
+
 ```rust
 use serial_test::serial;
 

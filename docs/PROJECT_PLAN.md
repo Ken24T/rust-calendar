@@ -7,11 +7,13 @@
 > root [README.md](../README.md) for an accurate feature list.
 
 ## Project Overview
+
 A native Windows desktop calendar application built with Rust, featuring a modern GUI with theming support, event management with single and repeating events, and configurable reminders.
 
 ## Core Features
 
 ### 1. User Interface
+
 - **GUI Framework**: Use `iced` or `slint` for native Windows GUI
   - `iced` - Pure Rust, cross-platform, modern reactive UI
   - `slint` - Declarative UI with excellent performance
@@ -67,6 +69,7 @@ A native Windows desktop calendar application built with Rust, featuring a moder
   - Smooth theme transitions
 
 ### 2. Event Management
+
 - **Single Events**:
   - Title, description, location
   - Start and end date/time
@@ -84,6 +87,7 @@ A native Windows desktop calendar application built with Rust, featuring a moder
   - Quarterly: Every 3 months (business quarter aligned)
 
 ### 3. Reminders
+
 - **Configurable Reminder System**:
   - Multiple reminders per event
   - Time-based reminders (minutes/hours/days before)
@@ -93,13 +97,14 @@ A native Windows desktop calendar application built with Rust, featuring a moder
   - Audio alerts (optional)
 
 ### 4. Data Storage
+
 - **Local Database**: SQLite for persistent storage
   - Events table with recurrence rules
   - Reminders table
   - Settings/preferences table
   - Theme configurations
   - UI preferences (view settings, column widths, fonts)
-- **Data Export/Import**: 
+- **Data Export/Import**:
   - iCalendar (.ics) format support
   - Drag-and-drop .ics file import
   - Batch import from multiple .ics files
@@ -109,14 +114,16 @@ A native Windows desktop calendar application built with Rust, featuring a moder
 
 ### Design Principles
 
-**Modularity First**
+#### Modularity First
+
 - Each file should have a single, clear responsibility
 - Maximum file size: ~200-300 lines of code
 - Split large modules into smaller, focused submodules
 - Use Rust's module system to organize related functionality
 - Prefer composition over large inheritance hierarchies
 
-**Comprehensive Testing**
+#### Comprehensive Testing
+
 - Every module must have corresponding tests
 - Test files mirror source structure (1:1 mapping)
 - Unit tests for all business logic
@@ -124,7 +131,8 @@ A native Windows desktop calendar application built with Rust, featuring a moder
 - Property-based testing for complex logic (recurrence rules)
 
 ### Project Structure
-```
+
+```text
 rust-calendar/
 ├── src/
 │   ├── main.rs                 # Application entry point (~50 lines)
@@ -383,6 +391,7 @@ serial_test = "3.0"              # Sequential test execution
 ## Implementation Phases
 
 ### Phase 1: Foundation (Weeks 1-2)
+
 - [ ] Set up project structure and dependencies
 - [ ] Initialize SQLite database schema
 - [ ] Create basic data models (Event, Reminder, Settings)
@@ -390,6 +399,7 @@ serial_test = "3.0"              # Sequential test execution
 - [ ] Set up logging and error handling
 
 ### Phase 2: Core Event Management (Weeks 3-4)
+
 - [ ] Implement event CRUD operations (modular: create.rs, read.rs, update.rs, delete.rs)
 - [ ] Build recurrence rule engine with frequency types module
 - [ ] Implement fortnightly recurrence patterns with comprehensive tests
@@ -400,6 +410,7 @@ serial_test = "3.0"              # Sequential test execution
 - [ ] Implement iCalendar import/export (separate modules for import/export)
 
 ### Phase 3: Basic UI (Weeks 5-6)
+
 - [ ] Set up GUI framework
 - [ ] Create main application window with menu bar
 - [ ] Implement calendar view system architecture
@@ -411,6 +422,7 @@ serial_test = "3.0"              # Sequential test execution
 - [ ] Implement basic drag-and-drop for event rescheduling
 
 ### Phase 4: Reminder System (Week 7)
+
 - [ ] Implement reminder scheduling
 - [ ] Integrate Windows notifications
 - [ ] Add reminder service background worker
@@ -418,6 +430,7 @@ serial_test = "3.0"              # Sequential test execution
 - [ ] Test notification delivery
 
 ### Phase 5: Theming (Week 8)
+
 - [ ] Design theme system architecture
 - [ ] Create light and dark themes
 - [ ] Implement theme switching logic
@@ -425,6 +438,7 @@ serial_test = "3.0"              # Sequential test execution
 - [ ] Build theme customization UI
 
 ### Phase 6: Advanced Features (Weeks 9-10)
+
 - [ ] Implement all remaining calendar views:
   - [ ] Day view with hourly time slots
   - [ ] Work week view (Monday-Friday)
@@ -449,6 +463,7 @@ serial_test = "3.0"              # Sequential test execution
 - [ ] Add keyboard shortcuts for view switching
 
 ### Phase 7: Polish & Testing (Weeks 11-12)
+
 - [ ] Run comprehensive test suite (unit, integration, property-based)
 - [ ] Ensure >90% code coverage across all modules
 - [ ] Performance optimization guided by benchmarks
@@ -461,6 +476,7 @@ serial_test = "3.0"              # Sequential test execution
 ## Database Schema
 
 ### Events Table
+
 ```sql
 CREATE TABLE events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -480,6 +496,7 @@ CREATE TABLE events (
 ```
 
 ### Reminders Table
+
 ```sql
 CREATE TABLE reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -493,6 +510,7 @@ CREATE TABLE reminders (
 ```
 
 ### Settings Table
+
 ```sql
 CREATE TABLE settings (
     key TEXT PRIMARY KEY,
@@ -502,6 +520,7 @@ CREATE TABLE settings (
 ```
 
 ### UI Preferences Table
+
 ```sql
 CREATE TABLE ui_preferences (
     id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton table
@@ -565,6 +584,7 @@ CREATE TABLE countdown_timers (
 ### View Types and Implementations
 
 #### 1. Day View (`day_view.rs`)
+
 - **Purpose**: Detailed schedule for a single day
 - **Layout**: Vertical time slots (e.g., 6 AM - 11 PM)
 - **Features**:
@@ -575,12 +595,13 @@ CREATE TABLE countdown_timers (
   - Drag to create new events
   - Drag events to reschedule
   - Resize events to adjust duration
-- **Customization**: 
+- **Customization**:
   - Adjustable time slot height
   - Start/end time of day range
   - Time interval (15/30/60 minutes)
 
 #### 2. Work Week View (`work_week_view.rs`)
+
 - **Purpose**: Monday through Friday overview
 - **Layout**: 5 columns (one per weekday) with time slots
 - **Features**:
@@ -593,6 +614,7 @@ CREATE TABLE countdown_timers (
   - Which days constitute "work week" (configurable)
 
 #### 3. Full Week View (`week_view.rs`)
+
 - **Purpose**: Complete 7-day week overview
 - **Layout**: 7 columns (Sunday-Saturday or Monday-Sunday)
 - **Features**:
@@ -606,6 +628,7 @@ CREATE TABLE countdown_timers (
   - Weekend highlighting color
 
 #### 4. Month View (`month_view.rs`)
+
 - **Purpose**: Traditional monthly calendar grid
 - **Layout**: 6 weeks × 7 days grid
 - **Features**:
@@ -621,6 +644,7 @@ CREATE TABLE countdown_timers (
   - Adjustable cell height
 
 #### 5. Quarter View (`quarter_view.rs`)
+
 - **Purpose**: 3-month overview (one business quarter)
 - **Layout**: 3 mini-month grids side by side
 - **Features**:
@@ -633,6 +657,7 @@ CREATE TABLE countdown_timers (
   - Event indicator style (dots, numbers, bars)
 
 #### 6. Year View (`year_view.rs`)
+
 - **Purpose**: Full annual overview
 - **Layout**: 12 mini-month grids (3×4 or 4×3 layout)
 - **Features**:
@@ -646,6 +671,7 @@ CREATE TABLE countdown_timers (
   - Event density visualization style
 
 #### 7. Agenda View (`agenda_view.rs`)
+
 - **Purpose**: Linear list of upcoming events
 - **Layout**: Scrollable list grouped by date
 - **Features**:
@@ -663,6 +689,7 @@ CREATE TABLE countdown_timers (
 ### View Switching
 
 **Navigation Methods**:
+
 - Toolbar buttons with icons
 - Dropdown menu selector
 - Keyboard shortcuts:
@@ -677,6 +704,7 @@ CREATE TABLE countdown_timers (
 - Right-click context menu
 
 **State Preservation**:
+
 - Current view saved to database
 - Selected date maintained across view switches
 - Zoom level/scale maintained per view
@@ -686,6 +714,7 @@ CREATE TABLE countdown_timers (
 ### Font Customization
 
 **Settings Structure** (`font_config.rs`):
+
 ```rust
 pub struct FontConfig {
     pub family: String,           // e.g., "Segoe UI", "Arial", "Calibri"
@@ -706,6 +735,7 @@ pub enum FontStyle {
 ```
 
 **Separate Font Settings**:
+
 - Event titles font
 - Event details font
 - Time labels font
@@ -713,6 +743,7 @@ pub enum FontStyle {
 - Navigation font
 
 **Font Picker UI**:
+
 - System font enumeration
 - Live preview
 - Size slider with text input
@@ -721,6 +752,7 @@ pub enum FontStyle {
 ### Column Width Customization
 
 **Implementation** (`resizable_column.rs`):
+
 - Hover over column divider shows resize cursor
 - Click and drag to resize
 - Double-click divider to auto-fit content
@@ -729,6 +761,7 @@ pub enum FontStyle {
 - Widths saved per view type
 
 **Storage**:
+
 ```rust
 pub struct ColumnLayout {
     pub view_type: ViewType,
@@ -737,6 +770,7 @@ pub struct ColumnLayout {
 ```
 
 **Reset Options**:
+
 - Reset to defaults per view
 - Reset all views to defaults
 - Auto-fit all columns
@@ -744,6 +778,7 @@ pub struct ColumnLayout {
 ### Row Height Customization
 
 **Settings**:
+
 - Time slot height (day/week views)
 - Event row height (month view)
 - Minimum height to show event details
@@ -752,12 +787,14 @@ pub struct ColumnLayout {
 ### Preferences Persistence
 
 **Save Triggers**:
+
 - On change (with debouncing)
 - On application close
 - Manual save button
 - Auto-save every 30 seconds if changes exist
 
 **Preferences Service** (`preferences/persistence.rs`):
+
 ```rust
 pub struct PreferencesService {
     db: Database,
@@ -779,6 +816,7 @@ impl PreferencesService {
 ### .ics File Import
 
 **Drop Zone Component** (`drop_zone.rs`):
+
 - Accept .ics files from file explorer
 - Visual feedback during drag-over
 - Support for single or multiple files
@@ -786,6 +824,7 @@ impl PreferencesService {
 - Error handling for invalid files
 
 **Implementation Flow**:
+
 1. User drags .ics file(s) over application window
 2. Drop zone highlights to indicate acceptance
 3. User releases mouse - files dropped
@@ -799,6 +838,7 @@ impl PreferencesService {
 8. Calendar view refreshes
 
 **Drag-and-Drop Handler** (`drag_drop_handler.rs`):
+
 ```rust
 pub struct DragDropHandler {
     ical_service: ICalService,
@@ -816,18 +856,21 @@ impl DragDropHandler {
 ### Event Rescheduling
 
 **Drag Operations**:
+
 - Drag event to different time slot → reschedule
 - Drag event to different day → move date
 - Drag event edges → adjust duration
 - Drag between views (if multiple calendars in future)
 
 **Visual Feedback**:
+
 - Ghost/preview of event during drag
 - Target slot highlights
 - Invalid drop targets grayed out
 - Cursor changes to indicate valid/invalid drop
 
 **Constraints**:
+
 - Cannot drag past events
 - Respect event minimum duration
 - Check for conflicts on drop
@@ -919,6 +962,7 @@ mod tests {
 ## Theme System
 
 ### Theme Configuration (TOML)
+
 ```toml
 [theme]
 name = "Dark"
@@ -957,6 +1001,7 @@ event_default = "#68217a"
 ## Testing Strategy
 
 ### Testing Philosophy
+
 - **Test-Driven Development (TDD)**: Write tests before implementation when possible
 - **Comprehensive Coverage**: Aim for >90% code coverage
 - **Fast Tests**: Unit tests should run in milliseconds
@@ -966,9 +1011,10 @@ event_default = "#68217a"
 ### Test Organization
 
 #### 1. Unit Tests (`tests/unit/`)
+
 Mirror the `src/` directory structure exactly:
 
-```
+```text
 tests/unit/
 ├── models/
 │   ├── event/
@@ -1004,6 +1050,7 @@ tests/unit/
 ```
 
 #### 2. Integration Tests (`tests/integration/`)
+
 Test interactions between components:
 
 - `event_workflow_tests.rs`: Create → Read → Update → Delete events
@@ -1013,6 +1060,7 @@ Test interactions between components:
 - `ical_integration_tests.rs`: Import/Export workflows
 
 #### 3. Property-Based Tests (`tests/property/`)
+
 Use `proptest` for edge case discovery:
 
 - `recurrence_properties.rs`: Test recurrence calculations with random dates
@@ -1020,6 +1068,7 @@ Use `proptest` for edge case discovery:
 - `event_properties.rs`: Test event invariants hold
 
 #### 4. Benchmark Tests (`benches/`)
+
 Performance testing:
 
 - `recurrence_bench.rs`: Benchmark calculating 10,000 occurrences
@@ -1031,11 +1080,13 @@ Performance testing:
 Every source file should have a corresponding test file:
 
 **Source: `src/models/recurrence/frequency.rs`** (~80 lines)
+
 ```rust
 // Implementation code
 ```
 
 **Test: `tests/unit/models/recurrence_frequency_tests.rs`** (~200 lines)
+
 ```rust
 use rust_calendar::models::recurrence::Frequency;
 use test_case::test_case;

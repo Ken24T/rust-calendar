@@ -11,7 +11,7 @@ This update adds comprehensive calendar view options, extensive UI customization
 ### 📅 Multiple Calendar Views (7 View Types)
 
 | View | Purpose | Keyboard Shortcut |
-|------|---------|-------------------|
+| ------ | --------- | ------------------- |
 | **Day View** | Detailed hourly schedule for a single day | `Ctrl+1` |
 | **Work Week View** | Monday-Friday business week overview | `Ctrl+2` |
 | **Full Week View** | Complete 7-day week with all days | `Ctrl+3` |
@@ -23,6 +23,7 @@ This update adds comprehensive calendar view options, extensive UI customization
 #### View-Specific Features
 
 **Day View**:
+
 - Hourly time slots (6 AM - 11 PM configurable)
 - Time intervals: 15/30/60 minutes
 - Current time indicator
@@ -30,32 +31,38 @@ This update adds comprehensive calendar view options, extensive UI customization
 - All-day events banner
 
 **Work Week View**:
+
 - Focus on Monday-Friday
 - Weekend events in optional sidebar
 - 5-column layout with synchronized time slots
 
 **Full Week View**:
+
 - All 7 days visible
 - Configurable week start (Sunday/Monday)
 - Weekend highlighting
 
 **Month View**:
+
 - Traditional 6-week × 7-day grid
 - Previous/next month dates shown
 - Event indicators (dots/bars/counts)
 - Click day to see all events
 
 **Quarter View**:
+
 - 3 months side-by-side (Q1, Q2, Q3, Q4)
 - Event density visualization
 - Quick quarter navigation
 
 **Year View**:
+
 - 12 mini-months in grid layout
 - Event density heat map
 - Click to zoom to month
 
 **Agenda View**:
+
 - Scrollable chronological list
 - Date headers separating days
 - Show 7/14/30/90 days ahead
@@ -64,6 +71,7 @@ This update adds comprehensive calendar view options, extensive UI customization
 ### 🎨 UI Customization System
 
 #### Font Customization
+
 - **Configurable Properties**:
   - Font family (system fonts)
   - Font size (8-72 points)
@@ -78,16 +86,18 @@ This update adds comprehensive calendar view options, extensive UI customization
 - **Live Preview**: See changes before applying
 
 #### Column Width Adjustment
+
 - **Drag to Resize**: Hover over column divider and drag
 - **Double-click**: Auto-fit to content
 - **Per-View Storage**: Each view type saves its own widths
 - **Constraints**: Min 50px, Max 500px
-- **Reset Options**: 
+- **Reset Options**:
   - Reset current view
   - Reset all views
   - Auto-fit all columns
 
 #### Row Height Adjustment
+
 - **Time Slot Heights** (Day/Week views):
   - Compact: 30px
   - Normal: 45px (default)
@@ -102,6 +112,7 @@ This update adds comprehensive calendar view options, extensive UI customization
 ### 💾 Preferences Persistence
 
 **All Settings Saved Between Sessions**:
+
 - Current view type and selected date
 - View-specific settings (columns, rows)
 - Font configurations
@@ -111,12 +122,14 @@ This update adds comprehensive calendar view options, extensive UI customization
 - Recent color selections
 
 **Storage**:
+
 - Location: `%APPDATA%\RustCalendar\preferences.db`
 - Auto-save every 30 seconds
 - Save on view switch
 - Save on application close
 
 **Reset Options**:
+
 - Reset current view
 - Reset all views
 - Reset fonts
@@ -126,7 +139,9 @@ This update adds comprehensive calendar view options, extensive UI customization
 ### 🎯 Drag-and-Drop System
 
 #### .ics File Import
+
 **User Flow**:
+
 1. Drag .ics file(s) from File Explorer
 2. Drop zone highlights when hovering
 3. Import preview dialog shows:
@@ -137,6 +152,7 @@ This update adds comprehensive calendar view options, extensive UI customization
 4. Confirm to import selected events
 
 **Features**:
+
 - Multiple file support
 - Batch import
 - Invalid file error handling
@@ -146,20 +162,24 @@ This update adds comprehensive calendar view options, extensive UI customization
 #### Event Drag Operations
 
 **Reschedule Event**:
+
 - Drag event to different time slot
 - Visual preview during drag
 - Prompt for recurring events (this/all occurrences)
 
 **Move Event Date**:
+
 - Drag to different day
 - Time preserved, date changes
 
 **Adjust Duration**:
+
 - Drag top/bottom edge of event
 - Resize start or end time
 - Minimum 15-minute duration
 
 **Visual Feedback**:
+
 - Semi-transparent ghost during drag
 - Green highlight for valid drop
 - Red highlight for invalid drop
@@ -169,6 +189,7 @@ This update adds comprehensive calendar view options, extensive UI customization
 ### ⌨️ Keyboard Shortcuts
 
 **View Navigation**:
+
 - `Ctrl+1` through `Ctrl+7` - Switch views
 - `→` / `.` - Next period
 - `←` / `,` - Previous period
@@ -176,12 +197,14 @@ This update adds comprehensive calendar view options, extensive UI customization
 - `PageUp/PageDown` - Year navigation
 
 **Event Operations**:
+
 - `Ctrl+N` - New event
 - `Ctrl+E` - Edit event
 - `Delete` - Delete event
 - `Ctrl+C/V` - Copy/paste event
 
 **View Controls**:
+
 - `Ctrl++/-` - Zoom in/out
 - `Ctrl+0` - Reset zoom
 - `F11` - Fullscreen
@@ -189,7 +212,8 @@ This update adds comprehensive calendar view options, extensive UI customization
 ## Updated Project Structure
 
 ### New UI Modules
-```
+
+```text
 src/ui/
 ├── views/calendar/
 │   ├── day_view.rs          # NEW
@@ -210,7 +234,8 @@ src/ui/
 ```
 
 ### New Model Modules
-```
+
+```text
 src/models/
 ├── settings/
 │   └── ui_preferences.rs    # NEW
@@ -221,7 +246,8 @@ src/models/
 ```
 
 ### New Service Modules
-```
+
+```text
 src/services/
 ├── database/
 │   └── ui_prefs_repo.rs     # NEW
@@ -237,6 +263,7 @@ src/services/
 ### New Tables
 
 **ui_preferences** - Global UI settings:
+
 ```sql
 CREATE TABLE ui_preferences (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -254,6 +281,7 @@ CREATE TABLE ui_preferences (
 ```
 
 **column_widths** - Per-view column widths:
+
 ```sql
 CREATE TABLE column_widths (
     view_type TEXT NOT NULL,
@@ -264,6 +292,7 @@ CREATE TABLE column_widths (
 ```
 
 **row_heights** - Per-view row heights:
+
 ```sql
 CREATE TABLE row_heights (
     view_type TEXT NOT NULL,
@@ -275,11 +304,13 @@ CREATE TABLE row_heights (
 ## Implementation Phases Updated
 
 ### Phase 3: Basic UI (Weeks 5-6)
+
 - ✅ Added: View switcher component
 - ✅ Added: Resizable column support
 - ✅ Added: Basic drag-and-drop
 
 ### Phase 6: Advanced Features (Weeks 9-10)
+
 - ✅ Added: All 7 view types
 - ✅ Added: Drag-and-drop .ics import
 - ✅ Added: Font customization UI
@@ -289,6 +320,7 @@ CREATE TABLE row_heights (
 ## Dependencies Added
 
 ### Cargo.toml Updates
+
 ```toml
 # File handling
 walkdir = "2.4"              # Directory traversal for file operations
@@ -297,7 +329,9 @@ walkdir = "2.4"              # Directory traversal for file operations
 ## Documentation Created
 
 ### New Document: UI_SYSTEM.md
+
 Comprehensive documentation covering:
+
 - All 7 view types with diagrams
 - Font customization system
 - Column/row adjustment
@@ -312,17 +346,20 @@ Comprehensive documentation covering:
 ### New Test Areas
 
 **View Rendering Tests**:
+
 - Each view type renders correctly
 - View switching maintains state
 - Keyboard shortcuts work
 
 **Customization Tests**:
+
 - Font changes apply correctly
 - Column widths persist
 - Row heights save/restore
 - Reset functions work
 
 **Drag-and-Drop Tests**:
+
 - .ics file parsing
 - Duplicate detection
 - Event rescheduling
@@ -330,6 +367,7 @@ Comprehensive documentation covering:
 - Invalid drop handling
 
 **Persistence Tests**:
+
 - Preferences save to database
 - Preferences load on startup
 - Default values work

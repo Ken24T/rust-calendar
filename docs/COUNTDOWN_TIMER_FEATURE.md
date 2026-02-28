@@ -9,6 +9,7 @@ The Desktop Countdown Timer feature allows users to "tear" events from the calen
 ## Feature Summary
 
 **Core Functionality**:
+
 - Drag any future event from the calendar to the desktop
 - Creates a persistent countdown timer window
 - Original event remains in calendar
@@ -21,8 +22,9 @@ The Desktop Countdown Timer feature allows users to "tear" events from the calen
 
 ### Creating a Countdown Timer
 
-**Method 1: Drag and Drop (Primary)**
-```
+#### Method 1: Drag and Drop (Primary)
+
+```text
 1. User clicks and holds event in calendar
 2. Drags cursor outside calendar window
 3. Desktop drop zone indicator appears
@@ -31,8 +33,9 @@ The Desktop Countdown Timer feature allows users to "tear" events from the calen
 6. Event remains in calendar unchanged
 ```
 
-**Method 2: Context Menu (Alternative)**
-```
+#### Method 2: Context Menu (Alternative)
+
+```text
 1. User right-clicks event in calendar
 2. Selects "Create Desktop Countdown"
 3. Timer appears at default position
@@ -40,7 +43,7 @@ The Desktop Countdown Timer feature allows users to "tear" events from the calen
 
 ### Countdown Timer States
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │           COUNTDOWN LIFECYCLE            │
 └─────────────────────────────────────────┘
@@ -74,6 +77,7 @@ The Desktop Countdown Timer feature allows users to "tear" events from the calen
 ### Database Schema
 
 **countdown_timers table**:
+
 ```sql
 CREATE TABLE countdown_timers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,6 +95,7 @@ CREATE TABLE countdown_timers (
 ### Data Models
 
 **CountdownTimer Model**:
+
 ```rust
 pub struct CountdownTimer {
     pub id: Option<i64>,
@@ -113,6 +118,7 @@ pub struct Size {
 ```
 
 **CountdownState Enum**:
+
 ```rust
 pub enum CountdownState {
     Active,         // Normal countdown
@@ -139,7 +145,8 @@ impl CountdownState {
 ### Module Structure
 
 **New Files**:
-```
+
+```text
 src/
 ├── ui/components/
 │   └── countdown_timer.rs          # Countdown window component
@@ -154,6 +161,7 @@ src/
 ### Countdown Service
 
 **CountdownService Implementation**:
+
 ```rust
 pub struct CountdownService {
     db: Arc<Database>,
@@ -250,6 +258,7 @@ impl CountdownService {
 **Purpose**: Control the granularity of time slots in day/week views.
 
 **Options**:
+
 - **15 minutes**: Fine-grained scheduling
   - Use case: Dense schedules, frequent meetings
   - 4 slots per hour = 48 rows for 12-hour day
@@ -263,13 +272,15 @@ impl CountdownService {
   - 1 slot per hour = 12 rows for 12-hour day
 
 **Database Storage**:
+
 ```sql
 -- In ui_preferences table
 time_interval INTEGER NOT NULL DEFAULT 60  -- 15, 30, or 60
 ```
 
 **Settings UI**:
-```
+
+```text
 ┌──────────────────────────────────────┐
 │ Time Display Settings                │
 ├──────────────────────────────────────┤
@@ -290,24 +301,28 @@ time_interval INTEGER NOT NULL DEFAULT 60  -- 15, 30, or 60
 **Purpose**: Set the default duration when creating new events.
 
 **Default Value**: 45 minutes
+
 - Most meetings are 30-60 minutes
 - 45 minutes is a common meeting length
 - User can adjust per-event after creation
 
 **Configuration**:
+
 ```sql
 -- In ui_preferences table
 default_event_duration INTEGER NOT NULL DEFAULT 45  -- minutes
 ```
 
 **Usage**:
+
 1. User drags on calendar to create new event
 2. Event is created with default duration (45 min)
 3. User can immediately resize if needed
 4. Or adjust in event edit dialog
 
 **Settings UI**:
-```
+
+```text
 ┌──────────────────────────────────────┐
 │ Event Settings                       │
 ├──────────────────────────────────────┤
@@ -323,6 +338,7 @@ default_event_duration INTEGER NOT NULL DEFAULT 45  -- minutes
 ```
 
 **Implementation**:
+
 ```rust
 pub struct ViewPreferences {
     pub time_interval: u32,          // 15, 30, or 60 minutes
@@ -348,6 +364,7 @@ impl ViewPreferences {
 ### Time Remaining Formats
 
 **Format Rules**:
+
 ```rust
 pub fn format_countdown(remaining: Duration) -> String {
     let total_seconds = remaining.num_seconds();
@@ -379,6 +396,7 @@ pub fn format_countdown(remaining: Duration) -> String {
 ```
 
 **Display Examples**:
+
 - `"5 days, 3 hours"`
 - `"1 day, 8 hours"`
 - `"3 hours, 45 minutes"`
@@ -389,17 +407,20 @@ pub fn format_countdown(remaining: Duration) -> String {
 ### Visual States
 
 **Active State** (Normal):
+
 - Steady display
 - Standard colors
 - Updates every second
 
 **Warning State** (< 5 minutes):
+
 - Flashing/pulsing animation
 - Color change (yellow/orange)
 - More prominent display
 - Sound notification (optional)
 
 **Started State** (Event time reached):
+
 - Bright flash
 - "Starting now!" text
 - Sound alert (optional)
@@ -446,7 +467,7 @@ pub enum PositionMode {
 
 ### Settings UI
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │ Countdown Timer Settings                    │
 ├─────────────────────────────────────────────┤
@@ -484,11 +505,13 @@ pub enum PositionMode {
 ### Unit Tests
 
 **Countdown Formatting**:
+
 - Test time remaining formatting at various intervals
 - Test edge cases (0 seconds, negative time, etc.)
 - Test state transitions
 
 **State Management**:
+
 - Test state calculation from time remaining
 - Test warning threshold detection
 - Test auto-dismiss logic
@@ -496,18 +519,21 @@ pub enum PositionMode {
 ### Integration Tests
 
 **Timer Creation**:
+
 - Test drag-and-drop to desktop
 - Test context menu creation
 - Test position validation
 - Test multiple timer creation
 
 **Timer Lifecycle**:
+
 - Test timer updates every second
 - Test warning state activation
 - Test auto-dismiss behavior
 - Test manual dismiss
 
 **Persistence**:
+
 - Test saving timer to database
 - Test restoring timers on startup
 - Test removing expired timers
@@ -515,12 +541,14 @@ pub enum PositionMode {
 ### UI Tests
 
 **Drag Operation**:
+
 - Test drag from calendar to desktop
 - Test visual feedback during drag
 - Test invalid drop zones
 - Test drop position calculation
 
 **Window Behavior**:
+
 - Test always-on-top functionality
 - Test window movement
 - Test window resizing (if enabled)
@@ -529,6 +557,7 @@ pub enum PositionMode {
 ## Future Enhancements
 
 **Potential Features**:
+
 - [ ] Custom countdown timer appearance themes
 - [ ] Countdown timer groups (folders)
 - [ ] Countdown timer templates
@@ -553,7 +582,8 @@ pub enum PositionMode {
 ---
 
 **Status**: Design complete, awaiting user specification of visual appearance
-**Next Steps**: 
+**Next Steps**:
+
 1. User to specify countdown timer visual design
 2. Implement drag-to-desktop functionality
 3. Create countdown window component

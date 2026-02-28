@@ -27,6 +27,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 **Branch:** `feat/database-backup`
 
 **What was implemented:**
+
 - ✅ `BackupService` with create, restore, list, delete methods
 - ✅ Auto-backup on startup (keeps last 5 backups)
 - ✅ File menu: "Backup Database..." (Ctrl+B), "Manage Backups..."
@@ -34,6 +35,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 - ✅ Backups stored in `%AppData%/rust-calendar/backups/`
 
 **Files Created/Modified:**
+
 - `src/services/backup/mod.rs` - BackupService implementation ✅
 - `src/ui_egui/dialogs/backup_manager.rs` - Backup management dialog ✅
 - `src/ui_egui/app/menu.rs` - File menu items ✅
@@ -48,6 +50,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 **Branch:** `feat/keyboard-shortcuts`
 
 **Shortcuts Implemented:**
+
 - `Ctrl+N` - New Event (open event dialog) ✅
 - `Ctrl+T` - Today (navigate to current date) ✅
 - `Ctrl+S` - Settings ✅
@@ -57,17 +60,20 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 - `Escape` - Close dialogs ✅
 
 **Implementation:**
+
 - Extended keyboard handling in `src/ui_egui/app.rs::update()` ✅
 - Used pattern: `ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::N))` ✅
 - Added shortcut hints to menu labels: "New Event    Ctrl+N" ✅
 - Documented shortcuts in `README.md` ✅
 
 **Files Modified:**
+
 - `src/ui_egui/app.rs` - Added keyboard handlers in `update()` method ✅
 - Menu button labels - Appended shortcut text ✅
 - `README.md` - Added keyboard shortcuts section ✅
 
 **Testing:**
+
 - ✅ Each shortcut performs correct action
 - ✅ Modifiers (Ctrl) work correctly
 - ✅ Shortcuts work when dialogs are closed
@@ -84,6 +90,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 **Branch:** `feat/ui-improvements`
 
 **Implementation:**
+
 - Added File menu items:
   - "Export All Events..." → File dialog, save all events as .ics ✅
   - "Export Date Range..." → Date picker dialog, export subset ✅
@@ -93,6 +100,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 - Quick select buttons: "This Month", "This Year", "Last 30 Days" ✅
 
 **Files Modified:**
+
 - `src/ui_egui/app/menu.rs` - Added Export Events submenu with export functions
 - `src/ui_egui/app/state.rs` - Added ExportRangeDialogState
 - `src/ui_egui/app/dialogs/mod.rs` - Wired up export dialog rendering
@@ -108,6 +116,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 **Branch:** `feat/validation-improvements`
 
 **Validation Rules Implemented:**
+
 - ✅ Title not empty
 - ✅ End after start
 - ✅ Color hex format validation
@@ -115,6 +124,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 - ✅ All-day event date boundary handling
 
 **Files Modified:**
+
 - `src/models/event/mod.rs` - Event::validate() method ✅
 - `src/ui_egui/event_dialog/state.rs` - Validation display ✅
 
@@ -132,6 +142,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 **Branch:** `feat/event-search`
 
 **What was implemented:**
+
 - ✅ Search dialog with Ctrl+F shortcut
 - ✅ `EventService::search()` method with case-insensitive search
 - ✅ Search across title, description, location, category
@@ -140,6 +151,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 - ✅ Escape to close dialog
 
 **Files Created/Modified:**
+
 - `src/ui_egui/dialogs/search_dialog.rs` - Search dialog UI ✅
 - `src/services/event/queries.rs` - EventService::search() ✅
 - `src/ui_egui/app/shortcuts.rs` - Ctrl+F binding ✅
@@ -154,6 +166,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 **Branch:** `feat/category-management`
 
 **What was implemented:**
+
 - ✅ Categories table with default categories (Work, Personal, Birthday, Holiday, Meeting, Deadline)
 - ✅ CategoryService with full CRUD operations
 - ✅ Edit → Manage Categories dialog for category management
@@ -162,6 +175,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 - ✅ Category filtering in all calendar views
 
 **Files Created/Modified:**
+
 - `src/models/category/mod.rs` - Category model ✅
 - `src/services/category/mod.rs` - CategoryService ✅
 - `src/services/database/schema.rs` - Categories table ✅
@@ -179,6 +193,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 **Branch:** `feat/event-templates`
 
 **What was implemented:**
+
 - ✅ EventTemplate model with validation (`src/models/template/mod.rs`)
 - ✅ TemplateService for CRUD operations (`src/services/template/mod.rs`)
 - ✅ Database table `event_templates` with all fields
@@ -194,6 +209,7 @@ This document outlines the implementation plan for 20 improvements to the rust-c
 - ✅ Keyboard shortcut fix: D/M/W/K keys no longer captured while typing in dialogs
 
 **Database Changes:**
+
 ```sql
 CREATE TABLE event_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,6 +227,7 @@ CREATE TABLE event_templates (
 ```
 
 **Files Created/Modified:**
+
 - `src/models/template/mod.rs` - EventTemplate model with validation
 - `src/services/template/mod.rs` - TemplateService for CRUD
 - `src/ui_egui/dialogs/template_manager.rs` - Template management dialog
@@ -221,6 +238,7 @@ CREATE TABLE event_templates (
 - `src/ui_egui/app/shortcuts.rs` - Fixed keyboard input detection
 
 **Testing:**
+
 - ✅ Create template, verify stored correctly
 - ✅ Create event from template via menu
 - ✅ Create event from template via context menu
@@ -238,6 +256,7 @@ CREATE TABLE event_templates (
 **Branch:** `feat/week-numbers`
 
 **What was implemented:**
+
 - ✅ `show_week_numbers` setting in Settings model and database
 - ✅ Toggle in Settings dialog
 - ✅ ISO week numbers displayed in Week view header
@@ -245,6 +264,7 @@ CREATE TABLE event_templates (
 - ✅ ISO week numbers displayed in Month view sidebar
 
 **Files Modified:**
+
 - `src/models/settings/mod.rs` - show_week_numbers field ✅
 - `src/ui_egui/settings_dialog.rs` - Checkbox ✅
 - `src/ui_egui/views/week_view.rs` - Week number in header ✅
@@ -264,7 +284,9 @@ CREATE TABLE event_templates (
 **Branch:** `feat/undo-redo`
 
 **Implementation:**
+
 - Create command pattern:
+
 ```rust
 trait Command {
     fn execute(&self, app: &mut CalendarApp) -> Result<()>;
@@ -279,6 +301,7 @@ struct MoveEventCommand { event_id: i64, old_start: DateTime, new_start: DateTim
 ```
 
 - Add to `CalendarApp`:
+
 ```rust
 undo_stack: Vec<Box<dyn Command>>,
 redo_stack: Vec<Box<dyn Command>>,
@@ -292,11 +315,13 @@ max_undo_history: usize = 50,
 - Limit undo stack to 50 operations (FIFO)
 
 **Files to Modify:**
+
 - Create `src/ui_egui/commands/mod.rs` - Command trait and implementations
 - `src/ui_egui/app.rs` - Add undo/redo stacks, Edit menu, keyboard shortcuts
 - Wrap all event CRUD operations in command execution
 
 **Testing:**
+
 - Create event, undo, verify event removed
 - Delete event, undo, verify event restored
 - Multiple undo/redo operations
@@ -312,7 +337,9 @@ max_undo_history: usize = 50,
 **Branch:** `feat/multi-select-events`
 
 **Implementation:**
+
 - Add to `CalendarApp`:
+
 ```rust
 selected_event_ids: HashSet<i64>,
 multi_select_mode: bool,
@@ -333,12 +360,14 @@ multi_select_mode: bool,
 - Add Edit menu: "Select All Events on Date", "Clear Selection"
 
 **Files to Modify:**
+
 - `src/ui_egui/app.rs` - Add selection state
 - All view files (`day_view.rs`, `week_view.rs`, `month_view.rs`) - Handle selection clicks, visual highlight
 - Add context menu for multi-select operations
 - Create `src/ui_egui/dialogs/bulk_operations.rs` - Bulk edit dialogs
 
 **Testing:**
+
 - Select multiple events with Ctrl+Click
 - Select range with Shift+Click
 - Bulk delete selected events
@@ -355,6 +384,7 @@ multi_select_mode: bool,
 **Branch:** `feat/ux-improvements-20251129`
 
 **What was implemented:**
+
 - ✅ `ResizeManager` with handle detection and resize context
 - ✅ Top/bottom edge detection for timed events
 - ✅ Left/right edge detection for ribbon (multi-day) events
@@ -365,6 +395,7 @@ multi_select_mode: bool,
 - ✅ Undo support via command pattern
 
 **Files Created/Modified:**
+
 - `src/ui_egui/resize.rs` - ResizeManager, ResizeContext, HandleRects ✅
 - `src/ui_egui/views/day_view.rs` - Resize interactions ✅
 - `src/ui_egui/views/week_view.rs` - Resize interactions ✅
@@ -372,6 +403,7 @@ multi_select_mode: bool,
 - `src/ui_egui/views/week_shared.rs` - Ribbon resize for multi-day events ✅
 
 **Testing:**
+
 - ✅ Drag top edge to change start time
 - ✅ Drag bottom edge to change end time
 - ✅ Drag left/right edges for multi-day events
@@ -388,7 +420,9 @@ multi_select_mode: bool,
 **Branch:** `feat/countdown-templates`
 
 **Implementation:**
+
 - Add table:
+
 ```sql
 CREATE TABLE countdown_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -406,12 +440,14 @@ CREATE TABLE countdown_templates (
 - Create `CountdownTemplateService` for database operations
 
 **Files to Modify:**
+
 - `src/services/database/mod.rs` - Add countdown_templates table
 - Create `src/services/countdown_template.rs` - Template service
 - `src/ui_egui/app/countdown/settings.rs` - Add template UI
 - Create `src/ui_egui/dialogs/countdown_template_manager.rs` - Template manager
 
 **Testing:**
+
 - Save countdown visuals as template
 - Apply template to different card
 - Manage templates (rename, delete)
@@ -430,6 +466,7 @@ CREATE TABLE countdown_templates (
 **Branch:** `feat/notification-settings-ui`
 
 **Implementation:**
+
 - Add "Notifications" tab to Settings dialog
 - Expose `CountdownNotificationConfig` fields:
   - Enable/disable notifications checkbox
@@ -449,11 +486,13 @@ CREATE TABLE countdown_templates (
 - Apply changes immediately to all cards
 
 **Files to Modify:**
+
 - `src/ui_egui/dialogs/settings.rs` - Add Notifications tab
 - `src/ui_egui/app.rs` - Pass notification config to settings dialog
 - `src/services/countdown/service.rs` - Expose config getters/setters (already implemented)
 
 **Testing:**
+
 - Change thresholds, verify visual warnings change
 - Disable notifications, verify no alerts shown
 - Test auto-dismiss settings
@@ -468,7 +507,9 @@ CREATE TABLE countdown_templates (
 **Branch:** `feat/crash-recovery`
 
 **Implementation:**
+
 - Create `app_state.json` in AppData directory:
+
 ```json
 {
     "window_position": {"x": 100, "y": 100},
@@ -486,10 +527,12 @@ CREATE TABLE countdown_templates (
 - Store separately from database for independence
 
 **Files to Modify:**
+
 - Create `src/services/app_state.rs` - State persistence service
 - `src/ui_egui/app.rs` - Save state on changes, load in `new()`
 
 **Testing:**
+
 - Close app, reopen, verify window position/size restored
 - Navigate to different view/date, close, verify restored
 - Corrupt JSON file, verify app starts with defaults
@@ -504,6 +547,7 @@ CREATE TABLE countdown_templates (
 **Branch:** `feat/migration-system`
 
 **Implementation:**
+
 - Create `migrations/` folder with numbered SQL files:
   - `001_initial_schema.sql`
   - `002_add_categories_table.sql`
@@ -511,6 +555,7 @@ CREATE TABLE countdown_templates (
   - etc.
 
 - Add `schema_version` table:
+
 ```sql
 CREATE TABLE schema_version (
     version INTEGER PRIMARY KEY,
@@ -528,12 +573,14 @@ CREATE TABLE schema_version (
 - Log migration applications
 
 **Files to Modify:**
+
 - Create `migrations/` directory with SQL files
 - Create `src/services/migration.rs` - Migration manager
 - `src/services/database/mod.rs` - Call migration manager on init
 - `src/main.rs` - Run migrations before UI startup
 
 **Testing:**
+
 - Fresh database applies all migrations
 - Existing database applies only new migrations
 - Failed migration rolls back and reports error
@@ -548,7 +595,9 @@ CREATE TABLE schema_version (
 **Branch:** `feat/event-caching`
 
 **Implementation:**
+
 - Add to `CalendarApp`:
+
 ```rust
 event_cache: HashMap<NaiveDate, Vec<Event>>,
 cache_valid_until: Option<Instant>,
@@ -565,11 +614,13 @@ cache_ttl: Duration = Duration::from_secs(60),
 - Add `EventService::get_cached_events(date: NaiveDate, cache: &mut HashMap) -> Vec<Event>`
 
 **Files to Modify:**
+
 - `src/ui_egui/app.rs` - Add cache fields and invalidation logic
 - `src/services/event/service.rs` - Add cache-aware query methods
 - All view files - Use cached events
 
 **Testing:**
+
 - Verify cache hit improves performance (benchmark)
 - Create event, verify cache invalidates
 - Wait for TTL, verify cache expires
@@ -588,6 +639,7 @@ cache_ttl: Duration = Duration::from_secs(60),
 **Branch:** `feat/natural-language-input`
 
 **Implementation:**
+
 - Add "Quick Add" text box above main view area
 - Parse patterns:
   - Date: "tomorrow", "next monday", "12/25", "Dec 25"
@@ -600,6 +652,7 @@ cache_ttl: Duration = Duration::from_secs(60),
     - "Lunch Dec 25 12:30pm 1h"
 
 - Use regex patterns + chrono parsing:
+
 ```rust
 struct ParsedEvent {
     title: String,
@@ -613,11 +666,13 @@ struct ParsedEvent {
 - Show parse errors in red text below input
 
 **Files to Modify:**
+
 - Create `src/services/natural_language.rs` - Parser
 - `src/ui_egui/app.rs` - Add quick add input box
 - Add unit tests for parser in `tests/unit/services/natural_language.rs`
 
 **Testing:**
+
 - Test various date formats
 - Test time parsing (12h and 24h)
 - Test duration extraction
@@ -632,6 +687,7 @@ struct ParsedEvent {
 **Branch:** `feat/event-attachments`
 
 **Database Changes:**
+
 ```sql
 ALTER TABLE events ADD COLUMN notes TEXT;
 
@@ -646,6 +702,7 @@ CREATE TABLE event_attachments (
 ```
 
 **Implementation:**
+
 - Add "Notes" tab to event dialog with multi-line text area
 - Add "Attachments" section with:
   - List of attached files with remove button
@@ -656,12 +713,14 @@ CREATE TABLE event_attachments (
 - Warn if file path becomes invalid (file moved/deleted)
 
 **Files to Modify:**
+
 - `src/models/event/mod.rs` - Add notes field
 - `src/services/database/mod.rs` - Add attachments table
 - Create `src/services/attachment.rs` - Attachment CRUD
 - `src/ui_egui/event_dialog.rs` - Add Notes tab and Attachments section
 
 **Testing:**
+
 - Add note to event, verify saved and displayed
 - Attach file, verify link stored
 - Click attachment, verify file opens
@@ -677,10 +736,13 @@ CREATE TABLE event_attachments (
 **Branch:** `feat/notification-sound`
 
 **Dependencies:**
+
 - Add `rodio = "0.17"` to Cargo.toml for audio playback
 
 **Implementation:**
+
 - Add sound fields to `CountdownNotificationConfig`:
+
 ```rust
 pub enable_sound: bool,
 pub sound_file: Option<PathBuf>,
@@ -696,11 +758,13 @@ pub sound_file: Option<PathBuf>,
 - Support .wav and .mp3 files
 
 **Files to Modify:**
+
 - `src/services/countdown/models.rs` - Add sound fields to config
 - `src/services/notification/mod.rs` - Add sound playback
 - `src/ui_egui/dialogs/settings.rs` - Add sound UI to Notifications tab
 
 **Testing:**
+
 - Select sound file, verify plays on notification
 - Test with .wav and .mp3 files
 - Disable sound, verify no audio plays
@@ -716,6 +780,7 @@ pub sound_file: Option<PathBuf>,
 **Branch:** `feat/auto-theme-switch`
 
 **What was implemented:**
+
 - ✅ `use_system_theme` setting in Settings model
 - ✅ "Use system theme" checkbox in Settings dialog
 - ✅ `dark-light` crate integration for OS theme detection
@@ -724,6 +789,7 @@ pub sound_file: Option<PathBuf>,
 **Note:** Scheduled mode (switch at specific times) not implemented - only Follow System mode.
 
 **Files Modified:**
+
 - `src/models/settings/mod.rs` - use_system_theme field ✅
 - `src/ui_egui/settings_dialog.rs` - Checkbox ✅
 - `src/ui_egui/app/lifecycle.rs` - dark_light::detect() integration ✅
@@ -742,7 +808,7 @@ pub sound_file: Option<PathBuf>,
 
 ### Commit Message Format
 
-```
+```text
 <type>: <short description>
 
 <optional longer description>
@@ -789,30 +855,35 @@ docs: document keyboard shortcuts in README
 ## Progress Tracking
 
 ### Phase 1 Status
+
 - [x] Database Backup System
 - [x] Keyboard Shortcuts
 - [x] Export Menu Integration
 - [x] Event Validation Enhancements
 
 ### Phase 2 Status
+
 - [x] Event Search
 - [x] Category Management & Filtering
 - [x] Event Templates
 - [x] Week Numbers
 
 ### Phase 3 Status
+
 - [x] Undo/Redo System
 - [ ] Multi-Select Events
 - [x] Drag-to-Resize Events
 - [ ] Countdown Card Templates
 
 ### Phase 4 Status
+
 - [ ] Notification Settings UI
 - [ ] Crash Recovery
 - [ ] Database Migration System
 - [ ] Event Caching
 
 ### Phase 5 Status
+
 - [ ] Natural Language Event Input
 - [ ] Event Attachments/Notes
 - [ ] Notification Sound

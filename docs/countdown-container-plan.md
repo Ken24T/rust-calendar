@@ -3,10 +3,13 @@
 > **Status: Implemented** — The countdown container has been built and shipped. This document is the original implementation plan, retained for reference. Actual implementation may differ in details.
 
 ## Overview
+
 Implement a container mode for countdown cards that allows users to display all countdown cards in a single resizable window, while preserving the existing individual window mode.
 
 ## Background
+
 Currently, each countdown card is rendered as a separate egui viewport/window. Users want the option to combine all cards into a single container where:
+
 - The container is a single resizable window
 - Cards auto-arrange based on container dimensions (vertical stack when tall/narrow, horizontal row when wide)
 - Cards can be manually dragged to reorder within the container
@@ -19,6 +22,7 @@ Currently, each countdown card is rendered as a separate egui viewport/window. U
 
 > [!NOTE]
 > **Card Sizing**: Cards intelligently auto-resize within the container:
+>
 > - **Vertical layout** (tall/narrow container): Cards take full width, auto-size height proportionally
 > - **Horizontal layout** (wide container): Cards take full height, auto-size width proportionally
 > - Minimum size constraints apply to prevent cards from becoming too small
@@ -340,13 +344,15 @@ fn layout_cards(
 ## Verification Plan
 
 ### Automated Tests
+
 - Unit tests for layout calculation with various container sizes
 - Test card reordering logic
 - Test orientation switching
 
 ### Manual Verification
+
 1. **Mode Switching**: Toggle between individual and container modes, verify cards transition smoothly
-2. **Responsive Layout**: 
+2. **Responsive Layout**:
    - Start with wide container → verify horizontal layout
    - Resize to tall/narrow → verify switches to vertical layout
    - Resize back → verify returns to horizontal
@@ -365,6 +371,7 @@ fn layout_cards(
    - Verify container opens at saved size/position
 
 ### Edge Cases
+
 - Single card in container
 - Many cards (10+) in container → verify scrolling if needed
 - Very small container size → verify minimum sizes enforced

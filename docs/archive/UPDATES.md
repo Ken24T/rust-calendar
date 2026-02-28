@@ -9,11 +9,13 @@ This update enhances the Rust Calendar project plan with a strong focus on **mod
 ## New Recurrence Frequencies
 
 ### Fortnightly
+
 - Every 2 weeks on the same day(s)
 - RFC 5545 equivalent: `FREQ=WEEKLY;INTERVAL=2`
 - Use case: Bi-weekly team meetings, pay periods
 
-### Quarterly  
+### Quarterly
+
 - Every 3 months (business quarter aligned)
 - RFC 5545 equivalent: `FREQ=MONTHLY;INTERVAL=3`
 - Use case: Quarterly reviews, tax deadlines, board meetings
@@ -21,6 +23,7 @@ This update enhances the Rust Calendar project plan with a strong focus on **mod
 ## Modularity Enhancements
 
 ### Key Principles
+
 1. **Maximum file size: 300 lines** (target: 150-200 lines)
 2. **Single Responsibility Principle** - One purpose per file
 3. **Feature-based module organization**
@@ -29,12 +32,14 @@ This update enhances the Rust Calendar project plan with a strong focus on **mod
 ### Project Structure Changes
 
 **Before**: Monolithic files
-```
+
+```text
 src/services/event_service.rs    (1000+ lines)
 ```
 
 **After**: Modular components
-```
+
+```text
 src/services/event/
 ├── mod.rs              (~50 lines)
 ├── crud.rs            (~120 lines)
@@ -43,6 +48,7 @@ src/services/event/
 ```
 
 ### New Module Structure
+
 - Split UI into `views/` and `components/` subdirectories
 - Separate database concerns: `connection.rs`, `migrations.rs`, `*_repo.rs`
 - Isolate recurrence logic: `frequency.rs`, `calculator.rs`, `exceptions.rs`, `patterns.rs`
@@ -51,11 +57,13 @@ src/services/event/
 ## Testing Infrastructure
 
 ### Coverage Requirements
+
 - **Minimum: 90% code coverage**
 - **Critical modules: 100% coverage** (recurrence, database, validation)
 
 ### Test Organization
-```
+
+```text
 tests/
 ├── unit/           # Unit tests (mirrors src/ exactly)
 ├── integration/    # Component interaction tests
@@ -64,6 +72,7 @@ tests/
 ```
 
 ### Testing Tools Added
+
 - `test-case` - Parameterized tests
 - `proptest` - Property-based testing
 - `mockall` - Mocking framework
@@ -72,6 +81,7 @@ tests/
 - `criterion` - Benchmarking
 
 ### Test Requirements
+
 - Every source file has a corresponding test file (1:1 mapping)
 - Every function/method has at least one test
 - Edge cases and error conditions must be tested
@@ -80,6 +90,7 @@ tests/
 ## New Documentation
 
 ### MODULARITY.md
+
 - Code organization guidelines
 - File size limits and enforcement
 - Refactoring patterns
@@ -87,8 +98,9 @@ tests/
 - Function complexity guidelines
 - Code review checklist
 
-### TESTING.md  
-- Testing philosophy and hierarchy
+### TESTING.md
+
+- Testing philosophyand hierarchy
 - Unit, integration, property-based, and benchmark tests
 - Test naming conventions
 - AAA pattern (Arrange-Act-Assert)
@@ -99,6 +111,7 @@ tests/
 ## Updated Files
 
 ### docs/PROJECT_PLAN.md
+
 - ✅ Added fortnightly and quarterly to feature list
 - ✅ Expanded project structure with modular organization
 - ✅ Added comprehensive testing section
@@ -106,6 +119,7 @@ tests/
 - ✅ Added recurrence code examples
 
 ### Cargo.toml
+
 - ✅ Added `test-case` for parameterized tests
 - ✅ Added `proptest` for property-based testing
 - ✅ Added `pretty_assertions` for better test output
@@ -113,6 +127,7 @@ tests/
 - ✅ Updated dev-dependencies comments
 
 ### README.md
+
 - ✅ Highlighted fortnightly and quarterly in features
 - ✅ Added modularity and testing design principles
 - ✅ Expanded project structure with test directories
@@ -122,6 +137,7 @@ tests/
 ## Sample Code Created
 
 ### Example Test Files
+
 1. **tests/unit/models/recurrence_frequency_tests.rs**
    - Demonstrates unit testing approach
    - Shows parameterized tests with `test-case`
@@ -145,6 +161,7 @@ tests/
 ## Implementation Guidelines
 
 ### When Creating New Code
+
 1. Check file line count - split if approaching 250 lines
 2. Write tests first (TDD approach preferred)
 3. Ensure test coverage for edge cases
@@ -152,12 +169,14 @@ tests/
 5. Run `cargo fmt` and `cargo clippy`
 
 ### Module Split Checklist
+
 - [ ] File exceeds 250 lines → Split immediately
 - [ ] Multiple structs in one file → Separate files
 - [ ] Many methods on one struct → Extract traits/modules
 - [ ] Complex function (>40 lines) → Break into smaller functions
 
 ### Test Coverage Checklist
+
 - [ ] Unit test for each function
 - [ ] Integration test for workflows
 - [ ] Property test for complex logic
@@ -194,6 +213,7 @@ cargo fmt -- --check
 ## Benefits
 
 ### Modularity Benefits
+
 ✅ Easier to understand (small, focused files)
 ✅ Easier to test (isolated components)
 ✅ Easier to maintain (clear boundaries)
@@ -201,6 +221,7 @@ cargo fmt -- --check
 ✅ Easier to review (small changesets)
 
 ### Testing Benefits
+
 ✅ Catch bugs early (before production)
 ✅ Confident refactoring (tests as safety net)
 ✅ Documentation (tests show usage)
