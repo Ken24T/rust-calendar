@@ -1,8 +1,8 @@
 //! Rendering logic for individual countdown cards within the container.
 
 use crate::services::countdown::{
-    CountdownCardState, CountdownCardVisuals, CountdownNotificationConfig,
-    CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
+    CountdownCardState, CountdownCardVisuals, CountdownCategoryId,
+    CountdownNotificationConfig, CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
 };
 use chrono::{DateTime, Local};
 
@@ -67,6 +67,7 @@ pub enum CardUiAction {
     GoToDate,
     Delete,
     Refresh,
+    ChangeCategory(CountdownCategoryId),
 }
 
 /// Convert an RGBA color to egui Color32
@@ -166,6 +167,7 @@ fn calculate_card_colors(
 
 /// Render a single card's content within a given rect.
 /// This is used by the container to render each card at its computed position.
+#[allow(clippy::too_many_arguments)]
 pub fn render_card_content(
     ui: &mut egui::Ui,
     card: &CountdownCardState,
@@ -174,6 +176,7 @@ pub fn render_card_content(
     now: DateTime<Local>,
     notification_config: &CountdownNotificationConfig,
     is_being_dragged: bool,
+    categories: &[(CountdownCategoryId, String)],
 ) -> CardUiAction {
     let mut action = CardUiAction::None;
 
@@ -327,6 +330,18 @@ pub fn render_card_content(
         if ui.button("🔄 Refresh countdown").clicked() {
             action = CardUiAction::Refresh;
             ui.close_menu();
+        }
+        if categories.len() > 1 {
+            ui.menu_button("📂 Move to category", |ui| {
+                for (cat_id, cat_name) in categories {
+                    if *cat_id == card.category_id {
+                        ui.label(egui::RichText::new(format!("✓ {cat_name}")).strong());
+                    } else if ui.button(cat_name).clicked() {
+                        action = CardUiAction::ChangeCategory(*cat_id);
+                        ui.close_menu();
+                    }
+                }
+            });
         }
         ui.separator();
         if ui.button("🗑 Delete card").clicked() {

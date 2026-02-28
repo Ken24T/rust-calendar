@@ -4,6 +4,7 @@ mod notifications;
 mod palette;
 mod persistence;
 pub mod repository;
+mod repository_categories;
 mod repository_settings;
 mod service;
 mod storage;
@@ -12,7 +13,7 @@ mod visuals;
 
 pub use models::{
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownDisplayMode, CountdownNotificationConfig, CountdownWarningState, RgbaColor,
-    MAX_DAYS_FONT_SIZE,
+    CountdownCategory, CountdownCategoryId, CountdownDisplayMode, CountdownNotificationConfig,
+    CountdownWarningState, RgbaColor, DEFAULT_CATEGORY_ID, MAX_DAYS_FONT_SIZE,
 };
 pub use service::CountdownService;

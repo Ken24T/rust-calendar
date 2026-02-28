@@ -291,6 +291,13 @@ pub struct CountdownCardState {
     /// Auto-dismiss configuration for this card
     #[serde(default)]
     pub auto_dismiss: CountdownAutoDismissConfig,
+    /// Category this card belongs to (defaults to General / 1)
+    #[serde(default = "default_category_id")]
+    pub category_id: CountdownCategoryId,
+}
+
+fn default_category_id() -> CountdownCategoryId {
+    CountdownCategoryId(DEFAULT_CATEGORY_ID)
 }
 
 impl CountdownCardState {
@@ -362,6 +369,68 @@ pub enum CountdownDisplayMode {
     IndividualWindows,
     /// All cards in a single container window
     Container,
+    /// Cards grouped by category, each category in its own container
+    CategoryContainers,
+}
+
+/// Unique identifier for countdown categories.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CountdownCategoryId(pub i64);
+
+/// The default category ID (seeded as "General").
+pub const DEFAULT_CATEGORY_ID: i64 = 1;
+
+/// A user-defined category for grouping countdown cards into containers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CountdownCategory {
+    pub id: CountdownCategoryId,
+    pub name: String,
+    /// Display ordering (lower = first)
+    pub display_order: i32,
+    /// Container geometry for this category in CategoryContainers mode
+    #[serde(default)]
+    pub container_geometry: Option<CountdownCardGeometry>,
+    /// Category-level visual defaults; cards inherit from these unless overridden.
+    /// When `use_global_defaults` is true the global defaults take precedence.
+    #[serde(default)]
+    pub visual_defaults: CountdownCardVisuals,
+    /// Default card width for new cards in this category
+    #[serde(default = "default_category_card_width")]
+    pub default_card_width: f32,
+    /// Default card height for new cards in this category
+    #[serde(default = "default_category_card_height")]
+    pub default_card_height: f32,
+    /// When true, this category inherits the global visual defaults
+    /// rather than using its own `visual_defaults`.
+    #[serde(default = "default_use_global_defaults")]
+    pub use_global_defaults: bool,
+}
+
+fn default_category_card_width() -> f32 {
+    120.0
+}
+
+fn default_category_card_height() -> f32 {
+    110.0
+}
+
+fn default_use_global_defaults() -> bool {
+    true
+}
+
+impl Default for CountdownCategory {
+    fn default() -> Self {
+        Self {
+            id: CountdownCategoryId(DEFAULT_CATEGORY_ID),
+            name: "General".to_string(),
+            display_order: 0,
+            container_geometry: None,
+            visual_defaults: CountdownCardVisuals::default(),
+            default_card_width: default_category_card_width(),
+            default_card_height: default_category_card_height(),
+            use_global_defaults: true,
+        }
+    }
 }
 
 
@@ -389,6 +458,9 @@ pub struct CountdownPersistedState {
     /// Manual card ordering for container mode (list of card IDs)
     #[serde(default)]
     pub card_order: Vec<CountdownCardId>,
+    /// User-defined categories for grouping cards
+    #[serde(default)]
+    pub categories: Vec<CountdownCategory>,
 }
 
 pub(crate) fn default_visuals() -> CountdownCardVisuals {
@@ -418,6 +490,12 @@ mod tests {
         let json = serde_json::to_string(&container).unwrap();
         let deserialized: CountdownDisplayMode = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized, CountdownDisplayMode::Container);
+
+        // Test CategoryContainers serialization
+        let category = CountdownDisplayMode::CategoryContainers;
+        let json = serde_json::to_string(&category).unwrap();
+        let deserialized: CountdownDisplayMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, CountdownDisplayMode::CategoryContainers);
     }
 
     #[test]
@@ -507,5 +585,48 @@ mod tests {
         assert_eq!(deserialized.card_order[0], CountdownCardId(1));
         assert_eq!(deserialized.card_order[1], CountdownCardId(3));
         assert_eq!(deserialized.card_order[2], CountdownCardId(2));
+    }
+
+    #[test]
+    fn test_countdown_category_default() {
+        let cat = CountdownCategory::default();
+        assert_eq!(cat.id, CountdownCategoryId(DEFAULT_CATEGORY_ID));
+        assert_eq!(cat.name, "General");
+        assert_eq!(cat.display_order, 0);
+        assert!(cat.use_global_defaults);
+        assert!(cat.container_geometry.is_none());
+    }
+
+    #[test]
+    fn test_countdown_category_serialization() {
+        let cat = CountdownCategory {
+            id: CountdownCategoryId(2),
+            name: "Cruises".to_string(),
+            display_order: 1,
+            container_geometry: Some(CountdownCardGeometry {
+                x: 50.0,
+                y: 100.0,
+                width: 600.0,
+                height: 400.0,
+            }),
+            visual_defaults: CountdownCardVisuals::default(),
+            default_card_width: 150.0,
+            default_card_height: 130.0,
+            use_global_defaults: false,
+        };
+
+        let json = serde_json::to_string(&cat).unwrap();
+        let deserialized: CountdownCategory = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, CountdownCategoryId(2));
+        assert_eq!(deserialized.name, "Cruises");
+        assert_eq!(deserialized.display_order, 1);
+        assert!(!deserialized.use_global_defaults);
+        assert!(deserialized.container_geometry.is_some());
+    }
+
+    #[test]
+    fn test_persisted_state_categories_default_empty() {
+        let state = CountdownPersistedState::default();
+        assert!(state.categories.is_empty());
     }
 }

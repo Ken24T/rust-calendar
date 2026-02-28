@@ -8,7 +8,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use super::models::{
     CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownWarningState,
+    CountdownCardVisuals, CountdownCategoryId, CountdownWarningState,
     RgbaColor,
 };
 
@@ -42,7 +42,8 @@ impl<'a> CountdownRepository<'a> {
                     days_font_size,
                     auto_dismiss_enabled, auto_dismiss_on_event_start, auto_dismiss_on_event_end,
                     auto_dismiss_delay_seconds,
-                    last_computed_days, last_warning_state, last_notification_time
+                    last_computed_days, last_warning_state, last_notification_time,
+                    category_id
              FROM countdown_cards
              ORDER BY id",
         )?;
@@ -72,7 +73,8 @@ impl<'a> CountdownRepository<'a> {
                     days_font_size,
                     auto_dismiss_enabled, auto_dismiss_on_event_start, auto_dismiss_on_event_end,
                     auto_dismiss_delay_seconds,
-                    last_computed_days, last_warning_state, last_notification_time
+                    last_computed_days, last_warning_state, last_notification_time,
+                    category_id
              FROM countdown_cards WHERE id = ?",
         )?;
 
@@ -98,7 +100,8 @@ impl<'a> CountdownRepository<'a> {
                     days_font_size,
                     auto_dismiss_enabled, auto_dismiss_on_event_start, auto_dismiss_on_event_end,
                     auto_dismiss_delay_seconds,
-                    last_computed_days, last_warning_state, last_notification_time
+                    last_computed_days, last_warning_state, last_notification_time,
+                    category_id
              FROM countdown_cards WHERE event_id = ?",
         )?;
 
@@ -131,7 +134,8 @@ impl<'a> CountdownRepository<'a> {
                 days_font_size,
                 auto_dismiss_enabled, auto_dismiss_on_event_start, auto_dismiss_on_event_end,
                 auto_dismiss_delay_seconds,
-                last_computed_days, last_warning_state, last_notification_time
+                last_computed_days, last_warning_state, last_notification_time,
+                category_id
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
                 ?11, ?12, ?13, ?14,
@@ -143,7 +147,8 @@ impl<'a> CountdownRepository<'a> {
                 ?33, ?34, ?35, ?36, ?37,
                 ?38,
                 ?39, ?40, ?41, ?42,
-                ?43, ?44, ?45
+                ?43, ?44, ?45,
+                ?46
             )",
             params![
                 card.id.0 as i64,
@@ -191,6 +196,7 @@ impl<'a> CountdownRepository<'a> {
                 card.last_computed_days,
                 last_warning_str,
                 last_notif_str,
+                card.category_id.0,
             ],
         ).context("Failed to insert countdown card")?;
 
@@ -221,6 +227,7 @@ impl<'a> CountdownRepository<'a> {
                 auto_dismiss_enabled = ?39, auto_dismiss_on_event_start = ?40, auto_dismiss_on_event_end = ?41,
                 auto_dismiss_delay_seconds = ?42,
                 last_computed_days = ?43, last_warning_state = ?44, last_notification_time = ?45,
+                category_id = ?46,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?1",
             params![
@@ -269,6 +276,7 @@ impl<'a> CountdownRepository<'a> {
                 card.last_computed_days,
                 last_warning_str,
                 last_notif_str,
+                card.category_id.0,
             ],
         ).context("Failed to update countdown card")?;
 
@@ -375,6 +383,7 @@ fn row_to_card_state(row: &Row<'_>) -> rusqlite::Result<CountdownCardState> {
     let last_computed_days: Option<i64> = row.get(42)?;
     let last_warning_str: Option<String> = row.get(43)?;
     let last_notification_str: Option<String> = row.get(44)?;
+    let category_id: i64 = row.get(45)?;
 
     let last_warning_state = last_warning_str.and_then(|s| string_to_warning_state(&s));
     let last_notification_time = last_notification_str.and_then(|s| {
@@ -400,6 +409,7 @@ fn row_to_card_state(row: &Row<'_>) -> rusqlite::Result<CountdownCardState> {
         last_warning_state,
         last_notification_time,
         auto_dismiss,
+        category_id: CountdownCategoryId(category_id),
     })
 }
 

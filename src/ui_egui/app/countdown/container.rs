@@ -11,9 +11,10 @@ pub use super::container_layout::{ContainerLayout, DragState};
 
 use crate::services::countdown::{
     CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownNotificationConfig,
+    CountdownCategoryId, CountdownNotificationConfig,
 };
 use chrono::{DateTime, Local};
+use std::collections::HashMap;
 
 /// Actions that can result from container UI interactions
 #[derive(Debug, Clone, Default)]
@@ -33,6 +34,8 @@ pub enum ContainerAction {
     GoToDate(chrono::NaiveDate),
     /// Refresh a specific card
     RefreshCard(CountdownCardId),
+    /// Change a card's category
+    ChangeCategory(CountdownCardId, CountdownCategoryId),
     /// Container geometry changed
     GeometryChanged(CountdownCardGeometry),
     /// Container was closed
@@ -51,8 +54,67 @@ fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
     })
 }
 
+/// Constants for the cross-category drop zone strip.
+const DROP_ZONE_HEIGHT: f32 = 32.0;
+const DROP_ZONE_BUTTON_SPACING: f32 = 4.0;
+const DROP_ZONE_MAX_BUTTON_WIDTH: f32 = 180.0;
+
+/// Check whether `pos` lands on a cross-category drop-zone button.
+///
+/// Returns `Some(target_category_id)` if the position is inside one of the
+/// drop-zone buttons, or `None` otherwise.
+fn drop_zone_hit_test(
+    pos: egui::Pos2,
+    available_rect: egui::Rect,
+    categories: &[(CountdownCategoryId, String)],
+    current_category_id: CountdownCategoryId,
+) -> Option<CountdownCategoryId> {
+    let other_categories: Vec<_> = categories
+        .iter()
+        .filter(|(id, _)| *id != current_category_id)
+        .collect();
+
+    if other_categories.is_empty() {
+        return None;
+    }
+
+    let drop_zone_y = available_rect.bottom() - DROP_ZONE_HEIGHT - 4.0;
+    let drop_zone_rect = egui::Rect::from_min_size(
+        egui::pos2(available_rect.left() + 4.0, drop_zone_y),
+        egui::vec2(available_rect.width() - 8.0, DROP_ZONE_HEIGHT),
+    );
+
+    let button_count = other_categories.len() as f32;
+    let total_spacing = DROP_ZONE_BUTTON_SPACING * (button_count - 1.0).max(0.0);
+    let button_width = ((drop_zone_rect.width() - 8.0 - total_spacing) / button_count)
+        .min(DROP_ZONE_MAX_BUTTON_WIDTH);
+    let total_buttons_width = button_width * button_count + total_spacing;
+    let start_x = drop_zone_rect.center().x - total_buttons_width / 2.0;
+
+    for (i, (cat_id, _)) in other_categories.iter().enumerate() {
+        let btn_x = start_x + (button_width + DROP_ZONE_BUTTON_SPACING) * i as f32;
+        let btn_rect = egui::Rect::from_min_size(
+            egui::pos2(btn_x, drop_zone_rect.top() + 4.0),
+            egui::vec2(button_width, DROP_ZONE_HEIGHT - 8.0),
+        );
+        if btn_rect.contains(pos) {
+            return Some(*cat_id);
+        }
+    }
+
+    None
+}
+
 /// Render all countdown cards within a container viewport.
 /// Returns any actions that need to be handled by the caller.
+///
+/// `window_title` controls the viewport title bar text.
+/// `viewport_id_suffix` must be unique per container window (used for the viewport ID hash).
+/// `effective_defaults_by_category` maps each category to its resolved visual defaults
+/// (accounting for the three-tier Global → Category → Card inheritance).
+/// `global_visual_defaults` is the fallback when a card's category is not in the map.
+/// `current_category_id` identifies this container's category; when set and a drag is
+/// active, a drop-zone strip appears at the bottom listing other categories as targets.
 #[allow(clippy::too_many_arguments)]
 pub fn render_container_window(
     ctx: &egui::Context,
@@ -62,10 +124,15 @@ pub fn render_container_window(
     drag_state: &mut DragState,
     now: DateTime<Local>,
     notification_config: &CountdownNotificationConfig,
-    visual_defaults: &CountdownCardVisuals,
+    effective_defaults_by_category: &HashMap<CountdownCategoryId, CountdownCardVisuals>,
+    global_visual_defaults: &CountdownCardVisuals,
     container_geometry: Option<CountdownCardGeometry>,
     default_card_width: f32,
     default_card_height: f32,
+    categories: &[(CountdownCategoryId, String)],
+    window_title: &str,
+    viewport_id_suffix: &str,
+    current_category_id: Option<CountdownCategoryId>,
 ) -> Vec<ContainerAction> {
     use std::time::Duration as StdDuration;
 
@@ -144,7 +211,7 @@ pub fn render_container_window(
         }
     };
 
-    let viewport_id = egui::ViewportId::from_hash_of("countdown_container");
+    let viewport_id = egui::ViewportId::from_hash_of(viewport_id_suffix);
 
     // Set position/size on first render OR when card count changes
     let needs_resize = !layout.initialized || card_count_changed;
@@ -162,7 +229,7 @@ pub fn render_container_window(
     // Otherwise, let the OS/user control the window position to prevent shaking during drag
     let builder = if needs_resize {
         egui::ViewportBuilder::default()
-            .with_title("Countdown Cards")
+            .with_title(window_title)
             .with_resizable(true)
             .with_visible(true)
             .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
@@ -170,7 +237,7 @@ pub fn render_container_window(
             .with_inner_size(egui::vec2(initial_geometry.width, initial_geometry.height))
     } else {
         egui::ViewportBuilder::default()
-            .with_title("Countdown Cards")
+            .with_title(window_title)
             .with_resizable(true)
             .with_visible(true)
             .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
@@ -401,33 +468,72 @@ pub fn render_container_window(
 
                             // Handle drag end
                             if response.drag_stopped() {
-                                if let Some(dragged_id) = drag_state.end_drag() {
-                                    if let Some(insert_idx) = drag_state.insert_index.take() {
-                                        // Reorder cards
-                                        let mut new_order = ordered_ids.clone();
-                                        if let Some(current_idx) = new_order.iter().position(|id| *id == dragged_id) {
-                                            new_order.remove(current_idx);
-                                            let adjusted_idx = if insert_idx > current_idx {
-                                                insert_idx.saturating_sub(1)
-                                            } else {
-                                                insert_idx
-                                            };
-                                            new_order.insert(adjusted_idx.min(new_order.len()), dragged_id);
-                                            actions.push(ContainerAction::ReorderCards(new_order));
+                                // Check cross-category drop zone first
+                                let mut handled_as_category_change = false;
+                                if let Some(current_cat) = current_category_id {
+                                    if let (Some(dragged_id), Some(pos)) =
+                                        (drag_state.dragging_card, drag_state.current_drag_pos)
+                                    {
+                                        if let Some(target_cat_id) = drop_zone_hit_test(
+                                            pos,
+                                            available_rect,
+                                            categories,
+                                            current_cat,
+                                        ) {
+                                            log::info!(
+                                                "Card {:?} dropped on category {:?} drop zone",
+                                                dragged_id,
+                                                target_cat_id
+                                            );
+                                            drag_state.end_drag();
+                                            actions.push(ContainerAction::ChangeCategory(
+                                                dragged_id,
+                                                target_cat_id,
+                                            ));
+                                            handled_as_category_change = true;
+                                        }
+                                    }
+                                }
+
+                                if !handled_as_category_change {
+                                    if let Some(dragged_id) = drag_state.end_drag() {
+                                        if let Some(insert_idx) = drag_state.insert_index.take() {
+                                            // Reorder cards
+                                            let mut new_order = ordered_ids.clone();
+                                            if let Some(current_idx) =
+                                                new_order.iter().position(|id| *id == dragged_id)
+                                            {
+                                                new_order.remove(current_idx);
+                                                let adjusted_idx = if insert_idx > current_idx {
+                                                    insert_idx.saturating_sub(1)
+                                                } else {
+                                                    insert_idx
+                                                };
+                                                new_order.insert(
+                                                    adjusted_idx.min(new_order.len()),
+                                                    dragged_id,
+                                                );
+                                                actions
+                                                    .push(ContainerAction::ReorderCards(new_order));
+                                            }
                                         }
                                     }
                                 }
                             }
 
-                            // Render the card content
+                            // Render the card content with per-category effective defaults
+                            let effective_defaults = effective_defaults_by_category
+                                .get(&card.category_id)
+                                .unwrap_or(global_visual_defaults);
                             let card_action = render_card_content(
                                 ui,
                                 card,
-                                visual_defaults,
+                                effective_defaults,
                                 rect,
                                 now,
                                 notification_config,
                                 is_dragging,
+                                categories,
                             );
 
                             // Convert card action to container action
@@ -447,6 +553,9 @@ pub fn render_container_window(
                                 }
                                 CardUiAction::Refresh => {
                                     actions.push(ContainerAction::RefreshCard(*card_id));
+                                }
+                                CardUiAction::ChangeCategory(cat_id) => {
+                                    actions.push(ContainerAction::ChangeCategory(*card_id, cat_id));
                                 }
                             }
                         }
@@ -473,6 +582,81 @@ pub fn render_container_window(
 
                         // Also show a ghost of the dragged card at cursor position
                         let _ = drag_pos; // Could use this for ghost rendering
+                    }
+
+                    // Cross-category drop zones — show at bottom when in CategoryContainers mode
+                    if let Some(current_cat_id) = current_category_id {
+                        let other_categories: Vec<_> = categories
+                            .iter()
+                            .filter(|(id, _)| *id != current_cat_id)
+                            .collect();
+
+                        if !other_categories.is_empty() {
+                            let drop_zone_y = available_rect.bottom() - DROP_ZONE_HEIGHT - 4.0;
+                            let drop_zone_rect = egui::Rect::from_min_size(
+                                egui::pos2(available_rect.left() + 4.0, drop_zone_y),
+                                egui::vec2(available_rect.width() - 8.0, DROP_ZONE_HEIGHT),
+                            );
+
+                            // Semi-transparent background strip
+                            ui.painter().rect_filled(
+                                drop_zone_rect,
+                                6.0,
+                                egui::Color32::from_rgba_unmultiplied(40, 40, 60, 210),
+                            );
+
+                            // Render a button for each target category
+                            let button_count = other_categories.len() as f32;
+                            let total_spacing =
+                                DROP_ZONE_BUTTON_SPACING * (button_count - 1.0).max(0.0);
+                            let button_width =
+                                ((drop_zone_rect.width() - 8.0 - total_spacing) / button_count)
+                                    .min(DROP_ZONE_MAX_BUTTON_WIDTH);
+                            let total_buttons_width =
+                                button_width * button_count + total_spacing;
+                            let start_x =
+                                drop_zone_rect.center().x - total_buttons_width / 2.0;
+
+                            for (i, (_cat_id, cat_name)) in other_categories.iter().enumerate() {
+                                let btn_x = start_x
+                                    + (button_width + DROP_ZONE_BUTTON_SPACING) * i as f32;
+                                let btn_rect = egui::Rect::from_min_size(
+                                    egui::pos2(btn_x, drop_zone_rect.top() + 4.0),
+                                    egui::vec2(button_width, DROP_ZONE_HEIGHT - 8.0),
+                                );
+
+                                // Check if pointer is hovering this drop target
+                                let pointer_over = drag_state
+                                    .current_drag_pos
+                                    .map(|p| btn_rect.contains(p))
+                                    .unwrap_or(false);
+
+                                let bg_color = if pointer_over {
+                                    egui::Color32::from_rgb(80, 140, 220)
+                                } else {
+                                    egui::Color32::from_rgb(60, 60, 80)
+                                };
+
+                                ui.painter().rect_filled(btn_rect, 4.0, bg_color);
+                                ui.painter().rect_stroke(
+                                    btn_rect,
+                                    4.0,
+                                    egui::Stroke::new(
+                                        1.0,
+                                        egui::Color32::from_gray(120),
+                                    ),
+                                );
+
+                                let label = format!("→ {}", cat_name);
+                                ui.painter().text(
+                                    btn_rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    &label,
+                                    egui::FontId::proportional(12.0),
+                                    egui::Color32::WHITE,
+                                );
+                            }
+                        }
                     }
                 }
             });

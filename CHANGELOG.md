@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.4] - 2026-03-01
+
+### Added
+
+- Cross-category drag-and-drop in Category Containers mode.
+  - When dragging a card, a drop-zone strip appears at the bottom of the container
+    showing other categories as coloured targets.
+  - Dropping on a target button moves the card to that category.
+  - Highlighted feedback when the pointer hovers over a drop-zone target.
+  - `drop_zone_hit_test()` helper for deterministic hit detection, shared between
+    drag-end processing and visual rendering.
+  - Single-container mode unaffected (drop zones only appear in CategoryContainers mode).
+
+## [2.1.3] - 2026-03-01
+
+### Added
+
+- Three-tier visual inheritance: Global → Category → Card.
+  - Cards with `use_default_*` flags now inherit from their category's visual defaults
+    (or the global defaults when the category has `use_global_defaults = true`).
+  - `effective_visual_defaults_for(category_id)` and `effective_visual_defaults_map()`
+    service methods resolve the inheritance chain.
+  - All three display modes (Individual Windows, Container, Category Containers) now
+    honour the three-tier defaults.
+  - Individual windows mode now correctly resolves `use_default_*` flags (previously
+    bypassed defaults entirely).
+- Three new unit tests covering the visual inheritance resolution.
+
+## [2.1.2] - 2026-03-01
+
+### Added
+
+- Category Containers display mode — renders one container window per countdown category.
+  - Each category gets its own resizable, draggable container with independent geometry persistence.
+  - Per-category layout and drag state tracked independently.
+  - Closing any category container switches back to Individual Windows mode.
+  - Container window titles show the category name (e.g. "⏱ General").
+- `render_container_window` now accepts custom `window_title` and `viewport_id_suffix` parameters for reuse across display modes.
+- `update_category_container_geometry` service method for persisting per-category container geometry.
+
+## [2.1.1] - 2026-03-01
+
+### Added
+
+- "Move to category" context menu on countdown cards (individual windows and container modes).
+  - Submenu lists all categories; current category shown with checkmark.
+  - Only appears when more than one category exists.
+  - Card's category is updated immediately and persisted on next save cycle.
+
+## [2.1.0] - 2026-02-28
+
+### Added
+
+- Countdown category manager dialog for creating, editing, and deleting countdown card categories.
+  - Two-column layout: scrollable category list (with card counts) and editor panel.
+  - Create/rename/reorder categories with duplicate name validation.
+  - Delete with confirmation; cards reassigned to the default "General" category.
+  - Accessible from View → Countdown Cards → Manage Categories menu.
+- Data layer for countdown card categories (from prior commit):
+  - `CountdownCategory` model with visual defaults, container geometry, and display ordering.
+  - `countdown_categories` database table with "General" seed row.
+  - `category_id` column on `countdown_cards` table.
+  - Full repository CRUD (`repository_categories.rs`) and service methods.
+  - `CategoryContainers` display mode variant.
+
 ## [2.0.17] - 2026-02-28
 
 ### Refactored
