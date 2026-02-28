@@ -243,6 +243,7 @@ impl CountdownUiState {
             &categories,
             "Countdown Cards",
             "countdown_container",
+            None, // No cross-category drop zones in single-container mode
         );
 
         // Collect delete requests
@@ -437,6 +438,7 @@ impl CountdownUiState {
                 &categories,
                 &window_title,
                 &viewport_id_suffix,
+                Some(cat_snap.id),
             );
 
             // Process container actions for this category

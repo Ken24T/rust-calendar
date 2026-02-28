@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.4] - 2026-03-01
+
+### Added
+
+- Cross-category drag-and-drop in Category Containers mode.
+  - When dragging a card, a drop-zone strip appears at the bottom of the container
+    showing other categories as coloured targets.
+  - Dropping on a target button moves the card to that category.
+  - Highlighted feedback when the pointer hovers over a drop-zone target.
+  - `drop_zone_hit_test()` helper for deterministic hit detection, shared between
+    drag-end processing and visual rendering.
+  - Single-container mode unaffected (drop zones only appear in CategoryContainers mode).
+
 ## [2.1.3] - 2026-03-01
 
 ### Added
