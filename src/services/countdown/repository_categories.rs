@@ -8,7 +8,7 @@ use rusqlite::{params, Row};
 
 use super::models::{
     CountdownCardGeometry, CountdownCardVisuals, CountdownCategory, CountdownCategoryId,
-    RgbaColor,
+    ContainerSortMode, RgbaColor,
 };
 use super::repository::CountdownRepository;
 
@@ -27,7 +27,8 @@ impl<'a> CountdownRepository<'a> {
                     default_days_fg_r, default_days_fg_g, default_days_fg_b, default_days_fg_a,
                     default_days_font_size,
                     default_card_width, default_card_height,
-                    use_global_defaults
+                    use_global_defaults,
+                    is_collapsed, sort_mode
              FROM countdown_categories
              ORDER BY display_order, name",
         )?;
@@ -53,7 +54,8 @@ impl<'a> CountdownRepository<'a> {
                     default_days_fg_r, default_days_fg_g, default_days_fg_b, default_days_fg_a,
                     default_days_font_size,
                     default_card_width, default_card_height,
-                    use_global_defaults
+                    use_global_defaults,
+                    is_collapsed, sort_mode
              FROM countdown_categories
              WHERE id = ?",
         )?;
@@ -71,6 +73,11 @@ impl<'a> CountdownRepository<'a> {
             .map(|g| (Some(g.x), Some(g.y), Some(g.width), Some(g.height)))
             .unwrap_or((None, None, None, None));
 
+        let sort_mode_str = match category.sort_mode {
+            ContainerSortMode::Date => "Date",
+            ContainerSortMode::Manual => "Manual",
+        };
+
         self.conn.execute(
             "INSERT INTO countdown_categories (
                 name, display_order,
@@ -82,7 +89,8 @@ impl<'a> CountdownRepository<'a> {
                 default_days_fg_r, default_days_fg_g, default_days_fg_b, default_days_fg_a,
                 default_days_font_size,
                 default_card_width, default_card_height,
-                use_global_defaults
+                use_global_defaults,
+                is_collapsed, sort_mode
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6,
                 ?7, ?8, ?9, ?10,
@@ -92,7 +100,8 @@ impl<'a> CountdownRepository<'a> {
                 ?20, ?21, ?22, ?23,
                 ?24,
                 ?25, ?26,
-                ?27
+                ?27,
+                ?28, ?29
             )",
             params![
                 category.name,
@@ -122,6 +131,8 @@ impl<'a> CountdownRepository<'a> {
                 category.default_card_width,
                 category.default_card_height,
                 category.use_global_defaults,
+                category.is_collapsed,
+                sort_mode_str,
             ],
         )
         .context("Failed to insert countdown category")?;
@@ -137,6 +148,11 @@ impl<'a> CountdownRepository<'a> {
             .map(|g| (Some(g.x), Some(g.y), Some(g.width), Some(g.height)))
             .unwrap_or((None, None, None, None));
 
+        let sort_mode_str = match category.sort_mode {
+            ContainerSortMode::Date => "Date",
+            ContainerSortMode::Manual => "Manual",
+        };
+
         let rows = self.conn.execute(
             "UPDATE countdown_categories SET
                 name = ?2, display_order = ?3,
@@ -149,6 +165,7 @@ impl<'a> CountdownRepository<'a> {
                 default_days_font_size = ?25,
                 default_card_width = ?26, default_card_height = ?27,
                 use_global_defaults = ?28,
+                is_collapsed = ?29, sort_mode = ?30,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?1",
             params![
@@ -180,6 +197,8 @@ impl<'a> CountdownRepository<'a> {
                 category.default_card_width,
                 category.default_card_height,
                 category.use_global_defaults,
+                category.is_collapsed,
+                sort_mode_str,
             ],
         )
         .context("Failed to update countdown category")?;
@@ -252,6 +271,13 @@ fn row_to_category(row: &Row<'_>) -> rusqlite::Result<CountdownCategory> {
         days_font_size: row.get(24)?,
     };
 
+    let is_collapsed: bool = row.get(28)?;
+    let sort_mode_str: String = row.get(29)?;
+    let sort_mode = match sort_mode_str.as_str() {
+        "Manual" => ContainerSortMode::Manual,
+        _ => ContainerSortMode::Date,
+    };
+
     Ok(CountdownCategory {
         id: CountdownCategoryId(id),
         name,
@@ -261,5 +287,7 @@ fn row_to_category(row: &Row<'_>) -> rusqlite::Result<CountdownCategory> {
         default_card_width: row.get(25)?,
         default_card_height: row.get(26)?,
         use_global_defaults: row.get(27)?,
+        is_collapsed,
+        sort_mode,
     })
 }

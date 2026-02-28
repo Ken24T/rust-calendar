@@ -432,6 +432,66 @@ impl CountdownService {
     pub(super) fn set_categories(&mut self, categories: Vec<CountdownCategory>) {
         self.categories = categories;
     }
+
+    /// Toggle the collapsed state of a category container.
+    pub fn toggle_category_collapsed(&mut self, category_id: CountdownCategoryId) {
+        if let Some(cat) = self.categories.iter_mut().find(|c| c.id == category_id) {
+            cat.is_collapsed = !cat.is_collapsed;
+            log::debug!(
+                "Category {:?} collapsed toggled to {}",
+                category_id,
+                cat.is_collapsed
+            );
+            self.dirty = true;
+        }
+    }
+
+    /// Set the sort mode for a category's container.
+    pub fn set_category_sort_mode(
+        &mut self,
+        category_id: CountdownCategoryId,
+        mode: super::models::ContainerSortMode,
+    ) {
+        if let Some(cat) = self.categories.iter_mut().find(|c| c.id == category_id) {
+            if cat.sort_mode != mode {
+                log::debug!(
+                    "Category {:?} sort mode changed: {:?} -> {:?}",
+                    category_id,
+                    cat.sort_mode,
+                    mode
+                );
+                cat.sort_mode = mode;
+                // When switching to Date mode, re-sort now
+                if mode == super::models::ContainerSortMode::Date {
+                    self.sort_cards_by_date();
+                }
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Check whether a category is collapsed.
+    #[allow(dead_code)]
+    pub fn is_category_collapsed(&self, category_id: CountdownCategoryId) -> bool {
+        self.categories
+            .iter()
+            .find(|c| c.id == category_id)
+            .map(|c| c.is_collapsed)
+            .unwrap_or(false)
+    }
+
+    /// Get the sort mode for a category.
+    #[allow(dead_code)]
+    pub fn category_sort_mode(
+        &self,
+        category_id: CountdownCategoryId,
+    ) -> super::models::ContainerSortMode {
+        self.categories
+            .iter()
+            .find(|c| c.id == category_id)
+            .map(|c| c.sort_mode)
+            .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]

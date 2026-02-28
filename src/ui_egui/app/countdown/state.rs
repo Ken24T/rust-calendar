@@ -6,8 +6,8 @@ use super::render::{
     viewport_title_matches, CountdownCardUiAction,
 };
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownCategoryId, CountdownDisplayMode, CountdownService,
+    ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
+    CountdownCardVisuals, CountdownCategoryId, CountdownDisplayMode, CountdownService,
 };
 use chrono::Local;
 use egui::{self, Context};
@@ -244,6 +244,8 @@ impl CountdownUiState {
             "Countdown Cards",
             "countdown_container",
             None, // No cross-category drop zones in single-container mode
+            false, // not collapsed
+            ContainerSortMode::default(), // date sort
         );
 
         // Collect delete requests
@@ -318,6 +320,11 @@ impl CountdownUiState {
                     log::info!("Change category for card {:?} to {:?}", card_id, cat_id);
                     service.set_card_category(card_id, cat_id);
                 }
+                ContainerAction::ToggleCollapse(_)
+                | ContainerAction::SetSortMode(_, _)
+                | ContainerAction::QuickAddCard(_) => {
+                    // These actions only apply in category containers mode
+                }
             }
         }
 
@@ -359,6 +366,8 @@ impl CountdownUiState {
             container_geometry: Option<CountdownCardGeometry>,
             card_width: f32,
             card_height: f32,
+            is_collapsed: bool,
+            sort_mode: ContainerSortMode,
         }
 
         let cat_snapshots: Vec<CategorySnapshot> = service
@@ -370,6 +379,8 @@ impl CountdownUiState {
                 container_geometry: c.container_geometry,
                 card_width: c.default_card_width,
                 card_height: c.default_card_height,
+                is_collapsed: c.is_collapsed,
+                sort_mode: c.sort_mode,
             })
             .collect();
 
@@ -384,6 +395,9 @@ impl CountdownUiState {
         let mut geometry_updates: Vec<(CountdownCategoryId, CountdownCardGeometry)> = Vec::new();
         let mut reorder_updates: Vec<Vec<CountdownCardId>> = Vec::new();
         let mut closed_categories: Vec<CountdownCategoryId> = Vec::new();
+        let mut toggle_collapses: Vec<CountdownCategoryId> = Vec::new();
+        let mut sort_mode_updates: Vec<(CountdownCategoryId, ContainerSortMode)> = Vec::new();
+        let mut quick_add_categories: Vec<CountdownCategoryId> = Vec::new();
 
         for cat_snap in &cat_snapshots {
             // Filter cards for this category
@@ -393,20 +407,31 @@ impl CountdownUiState {
                 .cloned()
                 .collect();
 
-            // Skip categories with no cards
-            if cat_cards.is_empty() {
+            // Skip categories with no cards (unless collapsed — still show the header)
+            if cat_cards.is_empty() && !cat_snap.is_collapsed {
                 continue;
             }
 
-            // Build per-category card order (preserving global ordering, filtered)
-            let cat_card_order: Vec<CountdownCardId> = if card_order.is_empty() {
-                cat_cards.iter().map(|c| c.id).collect()
-            } else {
-                card_order
-                    .iter()
-                    .filter(|id| cat_cards.iter().any(|c| c.id == **id))
-                    .copied()
-                    .collect()
+            // Build per-category card order respecting sort mode
+            let cat_card_order: Vec<CountdownCardId> = match cat_snap.sort_mode {
+                ContainerSortMode::Date => {
+                    // Sort by start_at date ascending
+                    let mut sorted = cat_cards.clone();
+                    sorted.sort_by_key(|c| c.start_at);
+                    sorted.iter().map(|c| c.id).collect()
+                }
+                ContainerSortMode::Manual => {
+                    // Preserve global ordering, filtered to this category
+                    if card_order.is_empty() {
+                        cat_cards.iter().map(|c| c.id).collect()
+                    } else {
+                        card_order
+                            .iter()
+                            .filter(|id| cat_cards.iter().any(|c| c.id == **id))
+                            .copied()
+                            .collect()
+                    }
+                }
             };
 
             // Get or create per-category layout and drag state
@@ -439,6 +464,8 @@ impl CountdownUiState {
                 &window_title,
                 &viewport_id_suffix,
                 Some(cat_snap.id),
+                cat_snap.is_collapsed,
+                cat_snap.sort_mode,
             );
 
             // Process container actions for this category
@@ -504,6 +531,15 @@ impl CountdownUiState {
                         log::info!("Change category for card {:?} to {:?}", card_id, cat_id);
                         category_changes.push((card_id, cat_id));
                     }
+                    ContainerAction::ToggleCollapse(cat_id) => {
+                        toggle_collapses.push(cat_id);
+                    }
+                    ContainerAction::SetSortMode(cat_id, mode) => {
+                        sort_mode_updates.push((cat_id, mode));
+                    }
+                    ContainerAction::QuickAddCard(cat_id) => {
+                        quick_add_categories.push(cat_id);
+                    }
                 }
             }
         }
@@ -517,6 +553,27 @@ impl CountdownUiState {
         }
         for new_order in reorder_updates {
             service.reorder_cards(new_order);
+        }
+        for cat_id in toggle_collapses {
+            service.toggle_category_collapsed(cat_id);
+        }
+        for (cat_id, mode) in sort_mode_updates {
+            service.set_category_sort_mode(cat_id, mode);
+        }
+        for cat_id in quick_add_categories {
+            let start = Local::now() + chrono::Duration::days(7);
+            service.create_card_in_category(
+                None,
+                "New Countdown",
+                start,
+                None,
+                None,
+                None,
+                None,
+                default_card_width,
+                default_card_height,
+                cat_id,
+            );
         }
         // If any category container was closed, switch back to individual windows
         if !closed_categories.is_empty() {

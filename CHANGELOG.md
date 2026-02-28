@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.5] - 2026-03-01
+
+### Added
+
+- Container collapse/expand: click the ▶/▼ toggle in the category container
+  header to collapse or expand, hiding all cards and leaving just the header bar.
+  Collapse state persists in the database.
+- Sort mode per category: toggle between Date (📅, cards sorted by start date)
+  and Manual (✋, user-defined drag order) via the header toolbar. Sort mode
+  persists in the database.
+- Quick-add button (➕) in category container headers: creates a new standalone
+  countdown card seven days from now, assigned to that category.
+- Card count badge in collapsed and expanded container headers.
+- `ContainerSortMode` enum (`Date`, `Manual`) on `CountdownCategory` model.
+- `is_collapsed` and `sort_mode` database columns with safe migrations.
+- `toggle_category_collapsed()`, `set_category_sort_mode()` service methods.
+
 ## [2.1.4] - 2026-03-01
 
 ### Added
