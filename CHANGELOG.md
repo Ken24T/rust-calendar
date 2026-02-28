@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.7] - 2026-02-28
+
+### Refactored
+
+- Extracted event dialog rendering into focused modules, reducing `render.rs` from 872 to 437 lines:
+  - `render_date_time.rs` (202 lines) — date/time pickers, all-day toggle, quick date buttons.
+  - `render_recurrence.rs` (234 lines) — frequency, interval, pattern, BYDAY toggles, weekday shortcuts, end condition.
+- Added shared layout helpers to `widgets.rs`: `labeled_row`, `indented_row`, `render_form_label`, `FORM_LABEL_WIDTH`.
+- Replaced `hex_to_color32` with existing `parse_hex_color` from widgets module.
+
 ## [2.0.6] - 2026-02-28
 
 ### Refactored

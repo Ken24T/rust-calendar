@@ -1,5 +1,7 @@
 pub mod recurrence;
 mod render;
+mod render_date_time;
+mod render_recurrence;
 pub mod state;
 mod widgets;
 
