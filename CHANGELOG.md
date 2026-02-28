@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.11] - 2026-02-28
+
+### Refactored
+
+- Extracted time grid context menu into `time_grid_context_menu.rs` (277 lines), reducing `time_grid.rs` from 783 to 620 lines.
+  - Split popup body into focused helpers: `render_event_menu`, `render_delete_buttons`, `render_export_button`, `render_empty_slot_menu`.
+- Extracted date picker popup into `views/date_picker.rs` (173 lines), reducing `app/views/mod.rs` from 782 to 526 lines.
+  - Split into `render_date_picker_header` and `render_date_picker_grid` helper methods.
+  - Moved `shift_month` and `days_in_month` helper functions.
+- DRYed triplicated view-result handling in day/week/workweek views into a single `handle_timed_view_result` helper method (~90 lines eliminated).
+
 ## [2.0.10] - 2026-02-28
 
 ### Removed
