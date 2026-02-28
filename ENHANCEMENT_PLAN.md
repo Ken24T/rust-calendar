@@ -1,9 +1,13 @@
 # Rust Calendar Enhancement Plan
 
-**Created:** November 19, 2025  
-**Last Updated:** November 30, 2025  
-**Status:** Phase 1, 2, & 3 Complete, Phase 4-5 In Progress  
-**Current Branch:** feat/ux-improvements-20251130
+> **Status: Mostly Complete** — Phases 1–3 are implemented and shipped.
+> Phases 4–5 contain remaining items (e.g. undo/redo). This document is
+> retained as a historical record of the feature planning process.
+
+**Created:** November 19, 2025\
+**Last Updated:** February 28, 2026\
+**Phases 1–3:** Complete\
+**Phases 4–5:** Partial — remaining items are tracked for future work
 
 ## Overview
 

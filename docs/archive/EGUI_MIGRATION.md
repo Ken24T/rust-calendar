@@ -1,5 +1,7 @@
 # egui Migration Guide
 
+> **Status: Historical** — This migration is complete. Retained for reference only.
+
 ## Overview
 
 This document tracks the migration from iced to egui for the Rust Calendar application.

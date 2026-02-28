@@ -1,5 +1,7 @@
 # My Day Panel & Multi-Day Event Ribbon Features
 
+> **Status: Implemented** — Both features have been built and shipped. This document is the original design specification, retained for reference. Actual implementation may differ in details.
+
 ## Overview
 
 Two complementary UI features that enhance calendar usability:

@@ -1,5 +1,7 @@
 # Feature Branch Summary: settings-database
 
+> **Status: Historical** — This feature branch was merged long ago. The schema, test counts, and file paths are all stale. Retained for reference only.
+
 ## Objective
 Implement persistent settings storage using SQLite database with full integration into the calendar application UI.
 

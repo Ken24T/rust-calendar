@@ -1,290 +1,220 @@
-# Rust Calendar Architecture
+# Architecture
 
-## Overview
+This document describes the architecture of Rust Calendar as of v2.0.17.
 
-This document describes the architectural design of the Rust Calendar application, including component relationships, data flow, and design decisions.
+## High-Level Overview
 
-## Architecture Diagram
+Rust Calendar is a desktop application built with egui/eframe (immediate-mode
+GUI) and SQLite (via rusqlite, bundled). It follows a layered architecture with
+strict separation between domain models, business logic, and presentation.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        User Interface                        │
-│                         (iced GUI)                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Calendar View│  │  Event View  │  │Settings View │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            │ Messages/Commands
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Application State                       │
-│                    (Reactive State Model)                    │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            │ Service Calls
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Service Layer                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │Event Service │  │Reminder Svc  │  │ Theme Svc    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            │ Data Operations
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Data Layer                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  SQLite DB   │  │  iCal I/O    │  │Windows Notif │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
+```text
+┌──────────────────────────────────────────┐
+│              UI Layer (egui)             │
+│         src/ui_egui/                     │
+│  Views · Dialogs · Event Editor · Theme  │
+└────────────────┬─────────────────────────┘
+                 │ calls
+┌────────────────▼─────────────────────────┐
+│           Service Layer                  │
+│         src/services/                    │
+│  Events · Settings · Themes · Backup     │
+│  Countdown · iCal · PDF · Sync           │
+└────────────────┬─────────────────────────┘
+                 │ reads/writes
+┌────────────────▼─────────────────────────┐
+│           Database Layer                 │
+│      src/services/database/              │
+│        SQLite (rusqlite)                 │
+└──────────────────────────────────────────┘
+
+┌──────────────────────────────────────────┐
+│           Domain Models                  │
+│         src/models/                      │
+│  Event · Recurrence · Settings · UI      │
+│  Category · Template · Reminder          │
+└──────────────────────────────────────────┘
 ```
 
-## Component Details
+## Layer Rules
 
-### 1. User Interface Layer
+1. **Models are UI-agnostic** — no egui types in `src/models/`.
+2. **Services are UI-agnostic** — no egui types in `src/services/`.
+3. **UI calls services, never the reverse.**
+4. **All database access** goes through `src/services/database/`.
+5. **Utils** (`src/utils/`) are shared helpers available to every layer.
 
-**Framework**: iced (Reactive UI)
+## Module Layout
 
-**Responsibilities**:
-- Render calendar views and UI components
-- Handle user input and interactions
-- Dispatch messages to update application state
-- Apply themes and styling
+### Models (`src/models/`)
 
-**Key Components**:
-- `CalendarView`: Month/week/day calendar display
-- `EventView`: Event creation and editing forms
-- `SettingsView`: Application settings and preferences
-- `ReminderView`: Reminder configuration
+Pure data types with `#[derive(Clone, Debug, Serialize, Deserialize)]` where
+appropriate. No side effects, no I/O.
 
-### 2. Application State
+- `event` — `Event` struct (title, start/end, all-day, category, colour,
+  recurrence rule, exceptions)
+- `recurrence` — `Frequency` enum (Daily, Weekly, Fortnightly, Monthly,
+  Quarterly, Yearly) and recurrence-rule parsing
+- `settings` — `Settings` struct (theme, format preferences, view config, card
+  dimensions, sync delay)
+- `ui` — `ViewConfig`, `ViewType` enum (Day, WorkWeek, Week, Month, Quarter)
+- `category` — event category with colour
+- `template` — reusable event template
+- `reminder` — reminder model
+- `calendar_source` — external calendar feed descriptor
+- `event_sync_map` — external-to-local event ID mapping
 
-**Pattern**: Elm Architecture (Model-Update-View)
+### Services (`src/services/`)
 
-**Responsibilities**:
-- Maintain current application state
-- Process messages and update state
-- Coordinate between UI and services
-- Handle asynchronous operations
+Business logic that operates on models and the database. Each service borrows a
+`&rusqlite::Connection` and exposes domain operations.
 
-**State Structure**:
-```rust
-struct AppState {
-    current_date: NaiveDate,
-    view_mode: ViewMode,  // Month, Week, Day
-    events: Vec<Event>,
-    selected_event: Option<Event>,
-    theme: Theme,
-    settings: Settings,
-}
+- `database/` — `Database` struct (wraps `rusqlite::Connection`), schema
+  creation, migrations
+- `event/` — `EventService` with `crud.rs`, `queries.rs`, and `recurrence/`
+  (expansion into concrete occurrences: daily, weekly, monthly, yearly parsers)
+- `settings/` — load/save `Settings` to/from the database
+- `theme/` — TOML-based theme loading from `assets/themes/`
+- `backup/` — database backup and restore
+- `countdown/` — countdown timer state, persistence, layout, visuals,
+  notifications, sync
+- `calendar_sync/` — external ICS feed sync engine, fetcher, mapping, scheduler
+- `icalendar/` — iCalendar import/export (`.ics` files)
+- `pdf/` — PDF calendar export
+- `notification/` — cross-platform desktop notifications
+- `reminder/` — reminder scheduling
+- `category/` — category CRUD
+- `template/` — event template CRUD
+
+### UI (`src/ui_egui/`)
+
+The presentation layer. Everything here is egui-specific.
+
+- `app.rs` — `CalendarApp` struct implementing `eframe::App`
+- `app/` — app shell, split by concern:
+  - `lifecycle.rs` — `new()`, `on_exit()`
+  - `context.rs` — `AppContext` (shared DB reference + services)
+  - `state.rs` — `AppState` (current date, view, selected events)
+  - `menu.rs`, `menu_export.rs`, `menu_help.rs` — menu bar
+  - `navigation.rs` — date/view navigation
+  - `sidebar.rs` — left sidebar
+  - `shortcuts.rs` — keyboard shortcuts
+  - `geometry.rs` — window geometry persistence
+  - `status_bar.rs`, `toast.rs`, `confirm.rs`
+  - `countdown/` — countdown UI state, rendering, container layout
+  - `dialogs/` — app-level dialog triggers
+  - `views/` — view dispatch and date picker
+- `views/` — calendar view implementations:
+  - `day_view.rs`, `week_view.rs`, `workweek_view.rs`, `month_view.rs`,
+    `quarter_view.rs`
+  - `time_grid.rs`, `time_grid_cell.rs` — shared time axis rendering
+  - `event_helpers.rs`, `event_rendering.rs` — event layout calculations
+  - `palette.rs` — event colour scheme
+- `event_dialog/` — event create/edit dialog (state, rendering, recurrence,
+  widgets)
+- `dialogs/` — modal dialogs (backup, categories, export, search, templates,
+  themes)
+- `commands/` — `UndoManager` (undo/redo support)
+- `drag.rs` — drag-and-drop handling
+- `resize.rs` — event resize interaction
+- `theme.rs` — `CalendarTheme` struct
+- `settings_dialog.rs` — settings dialog
+
+### Utils (`src/utils/`)
+
+- `date/` — date arithmetic helpers shared across layers
+
+## Application Lifecycle
+
+```text
+main.rs
+  │  #![windows_subsystem = "windows"]   ← hides console on Windows release
+  │  env_logger::init()
+  │  eframe::run_native("Rust Calendar", options,
+  │      |cc| Ok(Box::new(CalendarApp::new(cc))))
+  │
+  ▼
+CalendarApp::new(cc)                     [ui_egui/app/lifecycle.rs]
+  ├─ Database::new(path)                 ← opens/creates SQLite, runs schema
+  ├─ Load Settings, CalendarTheme
+  ├─ Create AppContext (&'static Database + services)
+  ├─ Initialise state: AppState, EventDialogState, CountdownUiState
+  ├─ Create CalendarSyncScheduler
+  └─ Return CalendarApp
+
+CalendarApp::update(ctx, frame)          [ui_egui/app.rs]
+  ├─ Process keyboard shortcuts
+  ├─ Render menu bar
+  ├─ Render sidebar
+  ├─ Render current view (Day/Week/Month/Quarter)
+  ├─ Render open dialogs (event editor, settings, etc.)
+  ├─ Render countdown windows/container
+  └─ Process toast notifications
+
+CalendarApp::on_exit(gl)                 [ui_egui/app/lifecycle.rs]
+  ├─ Save settings to database
+  ├─ Save window geometry
+  └─ Clean up GL resources
 ```
 
-### 3. Service Layer
+## Database
 
-#### Event Service
-- CRUD operations for events
-- Recurrence rule processing
-- Event querying and filtering
-- Conflict detection
+SQLite with foreign keys enabled. Schema is created on first run and migrated
+forward as needed.
 
-#### Reminder Service
-- Background reminder checking
-- Notification scheduling
-- Reminder persistence
-- Snooze handling
+### Tables
 
-#### Database Service
-- SQLite connection management
-- Transaction handling
-- Migration management
-- Query optimization
+- `settings` — singleton (id=1) application preferences
+- `events` — calendar events
+- `categories` — event categories (seeded with defaults)
+- `event_templates` — reusable event templates
+- `custom_themes` — user-created theme definitions
+- `calendar_sources` — external calendar feed URLs
+- `event_sync_map` — external-to-local event ID mapping for sync
+- `countdown_cards` — countdown timer cards (linked to events or standalone)
+- `countdown_settings` — countdown container-level settings
 
-#### Notification Service
-- Windows notification integration
-- Notification display and interaction
-- System tray management
+### Access Pattern
 
-#### Theme Service
-- Theme loading and parsing
-- Theme application
-- Custom theme management
+All database access flows through `services::database::Database`. The database
+connection is created once at startup, leaked as `&'static`, and shared across
+services via `AppContext`. Services borrow the connection for individual
+operations — no connection pooling or threading is needed for this single-user
+desktop application.
 
-### 4. Data Models
+## Cross-Platform Support
 
-#### Event Model
-```rust
-struct Event {
-    id: Option<i64>,
-    title: String,
-    description: Option<String>,
-    location: Option<String>,
-    start: DateTime<Local>,
-    end: DateTime<Local>,
-    is_all_day: bool,
-    category: Option<String>,
-    color: Option<String>,
-    recurrence: Option<RecurrenceRule>,
-    reminders: Vec<Reminder>,
-}
-```
+- **Linux**: primary development platform. Notifications via `notify-rust`.
+  Desktop integration via `.desktop` file in `packaging/`.
+- **Windows**: full support. Console hidden via `windows_subsystem`. Toast
+  notifications via the `windows` crate. Build requires Visual Studio Build
+  Tools.
+- **macOS**: untested but should compile — no macOS-specific code exists.
 
-#### Recurrence Rule
-```rust
-struct RecurrenceRule {
-    frequency: Frequency,  // Daily, Weekly, Monthly, Yearly
-    interval: u32,
-    count: Option<u32>,
-    until: Option<DateTime<Local>>,
-    by_day: Option<Vec<Weekday>>,
-    by_month_day: Option<Vec<i32>>,
-    exceptions: Vec<DateTime<Local>>,
-}
-```
+Platform-specific code uses `#[cfg(target_os = "...")]` guards. File paths use
+`std::path::Path` and the `directories` crate for XDG/AppData resolution.
 
-#### Reminder Model
-```rust
-struct Reminder {
-    id: Option<i64>,
-    event_id: i64,
-    minutes_before: i32,
-    custom_time: Option<DateTime<Local>>,
-    is_enabled: bool,
-    last_triggered: Option<DateTime<Local>>,
-}
-```
+## Theming
 
-## Data Flow
+Themes are defined in TOML files under `assets/themes/` (dark and light
+presets). Users can also create custom themes via the theme creator dialog; these
+are stored in the `custom_themes` database table. The `CalendarTheme` struct
+controls all colours used by the UI layer.
 
-### Event Creation Flow
-```
-User Input → UI Event → App State Update → Event Service → Database → Confirmation
-```
+## Error Handling
 
-### Reminder Trigger Flow
-```
-Background Thread → Check Due Reminders → Reminder Service → Windows Notification → User Interaction
-```
+- Application-level errors use `anyhow::Result`
+- Library-level error types use `thiserror`
+- Runtime diagnostics via `log` macros (`log::info!`, `log::warn!`,
+  `log::error!`)
+- Database initialisation failures fall back to in-memory SQLite
 
-### Theme Switch Flow
-```
-User Selection → Theme Service → Load Theme Config → Apply to UI → Persist Setting
-```
+## Codebase Metrics
 
-## Concurrency Model
+As of v2.0.17:
 
-### Main Thread
-- UI rendering and interaction
-- State management
-- Non-blocking operations
-
-### Background Thread
-- Reminder checking (every 60 seconds)
-- Database operations (when needed)
-- File I/O operations
-
-### Async Operations
-- iCalendar import/export
-- Large database queries
-- System notifications
-
-## Error Handling Strategy
-
-### Error Types
-```rust
-#[derive(thiserror::Error, Debug)]
-enum CalendarError {
-    #[error("Database error: {0}")]
-    Database(#[from] rusqlite::Error),
-    
-    #[error("Invalid recurrence rule: {0}")]
-    InvalidRecurrence(String),
-    
-    #[error("Event not found: {0}")]
-    EventNotFound(i64),
-    
-    #[error("Notification error: {0}")]
-    Notification(String),
-}
-```
-
-### Error Handling Approach
-- Use `Result<T, CalendarError>` for fallible operations
-- Display user-friendly error messages in UI
-- Log detailed errors for debugging
-- Graceful degradation when possible
-
-## Performance Considerations
-
-### Database Optimization
-- Index on event start/end times
-- Prepared statements for common queries
-- Connection pooling for concurrent access
-- Lazy loading of event details
-
-### UI Optimization
-- Virtual scrolling for large event lists
-- Efficient re-rendering with iced's reactive model
-- Cached theme resources
-- Debounced search input
-
-### Memory Management
-- Limit loaded events to visible date range
-- Periodic cleanup of old notifications
-- Efficient recurrence calculation caching
-
-## Security Considerations
-
-### Data Protection
-- Local database with file system permissions
-- Input validation and sanitization
-- SQL injection prevention (parameterized queries)
-- Secure handling of file paths
-
-### Privacy
-- No telemetry or data collection
-- No network operations (local-only app)
-- User control over all data
-
-## Testing Strategy
-
-### Unit Tests
-- Model validation logic
-- Recurrence calculation
-- Date/time utilities
-- Service layer functions
-
-### Integration Tests
-- Database operations
-- Event CRUD workflows
-- Reminder scheduling
-- iCalendar import/export
-
-### UI Tests
-- Component rendering
-- User interaction flows
-- Theme switching
-- State management
-
-## Future Architecture Considerations
-
-### Extensibility
-- Plugin system for custom event types
-- Theme marketplace
-- Calendar protocol support (CalDAV)
-
-### Scalability
-- Support for multiple calendars
-- Shared calendars (if sync added)
-- Performance with 100k+ events
-
-### Cross-Platform
-- Abstract OS-specific code
-- Platform-agnostic notification system
-- Universal theme system
-
----
-
-**Document Version**: 1.0  
-**Last Updated**: November 6, 2025
+- 144 source files, ~35,000 lines of Rust
+- All files under 550 lines (target: 300; see
+  [MODULARITY.md](MODULARITY.md) for guidelines)
+- 298 unit tests + 3 integration tests + 1 doc-test
+- Zero clippy warnings

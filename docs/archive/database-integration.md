@@ -1,5 +1,7 @@
 # Database and Settings Integration
 
+> **Status: Historical** — Initial integration is complete. The schema has evolved significantly since this document was written. Retained for reference only.
+
 ## Overview
 The calendar application now has full database integration with persistent settings. User preferences are automatically saved to a SQLite database and restored on application launch.
 

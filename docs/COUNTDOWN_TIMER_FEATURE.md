@@ -1,5 +1,7 @@
 # Desktop Countdown Timer Feature
 
+> **Status: Implemented** — This feature has been built and shipped. This document is the original design specification, retained for reference. Actual implementation may differ in details.
+
 ## Overview
 
 The Desktop Countdown Timer feature allows users to "tear" events from the calendar and place them on their desktop as persistent, always-on-top countdown widgets. This provides at-a-glance visibility of upcoming events without needing to keep the calendar open.

@@ -1,4 +1,10 @@
-# Rust Calendar Application - Project Plan
+# Rust Calendar Application — Project Plan
+
+> **Status: Historical** — This was the original project plan written before
+> development began. The application has since been built with egui/eframe
+> (not iced/slint as proposed here). Most features are implemented. See
+> [ARCHITECTURE.md](ARCHITECTURE.md) for the current system design and the
+> root [README.md](../README.md) for an accurate feature list.
 
 ## Project Overview
 A native Windows desktop calendar application built with Rust, featuring a modern GUI with theming support, event management with single and repeating events, and configurable reminders.
