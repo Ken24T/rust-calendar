@@ -29,6 +29,7 @@ impl CountdownRequest {
             color: event.color.clone(),
             body: event.description.clone(),
             display_label: location_label,
+            category_id: None,
         }
     }
 }

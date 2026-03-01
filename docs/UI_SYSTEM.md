@@ -733,7 +733,11 @@ Events shown in ribbon if they meet **any** of these conditions:
 ## Desktop Countdown Timer System
 
 ### Overview
-Create persistent countdown timer widgets by dragging events from the calendar to your desktop. Each countdown timer is a separate window that shows time remaining until the event starts.
+Create persistent countdown timer widgets by dragging events from the calendar
+to your desktop, via context menu, or via the event dialog. Each countdown
+timer is a separate window that shows time remaining until the event starts.
+Cards can be displayed as individual floating windows or grouped within
+category containers.
 
 ### Creating a Countdown Timer
 
@@ -744,10 +748,17 @@ Create persistent countdown timer widgets by dragging events from the calendar t
 4. Release mouse button
 5. Countdown timer window appears at cursor position
 
-**Method 2: Context Menu** (Alternative)
-1. Right-click on event
-2. Select "Create Desktop Countdown"
-3. Countdown window appears at default position
+**Method 2: Context Menu**
+1. Right-click on a future event in any calendar view
+2. Select "⏱ Create Countdown"
+3. If multiple categories exist, a submenu appears — pick the target container
+4. Countdown window appears at default position
+
+**Method 3: Event Dialog**
+1. Create or edit an event
+2. Tick "Create countdown card after saving"
+3. If multiple categories exist, choose the target container from the dropdown
+4. Save the event — a countdown card is created automatically
 
 ### Countdown Timer Features
 
@@ -907,23 +918,51 @@ pub enum PositionMode {
 4. **Daily Standup**: Recurring event countdown, always visible in morning
 5. **Break Timer**: Drag lunch break to desktop, countdown to break time
 
-### Visual Design Considerations (TBD)
+### Category Containers
 
-**User will specify**:
-- Countdown timer appearance/styling
-- Font and color scheme
-- Layout of information
-- Size and shape of window
-- Animation effects
-- Warning state visuals
+Cards can be organised into named categories. Each category is rendered as a
+collapsible container with its own header bar.
 
-**To be designed in implementation phase**:
-- Exact visual layout
-- Color palette
-- Typography
-- Animation timing
-- Interaction feedback
-- Accessibility features
+**Container Header Bar**:
+- ▶/▼ collapse/expand toggle
+- Category name
+- Card count badge (e.g. `(3)`)
+- Sort mode button: 📅 Date or ✋ Manual
+- ➕ quick-add button
+
+**Display Modes** (via View → Countdown Cards → Display mode):
+- **Individual Windows** — each card is a separate always-on-top window
+- **Combined Container** — all cards in one resizable window
+- **Category Containers** — cards grouped by category with individual containers
+
+**Category Management** (Edit → Manage Countdown Categories…):
+- Create, rename, reorder, and delete categories
+- Configure per-container card defaults:
+  - Inherit global defaults toggle
+  - Default card width/height (60–400 px)
+  - Colours: title background, title text, body background, days text
+  - Font sizes: title (10–48 pt) and days number (32–220 pt)
+- The default "General" category cannot be deleted or renamed
+
+**Three-Tier Visual Inheritance**:
+1. Global defaults — base settings
+2. Category defaults — override globals when "Inherit global defaults" is off
+3. Per-card overrides — individual card settings
+
+**Cross-Container Drag-and-Drop**:
+- Drag a card from one container and drop it onto another container's header
+- The card is re-assigned to the target category
+
+### Visual Design
+
+Cards use a two-panel layout: a coloured title bar (event title) and a body area
+(countdown number). All colours and font sizes are configurable via three-tier
+inheritance (Global → Category → Card).
+
+**Warning states** provide visual feedback as an event approaches:
+- Normal — steady display with standard colours
+- Warning — colour change, pulsing animation (configurable threshold)
+- Imminent — flashing, "Starting now!" text
 
 ## Keyboard Shortcuts
 

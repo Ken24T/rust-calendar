@@ -10,8 +10,8 @@ pub use super::card_rendering::format_card_tooltip;
 pub use super::container_layout::{ContainerLayout, DragState};
 
 use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownCategoryId, CountdownNotificationConfig,
+    ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
+    CountdownCardVisuals, CountdownCategoryId, CountdownNotificationConfig,
 };
 use chrono::{DateTime, Local};
 use std::collections::HashMap;
@@ -40,6 +40,12 @@ pub enum ContainerAction {
     GeometryChanged(CountdownCardGeometry),
     /// Container was closed
     Closed,
+    /// Toggle the collapsed state of this container's category
+    ToggleCollapse(CountdownCategoryId),
+    /// Set the sort mode for this container's category
+    SetSortMode(CountdownCategoryId, ContainerSortMode),
+    /// Quick-add a new card in this category
+    QuickAddCard(CountdownCategoryId),
 }
 
 /// Get the primary monitor width from context, with fallback to 1920
@@ -133,6 +139,8 @@ pub fn render_container_window(
     window_title: &str,
     viewport_id_suffix: &str,
     current_category_id: Option<CountdownCategoryId>,
+    is_collapsed: bool,
+    sort_mode: ContainerSortMode,
 ) -> Vec<ContainerAction> {
     use std::time::Duration as StdDuration;
 
@@ -418,6 +426,23 @@ pub fn render_container_window(
         egui::CentralPanel::default()
             .frame(egui::Frame::none().fill(egui::Color32::from_gray(30)))
             .show(child_ctx, |ui| {
+                // Header toolbar (only in CategoryContainers mode)
+                if let Some(cat_id) = current_category_id {
+                    render_container_header(
+                        ui,
+                        cat_id,
+                        cards.len(),
+                        is_collapsed,
+                        sort_mode,
+                        &mut actions,
+                    );
+                }
+
+                // If collapsed, skip card rendering entirely
+                if is_collapsed {
+                    return;
+                }
+
                 let available_rect = ui.available_rect_before_wrap();
 
                 // Build ordered list of card IDs
@@ -668,6 +693,74 @@ pub fn render_container_window(
     }
 
     actions
+}
+
+/// Render the toolbar header inside a category container.
+///
+/// Shows: collapse toggle, card count, sort mode selector, and quick-add button.
+fn render_container_header(
+    ui: &mut egui::Ui,
+    category_id: CountdownCategoryId,
+    card_count: usize,
+    is_collapsed: bool,
+    sort_mode: ContainerSortMode,
+    actions: &mut Vec<ContainerAction>,
+) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+
+        // Collapse/expand toggle
+        let arrow = if is_collapsed { "▶" } else { "▼" };
+        if ui
+            .button(arrow)
+            .on_hover_text(if is_collapsed {
+                "Expand container"
+            } else {
+                "Collapse container"
+            })
+            .clicked()
+        {
+            actions.push(ContainerAction::ToggleCollapse(category_id));
+        }
+
+        // Card count badge
+        let count_text = format!("{} card{}", card_count, if card_count == 1 { "" } else { "s" });
+        ui.label(
+            egui::RichText::new(count_text)
+                .size(11.0)
+                .color(egui::Color32::from_gray(160)),
+        );
+
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Quick-add button
+            if ui
+                .button("➕")
+                .on_hover_text("Add a new countdown card in this category")
+                .clicked()
+            {
+                actions.push(ContainerAction::QuickAddCard(category_id));
+            }
+
+            // Sort mode toggle
+            let sort_label = match sort_mode {
+                ContainerSortMode::Date => "📅",
+                ContainerSortMode::Manual => "✋",
+            };
+            let sort_tooltip = match sort_mode {
+                ContainerSortMode::Date => "Sorted by date — click to switch to manual order",
+                ContainerSortMode::Manual => "Manual order — click to switch to date sort",
+            };
+            if ui.button(sort_label).on_hover_text(sort_tooltip).clicked() {
+                let new_mode = match sort_mode {
+                    ContainerSortMode::Date => ContainerSortMode::Manual,
+                    ContainerSortMode::Manual => ContainerSortMode::Date,
+                };
+                actions.push(ContainerAction::SetSortMode(category_id, new_mode));
+            }
+        });
+    });
+
+    ui.add_space(2.0);
 }
 
 #[cfg(test)]

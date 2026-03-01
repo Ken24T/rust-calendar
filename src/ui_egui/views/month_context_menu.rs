@@ -8,7 +8,10 @@ use egui::{Color32, Pos2, Rect, Vec2};
 use std::collections::HashSet;
 
 use super::week_shared::DeleteConfirmRequest;
-use super::{countdown_menu_state, is_synced_event, CountdownMenuState, CountdownRequest};
+use super::{
+    countdown_menu_state, is_synced_event, CountdownCategoriesCache, CountdownMenuState,
+    CountdownRequest, COUNTDOWN_CATEGORIES_CACHE_ID,
+};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
@@ -195,10 +198,39 @@ pub fn render_cell_context_menu(
                         ui.separator();
                     }
                     CountdownMenuState::Available => {
-                        if ui.button("⏱ Create Countdown").clicked() {
-                            countdown_requests.push(countdown_request_for_month_event(
-                                &event, database,
-                            ));
+                        let categories = ui.ctx().data(|data| {
+                            data.get_temp::<CountdownCategoriesCache>(egui::Id::new(
+                                COUNTDOWN_CATEGORIES_CACHE_ID,
+                            ))
+                        })
+                        .map(|c| c.0)
+                        .unwrap_or_default();
+
+                        let mut created = false;
+
+                        if categories.len() <= 1 {
+                            if ui.button("⏱ Create Countdown").clicked() {
+                                countdown_requests.push(countdown_request_for_month_event(
+                                    &event, database,
+                                ));
+                                created = true;
+                            }
+                        } else {
+                            ui.menu_button("⏱ Create Countdown", |ui| {
+                                for (cat_id, cat_name) in &categories {
+                                    if ui.button(cat_name).clicked() {
+                                        let mut req =
+                                            countdown_request_for_month_event(&event, database);
+                                        req.category_id = Some(*cat_id);
+                                        countdown_requests.push(req);
+                                        created = true;
+                                        ui.close_menu();
+                                    }
+                                }
+                            });
+                        }
+
+                        if created {
                             ui.ctx().memory_mut(|mem| {
                                 mem.data.remove_temp::<i64>(popup_event_id_key);
                             });

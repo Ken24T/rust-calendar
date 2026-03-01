@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.8] - 2026-03-01
+
+### Added
+
+- Container card defaults editor in the Category Manager dialog. When editing a
+  category, expanding the "Card Defaults" section allows configuring:
+  - "Inherit global defaults" toggle (uses global visual settings when enabled)
+  - Default card width and height sliders (60–400 px)
+  - Per-container colour defaults: title background, title text, body background,
+    and days text — each with an egui colour picker
+  - Per-container font size defaults: title size (10–48 pt) and days number size
+    (32–220 pt)
+- Visual settings are disabled when "Inherit global defaults" is enabled,
+  providing clear feedback about the three-tier inheritance model.
+- All container defaults are persisted to the SQLite database on save.
+
+## [2.1.7] - 2026-03-01
+
+### Added
+
+- Category submenu on context-menu "Create Countdown" items across all calendar
+  views (day, week, work-week, month). When multiple countdown categories
+  exist, right-clicking an event and choosing "⏱ Create Countdown" now shows a
+  submenu listing every category so the user can pick the target container.
+  Single-category setups retain the simple one-click button.
+- `CountdownCategoriesCache` per-frame cache stored via egui temp data, avoiding
+  the need to thread categories through multiple rendering layers.
+- `render_countdown_menu_items` shared helper for rendering the countdown
+  context menu item(s) consistently.
+
+## [2.1.6] - 2026-03-01
+
+### Added
+
+- Category/container selector when creating countdown cards from the event dialog.
+  When "Create countdown card after saving" is checked and multiple categories
+  exist, a "Container" dropdown appears letting the user choose which category
+  the new card is assigned to (defaults to General).
+- `category_id` field on `CountdownRequest` so the creation flow can target a
+  specific category instead of always using the default.
+- `countdown_category_id` field on `EventDialogState` to track the user's
+  container selection.
+
+## [2.1.5] - 2026-03-01
+
+### Added
+
+- Container collapse/expand: click the ▶/▼ toggle in the category container
+  header to collapse or expand, hiding all cards and leaving just the header bar.
+  Collapse state persists in the database.
+- Sort mode per category: toggle between Date (📅, cards sorted by start date)
+  and Manual (✋, user-defined drag order) via the header toolbar. Sort mode
+  persists in the database.
+- Quick-add button (➕) in category container headers: creates a new standalone
+  countdown card seven days from now, assigned to that category.
+- Card count badge in collapsed and expanded container headers.
+- `ContainerSortMode` enum (`Date`, `Manual`) on `CountdownCategory` model.
+- `is_collapsed` and `sort_mode` database columns with safe migrations.
+- `toggle_category_collapsed()`, `set_category_sort_mode()` service methods.
+
 ## [2.1.4] - 2026-03-01
 
 ### Added

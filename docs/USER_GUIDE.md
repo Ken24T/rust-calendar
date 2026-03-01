@@ -116,6 +116,36 @@ until an event starts. You can:
 - Customise fonts, colours, and dimensions per card
 - Reset card positions via **View → Countdown Cards → Reset Card Positions**
 
+### Creating from a Context Menu
+
+Right-click any future event in a calendar view and choose **⏱ Create
+Countdown**. If you have multiple countdown categories, a submenu appears
+listing each category so you can choose the target container.
+
+### Category Containers
+
+Countdown cards can be organised into named categories (containers). Open
+**Edit → Manage Countdown Categories…** to create, edit, or delete categories.
+
+Each container has:
+
+- A **collapsible header** (▶/▼ toggle) with a card count badge
+- A **sort mode** switch — 📅 Date (by event start) or ✋ Manual
+- A **➕ quick-add** button to create a new card directly in that container
+- **Per-container card defaults** (colours, fonts, card dimensions) — expand
+  the "Card Defaults" section when editing a category
+
+Cards can be **dragged between containers** to re-categorise them.
+
+### Three-Tier Visual Inheritance
+
+Card visuals follow a three-tier model:
+
+1. **Global defaults** — base settings for all cards
+2. **Category defaults** — override globals (disable "Inherit global defaults"
+   in the Category Manager to customise)
+3. **Per-card overrides** — configured in the individual card's settings panel
+
 ## Drag and Drop
 
 In Day, Week, and Work Week views, you can **drag events** to move them to a
@@ -207,6 +237,9 @@ Open Settings with `Ctrl+S` or **Edit → Settings**.
 
 - **Default card width/height** — default size for new countdown cards
 - **Auto-create countdown cards on ICS import**
+
+Per-container defaults (colours, fonts, dimensions) are configured via
+**Edit → Manage Countdown Categories…** rather than in Settings.
 - **Open event dialog when importing/dragging ICS files**
 
 ### Calendar Sync

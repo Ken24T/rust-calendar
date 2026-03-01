@@ -373,6 +373,16 @@ pub enum CountdownDisplayMode {
     CategoryContainers,
 }
 
+/// Sort mode for cards within a container or category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ContainerSortMode {
+    /// Sort by event start date (earliest first)
+    #[default]
+    Date,
+    /// User-defined manual ordering via drag-and-drop
+    Manual,
+}
+
 /// Unique identifier for countdown categories.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CountdownCategoryId(pub i64);
@@ -404,6 +414,12 @@ pub struct CountdownCategory {
     /// rather than using its own `visual_defaults`.
     #[serde(default = "default_use_global_defaults")]
     pub use_global_defaults: bool,
+    /// Whether the container for this category is collapsed (title bar only)
+    #[serde(default)]
+    pub is_collapsed: bool,
+    /// Sort mode for cards within this category's container
+    #[serde(default)]
+    pub sort_mode: ContainerSortMode,
 }
 
 fn default_category_card_width() -> f32 {
@@ -429,6 +445,8 @@ impl Default for CountdownCategory {
             default_card_width: default_category_card_width(),
             default_card_height: default_category_card_height(),
             use_global_defaults: true,
+            is_collapsed: false,
+            sort_mode: ContainerSortMode::default(),
         }
     }
 }
@@ -613,6 +631,8 @@ mod tests {
             default_card_width: 150.0,
             default_card_height: 130.0,
             use_global_defaults: false,
+            is_collapsed: false,
+            sort_mode: ContainerSortMode::Manual,
         };
 
         let json = serde_json::to_string(&cat).unwrap();

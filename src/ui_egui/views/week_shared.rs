@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use super::{
     countdown_menu_state, is_synced_event,
-    AutoFocusRequest, CountdownMenuState, CountdownRequest,
+    AutoFocusRequest, CountdownMenuState, CountdownRequest, render_countdown_menu_items,
 };
 use crate::models::event::Event;
 use crate::services::database::Database;
@@ -297,10 +297,7 @@ pub fn render_ribbon_event_with_handles(
                 ui.separator();
             }
             CountdownMenuState::Available => {
-                if ui.button("⏱ Create Countdown").clicked() {
-                    countdown_requests.push(CountdownRequest::from_event(event));
-                    ui.close_menu();
-                }
+                render_countdown_menu_items(ui, event, countdown_requests);
                 ui.separator();
             }
         }

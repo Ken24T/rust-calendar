@@ -269,6 +269,22 @@ pub(super) fn run_countdown_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE countdown_cards ADD COLUMN category_id INTEGER NOT NULL DEFAULT 1 REFERENCES countdown_categories(id)",
     )?;
 
+    // Add is_collapsed column to countdown_categories
+    migrations::ensure_column(
+        conn,
+        "countdown_categories",
+        "is_collapsed",
+        "ALTER TABLE countdown_categories ADD COLUMN is_collapsed INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    // Add sort_mode column to countdown_categories
+    migrations::ensure_column(
+        conn,
+        "countdown_categories",
+        "sort_mode",
+        "ALTER TABLE countdown_categories ADD COLUMN sort_mode TEXT NOT NULL DEFAULT 'Date'",
+    )?;
+
     Ok(())
 }
 

@@ -12,8 +12,9 @@ mod sync;
 mod visuals;
 
 pub use models::{
-    CountdownCardGeometry, CountdownCardId, CountdownCardState, CountdownCardVisuals,
-    CountdownCategory, CountdownCategoryId, CountdownDisplayMode, CountdownNotificationConfig,
-    CountdownWarningState, RgbaColor, DEFAULT_CATEGORY_ID, MAX_DAYS_FONT_SIZE,
+    ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
+    CountdownCardVisuals, CountdownCategory, CountdownCategoryId, CountdownDisplayMode,
+    CountdownNotificationConfig, CountdownWarningState, RgbaColor, DEFAULT_CATEGORY_ID,
+    MAX_DAYS_FONT_SIZE,
 };
 pub use service::CountdownService;

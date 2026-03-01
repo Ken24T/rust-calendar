@@ -1,6 +1,6 @@
 use crate::models::event::Event;
 use crate::models::settings::Settings;
-use crate::services::countdown::{CountdownCardId, CountdownCardVisuals};
+use crate::services::countdown::{CountdownCardId, CountdownCardVisuals, CountdownCategoryId, DEFAULT_CATEGORY_ID};
 use chrono::{self, Local, NaiveDate, NaiveDateTime, NaiveTime};
 
 use super::recurrence::{ParsedRRule, RecurrenceFrequency, RecurrencePattern};
@@ -53,6 +53,8 @@ pub struct EventDialogState {
     #[allow(dead_code)]
     pub show_advanced: bool,
     pub create_countdown: bool,
+    /// Which category to assign the new countdown card to
+    pub countdown_category_id: CountdownCategoryId,
     /// Linked countdown card (if any)
     pub linked_card: Option<LinkedCountdownCard>,
     /// Whether the card settings section is expanded
@@ -125,6 +127,7 @@ impl EventDialogState {
             warning_messages: Vec::new(),
             show_advanced: false,
             create_countdown: false,
+            countdown_category_id: CountdownCategoryId(DEFAULT_CATEGORY_ID),
             linked_card: None,
             show_card_settings: false,
             active_date_picker: None,
@@ -192,6 +195,7 @@ impl EventDialogState {
             warning_messages: Vec::new(),
             show_advanced: false,
             create_countdown: false,
+            countdown_category_id: CountdownCategoryId(DEFAULT_CATEGORY_ID),
             linked_card: None,
             show_card_settings: false,
             active_date_picker: None,

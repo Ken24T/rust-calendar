@@ -42,8 +42,13 @@ with local-first data storage and no cloud dependencies.
 ### Countdown Timers
 
 - Tear events from the calendar to create desktop countdown widgets
-- Individual floating windows or combined container mode
+- Individual floating windows, combined container, or category containers mode
 - Always-on-top, persistent countdown display
+- Category containers with collapsible headers, sort modes, and quick-add
+- Three-tier visual inheritance: Global → Category → Card
+- Per-container card defaults (colours, fonts, dimensions)
+- Cross-container drag-and-drop to re-categorise cards
+- Choose target container when creating from context menu or event dialog
 
 ### Customisation
 
