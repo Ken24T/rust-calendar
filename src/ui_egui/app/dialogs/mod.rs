@@ -123,7 +123,16 @@ impl CalendarApp {
             }
         };
 
-        let (saved_event, card_changes, auto_create_card, was_new_event, event_saved, delete_request) = {
+        let (saved_event, card_changes, auto_create_card, countdown_category, was_new_event, event_saved, delete_request) = {
+            // Snapshot categories for the dropdown before borrowing state
+            let countdown_categories: Vec<_> = self
+                .context
+                .countdown_service()
+                .categories()
+                .iter()
+                .map(|c| (c.id, c.name.clone()))
+                .collect();
+
             let state = self
                 .event_dialog_state
                 .as_mut()
@@ -138,6 +147,7 @@ impl CalendarApp {
                 self.context.database(),
                 &self.settings,
                 &mut self.show_event_dialog,
+                &countdown_categories,
             );
 
             // For auto-creating countdown cards, check if the event is in the future
@@ -149,12 +159,18 @@ impl CalendarApp {
             let auto_create_card = state.create_countdown 
                 && state.event_id.is_none()
                 && event_ends_in_future;
+            let countdown_category = if auto_create_card {
+                Some(state.countdown_category_id)
+            } else {
+                None
+            };
             let was_new_event = state.event_id.is_none();
             let event_saved = saved_event.is_some();
             (
                 saved_event,
                 card_changes,
                 auto_create_card,
+                countdown_category,
                 was_new_event,
                 event_saved,
                 delete_request,
@@ -188,7 +204,9 @@ impl CalendarApp {
             }
 
             if auto_create_card {
-                self.consume_countdown_requests(vec![CountdownRequest::from_event(event)]);
+                let mut req = CountdownRequest::from_event(event);
+                req.category_id = countdown_category;
+                self.consume_countdown_requests(vec![req]);
             }
             self.sync_cards_from_event(event);
 

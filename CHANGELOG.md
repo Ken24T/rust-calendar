@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.6] - 2026-03-01
+
+### Added
+
+- Category/container selector when creating countdown cards from the event dialog.
+  When "Create countdown card after saving" is checked and multiple categories
+  exist, a "Container" dropdown appears letting the user choose which category
+  the new card is assigned to (defaults to General).
+- `category_id` field on `CountdownRequest` so the creation flow can target a
+  specific category instead of always using the default.
+- `countdown_category_id` field on `EventDialogState` to track the user's
+  container selection.
+
 ## [2.1.5] - 2026-03-01
 
 ### Added

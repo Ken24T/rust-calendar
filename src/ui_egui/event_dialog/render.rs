@@ -4,7 +4,7 @@ use egui::{Color32, RichText};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::category::CategoryService;
-use crate::services::countdown::CountdownCardId;
+use crate::services::countdown::{CountdownCardId, CountdownCategoryId};
 use crate::services::database::Database;
 
 use super::state::EventDialogState;
@@ -47,6 +47,7 @@ pub fn render_event_dialog(
     database: &Database,
     settings: &Settings,
     show_dialog: &mut bool,
+    countdown_categories: &[(CountdownCategoryId, String)],
 ) -> EventDialogResult {
     let mut result = EventDialogResult::default();
     let mut dialog_open = *show_dialog;
@@ -70,7 +71,7 @@ pub fn render_event_dialog(
         egui::ScrollArea::vertical().show(ui, |ui| {
             render_error_banner(ui, state);
             render_warning_banner(ui, state);
-            render_basic_information_section(ui, state, database);
+            render_basic_information_section(ui, state, database, countdown_categories);
             render_date_time::render_date_time_section(ui, state);
             render_appearance_section(ui, state);
             render_recurrence::render_recurrence_section(ui, state, settings);
@@ -112,7 +113,12 @@ fn render_warning_banner(ui: &mut egui::Ui, state: &EventDialogState) {
     ui.add_space(4.0);
 }
 
-fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogState, database: &Database) {
+fn render_basic_information_section(
+    ui: &mut egui::Ui,
+    state: &mut EventDialogState,
+    database: &Database,
+    countdown_categories: &[(CountdownCategoryId, String)],
+) {
     ui.heading("Basic Information");
     ui.add_space(4.0);
 
@@ -186,6 +192,29 @@ fn render_basic_information_section(ui: &mut egui::Ui, state: &mut EventDialogSt
                 state.create_countdown = false;
             }
         });
+
+        // Show category picker when countdown creation is enabled
+        if state.create_countdown && countdown_categories.len() > 1 {
+            indented_row(ui, |ui| {
+                ui.label("Container:");
+                let current_name = countdown_categories
+                    .iter()
+                    .find(|(id, _)| *id == state.countdown_category_id)
+                    .map(|(_, name)| name.as_str())
+                    .unwrap_or("General");
+                egui::ComboBox::from_id_source("countdown_category_picker")
+                    .selected_text(current_name)
+                    .show_ui(ui, |ui| {
+                        for (cat_id, cat_name) in countdown_categories {
+                            ui.selectable_value(
+                                &mut state.countdown_category_id,
+                                *cat_id,
+                                cat_name,
+                            );
+                        }
+                    });
+            });
+        }
     }
 
     ui.add_space(12.0);

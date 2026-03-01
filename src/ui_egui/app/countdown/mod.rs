@@ -11,7 +11,7 @@ mod sync;
 pub(super) use state::{CountdownUiState, OpenEventDialogRequest};
 
 use super::CalendarApp;
-use crate::services::countdown::{CountdownCardGeometry, RgbaColor};
+use crate::services::countdown::{CountdownCardGeometry, CountdownCategoryId, RgbaColor, DEFAULT_CATEGORY_ID};
 use crate::ui_egui::views::CountdownRequest;
 use chrono::Local;
 use directories::ProjectDirs;
@@ -96,6 +96,7 @@ impl CalendarApp {
                 color,
                 body,
                 display_label,
+                category_id,
             } = request;
 
             let (effective_start_at, effective_end_at) = event_id
@@ -161,7 +162,7 @@ impl CalendarApp {
                 self.settings.default_card_width,
                 self.settings.default_card_height
             );
-            let card_id = self.context.countdown_service_mut().create_card(
+            let card_id = self.context.countdown_service_mut().create_card_in_category(
                 event_id,
                 title,
                 target_at,
@@ -171,6 +172,7 @@ impl CalendarApp {
                 event_body,
                 self.settings.default_card_width,
                 self.settings.default_card_height,
+                category_id.unwrap_or(CountdownCategoryId(DEFAULT_CATEGORY_ID)),
             );
 
             // Card title defaults to event title, user can override in settings

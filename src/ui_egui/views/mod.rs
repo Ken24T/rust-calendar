@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, Timelike};
 
 use crate::models::event::Event;
+use crate::services::countdown::CountdownCategoryId;
 
 mod day_context_menu;
 pub mod day_view;
@@ -32,6 +33,8 @@ pub struct CountdownRequest {
     pub body: Option<String>,
     #[allow(dead_code)]
     pub display_label: Option<String>,
+    /// Target category for the new card (None = default/General).
+    pub category_id: Option<CountdownCategoryId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
