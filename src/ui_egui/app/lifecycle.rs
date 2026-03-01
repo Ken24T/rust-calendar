@@ -235,11 +235,19 @@ impl CalendarApp {
 
         // Handle requests to open event dialog from countdown cards
         for request in render_result.event_dialog_requests {
+            if self.hidden_to_tray {
+                self.restore_from_tray(ctx);
+            }
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.open_event_dialog_for_card(request);
         }
 
         // Handle requests to navigate to a date
         for request in render_result.go_to_date_requests {
+            if self.hidden_to_tray {
+                self.restore_from_tray(ctx);
+            }
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.current_date = request.date;
         }
         
