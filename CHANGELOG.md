@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.3] - 2026-03-02
+
+### Fixed
+
+- System tray menu items (Show Calendar, Exit) and left-click restore now work
+  reliably across multiple hide/show cycles on Windows. Previously, the second
+  cycle would fail because destroying and re-creating the tray icon produced
+  event handlers whose `ctx.request_repaint()` could no longer wake the winit
+  event loop.
+- Tray icon is now kept alive across hide/show cycles; only destroyed when the
+  setting is disabled or the application exits.
+- Added self-sustaining `request_repaint_after(200ms)` loop while hidden to tray,
+  ensuring `poll_tray_events()` always runs even when the window is off-screen.
+
 ## [2.2.1] - 2026-03-01
 
 ### Changed

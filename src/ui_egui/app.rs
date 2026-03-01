@@ -96,10 +96,16 @@ pub struct CalendarApp {
     tray_exit_menu_id: Option<tray_icon::menu::MenuId>,
     /// True when the main window is hidden to the tray
     hidden_to_tray: bool,
-    /// Saved outer position of the main window before hiding to tray
-    tray_saved_outer_position: Option<egui::Pos2>,
     /// Set to true when user explicitly requests exit (File > Exit or tray > Exit)
     exit_requested: bool,
+    /// Shared action flag written by tray event handlers, read by poll_tray_events
+    tray_action_flag: Option<std::sync::Arc<std::sync::atomic::AtomicU8>>,
+    /// Cached native window handle for Win32 API calls
+    tray_hwnd: isize,
+    /// Saved pixel position before hiding (for pixel-perfect restore)
+    tray_saved_pixel_pos: Option<(i32, i32)>,
+    /// Original extended window style, restored when showing
+    tray_original_exstyle: i32,
 }
 
 impl eframe::App for CalendarApp {

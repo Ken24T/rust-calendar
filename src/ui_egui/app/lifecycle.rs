@@ -94,25 +94,19 @@ impl CalendarApp {
             tray_show_menu_id: None,
             tray_exit_menu_id: None,
             hidden_to_tray: false,
-            tray_saved_outer_position: None,
             exit_requested: false,
+            tray_action_flag: None,
+            tray_hwnd: 0,
+            tray_saved_pixel_pos: None,
+            tray_original_exstyle: 0,
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);
         Self::configure_fonts(&cc.egui_ctx);
         app.focus_on_current_time_if_visible();
 
-        // Create system tray icon if the setting is enabled
-        if app.settings.minimize_to_tray {
-            if let Some((tray, show_id, exit_id)) = Self::create_tray_icon() {
-                app.tray_icon = Some(tray);
-                app.tray_show_menu_id = Some(show_id);
-                app.tray_exit_menu_id = Some(exit_id);
-            } else {
-                log::warn!("System tray unavailable; minimize_to_tray disabled");
-                app.settings.minimize_to_tray = false;
-            }
-        }
+        // Tray icon is created lazily when the window is first hidden
+        // to the tray, so nothing to do here at startup.
 
         app
     }
@@ -191,6 +185,62 @@ impl CalendarApp {
         // System tray: poll events and intercept close-to-tray
         self.poll_tray_events(ctx);
         self.handle_close_to_tray(ctx);
+
+        // When hidden to tray, the window is off-screen but nominally
+        // visible to winit.  Schedule periodic repaints so the event loop
+        // stays alive and poll_tray_events can process actions.
+        if self.hidden_to_tray {
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+
+            // Continue rendering countdown cards as independent desktop widgets
+            let render_result = self.countdown_ui.render_cards(
+                ctx,
+                self.context.countdown_service_mut(),
+                self.settings.default_card_width,
+                self.settings.default_card_height,
+            );
+
+            // Handle requests that need the main window restored
+            for request in render_result.event_dialog_requests {
+                self.restore_from_tray(ctx);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                self.open_event_dialog_for_card(request);
+            }
+            for request in render_result.go_to_date_requests {
+                self.restore_from_tray(ctx);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                self.current_date = request.date;
+            }
+            for request in render_result.delete_card_requests {
+                self.restore_from_tray(ctx);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                    card_id: request.card_id,
+                    card_title: request.card_title,
+                });
+            }
+
+            self.countdown_ui
+                .render_settings_dialogs(ctx, self.context.countdown_service_mut());
+
+            for request in self.countdown_ui.drain_delete_requests() {
+                self.restore_from_tray(ctx);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                    card_id: request.card_id,
+                    card_title: request.card_title,
+                });
+            }
+
+            self.refresh_countdowns(ctx);
+            self.check_and_show_countdown_notifications(ctx);
+            self.persist_countdowns_if_needed();
+
+            // Handle confirmation dialogs (may be open from card delete)
+            self.handle_confirm_dialog(ctx);
+
+            return; // Skip main window UI rendering while hidden
+        }
 
         self.handle_file_drops(ctx);
 
