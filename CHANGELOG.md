@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.8] - 2026-03-01
+
+### Added
+
+- Container card defaults editor in the Category Manager dialog. When editing a
+  category, expanding the "Card Defaults" section allows configuring:
+  - "Inherit global defaults" toggle (uses global visual settings when enabled)
+  - Default card width and height sliders (60–400 px)
+  - Per-container colour defaults: title background, title text, body background,
+    and days text — each with an egui colour picker
+  - Per-container font size defaults: title size (10–48 pt) and days number size
+    (32–220 pt)
+- Visual settings are disabled when "Inherit global defaults" is enabled,
+  providing clear feedback about the three-tier inheritance model.
+- All container defaults are persisted to the SQLite database on save.
+
 ## [2.1.7] - 2026-03-01
 
 ### Added

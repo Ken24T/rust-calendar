@@ -2,9 +2,25 @@
 //! countdown card categories (separate from event categories).
 
 use crate::services::countdown::{
-    CountdownCategory, CountdownCategoryId, CountdownService, DEFAULT_CATEGORY_ID,
+    CountdownCardVisuals, CountdownCategory, CountdownCategoryId, CountdownService,
+    RgbaColor, DEFAULT_CATEGORY_ID,
 };
 use egui::{Color32, RichText};
+
+/// Convert an [`RgbaColor`] to an egui [`Color32`].
+fn rgba_to_color32(c: RgbaColor) -> Color32 {
+    Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a)
+}
+
+/// Convert an egui [`Color32`] to an [`RgbaColor`].
+fn color32_to_rgba(c: Color32) -> RgbaColor {
+    RgbaColor {
+        r: c.r(),
+        g: c.g(),
+        b: c.b(),
+        a: c.a(),
+    }
+}
 
 /// State for the countdown category management dialog.
 #[derive(Debug, Clone, Default)]
@@ -23,6 +39,16 @@ pub struct CountdownCategoryManagerState {
     pub success_message: Option<String>,
     /// Category to delete (confirmation pending)
     pub delete_pending: Option<(CountdownCategoryId, String, usize)>,
+    /// Working copy of the category's visual defaults.
+    pub visual_defaults: CountdownCardVisuals,
+    /// Working copy of the default card width.
+    pub default_card_width: f32,
+    /// Working copy of the default card height.
+    pub default_card_height: f32,
+    /// Working copy of the "use global defaults" toggle.
+    pub use_global_defaults: bool,
+    /// Whether the card-defaults section is expanded in the UI.
+    pub defaults_expanded: bool,
 }
 
 impl CountdownCategoryManagerState {
@@ -53,6 +79,10 @@ impl CountdownCategoryManagerState {
         self.name_input = category.name.clone();
         self.display_order_input = category.display_order.to_string();
         self.editing_category_id = Some(category.id);
+        self.visual_defaults = category.visual_defaults.clone();
+        self.default_card_width = category.default_card_width;
+        self.default_card_height = category.default_card_height;
+        self.use_global_defaults = category.use_global_defaults;
         self.error_message = None;
         self.success_message = None;
     }
@@ -69,6 +99,11 @@ impl CountdownCategoryManagerState {
     fn clear_inputs(&mut self) {
         self.name_input.clear();
         self.display_order_input = "0".to_string();
+        self.visual_defaults = CountdownCardVisuals::default();
+        self.default_card_width = 120.0;
+        self.default_card_height = 110.0;
+        self.use_global_defaults = true;
+        self.defaults_expanded = false;
     }
 }
 
@@ -101,8 +136,8 @@ pub fn render_countdown_category_manager_dialog(
     egui::Window::new("📂 Countdown Categories")
         .open(&mut dialog_open)
         .collapsible(false)
-        .resizable(false)
-        .fixed_size([500.0, 360.0])
+        .resizable(true)
+        .default_size([620.0, 520.0])
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             // Error/success messages at top
@@ -186,6 +221,10 @@ pub fn render_countdown_category_manager_dialog(
 
                 // RIGHT: editor panel
                 columns[1].vertical(|ui| {
+                    egui::ScrollArea::vertical()
+                        .id_source("category_editor_scroll")
+                        .max_height(ui.available_height() - 8.0)
+                        .show(ui, |ui| {
                     let is_editing = state.editing_category_id.is_some();
                     let is_default = state
                         .editing_category_id
@@ -308,6 +347,131 @@ pub fn render_countdown_category_manager_dialog(
                             }
                         });
                     }
+
+                    // Card Defaults section (only when editing)
+                    if is_editing {
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.add_space(4.0);
+
+                        let header = if state.defaults_expanded {
+                            "▼ Card Defaults"
+                        } else {
+                            "▶ Card Defaults"
+                        };
+                        if ui.button(header).clicked() {
+                            state.defaults_expanded = !state.defaults_expanded;
+                        }
+
+                        if state.defaults_expanded {
+                            ui.add_space(4.0);
+
+                            // Use global defaults toggle
+                            ui.checkbox(
+                                &mut state.use_global_defaults,
+                                "Inherit global defaults",
+                            );
+                            ui.label(
+                                RichText::new(
+                                    "When enabled, cards use global visual defaults.",
+                                )
+                                .small()
+                                .weak(),
+                            );
+
+                            ui.add_space(8.0);
+                            ui.label(RichText::new("Card Dimensions").strong().size(13.0));
+                            ui.add_space(2.0);
+
+                            // Card width
+                            ui.horizontal(|ui| {
+                                ui.label("Width:");
+                                ui.add(
+                                    egui::Slider::new(
+                                        &mut state.default_card_width,
+                                        60.0..=400.0,
+                                    )
+                                    .suffix(" px"),
+                                );
+                            });
+
+                            // Card height
+                            ui.horizontal(|ui| {
+                                ui.label("Height:");
+                                ui.add(
+                                    egui::Slider::new(
+                                        &mut state.default_card_height,
+                                        60.0..=400.0,
+                                    )
+                                    .suffix(" px"),
+                                );
+                            });
+
+                            // Visual settings (disabled when inheriting globals)
+                            ui.add_space(8.0);
+                            ui.label(RichText::new("Colours & Fonts").strong().size(13.0));
+                            if state.use_global_defaults {
+                                ui.label(
+                                    RichText::new(
+                                        "Disable \"Inherit global defaults\" to customise.",
+                                    )
+                                    .small()
+                                    .weak()
+                                    .italics(),
+                                );
+                            }
+                            ui.add_space(2.0);
+
+                            let enabled = !state.use_global_defaults;
+
+                            ui.add_enabled_ui(enabled, |ui| {
+                                render_category_color_row(
+                                    ui,
+                                    "Title BG:",
+                                    &mut state.visual_defaults.title_bg_color,
+                                );
+                                render_category_color_row(
+                                    ui,
+                                    "Title Text:",
+                                    &mut state.visual_defaults.title_fg_color,
+                                );
+                                render_category_color_row(
+                                    ui,
+                                    "Body BG:",
+                                    &mut state.visual_defaults.body_bg_color,
+                                );
+                                render_category_color_row(
+                                    ui,
+                                    "Days Text:",
+                                    &mut state.visual_defaults.days_fg_color,
+                                );
+
+                                ui.add_space(4.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Title size:");
+                                    ui.add(
+                                        egui::Slider::new(
+                                            &mut state.visual_defaults.title_font_size,
+                                            10.0..=48.0,
+                                        )
+                                        .suffix(" pt"),
+                                    );
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label("Days size:");
+                                    ui.add(
+                                        egui::Slider::new(
+                                            &mut state.visual_defaults.days_font_size,
+                                            32.0..=220.0,
+                                        )
+                                        .suffix(" pt"),
+                                    );
+                                });
+                            });
+                        }
+                    }
+                    }); // end ScrollArea
                 });
             });
 
@@ -376,6 +540,10 @@ fn handle_save(
                 cat.name = name.to_string();
             }
             cat.display_order = display_order;
+            cat.visual_defaults = state.visual_defaults.clone();
+            cat.default_card_width = state.default_card_width;
+            cat.default_card_height = state.default_card_height;
+            cat.use_global_defaults = state.use_global_defaults;
             state.success_message = Some("Category updated".to_string());
             response.categories_changed = true;
         } else {
@@ -387,6 +555,10 @@ fn handle_save(
             id: CountdownCategoryId(0), // add_category assigns proper ID
             name: name.to_string(),
             display_order,
+            visual_defaults: state.visual_defaults.clone(),
+            default_card_width: state.default_card_width,
+            default_card_height: state.default_card_height,
+            use_global_defaults: state.use_global_defaults,
             ..CountdownCategory::default()
         };
         let added = service.add_category(new_cat);
@@ -399,4 +571,21 @@ fn handle_save(
             state.start_edit(cat);
         }
     }
+}
+
+/// Render a labelled colour-picker row for a category default colour.
+fn render_category_color_row(ui: &mut egui::Ui, label: &str, color: &mut RgbaColor) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        let mut c32 = rgba_to_color32(*color);
+        if egui::color_picker::color_edit_button_srgba(
+            ui,
+            &mut c32,
+            egui::color_picker::Alpha::Opaque,
+        )
+        .changed()
+        {
+            *color = color32_to_rgba(c32);
+        }
+    });
 }
