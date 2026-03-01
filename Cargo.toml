@@ -1,6 +1,6 @@
 [package]
 name = "rust-calendar"
-version = "2.2.1"
+version = "2.3.4"
 edition = "2021"
 authors = ["Ken24T"]
 description = "A modern cross-platform desktop calendar application with theming and event management"
@@ -71,6 +71,9 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 # System theme detection
 dark-light = "1.1"
 
+# System tray integration
+tray-icon = "0.19"
+
 # PDF generation
 printpdf = "0.7"
 
@@ -103,10 +106,14 @@ strip = true
 # Hide console window on Windows for release builds
 [target.'cfg(windows)'.build-dependencies]
 
+[target.'cfg(unix)'.dependencies]
+gtk = "0.18"
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.54", features = [
     "Win32_UI_Notifications",
     "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",
     "Win32_Graphics_Gdi"
 ] }

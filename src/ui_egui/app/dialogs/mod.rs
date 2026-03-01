@@ -315,6 +315,7 @@ impl CalendarApp {
 
         if response.saved {
             self.apply_theme_from_db(ctx);
+            self.sync_tray_to_settings(ctx);
         }
     }
 

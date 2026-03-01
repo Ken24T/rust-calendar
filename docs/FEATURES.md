@@ -81,6 +81,14 @@ A summary of the features available in Rust Calendar.
 - Countdown card default dimensions
 - Google Calendar sync configuration
 
+## System Tray
+
+- Minimise to system tray on close (optional setting)
+- Tray context menu: Show Calendar, Exit
+- Left-click tray icon to restore the main window
+- Countdown cards remain visible while the main window is hidden
+- Cross-platform: Windows (off-screen + Win32) and Linux (GTK/libappindicator)
+
 ## Notifications
 
 - Cross-platform desktop notifications for event reminders

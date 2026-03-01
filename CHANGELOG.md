@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.4] - 2026-03-02
+
+### Fixed
+
+- System tray menu items (Show Calendar, Exit) and left-click restore now work
+  reliably across multiple hide/show cycles on Windows. Previously, the second
+  cycle would fail because destroying and re-creating the tray icon produced
+  event handlers whose `ctx.request_repaint()` could no longer wake the winit
+  event loop.
+- Tray icon is now kept alive across hide/show cycles; only destroyed when the
+  setting is disabled or the application exits.
+- Added self-sustaining `request_repaint_after(200ms)` loop while hidden to tray,
+  ensuring `poll_tray_events()` always runs even when the window is off-screen.
+- Fixed `sync_tray_to_settings` missing `Visible(true)` on Linux when the tray
+  setting is disabled while the window is hidden.
+
+## [2.3.2] - 2026-03-01
+
+### Fixed
+
+- Edit Event and Go to Date context menu actions on countdown cards now restore
+  the main window from tray and bring it to focus, matching the behaviour
+  already implemented for Delete Card confirmation.
+
+## [2.3.1] - 2026-03-01
+
+### Fixed
+
+- Pump GTK events in `poll_tray_events()` so libappindicator completes D-Bus
+  registration and the tray icon becomes visible on Cinnamon/GNOME.
+- Added `gtk 0.18` as a Linux-only dependency for `gtk::init()` / iteration.
+- Save window outer position before hiding to tray; restore to same position
+  on show.
+- Bring main window to focus when countdown card delete confirmation is
+  triggered, so the dialog is visible above card viewports.
+
+## [2.3.0] - 2026-03-01
+
+### Added
+
+- System tray integration: "Minimise to system tray on close" setting
+  (default off).
+- Closing the main window hides to tray; countdown cards remain visible as
+  independent desktop widgets.
+- Tray context menu with Show Calendar and Exit actions.
+- Left-click on tray icon restores the main window.
+- File > Exit always truly exits regardless of tray setting.
+- Tray icon created/destroyed dynamically when the setting is toggled.
+- Graceful fallback if tray host is unavailable (e.g. GNOME without
+  AppIndicator).
+- Database migration for `minimize_to_tray` column.
+- Updated build dependencies: `libayatana-appindicator3-dev`, `libxdo-dev`.
+
 ## [2.2.1] - 2026-03-01
 
 ### Changed

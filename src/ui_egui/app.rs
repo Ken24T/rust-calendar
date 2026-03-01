@@ -18,6 +18,7 @@ mod sync_scheduler;
 mod state;
 mod status_bar;
 mod toast;
+mod tray;
 mod views;
 
 use self::context::AppContext;
@@ -88,6 +89,23 @@ pub struct CalendarApp {
     undo_manager: UndoManager,
     /// Background scheduler for periodic calendar source sync
     calendar_sync_scheduler: Arc<Mutex<CalendarSyncScheduler>>,
+    /// System tray icon (None when tray is disabled or unavailable)
+    tray_icon: Option<tray_icon::TrayIcon>,
+    /// Menu item IDs for tray context menu
+    tray_show_menu_id: Option<tray_icon::menu::MenuId>,
+    tray_exit_menu_id: Option<tray_icon::menu::MenuId>,
+    /// True when the main window is hidden to the tray
+    hidden_to_tray: bool,
+    /// Set to true when user explicitly requests exit (File > Exit or tray > Exit)
+    exit_requested: bool,
+    /// Shared action flag written by tray event handlers, read by poll_tray_events
+    tray_action_flag: Option<std::sync::Arc<std::sync::atomic::AtomicU8>>,
+    /// Cached native window handle for Win32 API calls
+    tray_hwnd: isize,
+    /// Saved pixel position before hiding (for pixel-perfect restore)
+    tray_saved_pixel_pos: Option<(i32, i32)>,
+    /// Original extended window style, restored when showing
+    tray_original_exstyle: i32,
 }
 
 impl eframe::App for CalendarApp {

@@ -59,6 +59,13 @@ with local-first data storage and no cloud dependencies.
 - Adjustable default event duration
 - All preferences persisted between sessions
 
+### System Tray
+
+- Optional "Minimise to system tray on close" setting
+- Tray context menu (Show Calendar, Exit) and left-click restore
+- Countdown cards remain visible while the main window is hidden
+- Cross-platform support (Windows and Linux)
+
 ### Reminders and Notifications
 
 - Multiple configurable reminders per event
@@ -86,7 +93,8 @@ with local-first data storage and no cloud dependencies.
 
    ```bash
    sudo apt install build-essential libgtk-3-dev libxcb-render0-dev \
-     libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+     libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev \
+     libayatana-appindicator3-dev libxdo-dev
    ```
 
    **Windows**: Visual Studio Build Tools with C++ development tools

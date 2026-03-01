@@ -211,6 +211,20 @@ Rust Calendar includes light and dark themes.
 - **System theme**: enable **Use system theme** in Settings to follow your OS
   light/dark preference
 
+## System Tray
+
+- **Enable**: go to **Edit → Settings → View** and tick "Minimise to system
+  tray on close"
+- **Behaviour**: when enabled, closing the main window hides it to the system
+  tray instead of exiting. Countdown cards remain visible and responsive.
+- **Restore**: click the tray icon or right-click and select "Show Calendar"
+- **Exit**: right-click the tray icon and select "Exit", or use **File → Exit**
+  (always exits regardless of the tray setting)
+- **Linux note**: requires a desktop environment with system tray support (KDE,
+  XFCE, MATE, Cinnamon, LXQt). On GNOME, install the
+  [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
+  If no tray host is detected, the setting is automatically disabled.
+
 ## Settings
 
 Open Settings with `Ctrl+S` or **Edit → Settings**.

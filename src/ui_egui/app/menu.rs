@@ -46,6 +46,7 @@ impl CalendarApp {
             }
             ui.separator();
             if ui.button("Exit").clicked() {
+                self.exit_requested = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         });
