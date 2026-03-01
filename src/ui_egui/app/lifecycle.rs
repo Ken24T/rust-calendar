@@ -94,6 +94,7 @@ impl CalendarApp {
             tray_show_menu_id: None,
             tray_exit_menu_id: None,
             hidden_to_tray: false,
+            tray_saved_outer_position: None,
             exit_requested: false,
         };
 
@@ -244,6 +245,13 @@ impl CalendarApp {
         
         // Handle delete confirmation requests for countdown cards
         for request in render_result.delete_card_requests {
+            // If the main window is hidden, restore it so the confirmation
+            // dialog is visible (it renders in the main viewport).
+            if self.hidden_to_tray {
+                self.restore_from_tray(ctx);
+            }
+            // Ensure the main window is in front of countdown card viewports
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
                 card_id: request.card_id,
                 card_title: request.card_title,
@@ -255,6 +263,10 @@ impl CalendarApp {
         
         // Handle delete requests from settings dialogs
         for request in self.countdown_ui.drain_delete_requests() {
+            if self.hidden_to_tray {
+                self.restore_from_tray(ctx);
+            }
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
                 card_id: request.card_id,
                 card_title: request.card_title,

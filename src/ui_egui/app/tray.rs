@@ -7,6 +7,15 @@ impl CalendarApp {
     /// unavailable (e.g. GNOME without AppIndicator extension).
     pub(super) fn create_tray_icon(
     ) -> Option<(TrayIcon, tray_icon::menu::MenuId, tray_icon::menu::MenuId)> {
+        // GTK must be initialised before tray-icon creates menus on Linux
+        #[cfg(target_os = "linux")]
+        {
+            if gtk::init().is_err() {
+                log::warn!("Failed to initialise GTK for system tray");
+                return None;
+            }
+        }
+
         let show_item = MenuItem::new("Show Calendar", true, None);
         let exit_item = MenuItem::new("Exit", true, None);
         let show_id = show_item.id().clone();
@@ -72,6 +81,16 @@ impl CalendarApp {
             return;
         }
 
+        // Process pending GTK events so libappindicator can handle D-Bus
+        // registration and menu interactions. Without this, the tray icon
+        // never becomes visible because egui/winit doesn't run a GTK loop.
+        #[cfg(target_os = "linux")]
+        {
+            while gtk::events_pending() {
+                gtk::main_iteration();
+            }
+        }
+
         // Poll menu events (right-click menu)
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             if Some(&event.id) == self.tray_show_menu_id.as_ref() {
@@ -105,6 +124,10 @@ impl CalendarApp {
             && self.tray_icon.is_some()
             && !self.exit_requested
         {
+            // Save the current window position so we can restore it later
+            self.tray_saved_outer_position = ctx.input(|i| i.viewport().outer_rect)
+                .map(|rect| rect.min);
+
             // Cancel the real close, hide to tray instead
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
@@ -116,9 +139,15 @@ impl CalendarApp {
     }
 
     /// Show the main window and bring it to focus.
-    fn restore_from_tray(&mut self, ctx: &egui::Context) {
+    pub(super) fn restore_from_tray(&mut self, ctx: &egui::Context) {
         if self.hidden_to_tray {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+
+            // Restore the saved position so the window reappears where it was
+            if let Some(pos) = self.tray_saved_outer_position.take() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
+            }
+
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.hidden_to_tray = false;
             log::info!("Main window restored from system tray");
