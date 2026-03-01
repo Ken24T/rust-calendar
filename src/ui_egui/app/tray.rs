@@ -346,7 +346,8 @@ impl CalendarApp {
     }
 
     /// Handle a settings change for `minimize_to_tray`.
-    pub(super) fn sync_tray_to_settings(&mut self) {
+    #[allow(unused_variables)]
+    pub(super) fn sync_tray_to_settings(&mut self, ctx: &egui::Context) {
         if !self.settings.minimize_to_tray && self.tray_icon.is_some() {
             self.tray_icon = None;
             self.tray_show_menu_id = None;
@@ -361,6 +362,8 @@ impl CalendarApp {
                     let (x, y) = self.tray_saved_pixel_pos.unwrap_or((100, 100));
                     show_window_onscreen(self.tray_hwnd, self.tray_original_exstyle, x, y);
                 }
+                #[cfg(not(target_os = "windows"))]
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             }
             log::info!("System tray icon removed (setting disabled)");
         }

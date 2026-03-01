@@ -651,7 +651,7 @@ colours and font sizes), default card dimensions, `use_global_defaults` flag,
 - [ ] Share countdown timer link (if cloud sync added)
 - [ ] Countdown timer widgets for multiple monitors
 - [ ] Countdown timer for recurring event series
-- [ ] Integration with system tray (minimize to tray)
+- [x] Integration with system tray (minimize to tray) — shipped v2.3.0–v2.3.3
 - [ ] Countdown timer history
 
 ## User Benefits

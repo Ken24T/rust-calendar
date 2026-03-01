@@ -59,6 +59,13 @@ with local-first data storage and no cloud dependencies.
 - Adjustable default event duration
 - All preferences persisted between sessions
 
+### System Tray
+
+- Optional "Minimise to system tray on close" setting
+- Tray context menu (Show Calendar, Exit) and left-click restore
+- Countdown cards remain visible while the main window is hidden
+- Cross-platform support (Windows and Linux)
+
 ### Reminders and Notifications
 
 - Multiple configurable reminders per event
