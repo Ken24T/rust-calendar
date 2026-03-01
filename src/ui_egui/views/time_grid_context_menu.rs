@@ -8,7 +8,7 @@ use egui::Color32;
 use std::collections::HashSet;
 
 use super::week_shared::{DeleteConfirmRequest, EventInteractionResult};
-use super::{countdown_menu_state, is_synced_event, CountdownMenuState, CountdownRequest};
+use super::{countdown_menu_state, is_synced_event, CountdownMenuState, CountdownRequest, render_countdown_menu_items};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;
@@ -133,10 +133,7 @@ fn render_event_menu(
             ui.separator();
         }
         CountdownMenuState::Available => {
-            if ui.button("⏱ Create Countdown").clicked() {
-                countdown_requests.push(CountdownRequest::from_event(event));
-                ui.memory_mut(|mem| mem.close_popup());
-            }
+            render_countdown_menu_items(ui, event, countdown_requests);
             ui.separator();
         }
     }

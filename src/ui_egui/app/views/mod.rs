@@ -4,7 +4,9 @@ use crate::models::event::Event;
 use crate::services::calendar_sync::CalendarSourceService;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
-use crate::ui_egui::views::{AutoFocusRequest, CountdownRequest};
+use crate::ui_egui::views::{
+    AutoFocusRequest, CountdownCategoriesCache, CountdownRequest,
+};
 use chrono::Local;
 use std::collections::HashSet;
 
@@ -25,6 +27,22 @@ impl CalendarApp {
             .iter()
             .filter_map(|card| card.event_id)
             .collect();
+
+        // Store countdown categories in egui per-frame data so context menus
+        // can offer a category picker without threading the list everywhere.
+        let categories: Vec<_> = self
+            .context
+            .countdown_service()
+            .categories()
+            .iter()
+            .map(|c| (c.id, c.name.clone()))
+            .collect();
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("countdown_categories_cache"),
+                CountdownCategoriesCache(categories),
+            );
+        });
 
         // Use a frame with no outer/inner margin to prevent gaps between panels
         // The sidebar already has its own inner padding

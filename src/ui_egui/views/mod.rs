@@ -3,6 +3,52 @@ use chrono::{DateTime, Local, NaiveDate, NaiveTime, Timelike};
 use crate::models::event::Event;
 use crate::services::countdown::CountdownCategoryId;
 
+/// Per-frame cache of countdown categories stored in egui's temp data.
+///
+/// Written by `render_main_panel` each frame so context menus can read
+/// it without threading the list through every function layer.
+#[derive(Clone, Default)]
+pub struct CountdownCategoriesCache(pub Vec<(CountdownCategoryId, String)>);
+
+/// Unique ID used for `CountdownCategoriesCache` in egui's `IdTypeMap`.
+const COUNTDOWN_CATEGORIES_CACHE_ID: &str = "countdown_categories_cache";
+
+/// Render the "Create Countdown" context-menu item(s).
+///
+/// - If only one category exists, shows a single button.
+/// - If multiple categories exist, shows a submenu to pick the target container.
+pub fn render_countdown_menu_items(
+    ui: &mut egui::Ui,
+    event: &Event,
+    countdown_requests: &mut Vec<CountdownRequest>,
+) {
+    let categories = ui.ctx().data(|data| {
+        data.get_temp::<CountdownCategoriesCache>(egui::Id::new(COUNTDOWN_CATEGORIES_CACHE_ID))
+    })
+    .map(|c| c.0)
+    .unwrap_or_default();
+
+    if categories.len() <= 1 {
+        // Single category — simple button
+        if ui.button("⏱ Create Countdown").clicked() {
+            countdown_requests.push(CountdownRequest::from_event(event));
+            ui.close_menu();
+        }
+    } else {
+        // Multiple categories — show submenu
+        ui.menu_button("⏱ Create Countdown", |ui| {
+            for (cat_id, cat_name) in &categories {
+                if ui.button(cat_name).clicked() {
+                    let mut req = CountdownRequest::from_event(event);
+                    req.category_id = Some(*cat_id);
+                    countdown_requests.push(req);
+                    ui.close_menu();
+                }
+            }
+        });
+    }
+}
+
 mod day_context_menu;
 pub mod day_view;
 mod day_event_rendering;
