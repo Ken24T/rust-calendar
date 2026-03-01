@@ -6,8 +6,9 @@ use super::render::{
     viewport_title_matches, CountdownCardUiAction,
 };
 use crate::services::countdown::{
-    ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownCategoryId, CountdownDisplayMode, CountdownService,
+    CardSettingsSnapshot, ContainerSortMode, CountdownCardGeometry, CountdownCardId,
+    CountdownCardState, CountdownCardVisuals, CountdownCategoryId, CountdownDisplayMode,
+    CountdownService,
 };
 use chrono::Local;
 use egui::{self, Context};
@@ -42,6 +43,7 @@ pub(in super::super) struct CountdownUiState {
     pub(super) open_settings: HashSet<CountdownCardId>,
     pub(super) settings_geometry: HashMap<CountdownCardId, CountdownCardGeometry>,
     pub(super) settings_needs_layout: HashSet<CountdownCardId>,
+    pub(super) settings_snapshots: HashMap<CountdownCardId, CardSettingsSnapshot>,
     pub(super) render_log_state: HashMap<CountdownCardId, CountdownRenderSnapshot>,
     pub(super) pending_event_body_updates: Vec<(i64, Option<String>)>,
     geometry_samples: HashMap<CountdownCardId, GeometrySampleState>,
@@ -89,6 +91,27 @@ impl CountdownUiState {
     /// Reset container state so it will re-initialize on next render
     pub(in super::super) fn reset_container_state(&mut self) {
         self.container_layout.initialized = false;
+    }
+
+    /// Open the settings dialog for a card, taking a snapshot of its current
+    /// state so that Cancel can revert the preview changes.
+    fn open_settings_dialog(
+        &mut self,
+        card: &CountdownCardState,
+        service: &CountdownService,
+    ) {
+        let card_id = card.id;
+        // Only snapshot once per dialog session (idempotent on re-insert)
+        if self.open_settings.insert(card_id) {
+            if let Some(snapshot) = service.snapshot_card_settings(card_id) {
+                self.settings_snapshots.insert(card_id, snapshot);
+            }
+        }
+        let default_geometry = default_settings_geometry_for(card);
+        self.settings_geometry
+            .entry(card_id)
+            .or_insert(default_geometry);
+        self.settings_needs_layout.insert(card_id);
     }
     
     /// Full reset of all UI state when card positions are reset.
@@ -270,15 +293,11 @@ impl CountdownUiState {
                     self.open_settings.remove(&card_id);
                     self.settings_geometry.remove(&card_id);
                     self.settings_needs_layout.remove(&card_id);
+                    self.settings_snapshots.remove(&card_id);
                 }
                 ContainerAction::OpenSettings(card_id) => {
                     if let Some(card) = cards.iter().find(|c| c.id == card_id) {
-                        self.open_settings.insert(card_id);
-                        let default_geometry = default_settings_geometry_for(card);
-                        self.settings_geometry
-                            .entry(card_id)
-                            .or_insert(default_geometry);
-                        self.settings_needs_layout.insert(card_id);
+                        self.open_settings_dialog(card, service);
                     }
                 }
                 ContainerAction::OpenEventDialog(card_id) => {
@@ -291,12 +310,7 @@ impl CountdownUiState {
                             });
                         } else {
                             // Fall back to card settings if no event
-                            self.open_settings.insert(card_id);
-                            let default_geometry = default_settings_geometry_for(card);
-                            self.settings_geometry
-                                .entry(card_id)
-                                .or_insert(default_geometry);
-                            self.settings_needs_layout.insert(card_id);
+                            self.open_settings_dialog(card, service);
                         }
                     }
                 }
@@ -486,15 +500,11 @@ impl CountdownUiState {
                         self.open_settings.remove(&card_id);
                         self.settings_geometry.remove(&card_id);
                         self.settings_needs_layout.remove(&card_id);
+                        self.settings_snapshots.remove(&card_id);
                     }
                     ContainerAction::OpenSettings(card_id) => {
                         if let Some(card) = cat_cards.iter().find(|c| c.id == card_id) {
-                            self.open_settings.insert(card_id);
-                            let default_geometry = default_settings_geometry_for(card);
-                            self.settings_geometry
-                                .entry(card_id)
-                                .or_insert(default_geometry);
-                            self.settings_needs_layout.insert(card_id);
+                            self.open_settings_dialog(card, service);
                         }
                     }
                     ContainerAction::OpenEventDialog(card_id) => {
@@ -506,12 +516,7 @@ impl CountdownUiState {
                                     visuals: card.visuals.clone(),
                                 });
                             } else {
-                                self.open_settings.insert(card_id);
-                                let default_geometry = default_settings_geometry_for(card);
-                                self.settings_geometry
-                                    .entry(card_id)
-                                    .or_insert(default_geometry);
-                                self.settings_needs_layout.insert(card_id);
+                                self.open_settings_dialog(card, service);
                             }
                         }
                     }
@@ -698,12 +703,7 @@ impl CountdownUiState {
                     });
                 }
                 CountdownCardUiAction::OpenSettings => {
-                    self.open_settings.insert(card.id);
-                    let default_geometry = default_settings_geometry_for(&card);
-                    self.settings_geometry
-                        .entry(card.id)
-                        .or_insert(default_geometry);
-                    self.settings_needs_layout.insert(card.id);
+                    self.open_settings_dialog(&card, service);
                 }
                 CountdownCardUiAction::OpenEventDialog => {
                     if let Some(event_id) = card.event_id {
@@ -714,12 +714,7 @@ impl CountdownUiState {
                         });
                     } else {
                         // Fall back to card settings if no event
-                        self.open_settings.insert(card.id);
-                        let default_geometry = default_settings_geometry_for(&card);
-                        self.settings_geometry
-                            .entry(card.id)
-                            .or_insert(default_geometry);
-                        self.settings_needs_layout.insert(card.id);
+                        self.open_settings_dialog(&card, service);
                     }
                 }
                 CountdownCardUiAction::GeometrySettled => {
@@ -781,6 +776,7 @@ impl CountdownUiState {
             self.open_settings.remove(&id);
             self.settings_geometry.remove(&id);
             self.settings_needs_layout.remove(&id);
+            self.settings_snapshots.remove(&id);
             self.clear_geometry_wait_state(&id);
             self.render_log_state.remove(&id);
             self.geometry_samples.remove(&id);

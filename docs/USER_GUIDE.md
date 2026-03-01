@@ -188,12 +188,16 @@ Save frequently-used event configurations as templates:
 
 ### Backup
 
+- **Automatic backup**: a backup is created automatically each time the
+  application starts. The five most recent automatic backups are kept; older ones
+  are removed automatically.
 - **Create backup**: `Ctrl+B` or **File → Backup Database…** — creates a
-  timestamped copy of your database
+  timestamped copy of your database. Manual backups are not subject to automatic
+  cleanup.
 - **Manage backups**: **File → Manage Backups…** — view, restore, or delete
   backups
 - **Restore**: restoring a backup automatically creates a safety copy of your
-  current database before overwriting
+  current database before overwriting. A restart is required after restoring.
 - **Location**: backups are stored in your system's app data directory
   (`%AppData%\rust-calendar\backups\` on Windows, `~/.local/share/rust-calendar/backups/`
   on Linux)

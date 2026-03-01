@@ -672,7 +672,7 @@ pub fn render_container_window(
                                     ),
                                 );
 
-                                let label = format!("→ {}", cat_name);
+                                let label = format!("> {}", cat_name);
                                 ui.painter().text(
                                     btn_rect.center(),
                                     egui::Align2::CENTER_CENTER,

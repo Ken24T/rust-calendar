@@ -89,12 +89,23 @@ impl CalendarApp {
                 self.show_settings_dialog = true;
                 ui.close_menu();
             }
+            
+            ui.separator();
+            
             if ui.button("🎨 Manage Themes...").clicked() {
                 self.state.theme_dialog_state.open(&self.settings.theme);
                 ui.close_menu();
             }
             if ui.button("📂 Manage Categories...").clicked() {
                 self.state.category_manager_state.open();
+                ui.close_menu();
+            }
+            if ui.button("📦 Manage Containers...").clicked() {
+                self.state.countdown_category_manager_state.open();
+                ui.close_menu();
+            }
+            if ui.button("📋 Manage Templates...").clicked() {
+                self.state.template_manager_state.open(self.context.database());
                 ui.close_menu();
             }
         });
@@ -284,13 +295,6 @@ impl CalendarApp {
                 }
                 
                 ui.separator();
-
-                if ui.button("📂 Manage Categories...").clicked() {
-                    self.state.countdown_category_manager_state.open();
-                    ui.close_menu();
-                }
-
-                ui.separator();
                 
                 // Reset positions option - helpful when cards get lost on disconnected monitors
                 let card_count = self.context.countdown_service().cards().len();
@@ -424,12 +428,12 @@ impl CalendarApp {
             let templates = service.list_all().unwrap_or_default();
 
             if templates.is_empty() {
-                ui.label(egui::RichText::new("No templates").weak().italics());
-                ui.separator();
+                ui.label(egui::RichText::new("No templates yet").weak().italics());
+                ui.label(egui::RichText::new("Use Edit > Manage Templates").weak().small());
             } else {
                 // Show each template as a button
                 for template in &templates {
-                    let label = format!("{} → {}", template.name, template.title);
+                    let label = format!("{} > {}", template.name, template.title);
                     if ui.button(&label).on_hover_text(format!(
                         "Create event from template: {}\nDuration: {}",
                         template.title,
@@ -451,12 +455,6 @@ impl CalendarApp {
                         ui.close_menu();
                     }
                 }
-                ui.separator();
-            }
-
-            if ui.button("Manage Templates...").clicked() {
-                self.state.template_manager_state.open(self.context.database());
-                ui.close_menu();
             }
         });
     }

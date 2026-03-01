@@ -5,6 +5,7 @@ use egui::{Color32, RichText};
 
 use crate::models::settings::Settings;
 use crate::models::template::EventTemplate;
+use crate::services::category::CategoryService;
 use crate::services::database::Database;
 use crate::services::template::TemplateService;
 
@@ -273,7 +274,7 @@ fn render_template_list(
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui| {
                                     ui.label(RichText::new(&template.name).strong());
-                                    ui.label("→");
+                                    ui.label(">");
                                     ui.label(&template.title);
                                 });
                                 
@@ -381,7 +382,64 @@ fn render_edit_form(
 
             // Category
             labeled_row(ui, "Category:", |ui| {
-                ui.text_edit_singleline(&mut editing.category);
+                let cat_service = CategoryService::new(database.connection());
+                let categories = cat_service.list_all().unwrap_or_default();
+
+                let selected_display = if editing.category.is_empty() {
+                    "None".to_string()
+                } else {
+                    categories
+                        .iter()
+                        .find(|c| c.name == editing.category)
+                        .map(|c| c.display_name())
+                        .unwrap_or_else(|| editing.category.clone())
+                };
+
+                let selected_color = categories
+                    .iter()
+                    .find(|c| c.name == editing.category)
+                    .and_then(|c| parse_hex_color(&c.color))
+                    .unwrap_or(Color32::TRANSPARENT);
+
+                ui.horizontal(|ui| {
+                    if !editing.category.is_empty() {
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 3.0, selected_color);
+                    }
+
+                    egui::ComboBox::from_id_source("template_category_dropdown")
+                        .selected_text(&selected_display)
+                        .width(180.0)
+                        .show_ui(ui, |ui| {
+                            let is_none = editing.category.is_empty();
+                            if ui.selectable_label(is_none, "None").clicked() {
+                                editing.category.clear();
+                            }
+
+                            ui.separator();
+
+                            for cat in &categories {
+                                let is_selected = cat.name == editing.category;
+                                ui.horizontal(|ui| {
+                                    let color =
+                                        parse_hex_color(&cat.color).unwrap_or(Color32::GRAY);
+                                    let (rect, _) = ui.allocate_exact_size(
+                                        egui::vec2(12.0, 12.0),
+                                        egui::Sense::hover(),
+                                    );
+                                    ui.painter().rect_filled(rect, 2.0, color);
+
+                                    if ui
+                                        .selectable_label(is_selected, cat.display_name())
+                                        .clicked()
+                                    {
+                                        editing.category = cat.name.clone();
+                                    }
+                                });
+                            }
+                        });
+                });
             });
 
             // Description

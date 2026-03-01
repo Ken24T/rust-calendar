@@ -93,8 +93,35 @@ impl CalendarApp {
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);
+        Self::configure_fonts(&cc.egui_ctx);
         app.focus_on_current_time_if_visible();
         app
+    }
+
+    /// Configure fonts to ensure UI glyphs (arrows, triangles) render correctly.
+    fn configure_fonts(ctx: &egui::Context) {
+        let mut fonts = egui::FontDefinitions::default();
+
+        // Add NotoSansSymbols2 (bundled subset) as a fallback for UI glyphs
+        // that may be missing from the default proportional font on some systems.
+        // This covers ⏵ ⏷ (used by CollapsingHeader / ComboBox) and similar.
+        fonts.font_data.insert(
+            "noto_symbols2".to_owned(),
+            egui::FontData::from_static(include_bytes!(
+                "../../../assets/fonts/NotoSansSymbols2-Regular-Subset.ttf"
+            )),
+        );
+
+        // Append as last-resort fallback for proportional text
+        if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+            family.push("noto_symbols2".to_owned());
+        }
+        // Also for monospace
+        if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+            family.push("noto_symbols2".to_owned());
+        }
+
+        ctx.set_fonts(fonts);
     }
 
     fn parse_view_type(view_str: &str) -> ViewType {

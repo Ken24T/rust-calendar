@@ -28,6 +28,8 @@ pub(super) enum CountdownSettingsCommand {
     ApplyVisualDefaults(CountdownCardId),
     /// Request delete confirmation (goes through confirm dialog)
     RequestDeleteCard(CountdownCardId, String),
+    /// Cancel settings — revert all per-card changes to the snapshot
+    CancelSettings,
     SetStartAt(CountdownCardId, chrono::DateTime<chrono::Local>),
     SetDefaultTitleBgColor(RgbaColor),
     ResetDefaultTitleBgColor,
@@ -310,7 +312,7 @@ pub(super) fn render_countdown_settings_ui(
                                     .commands
                                     .push(CountdownSettingsCommand::ApplyVisualDefaults(card.id));
                             }
-                            if ui.button("Save").clicked() {
+                            if ui.button("Apply").clicked() {
                                 result.close_requested = true;
                             }
                             let delete_clicked = ui
@@ -326,7 +328,9 @@ pub(super) fn render_countdown_settings_ui(
                                 result.close_requested = true;
                             }
                             if ui.button("Cancel").clicked() {
-                                result.close_requested = true;
+                                result
+                                    .commands
+                                    .push(CountdownSettingsCommand::CancelSettings);
                             }
                         });
                     });
