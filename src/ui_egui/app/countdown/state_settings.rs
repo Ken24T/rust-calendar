@@ -64,19 +64,30 @@ impl CountdownUiState {
                 );
 
                 let viewport_info = viewport_info(ctx, viewport_id);
-                let mut should_close = viewport_info
+                let os_close_requested = viewport_info
                     .as_ref()
                     .map(|info| info.close_requested())
                     .unwrap_or(false);
 
+                let mut should_apply = false;
+                let mut should_cancel = os_close_requested; // OS X button = cancel
+
                 for command in result.commands {
-                    if self.apply_settings_command(service, command) {
-                        should_close = true;
+                    match &command {
+                        CountdownSettingsCommand::CancelSettings => {
+                            should_cancel = true;
+                        }
+                        _ => {
+                            if self.apply_settings_command(service, command) {
+                                // Delete returns true — skip cancel logic
+                                should_apply = true;
+                            }
+                        }
                     }
                 }
 
                 if result.close_requested {
-                    should_close = true;
+                    should_apply = true;
                 }
 
                 if let Some(info) = viewport_info.as_ref() {
@@ -89,7 +100,27 @@ impl CountdownUiState {
                     }
                 }
 
-                if should_close {
+                if should_cancel && !should_apply {
+                    // Cancel: restore card from snapshot, discard pending body
+                    // updates for this card's event
+                    if let Some(snapshot) = self.settings_snapshots.remove(&id) {
+                        let event_id = service
+                            .cards()
+                            .iter()
+                            .find(|c| c.id == id)
+                            .and_then(|c| c.event_id);
+                        service.restore_card_settings(id, &snapshot);
+                        // Remove any pending event body updates that were set
+                        // during this preview session
+                        if let Some(eid) = event_id {
+                            self.pending_event_body_updates
+                                .retain(|(id, _)| *id != eid);
+                        }
+                    }
+                    dialogs_to_close.push(id);
+                } else if should_apply {
+                    // Apply: discard snapshot, keep changes
+                    self.settings_snapshots.remove(&id);
                     dialogs_to_close.push(id);
                 }
             } else {
@@ -101,6 +132,7 @@ impl CountdownUiState {
             self.open_settings.remove(&id);
             self.settings_geometry.remove(&id);
             self.settings_needs_layout.remove(&id);
+            self.settings_snapshots.remove(&id);
         }
     }
 
@@ -185,6 +217,7 @@ impl CountdownUiState {
                 self.open_settings.remove(&id);
                 self.settings_geometry.remove(&id);
                 self.settings_needs_layout.remove(&id);
+                self.settings_snapshots.remove(&id);
                 self.render_log_state.remove(&id);
                 self.clear_geometry_wait_state(&id);
                 true
@@ -239,6 +272,10 @@ impl CountdownUiState {
             }
             CountdownSettingsCommand::ResetDefaultTitleFontSize => {
                 service.reset_default_title_font_size();
+                false
+            }
+            CountdownSettingsCommand::CancelSettings => {
+                // Handled in the render loop above, not here
                 false
             }
         }

@@ -89,12 +89,19 @@ impl CalendarApp {
                 self.show_settings_dialog = true;
                 ui.close_menu();
             }
+            
+            ui.separator();
+            
             if ui.button("🎨 Manage Themes...").clicked() {
                 self.state.theme_dialog_state.open(&self.settings.theme);
                 ui.close_menu();
             }
             if ui.button("📂 Manage Categories...").clicked() {
                 self.state.category_manager_state.open();
+                ui.close_menu();
+            }
+            if ui.button("📦 Manage Containers...").clicked() {
+                self.state.countdown_category_manager_state.open();
                 ui.close_menu();
             }
         });
@@ -283,13 +290,6 @@ impl CalendarApp {
                     ui.close_menu();
                 }
                 
-                ui.separator();
-
-                if ui.button("📂 Manage Categories...").clicked() {
-                    self.state.countdown_category_manager_state.open();
-                    ui.close_menu();
-                }
-
                 ui.separator();
                 
                 // Reset positions option - helpful when cards get lost on disconnected monitors

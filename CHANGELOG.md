@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-03-01
+
+### Added
+
+- Apply/Cancel semantics for countdown card settings: changes preview live on
+  the card but must be confirmed with "Apply" to persist. "Cancel" or closing
+  the window reverts to the pre-edit state.
+- `CardSettingsSnapshot` struct captures card visuals, title, comment, and date
+  when the settings dialog opens, enabling clean revert on cancel.
+- Bundled NotoSansSymbols2 fallback font subset (1.6 KB) for UI triangle/arrow
+  glyphs (⏵ ⏷ ▶ ▼ etc.) that were missing on some Linux systems.
+
+### Changed
+
+- Renamed "Save" button to "Apply" in card settings to clarify commit semantics.
+- Container management moved to Edit menu; removed from View > Countdown Cards
+  submenu.
+- Added separator in Edit menu between Settings and theme/category management.
+
+### Fixed
+
+- Container default settings (colours, fonts, dimensions) are now honoured when
+  creating new cards. Previously, `create_card_in_category()` always used global
+  defaults instead of the category's own defaults when `use_global_defaults` was
+  disabled.
+
 ## [2.1.8] - 2026-03-01
 
 ### Added

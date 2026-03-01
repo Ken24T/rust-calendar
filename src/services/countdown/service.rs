@@ -10,6 +10,19 @@ use super::models::{
 };
 use super::palette::apply_event_palette_if_needed;
 
+/// Snapshot of a card's editable state, taken when the settings dialog opens.
+///
+/// Used for apply/cancel semantics: changes preview live on the card, but
+/// are reverted from this snapshot if the user cancels.
+#[derive(Debug, Clone)]
+pub struct CardSettingsSnapshot {
+    pub visuals: CountdownCardVisuals,
+    pub title_override: Option<String>,
+    pub auto_title_override: bool,
+    pub comment: Option<String>,
+    pub start_at: DateTime<Local>,
+}
+
 /// Manages active countdown cards while the calendar app is running.
 pub struct CountdownService {
     pub(super) cards: Vec<CountdownCardState>,
@@ -189,13 +202,20 @@ impl CountdownService {
         const FALLBACK_HEIGHT: f32 = 110.0;
 
         // Use provided dimensions if valid, otherwise use fallbacks
-        let width = if default_width.is_finite() {
-            default_width.clamp(MIN_DIMENSION, MAX_DIMENSION)
+        // If the category has custom dimensions (not inheriting global), prefer those
+        let category_dims = self.categories.iter().find(|c| c.id == category_id)
+            .filter(|c| !c.use_global_defaults)
+            .map(|c| (c.default_card_width, c.default_card_height));
+
+        let (raw_width, raw_height) = category_dims.unwrap_or((default_width, default_height));
+
+        let width = if raw_width.is_finite() {
+            raw_width.clamp(MIN_DIMENSION, MAX_DIMENSION)
         } else {
             FALLBACK_WIDTH
         };
-        let height = if default_height.is_finite() {
-            default_height.clamp(MIN_DIMENSION, MAX_DIMENSION)
+        let height = if raw_height.is_finite() {
+            raw_height.clamp(MIN_DIMENSION, MAX_DIMENSION)
         } else {
             FALLBACK_HEIGHT
         };
@@ -232,7 +252,7 @@ impl CountdownService {
             title_override: None,
             auto_title_override: false,
             geometry,
-            visuals: self.visual_defaults.clone(),
+            visuals: self.effective_visual_defaults_for(category_id),
             last_computed_days: None,
             comment: event_body,
             event_color,
@@ -306,6 +326,37 @@ impl CountdownService {
         if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
             card.title_override = title;
             card.auto_title_override = false;
+            self.dirty = true;
+            return true;
+        }
+        false
+    }
+
+    /// Take a snapshot of a card's editable settings for apply/cancel semantics.
+    pub fn snapshot_card_settings(&self, id: CountdownCardId) -> Option<CardSettingsSnapshot> {
+        self.cards.iter().find(|card| card.id == id).map(|card| {
+            CardSettingsSnapshot {
+                visuals: card.visuals.clone(),
+                title_override: card.title_override.clone(),
+                auto_title_override: card.auto_title_override,
+                comment: card.comment.clone(),
+                start_at: card.start_at,
+            }
+        })
+    }
+
+    /// Restore a card's editable settings from a previous snapshot (cancel).
+    pub fn restore_card_settings(
+        &mut self,
+        id: CountdownCardId,
+        snapshot: &CardSettingsSnapshot,
+    ) -> bool {
+        if let Some(card) = self.cards.iter_mut().find(|c| c.id == id) {
+            card.visuals = snapshot.visuals.clone();
+            card.title_override = snapshot.title_override.clone();
+            card.auto_title_override = snapshot.auto_title_override;
+            card.comment = snapshot.comment.clone();
+            card.start_at = snapshot.start_at;
             self.dirty = true;
             return true;
         }
