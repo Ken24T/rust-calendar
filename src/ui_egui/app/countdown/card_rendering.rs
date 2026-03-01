@@ -24,7 +24,7 @@ pub fn format_card_tooltip(card: &CountdownCardState, now: DateTime<Local>) -> S
         } else {
             end.format("%d %b %Y %H:%M").to_string()
         };
-        lines.push(format!("📅 {} → {}", start_str, end_str));
+        lines.push(format!("📅 {} - {}", start_str, end_str));
     }
 
     // Detailed countdown (DD:HH:MM)
