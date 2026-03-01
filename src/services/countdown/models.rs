@@ -107,25 +107,58 @@ impl CountdownCardGeometry {
         self.x.abs() < 10000.0 && self.y.abs() < 10000.0
     }
     
-    /// Sanitize this geometry to ensure it's visible.
-    /// If position seems invalid, reset to default.
-    pub fn sanitize_for_monitors(&self, _monitors: &[(f32, f32, f32, f32)], default_pos: (f32, f32)) -> Self {
-        // If the geometry is plausible (valid finite values, reasonable range), trust it
-        if self.is_plausible() {
+    /// Sanitize this geometry to ensure it's visible on at least one monitor.
+    /// The `monitors` parameter is a list of (x, y, width, height) tuples for
+    /// each connected monitor.  If the geometry doesn't overlap any monitor by
+    /// at least 200×100 px, it is repositioned to `default_pos`.
+    pub fn sanitize_for_monitors(&self, monitors: &[(f32, f32, f32, f32)], default_pos: (f32, f32)) -> Self {
+        // Basic validity check first (NaN, infinite, tiny)
+        if !self.is_plausible() {
+            log::warn!(
+                "Geometry {:?} is not plausible, resetting to default position {:?}",
+                self, default_pos
+            );
+            return Self {
+                x: default_pos.0.max(0.0),
+                y: default_pos.1.max(0.0),
+                width: self.width.clamp(100.0, 800.0),
+                height: self.height.clamp(100.0, 600.0),
+            };
+        }
+
+        // Check whether the window overlaps any monitor significantly
+        let min_overlap_x: f32 = 200.0;
+        let min_overlap_y: f32 = 100.0;
+
+        let visible = monitors.iter().any(|&(mx, my, mw, mh)| {
+            let overlap_left = mx.max(self.x);
+            let overlap_right = (mx + mw).min(self.x + self.width);
+            let overlap_top = my.max(self.y);
+            let overlap_bottom = (my + mh).min(self.y + self.height);
+
+            let h = overlap_right - overlap_left;
+            let v = overlap_bottom - overlap_top;
+
+            // For small windows, require proportional overlap instead
+            h >= min_overlap_x.min(self.width * 0.5)
+                && v >= min_overlap_y.min(self.height * 0.5)
+        });
+
+        if visible {
             return *self;
         }
-        
-        // Geometry is invalid (NaN, infinite, or absurdly positioned) - reset to default
+
+        // Not visible — move to default_pos (clamped to the first monitor)
         log::warn!(
-            "Geometry {:?} is not plausible, resetting to default position {:?}",
-            self, default_pos
+            "Geometry {:?} is not visible on any of {} monitor(s), \
+             resetting to default position {:?}",
+            self, monitors.len(), default_pos
         );
-        
         Self {
             x: default_pos.0.max(0.0),
             y: default_pos.1.max(0.0),
-            width: self.width.clamp(100.0, 800.0),
-            height: self.height.clamp(100.0, 600.0),
+            width: self.width,
+            height: self.height,
         }
     }
 }

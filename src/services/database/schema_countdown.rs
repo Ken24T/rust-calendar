@@ -262,11 +262,13 @@ pub(super) fn run_countdown_migrations(conn: &Connection) -> Result<()> {
     migrate_use_default_flags(conn)?;
 
     // Add category_id column to countdown_cards (defaults to 1 = "General")
+    // Note: SQLite forbids REFERENCES in ALTER TABLE ADD COLUMN with a non-NULL default,
+    // so we omit the FK constraint here; referential integrity is enforced by application logic.
     migrations::ensure_column(
         conn,
         "countdown_cards",
         "category_id",
-        "ALTER TABLE countdown_cards ADD COLUMN category_id INTEGER NOT NULL DEFAULT 1 REFERENCES countdown_categories(id)",
+        "ALTER TABLE countdown_cards ADD COLUMN category_id INTEGER NOT NULL DEFAULT 1",
     )?;
 
     // Add is_collapsed column to countdown_categories
