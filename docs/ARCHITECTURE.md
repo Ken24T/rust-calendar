@@ -77,7 +77,7 @@ Business logic that operates on models and the database. Each service borrows a
 - `theme/` — TOML-based theme loading from `assets/themes/`
 - `backup/` — database backup and restore
 - `countdown/` — countdown timer state, persistence, layout, visuals,
-  notifications, sync
+  notifications, sync, category management
 - `calendar_sync/` — external ICS feed sync engine, fetcher, mapping, scheduler
 - `icalendar/` — iCalendar import/export (`.ics` files)
 - `pdf/` — PDF calendar export
@@ -112,8 +112,8 @@ The presentation layer. Everything here is egui-specific.
   - `palette.rs` — event colour scheme
 - `event_dialog/` — event create/edit dialog (state, rendering, recurrence,
   widgets)
-- `dialogs/` — modal dialogs (backup, categories, export, search, templates,
-  themes)
+- `dialogs/` — modal dialogs (backup, categories, countdown categories, export,
+  search, templates, themes)
 - `commands/` — `UndoManager` (undo/redo support)
 - `drag.rs` — drag-and-drop handling
 - `resize.rs` — event resize interaction
@@ -172,7 +172,9 @@ forward as needed.
 - `calendar_sources` — external calendar feed URLs
 - `event_sync_map` — external-to-local event ID mapping for sync
 - `countdown_cards` — countdown timer cards (linked to events or standalone)
-- `countdown_settings` — countdown container-level settings
+- `countdown_settings` — countdown global settings (visual defaults, display mode)
+- `countdown_categories` — countdown card categories with per-container visual
+  defaults, display order, collapse/sort state, and default card dimensions
 
 ### Access Pattern
 
