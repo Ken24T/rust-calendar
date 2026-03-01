@@ -90,11 +90,29 @@ impl CalendarApp {
                     sync_startup_delay,
                 ),
             )),
+            tray_icon: None,
+            tray_show_menu_id: None,
+            tray_exit_menu_id: None,
+            hidden_to_tray: false,
+            exit_requested: false,
         };
 
         app.apply_theme_from_db(&cc.egui_ctx);
         Self::configure_fonts(&cc.egui_ctx);
         app.focus_on_current_time_if_visible();
+
+        // Create system tray icon if the setting is enabled
+        if app.settings.minimize_to_tray {
+            if let Some((tray, show_id, exit_id)) = Self::create_tray_icon() {
+                app.tray_icon = Some(tray);
+                app.tray_show_menu_id = Some(show_id);
+                app.tray_exit_menu_id = Some(exit_id);
+            } else {
+                log::warn!("System tray unavailable; minimize_to_tray disabled");
+                app.settings.minimize_to_tray = false;
+            }
+        }
+
         app
     }
 
@@ -169,6 +187,10 @@ impl CalendarApp {
     }
 
     pub(super) fn handle_update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // System tray: poll events and intercept close-to-tray
+        self.poll_tray_events(ctx);
+        self.handle_close_to_tray(ctx);
+
         self.handle_file_drops(ctx);
 
         // Handle keyboard shortcuts

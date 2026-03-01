@@ -27,6 +27,7 @@ pub struct Settings {
     pub edit_before_import: bool,
     pub sidebar_width: f32,
     pub sync_startup_delay_minutes: i64,
+    pub minimize_to_tray: bool,
 }
 
 impl Default for Settings {
@@ -54,6 +55,7 @@ impl Default for Settings {
             edit_before_import: false,
             sidebar_width: 180.0,
             sync_startup_delay_minutes: 15,
+            minimize_to_tray: false,
         }
     }
 }

@@ -26,5 +26,6 @@ pub fn row_to_settings(row: &Row) -> Result<Settings, rusqlite::Error> {
         edit_before_import: row.get::<_, i32>(19).unwrap_or(0) != 0,
         sidebar_width: row.get::<_, f32>(20).unwrap_or(180.0),
         sync_startup_delay_minutes: row.get::<_, i64>(21).unwrap_or(15),
+        minimize_to_tray: row.get::<_, i32>(22).unwrap_or(0) != 0,
     })
 }

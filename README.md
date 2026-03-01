@@ -86,7 +86,8 @@ with local-first data storage and no cloud dependencies.
 
    ```bash
    sudo apt install build-essential libgtk-3-dev libxcb-render0-dev \
-     libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+     libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev \
+     libayatana-appindicator3-dev libxdo-dev
    ```
 
    **Windows**: Visual Studio Build Tools with C++ development tools

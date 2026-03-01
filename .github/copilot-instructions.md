@@ -66,7 +66,7 @@ cargo tarpaulin --out Html
 
 - **Rust toolchain**: Stable (managed via `rust-toolchain.toml`), components: rustfmt, clippy, rust-analyzer
 - **Minimum Rust version**: 1.75+
-- **Linux build dependencies**: `build-essential libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev`
+- **Linux build dependencies**: `build-essential libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libayatana-appindicator3-dev libxdo-dev`
 - **Windows build dependencies**: Visual Studio Build Tools with C++ development tools
 - **No hard-coded paths**: Use `directories::ProjectDirs` for data/config paths; never hard-code `/home/user` or `C:\Users\`
 

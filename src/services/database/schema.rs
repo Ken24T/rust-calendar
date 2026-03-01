@@ -142,6 +142,13 @@ fn run_settings_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE settings ADD COLUMN sync_startup_delay_minutes INTEGER NOT NULL DEFAULT 15",
     )?;
 
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "minimize_to_tray",
+        "ALTER TABLE settings ADD COLUMN minimize_to_tray INTEGER NOT NULL DEFAULT 0",
+    )?;
+
     let had_time_slot = migrations::column_exists(conn, "settings", "time_slot_interval")?;
     let has_default_duration =
         migrations::column_exists(conn, "settings", "default_event_duration")?;

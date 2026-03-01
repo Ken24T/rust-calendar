@@ -362,6 +362,15 @@ pub fn render_settings_dialog(
                     show_ribbon_changed = true;
                 }
 
+                ui.horizontal(|ui| {
+                    ui.add_space(label_width);
+                    ui.checkbox(&mut settings.minimize_to_tray, "Minimise to system tray on close")
+                        .on_hover_text(
+                            "When enabled, closing the main window hides it to the system tray \
+                             instead of exiting. Countdown cards remain visible and responsive.",
+                        );
+                });
+
                 ui.add_space(16.0);
                 ui.separator();
                 ui.add_space(8.0);
