@@ -132,19 +132,25 @@ Each container has:
 - A **collapsible header** (▶/▼ toggle) with a card count badge
 - A **sort mode** switch — 📅 Date (by event start) or ✋ Manual
 - A **➕ quick-add** button to create a new card directly in that container
-- **Per-container card defaults** (colours, fonts, card dimensions) — expand
-  the "Card Defaults" section when editing a category
+- A **template** selection and **layout orientation** — configured in the
+  "Card Defaults" section when editing a category
 
 Cards can be **dragged between containers** to re-categorise them.
 
-### Three-Tier Visual Inheritance
+### Card Templates
 
-Card visuals follow a three-tier model:
+Reusable card templates define colours, fonts, and default card dimensions.
+Open **Edit → Manage Card Templates…** to create, edit, or delete templates.
+
+### Visual Inheritance
+
+Card visuals follow a four-tier model:
 
 1. **Global defaults** — base settings for all cards
-2. **Category defaults** — override globals (disable "Inherit global defaults"
-   in the Category Manager to customise)
-3. **Per-card overrides** — configured in the individual card's settings panel
+2. **Template** — reusable set of colours, fonts, and default dimensions;
+   selected per-category via the Category Manager
+3. **Category overrides** — card dimensions can be overridden per-container
+4. **Per-card overrides** — configured in the individual card's settings panel
 
 ## Drag and Drop
 
@@ -257,8 +263,8 @@ Open Settings with `Ctrl+S` or **Edit → Settings**.
 - **Auto-create countdown cards on ICS import**
 - **Open event dialog when importing/dragging ICS files**
 
-Per-container defaults (colours, fonts, dimensions) are configured via
-**Edit → Manage Countdown Categories…** rather than in Settings.
+Card visual templates are managed via **Edit → Manage Card Templates…** and
+assigned per-category in **Edit → Manage Countdown Categories…**.
 
 ### Calendar Sync
 

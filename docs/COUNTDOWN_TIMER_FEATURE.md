@@ -21,8 +21,9 @@ The Desktop Countdown Timer feature allows users to "tear" events from the calen
 **Category Containers** (v2.1.0+):
 
 - Organise countdown cards into named categories (containers)
-- Three-tier visual inheritance: Global → Category → Card
-- Per-container card defaults (colours, fonts, dimensions)
+- Four-tier visual inheritance: Global → Template → Category → Card
+- Reusable card templates (colours, fonts, default dimensions)
+- Per-category layout orientation (Auto, Portrait, Landscape)
 - Collapse/expand containers, sort by date or manual order
 - Quick-add cards via container header button
 - Drag cards between containers to re-categorise
@@ -594,28 +595,46 @@ Each container header shows:
 - **Sort mode button**: 📅 (Date — sorted by event start) or ✋ (Manual)
 - **➕ Quick-add button** for creating a new card directly in that container
 
-### Container Card Defaults
+### Card Templates
 
-Each category can define default visual settings for its cards via the
-"Card Defaults" section in the Category Manager:
+Card visuals are defined by reusable **templates** managed via
+**Edit → Manage Card Templates…**. Each template specifies:
 
-- **Inherit global defaults** toggle — when enabled, the category uses global
-  visual defaults rather than its own
-- **Card dimensions** — default width and height for new cards (60–400 px)
 - **Colours** — title background, title text, body background, and days text
 - **Font sizes** — title font size (10–48 pt) and days number size (32–220 pt)
+- **Default card dimensions** — width and height for new cards (60–400 px)
 
-### Three-Tier Visual Inheritance
+A seeded "Default" template ships out of the box and cannot be deleted.
 
-Card visuals follow a three-tier inheritance model:
+### Container Card Defaults
+
+Each category selects how its cards are styled via the "Card Defaults" section
+in the Category Manager:
+
+- **Template dropdown** — choose a template or "Global defaults" (inherits the
+  global visual defaults directly)
+- **Layout orientation** — Auto (detect from container shape), Portrait
+  (vertical), or Landscape (horizontal)
+- **Card dimensions** — override the template's default width and height
+  (60–400 px); these are a container-level concern
+
+A read-only **template preview** shows the resolved colours, fonts, and
+dimensions from the selected template.
+
+### Four-Tier Visual Inheritance
+
+Card visuals follow a four-tier inheritance model:
 
 1. **Global defaults** — base defaults applied to all cards
-2. **Category defaults** — override globals when `use_global_defaults` is false
-3. **Per-card overrides** — individual card settings override category/global
+2. **Template** — defines a reusable set of colours, fonts, and default
+   dimensions; selected per-category
+3. **Category** — overrides card dimensions; legacy inline visuals still
+   supported for migration
+4. **Per-card overrides** — individual card settings override all upper tiers
 
 When a card has `use_default_title_bg = true`, for example, it resolves the
-title background colour from its category's defaults (or global defaults if the
-category inherits globals).
+title background colour from its category's template (or global defaults if the
+category has no template assigned).
 
 ### Cross-Container Drag-and-Drop
 
@@ -636,17 +655,23 @@ When creating a countdown card, the target container can be selected:
 ### Database Schema
 
 Categories are stored in the `countdown_categories` table with columns for
-name, display order, container geometry, visual defaults (title/body/days
-colours and font sizes), default card dimensions, `use_global_defaults` flag,
-`is_collapsed`, and `sort_mode`.
+name, display order, container geometry, `template_id` (foreign key to
+`countdown_card_templates`), `orientation`, default card dimensions,
+`is_collapsed`, and `sort_mode`. Legacy visual-default columns are retained for
+migration.
+
+Templates are stored in the `countdown_card_templates` table with columns for
+name, title/body/days colours, font sizes, and default card dimensions. A seeded
+"Default" template (id=1) is created on first run. Existing categories with
+custom visuals are auto-migrated to templates.
 
 ## Future Enhancements
 
 **Potential Features**:
 
-- [ ] Custom countdown timer appearance themes
+- [x] Custom countdown timer appearance themes — shipped v2.4.0 (card templates)
 - [x] Countdown timer groups (category containers) — shipped v2.1.0–v2.1.8
-- [ ] Countdown timer templates
+- [x] Countdown timer templates — shipped v2.4.0
 - [ ] Export countdown as image
 - [ ] Share countdown timer link (if cloud sync added)
 - [ ] Countdown timer widgets for multiple monitors

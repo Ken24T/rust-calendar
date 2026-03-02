@@ -112,8 +112,8 @@ The presentation layer. Everything here is egui-specific.
   - `palette.rs` — event colour scheme
 - `event_dialog/` — event create/edit dialog (state, rendering, recurrence,
   widgets)
-- `dialogs/` — modal dialogs (backup, categories, countdown categories, export,
-  search, templates, themes)
+- `dialogs/` — modal dialogs (backup, categories, countdown categories,
+  countdown card templates, export, search, event templates, themes)
 - `commands/` — `UndoManager` (undo/redo support)
 - `drag.rs` — drag-and-drop handling
 - `resize.rs` — event resize interaction
@@ -173,8 +173,10 @@ forward as needed.
 - `event_sync_map` — external-to-local event ID mapping for sync
 - `countdown_cards` — countdown timer cards (linked to events or standalone)
 - `countdown_settings` — countdown global settings (visual defaults, display mode)
-- `countdown_categories` — countdown card categories with per-container visual
-  defaults, display order, collapse/sort state, and default card dimensions
+- `countdown_card_templates` — reusable card visual templates (colours, fonts,
+  default dimensions); seeded "Default" template on first run
+- `countdown_categories` — countdown card categories with template reference,
+  layout orientation, display order, collapse/sort state, and card dimensions
 
 ### Access Pattern
 

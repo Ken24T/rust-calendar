@@ -69,6 +69,15 @@ A summary of the features available in Rust Calendar.
 - Custom theme creator with live preview
 - System theme auto-detection (follow OS light/dark preference)
 
+## Card Templates
+
+- Reusable visual templates for countdown cards (colours, fonts, default dimensions)
+- Manage via Edit → Manage Card Templates…
+- Assign templates per-category in the Category Manager
+- Per-category layout orientation: Auto, Portrait, or Landscape
+- Four-tier visual inheritance: Global → Template → Category → Card
+- Built-in "Default" template seeded on first run
+
 ## Settings
 
 - First day of week and work week boundaries

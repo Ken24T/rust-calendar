@@ -938,16 +938,23 @@ collapsible container with its own header bar.
 **Category Management** (Edit → Manage Countdown Categories…):
 - Create, rename, reorder, and delete categories
 - Configure per-container card defaults:
-  - Inherit global defaults toggle
+  - Template dropdown — select a card template or "Global defaults"
+  - Layout orientation — Auto, Portrait, or Landscape
   - Default card width/height (60–400 px)
-  - Colours: title background, title text, body background, days text
-  - Font sizes: title (10–48 pt) and days number (32–220 pt)
+  - Read-only template preview (colours, fonts, dimensions)
 - The default "General" category cannot be deleted or renamed
 
-**Three-Tier Visual Inheritance**:
+**Card Template Management** (Edit → Manage Card Templates…):
+- Create, edit, and delete reusable card visual templates
+- Each template defines: colours (title BG/FG, body BG, days FG), font sizes
+  (title 10–48 pt, days 32–220 pt), and default card dimensions
+- The built-in "Default" template cannot be deleted
+
+**Four-Tier Visual Inheritance**:
 1. Global defaults — base settings
-2. Category defaults — override globals when "Inherit global defaults" is off
-3. Per-card overrides — individual card settings
+2. Template — reusable colours, fonts, dimensions (selected per-category)
+3. Category — overrides card dimensions; legacy inline visuals for migration
+4. Per-card overrides — individual card settings
 
 **Cross-Container Drag-and-Drop**:
 - Drag a card from one container and drop it onto another container's header
@@ -956,8 +963,8 @@ collapsible container with its own header bar.
 ### Visual Design
 
 Cards use a two-panel layout: a coloured title bar (event title) and a body area
-(countdown number). All colours and font sizes are configurable via three-tier
-inheritance (Global → Category → Card).
+(countdown number). All colours and font sizes are configurable via four-tier
+inheritance (Global → Template → Category → Card).
 
 **Warning states** provide visual feedback as an event approaches:
 - Normal — steady display with standard colours
