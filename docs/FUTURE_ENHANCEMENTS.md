@@ -11,21 +11,28 @@ This document outlines planned enhancements for future development.
 **Status:** Planned
 
 ### Current Behavior
+
+
 - Past timed events are dimmed to 50% opacity in Day, Week, and Month views
 - All-day events are NOT dimmed, even when they're in the past
 
 ### Desired Behavior
+
+
 - All-day events that have ended should also be dimmed to 50% opacity
 - Consistent visual treatment for all past events
 
 ### Implementation Notes
 
 #### Files to Modify
+
+
 - `src/ui_egui/views/week_shared.rs` - Ribbon/all-day event rendering
 - `src/ui_egui/views/day_view.rs` - All-day event section
 - `src/ui_egui/views/month_view.rs` - Already handles timed events, check all-day
 
 #### Logic
+
 ```rust
 // For all-day events, check if end date is before today
 let today = Local::now().date_naive();
@@ -36,6 +43,8 @@ let is_past = event.end.date_naive() < today;
 ```
 
 #### Considerations
+
+
 - Multi-day events: Only dim after the last day has passed
 - Current day all-day events: Should NOT be dimmed
 - Consistent with timed event dimming (50% opacity via `linear_multiply(0.5)`)
@@ -54,6 +63,8 @@ and card templates have all been shipped. See
 implementation.
 
 ### Remaining Future Extensions
+
+
 - Export/share containers
 - Priority-based sort mode
 
@@ -66,10 +77,14 @@ implementation.
 **Status:** Planned
 
 ### Current Behavior
+
+
 - Countdown card tooltips/flyovers show basic event info
 - Date range of the event is not displayed
 
 ### Desired Behavior
+
+
 - Tooltip should include the event's start and end date/time
 - Format examples:
   - Single day timed: "Nov 27, 2025 • 2:00 PM - 4:00 PM"
@@ -80,9 +95,12 @@ implementation.
 ### Implementation Notes
 
 #### Files to Modify
+
+
 - `src/ui_egui/app/countdown/mod.rs` - Card rendering with tooltip
 
 #### Display Logic
+
 ```rust
 fn format_date_range(start: DateTime<Local>, end: DateTime<Local>, all_day: bool) -> String {
     let start_date = start.date_naive();
@@ -116,7 +134,8 @@ fn format_date_range(start: DateTime<Local>, end: DateTime<Local>, all_day: bool
 ```
 
 #### Tooltip Content
-```
+
+```text
 ┌─────────────────────────────────┐
 │ 🎄 Christmas Cruise             │
 │ Dec 18 - Dec 25, 2025           │  <- NEW: Date range
@@ -129,15 +148,9 @@ fn format_date_range(start: DateTime<Local>, end: DateTime<Local>, all_day: bool
 
 ## Implementation Order
 
-1. **Dim Past All-Day Events** - Quick win, 1-2 hours
-2. **Countdown Card Tooltip Date Range** - Quick win, 30 mins
-3. **Countdown Card Container** - Larger feature, 4-8 hours
-   - Phase 1: Database schema & migrations
-   - Phase 2: Container service layer
-   - Phase 3: Container UI component
-   - Phase 4: Drag & drop reordering
-   - Phase 5: Multiple containers (optional)
+1. **Dim Past All-Day Events** — Quick win, 1–2 hours
+2. **Countdown Card Tooltip Date Range** — Quick win, 30 mins
 
 ---
 
-*Last Updated: November 25, 2025*
+<!-- Last Updated: March 2, 2026 -->

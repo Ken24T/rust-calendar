@@ -12,7 +12,7 @@ The application window consists of three primary areas:
 2. **Calendar View** (Center) - The main calendar display area
 3. **My Day Panel** (Left or Right) - Shows selected day's events in chronological order
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  [Multi-Day Event Ribbon - Configurable height]                         │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
@@ -43,7 +43,7 @@ The application window consists of three primary areas:
 ### View Types
 
 | View | Purpose | Best For | Keyboard Shortcut |
-|------|---------|----------|-------------------|
+| ------ | --------- | ---------- | ------------------- |
 | **Day** | Single day with hourly time slots | Detailed daily planning | `Ctrl+1` |
 | **Work Week** | Monday-Friday overview | Work schedule focus | `Ctrl+2` |
 | **Full Week** | Complete 7-day week | Weekly planning | `Ctrl+3` |
@@ -55,7 +55,8 @@ The application window consists of three primary areas:
 ### View-Specific Features
 
 #### Day View
-```
+
+```text
 ┌─────────────────────────────────┐
 │ [All-Day Events Banner]         │
 ├─────────────────────────────────┤
@@ -73,6 +74,7 @@ The application window consists of three primary areas:
 ```
 
 **Features**:
+
 - Configurable time range (e.g., 6 AM - 11 PM)
 - **Adjustable time granularity**: 15/30/60 minute intervals (default: 60 min)
 - Current time indicator (red line)
@@ -83,6 +85,7 @@ The application window consists of three primary areas:
 - **Drag events to desktop to create countdown timer**
 
 **Customization**:
+
 - Time slot height (compact/normal/comfortable)
 - Time interval granularity (15/30/60 minutes)
 - Default event duration (configurable, default 45 min)
@@ -91,7 +94,8 @@ The application window consists of three primary areas:
 - Show/hide all-day event banner
 
 #### Work Week View
-```
+
+```text
 ┌──────────┬──────────┬──────────┬──────────┬──────────┐
 │  Monday  │ Tuesday  │Wednesday │ Thursday │  Friday  │
 ├──────────┼──────────┼──────────┼──────────┼──────────┤
@@ -106,26 +110,31 @@ The application window consists of three primary areas:
 ```
 
 **Features**:
+
 - Focus on business week (M-F)
 - Weekend events optionally shown in sidebar
 - Column-per-day layout
 - Time slots synchronized across columns
 
 **Customization**:
+
 - Define which days are "work week" (configurable beyond M-F)
 - Individual column widths
 - Show/hide weekends in side panel
 
 #### Full Week View
+
 Similar to Work Week but includes Saturday and Sunday columns.
 
 **Customization**:
+
 - Week start day (Sunday or Monday)
 - Weekend highlighting
 - 7 independently resizable columns
 
 #### Month View
-```
+
+```text
 ┌────────────────────────────────────────────────┐
 │              January 2025                      │
 ├───────┬───────┬───────┬───────┬───────┬───────┤
@@ -142,6 +151,7 @@ Similar to Work Week but includes Saturday and Sunday columns.
 ```
 
 **Features**:
+
 - Traditional calendar grid (6 weeks × 7 days)
 - Previous/next month days shown in muted color
 - Event indicators (dots, lines, or counts)
@@ -150,13 +160,15 @@ Similar to Work Week but includes Saturday and Sunday columns.
 - Today highlighted
 
 **Customization**:
+
 - Cell height (more space = more visible events)
 - Show/hide week numbers
 - Show/hide adjacent month dates
 - Event display style (dots, bars, numbers)
 
 #### Quarter View
-```
+
+```text
 ┌─────────────┬─────────────┬─────────────┐
 │   January   │  February   │    March    │
 │  S M T W T  │  S M T W T  │  S M T W T  │
@@ -166,17 +178,20 @@ Similar to Work Week but includes Saturday and Sunday columns.
 ```
 
 **Features**:
+
 - Three months side-by-side
 - Q1, Q2, Q3, Q4 navigation
 - Event density visualization
 - Quick quarter overview
 
 **Customization**:
+
 - Compact or expanded month size
 - Event indicator style
 
 #### Year View
-```
+
+```text
 ┌──────┬──────┬──────┬──────┐
 │ Jan  │ Feb  │ Mar  │ Apr  │
 ├──────┼──────┼──────┼──────┤
@@ -187,17 +202,20 @@ Similar to Work Week but includes Saturday and Sunday columns.
 ```
 
 **Features**:
+
 - All 12 months visible
 - Click month to zoom to month view
 - Event density heat map
 - Annual planning overview
 
 **Customization**:
+
 - Grid layout (3×4, 4×3, 2×6)
 - Color intensity for event density
 
 #### Agenda View
-```
+
+```text
 ┌─────────────────────────────────────┐
 │ Monday, January 6, 2025             │
 ├─────────────────────────────────────┤
@@ -216,6 +234,7 @@ Similar to Work Week but includes Saturday and Sunday columns.
 ```
 
 **Features**:
+
 - Linear chronological list
 - Date headers separate days
 - Event details inline
@@ -223,6 +242,7 @@ Similar to Work Week but includes Saturday and Sunday columns.
 - Scroll through time
 
 **Customization**:
+
 - Days to show ahead (7, 14, 30, 90, 365)
 - Include past events
 - Grouping (by day, week, month)
@@ -233,6 +253,7 @@ Similar to Work Week but includes Saturday and Sunday columns.
 ### Font Settings
 
 **Global Font Configuration**:
+
 ```rust
 pub struct FontConfig {
     pub family: String,        // "Segoe UI", "Arial", "Calibri", etc.
@@ -243,6 +264,7 @@ pub struct FontConfig {
 ```
 
 **Per-Element Font Settings**:
+
 - Event titles
 - Event details
 - Time labels
@@ -250,7 +272,8 @@ pub struct FontConfig {
 - Navigation text
 
 **Font Picker UI**:
-```
+
+```text
 ┌──────────────────────────────────────┐
 │ Font Family:  [Segoe UI        ▼]   │
 │ Size:         [14          ▼]       │
@@ -270,6 +293,7 @@ pub struct FontConfig {
 ### Column Width Adjustment
 
 **How to Resize**:
+
 1. Hover over column divider
 2. Cursor changes to resize indicator (↔)
 3. Click and drag left/right
@@ -277,16 +301,19 @@ pub struct FontConfig {
 5. Double-click divider to auto-fit
 
 **Constraints**:
+
 - Minimum width: 50 pixels
 - Maximum width: 500 pixels
 - Auto-fit calculates based on content
 
 **Persistence**:
+
 - Widths saved per view type
 - Restored on view switch
 - Saved to database on change
 
 **Reset Options**:
+
 - "Reset This View" - Reset current view's columns
 - "Reset All Views" - Reset all views to defaults
 - "Auto-fit All" - Auto-fit all columns based on content
@@ -294,6 +321,7 @@ pub struct FontConfig {
 ### Row Height Adjustment
 
 **Settings**:
+
 - **Time Slot Height** (Day/Week views):
   - Compact: 30px per slot
   - Normal: 45px per slot (default)
@@ -309,6 +337,7 @@ pub struct FontConfig {
 ### View Preferences
 
 **Saved Per View**:
+
 ```rust
 pub struct ViewPreferences {
     pub view_type: ViewType,
@@ -324,6 +353,7 @@ pub struct ViewPreferences {
 ```
 
 **Global Preferences**:
+
 ```rust
 pub struct GlobalPreferences {
     pub week_start_day: Weekday,  // Sunday or Monday
@@ -338,12 +368,14 @@ pub struct GlobalPreferences {
 ### Time Granularity Settings
 
 **Time Interval Options**:
+
 - **15 minutes**: Fine-grained scheduling, more rows
 - **30 minutes**: Balanced detail and overview
 - **60 minutes**: Default, clean hourly view
 
 **Configuration UI**:
-```
+
+```text
 ┌──────────────────────────────────────┐
 │ Time Display Settings                │
 ├──────────────────────────────────────┤
@@ -370,6 +402,7 @@ pub struct GlobalPreferences {
 ```
 
 **Impact on Views**:
+
 - **Day/Week Views**: Changes row density
 - **New Event Creation**: Uses default duration
 - **Drag Operations**: Snaps to interval grid
@@ -383,6 +416,7 @@ The My Day panel provides a focused view of the currently selected day's events 
 ### Features
 
 **Display**:
+
 - Chronological list of events from selected date
 - Shows start time, duration, and event title
 - All-day events displayed at top
@@ -391,11 +425,13 @@ The My Day panel provides a focused view of the currently selected day's events 
 - Color-coded event indicators matching calendar
 
 **Positioning**:
+
 - **Left side** (default)
 - **Right side**
 - **Hidden** (more screen space for calendar)
 
 **Width**:
+
 - Adjustable via drag handle on panel edge
 - Default: 250px
 - Minimum: 180px
@@ -404,7 +440,7 @@ The My Day panel provides a focused view of the currently selected day's events 
 
 ### Visual Layout
 
-```
+```text
 ┌─────────────────────────┐
 │ Thu, May 15, 2025       │
 ├─────────────────────────┤
@@ -435,18 +471,21 @@ The My Day panel provides a focused view of the currently selected day's events 
 ### Interactions
 
 **Event Items**:
+
 - **Click**: Select event (highlights in calendar)
 - **Double-click**: Open event editor
 - **Right-click**: Context menu (Edit / Delete / Duplicate / Create Countdown)
 - **Drag**: Drag to calendar or desktop to create countdown timer
 
 **Panel Controls**:
+
 - **Date Header**: Click to open date picker
 - **Resize Handle**: Drag to adjust panel width
 - **Toggle Button**: Show/hide panel (in toolbar)
 - **Position Button**: Switch left/right positioning
 
 **Selection Sync**:
+
 - Selecting a different date in calendar updates My Day panel
 - Clicking an event in My Day panel highlights it in the calendar view
 - Bidirectional synchronization
@@ -454,7 +493,8 @@ The My Day panel provides a focused view of the currently selected day's events 
 ### Configuration
 
 **My Day Settings** (in Preferences):
-```
+
+```text
 ┌──────────────────────────────────┐
 │ My Day Panel Settings            │
 ├──────────────────────────────────┤
@@ -485,7 +525,8 @@ The My Day panel provides a focused view of the currently selected day's events 
 ### Empty State
 
 When the selected day has no events:
-```
+
+```text
 ┌─────────────────────────┐
 │ Thu, May 15, 2025       │
 ├─────────────────────────┤
@@ -514,6 +555,7 @@ The Multi-Day Event Ribbon is a horizontal strip at the top of the calendar that
 ### Display Criteria
 
 Events shown in ribbon if they meet **any** of these conditions:
+
 - Span 2+ days (48+ hours)
 - Marked as "all-day" and span multiple days
 - Span across weekend boundaries
@@ -521,7 +563,7 @@ Events shown in ribbon if they meet **any** of these conditions:
 
 ### Visual Layout
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────────┐
 │  [Multi-Day Event Ribbon]                                              │
 │  ┌─────────────────────────┬──────────────────┬────────────────────┐  │
@@ -540,6 +582,7 @@ Events shown in ribbon if they meet **any** of these conditions:
 ### Features
 
 **Display Elements**:
+
 - Event title
 - Date range (start - end)
 - Duration indicator (visual bar)
@@ -547,11 +590,13 @@ Events shown in ribbon if they meet **any** of these conditions:
 - Icon for event type (vacation, conference, etc.)
 
 **Visual Indicators**:
+
 - Progress bar showing how much of event has elapsed
 - Current day marker if event is ongoing
 - Countdown to start if event is upcoming
 
 **Ribbon Modes**:
+
 1. **Compact** (default): Single row, horizontal scroll if needed
 2. **Expanded**: Multiple rows, all events visible
 3. **Auto**: Expands when >3 events, compact otherwise
@@ -559,12 +604,14 @@ Events shown in ribbon if they meet **any** of these conditions:
 ### Interactions
 
 **Event Cards**:
+
 - **Click**: Navigate calendar to event start date
 - **Double-click**: Open event editor
 - **Hover**: Show tooltip with full details (description, location, attendees)
 - **Right-click**: Context menu (Edit / Delete / Unpin from Ribbon / Create Countdown)
 
 **Ribbon Controls**:
+
 - **Expand/Collapse Button**: Toggle between compact/expanded modes
 - **Scroll Arrows**: Navigate when events exceed visible width
 - **Settings Icon**: Configure ribbon preferences
@@ -573,7 +620,8 @@ Events shown in ribbon if they meet **any** of these conditions:
 ### Configuration
 
 **Ribbon Settings** (in Preferences):
-```
+
+```text
 ┌──────────────────────────────────────────────────┐
 │ Multi-Day Event Ribbon Settings                  │
 ├──────────────────────────────────────────────────┤
@@ -615,14 +663,16 @@ Events shown in ribbon if they meet **any** of these conditions:
 ### Examples
 
 **Compact Mode**:
-```
+
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │ ◀ │ Vacation (May 15-22) │ Conf (May 20-21) │ ... │ ▶ │ ⚙  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 **Expanded Mode**:
-```
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Row 1: │ Vacation ████████████████████ May 15-22 (8 days)     │
 │ Row 2: │ Conference ████ May 20-21 (2 days)                    │
@@ -632,14 +682,16 @@ Events shown in ribbon if they meet **any** of these conditions:
 ```
 
 **Auto Mode** (3 events, stays compact):
-```
+
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │ Vacation (May 15-22) │ Conference │ Project Alpha           │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 **Auto Mode** (5+ events, expands automatically):
-```
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ Row 1: │ Vacation │ Conference │ Project Alpha                 │
 │ Row 2: │ Training │ Deployment Window                          │
@@ -651,6 +703,7 @@ Events shown in ribbon if they meet **any** of these conditions:
 ### .ics File Import
 
 **User Flow**:
+
 1. Drag .ics file(s) from File Explorer
 2. Hover over calendar application
 3. Drop zone highlights
@@ -661,7 +714,8 @@ Events shown in ribbon if they meet **any** of these conditions:
 8. Events added to calendar
 
 **Import Preview Dialog**:
-```
+
+```text
 ┌─────────────────────────────────────────────┐
 │ Import Events                               │
 ├─────────────────────────────────────────────┤
@@ -680,6 +734,7 @@ Events shown in ribbon if they meet **any** of these conditions:
 ```
 
 **Features**:
+
 - Multiple file drop support
 - Duplicate detection
 - Conflict highlighting
@@ -717,6 +772,7 @@ Events shown in ribbon if they meet **any** of these conditions:
    - New always-on-top countdown window appears
 
 **Visual Feedback**:
+
 - Ghost/preview of event during drag (semi-transparent)
 - Target slot highlights in green (valid) or red (invalid)
 - Desktop drop zone indicator when dragging outside window
@@ -724,6 +780,7 @@ Events shown in ribbon if they meet **any** of these conditions:
 - Tooltip shows new date/time during drag
 
 **Constraints**:
+
 - Cannot drag events into the past
 - Cannot create conflicts (prompt if conflict detected)
 - Respect minimum event duration (15 minutes)
@@ -733,6 +790,7 @@ Events shown in ribbon if they meet **any** of these conditions:
 ## Desktop Countdown Timer System
 
 ### Overview
+
 Create persistent countdown timer widgets by dragging events from the calendar
 to your desktop, via context menu, or via the event dialog. Each countdown
 timer is a separate window that shows time remaining until the event starts.
@@ -741,20 +799,23 @@ category containers.
 
 ### Creating a Countdown Timer
 
-**Method 1: Drag to Desktop**
+#### Method 1: Drag to Desktop
+
 1. Click and hold any future event in the calendar
 2. Drag event outside the calendar window
 3. Move cursor to desired position on desktop
 4. Release mouse button
 5. Countdown timer window appears at cursor position
 
-**Method 2: Context Menu**
+#### Method 2: Context Menu
+
 1. Right-click on a future event in any calendar view
 2. Select "⏱ Create Countdown"
 3. If multiple categories exist, a submenu appears — pick the target container
 4. Countdown window appears at default position
 
-**Method 3: Event Dialog**
+#### Method 3: Event Dialog
+
 1. Create or edit an event
 2. Tick "Create countdown card after saving"
 3. If multiple categories exist, choose the target container from the dropdown
@@ -763,6 +824,7 @@ category containers.
 ### Countdown Timer Features
 
 **Window Properties**:
+
 - Always-on-top (stays visible above other windows)
 - Movable (drag to reposition)
 - Resizable (optional)
@@ -771,6 +833,7 @@ category containers.
 - Semi-transparent background (optional)
 
 **Display Elements** (Design TBD - to be specified by user):
+
 - Event title
 - Time remaining (dynamic countdown)
 - Event start date/time
@@ -780,6 +843,7 @@ category containers.
 - "Open in Calendar" button
 
 **Auto-Dismiss Options**:
+
 - Dismiss when event starts (configurable)
 - Dismiss when event ends
 - Manual dismiss only (stay until closed)
@@ -803,6 +867,7 @@ pub struct CountdownTimer {
 ### Countdown Display Format
 
 **Time Remaining Formats**:
+
 - **Days away**: "5 days, 3 hours"
 - **Hours away**: "3 hours, 45 minutes"
 - **Minutes away**: "45 minutes, 30 seconds"
@@ -812,11 +877,12 @@ pub struct CountdownTimer {
 
 ### Countdown Timer Lifecycle
 
-```
+```text
 Create → Active → Warning → Started → Dismissed
 ```
 
 **States**:
+
 1. **Created**: Timer window opens, countdown begins
 2. **Active**: Normal countdown display, updates every second
 3. **Warning**: < 5 minutes remaining, visual indicator (flash, color change)
@@ -826,17 +892,20 @@ Create → Active → Warning → Started → Dismissed
 ### Persistence and Restoration
 
 **On Application Close**:
+
 - Save all active countdown timer positions
 - Save window dimensions
 - Save countdown timer settings
 
 **On Application Startup**:
+
 - Restore all countdown timers
 - Update countdown times
 - Remove timers for past events (if auto-dismiss enabled)
 - Restore window positions (adjust if off-screen)
 
 **Multiple Timers**:
+
 - Support unlimited simultaneous countdown timers
 - Smart positioning (avoid overlapping new timers)
 - Manager tracks all active timers
@@ -844,12 +913,14 @@ Create → Active → Warning → Started → Dismissed
 ### Interaction with Main Calendar
 
 **Bidirectional Link**:
+
 - Countdown timer updates when event changes in calendar
 - Click countdown timer to open event in calendar
 - Delete event in calendar → countdown timer removed
 - Reschedule event → countdown updates immediately
 
 **Visual Indicators**:
+
 - Events with active countdown timers marked in calendar
 - Icon or badge on event card
 - "Has countdown" filter option
@@ -889,6 +960,7 @@ impl CountdownService {
 ### Settings and Configuration
 
 **Countdown Preferences**:
+
 ```rust
 pub struct CountdownPreferences {
     pub auto_dismiss_on_start: bool,    // Default: true
@@ -912,6 +984,7 @@ pub enum PositionMode {
 ### Use Cases
 
 **Example Scenarios**:
+
 1. **Important Meeting**: Drag meeting to desktop, countdown reminds you as meeting approaches
 2. **Project Deadline**: Keep deadline countdown visible while working
 3. **Multiple Meetings**: Create countdown for each meeting, arrange on screen
@@ -924,6 +997,7 @@ Cards can be organised into named categories. Each category is rendered as a
 collapsible container with its own header bar.
 
 **Container Header Bar**:
+
 - ▶/▼ collapse/expand toggle
 - Category name
 - Card count badge (e.g. `(3)`)
@@ -931,11 +1005,13 @@ collapsible container with its own header bar.
 - ➕ quick-add button
 
 **Display Modes** (via View → Countdown Cards → Display mode):
+
 - **Individual Windows** — each card is a separate always-on-top window
 - **Combined Container** — all cards in one resizable window
 - **Category Containers** — cards grouped by category with individual containers
 
 **Category Management** (Edit → Manage Countdown Categories…):
+
 - Create, rename, reorder, and delete categories
 - Configure per-container card defaults:
   - Template dropdown — select a card template or "Global defaults"
@@ -945,18 +1021,23 @@ collapsible container with its own header bar.
 - The default "General" category cannot be deleted or renamed
 
 **Card Template Management** (Edit → Manage Card Templates…):
+
 - Create, edit, and delete reusable card visual templates
 - Each template defines: colours (title BG/FG, body BG, days FG), font sizes
+
   (title 10–48 pt, days 32–220 pt), and default card dimensions
+
 - The built-in "Default" template cannot be deleted
 
 **Four-Tier Visual Inheritance**:
+
 1. Global defaults — base settings
 2. Template — reusable colours, fonts, dimensions (selected per-category)
 3. Category — overrides card dimensions; legacy inline visuals for migration
 4. Per-card overrides — individual card settings
 
 **Cross-Container Drag-and-Drop**:
+
 - Drag a card from one container and drop it onto another container's header
 - The card is re-assigned to the target category
 
@@ -967,6 +1048,7 @@ Cards use a two-panel layout: a coloured title bar (event title) and a body area
 inheritance (Global → Template → Category → Card).
 
 **Warning states** provide visual feedback as an event approaches:
+
 - Normal — steady display with standard colours
 - Warning — colour change, pulsing animation (configurable threshold)
 - Imminent — flashing, "Starting now!" text
@@ -974,6 +1056,7 @@ inheritance (Global → Template → Category → Card).
 ## Keyboard Shortcuts
 
 ### View Navigation
+
 - `Ctrl+1` - Day view
 - `Ctrl+2` - Work week view
 - `Ctrl+3` - Full week view
@@ -983,6 +1066,7 @@ inheritance (Global → Template → Category → Card).
 - `Ctrl+7` - Agenda view
 
 ### Time Navigation
+
 - `→` or `.` - Next period (day/week/month depending on view)
 - `←` or `,` - Previous period
 - `T` - Go to today
@@ -990,6 +1074,7 @@ inheritance (Global → Template → Category → Card).
 - `PageDown` - Next year
 
 ### Event Operations
+
 - `Ctrl+N` - New event
 - `Ctrl+E` - Edit selected event
 - `Delete` - Delete selected event
@@ -998,12 +1083,14 @@ inheritance (Global → Template → Category → Card).
 - `Enter` - Open event details
 
 ### View Controls
+
 - `Ctrl++` - Zoom in (increase row height)
 - `Ctrl+-` - Zoom out (decrease row height)
 - `Ctrl+0` - Reset zoom
 - `F11` - Toggle fullscreen
 
 ### Application
+
 - `Ctrl+F` - Search events
 - `Ctrl+,` - Open settings
 - `Ctrl+Q` - Quit application
@@ -1012,10 +1099,12 @@ inheritance (Global → Template → Category → Card).
 ## Preferences Persistence
 
 ### Storage Location
+
 - **Windows**: `%APPDATA%\RustCalendar\preferences.db`
 - SQLite database containing all preferences
 
 ### Saved Preferences
+
 - Current view type
 - View-specific settings (column widths, row heights)
 - Font configurations
@@ -1026,12 +1115,14 @@ inheritance (Global → Template → Category → Card).
 - Recent color picks
 
 ### Save Strategy
+
 - **Auto-save**: Every 30 seconds if changes detected
 - **On change**: Immediate save for critical preferences (debounced)
 - **On close**: Final save on application exit
 - **On view switch**: Save current view state
 
 ### Reset Options
+
 - **Reset Current View** - Reset active view to defaults
 - **Reset All Views** - Reset all view preferences
 - **Reset Fonts** - Reset to system default fonts
@@ -1041,22 +1132,26 @@ inheritance (Global → Template → Category → Card).
 ## Accessibility Features
 
 ### High Contrast Support
+
 - Respect Windows high contrast themes
 - Adjust colors automatically
 - Maintain readability in all contrast modes
 
 ### Keyboard Navigation
+
 - Full keyboard navigation support
 - Tab through all interactive elements
 - Arrow key navigation in calendars
 - Escape to close dialogs
 
 ### Screen Reader Support
+
 - ARIA labels on all UI elements
 - Announcements for view changes
 - Event details readable by screen readers
 
 ### Scalability
+
 - Support for 100%-300% DPI scaling
 - Adjustable font sizes (8-72pt)
 - Minimum touch target size (44×44 pixels)
@@ -1065,18 +1160,21 @@ inheritance (Global → Template → Category → Card).
 ## Performance Considerations
 
 ### Rendering Optimization
+
 - Virtual scrolling for agenda view (render visible items only)
 - Lazy loading of event details
 - Cached rendered elements
 - Debounced resize events (300ms)
 
 ### Memory Management
+
 - Load only visible date range events
 - Unload events outside view window
 - Limit cached font renders
 - Periodic cleanup of unused resources
 
 ### Responsive Design
+
 - Smooth animations (60 FPS target)
 - Non-blocking UI operations
 - Background thread for heavy calculations
