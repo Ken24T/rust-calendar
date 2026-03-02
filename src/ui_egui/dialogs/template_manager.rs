@@ -182,7 +182,7 @@ pub fn render_template_manager_dialog(
     let mut dialog_open = state.is_open;
     let default_duration = settings.default_event_duration;
 
-    egui::Window::new("📋 Manage Templates")
+    egui::Window::new("📋 Manage Event Templates")
         .open(&mut dialog_open)
         .collapsible(false)
         .resizable(true)

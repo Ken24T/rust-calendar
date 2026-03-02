@@ -3,7 +3,7 @@ use chrono::Datelike;
 use crate::services::event::EventService;
 use crate::services::pdf::{PdfExportService, service::PdfExportOptions};
 
-/// Export-related menu functions (PDF and ICS export).
+/// Export and import menu functions (PDF, ICS, countdown layout).
 impl CalendarApp {
     pub(super) fn export_month_to_pdf(&self) {
         let date = self.current_date;
@@ -233,5 +233,102 @@ impl CalendarApp {
                 }
             }
         }
+    }
+
+    // ========== ICS Import ==========
+
+    /// Open a file dialog and import events from an .ics file.
+    pub(super) fn import_events_ics(&mut self) {
+        let paths = rfd::FileDialog::new()
+            .set_title("Import Events")
+            .add_filter("iCalendar", &["ics"])
+            .pick_files();
+
+        let Some(paths) = paths else { return };
+
+        for path in &paths {
+            match std::fs::read_to_string(path) {
+                Ok(ics_content) => {
+                    if !(ics_content.contains("BEGIN:VCALENDAR")
+                        || ics_content.contains("BEGIN:VEVENT"))
+                    {
+                        log::warn!("File {:?} does not look like an iCalendar file", path);
+                        self.toast_manager
+                            .warning("Selected file is not a valid iCalendar file");
+                        continue;
+                    }
+
+                    use crate::services::icalendar::import;
+
+                    match import::from_str(&ics_content) {
+                        Ok(events) => {
+                            self.handle_ics_import(events, "file import");
+                        }
+                        Err(e) => {
+                            log::error!("Failed to parse ICS file {:?}: {}", path, e);
+                            self.toast_manager.error("Failed to parse iCalendar file");
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to read file {:?}: {}", path, e);
+                    self.toast_manager.error("Failed to read selected file");
+                }
+            }
+        }
+    }
+
+    // ========== Countdown Layout Export / Import ==========
+
+    /// Export the current countdown layout configuration to a JSON file.
+    pub(super) fn export_countdown_layout(&mut self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Countdown Layout")
+            .set_file_name("countdown_layout.json")
+            .add_filter("JSON", &["json"])
+            .save_file()
+        {
+            match self
+                .context
+                .countdown_service()
+                .export_layout_to_file(&path)
+            {
+                Ok(()) => {
+                    log::info!("Exported countdown layout to {:?}", path);
+                    self.toast_manager.success("Countdown layout exported");
+                }
+                Err(e) => {
+                    log::error!("Failed to export countdown layout: {}", e);
+                    self.toast_manager.error("Failed to export countdown layout");
+                }
+            }
+        }
+    }
+
+    /// Import a countdown layout configuration from a JSON file.
+    pub(super) fn import_countdown_layout(&mut self) {
+        use crate::services::countdown::CountdownService;
+
+        let path = rfd::FileDialog::new()
+            .set_title("Import Countdown Layout")
+            .add_filter("JSON", &["json"])
+            .pick_file();
+
+        let Some(path) = path else { return };
+
+        let layout = match CountdownService::read_layout_file(&path) {
+            Ok(layout) => layout,
+            Err(e) => {
+                log::error!("Failed to read countdown layout {:?}: {}", path, e);
+                self.toast_manager
+                    .error(format!("Failed to read layout file: {}", e));
+                return;
+            }
+        };
+
+        let summary = self.context.countdown_service_mut().import_layout(layout);
+        log::info!("Imported countdown layout: {}", summary);
+        self.toast_manager
+            .success(format!("Layout imported: {}", summary));
     }
 }
