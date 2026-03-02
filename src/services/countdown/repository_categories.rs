@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Row};
 
 use super::models::{
-    CountdownCardGeometry, CountdownCardVisuals, CountdownCategory, CountdownCategoryId,
-    ContainerSortMode, RgbaColor,
+    CountdownCardGeometry, CountdownCardTemplateId, CountdownCardVisuals,
+    CountdownCategory, CountdownCategoryId, ContainerSortMode, LayoutOrientation, RgbaColor,
 };
 use super::repository::CountdownRepository;
 
@@ -28,7 +28,8 @@ impl<'a> CountdownRepository<'a> {
                     default_days_font_size,
                     default_card_width, default_card_height,
                     use_global_defaults,
-                    is_collapsed, sort_mode
+                    is_collapsed, sort_mode,
+                    template_id, orientation
              FROM countdown_categories
              ORDER BY display_order, name",
         )?;
@@ -55,7 +56,8 @@ impl<'a> CountdownRepository<'a> {
                     default_days_font_size,
                     default_card_width, default_card_height,
                     use_global_defaults,
-                    is_collapsed, sort_mode
+                    is_collapsed, sort_mode,
+                    template_id, orientation
              FROM countdown_categories
              WHERE id = ?",
         )?;
@@ -78,6 +80,12 @@ impl<'a> CountdownRepository<'a> {
             ContainerSortMode::Manual => "Manual",
         };
 
+        let orientation_str = match category.orientation {
+            LayoutOrientation::Auto => "Auto",
+            LayoutOrientation::Portrait => "Portrait",
+            LayoutOrientation::Landscape => "Landscape",
+        };
+
         self.conn.execute(
             "INSERT INTO countdown_categories (
                 name, display_order,
@@ -90,7 +98,8 @@ impl<'a> CountdownRepository<'a> {
                 default_days_font_size,
                 default_card_width, default_card_height,
                 use_global_defaults,
-                is_collapsed, sort_mode
+                is_collapsed, sort_mode,
+                template_id, orientation
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6,
                 ?7, ?8, ?9, ?10,
@@ -101,7 +110,8 @@ impl<'a> CountdownRepository<'a> {
                 ?24,
                 ?25, ?26,
                 ?27,
-                ?28, ?29
+                ?28, ?29,
+                ?30, ?31
             )",
             params![
                 category.name,
@@ -133,6 +143,8 @@ impl<'a> CountdownRepository<'a> {
                 category.use_global_defaults,
                 category.is_collapsed,
                 sort_mode_str,
+                category.template_id.map(|t| t.0),
+                orientation_str,
             ],
         )
         .context("Failed to insert countdown category")?;
@@ -153,6 +165,12 @@ impl<'a> CountdownRepository<'a> {
             ContainerSortMode::Manual => "Manual",
         };
 
+        let orientation_str = match category.orientation {
+            LayoutOrientation::Auto => "Auto",
+            LayoutOrientation::Portrait => "Portrait",
+            LayoutOrientation::Landscape => "Landscape",
+        };
+
         let rows = self.conn.execute(
             "UPDATE countdown_categories SET
                 name = ?2, display_order = ?3,
@@ -166,6 +184,7 @@ impl<'a> CountdownRepository<'a> {
                 default_card_width = ?26, default_card_height = ?27,
                 use_global_defaults = ?28,
                 is_collapsed = ?29, sort_mode = ?30,
+                template_id = ?31, orientation = ?32,
                 updated_at = CURRENT_TIMESTAMP
              WHERE id = ?1",
             params![
@@ -199,6 +218,8 @@ impl<'a> CountdownRepository<'a> {
                 category.use_global_defaults,
                 category.is_collapsed,
                 sort_mode_str,
+                category.template_id.map(|t| t.0),
+                orientation_str,
             ],
         )
         .context("Failed to update countdown category")?;
@@ -278,11 +299,21 @@ fn row_to_category(row: &Row<'_>) -> rusqlite::Result<CountdownCategory> {
         _ => ContainerSortMode::Date,
     };
 
+    let template_id: Option<i64> = row.get(30)?;
+    let orientation_str: String = row.get(31)?;
+    let orientation = match orientation_str.as_str() {
+        "Portrait" => LayoutOrientation::Portrait,
+        "Landscape" => LayoutOrientation::Landscape,
+        _ => LayoutOrientation::Auto,
+    };
+
     Ok(CountdownCategory {
         id: CountdownCategoryId(id),
         name,
         display_order,
         container_geometry,
+        template_id: template_id.map(CountdownCardTemplateId),
+        orientation,
         visual_defaults,
         default_card_width: row.get(25)?,
         default_card_height: row.get(26)?,

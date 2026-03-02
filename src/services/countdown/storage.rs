@@ -32,6 +32,7 @@ impl CountdownService {
             container_geometry: self.container_geometry,
             card_order: self.card_order.clone(),
             categories: self.categories.clone(),
+            templates: self.templates.clone(),
         }
     }
 
@@ -81,6 +82,9 @@ impl CountdownService {
             settings.container_geometry, settings.display_mode, categories.len()
         );
 
+        // Load templates
+        let templates = repo.get_all_templates()?;
+
         Ok(Self {
             cards,
             next_id: settings.next_card_id.max(1),
@@ -95,6 +99,7 @@ impl CountdownService {
             container_geometry: settings.container_geometry,
             card_order: settings.card_order,
             categories,
+            templates,
         })
     }
 
@@ -103,7 +108,40 @@ impl CountdownService {
     pub fn save_to_database(&mut self, conn: &Connection) -> Result<()> {
         let repo = CountdownRepository::new(conn);
 
-        // Sync categories first (cards reference categories via FK)
+        // Sync templates first (categories reference templates via FK)
+        let existing_templates = repo.get_all_templates()?;
+        let existing_tmpl_ids: std::collections::HashSet<i64> =
+            existing_templates.iter().map(|t| t.id.0).collect();
+        let current_tmpl_ids: std::collections::HashSet<i64> =
+            self.templates.iter().map(|t| t.id.0).collect();
+
+        // Delete removed templates (clears category references)
+        for id in existing_tmpl_ids.difference(&current_tmpl_ids) {
+            use super::models::CountdownCardTemplateId;
+            if let Err(e) = repo.delete_template(CountdownCardTemplateId(*id)) {
+                log::warn!("Failed to delete template {}: {}", id, e);
+            }
+        }
+
+        // Insert or update current templates
+        for template in &mut self.templates {
+            if existing_tmpl_ids.contains(&template.id.0) {
+                repo.update_template(template)?;
+            } else {
+                let new_id = repo.insert_template(template)?;
+                if new_id != template.id {
+                    // Update category references to use the new template ID
+                    for cat in &mut self.categories {
+                        if cat.template_id == Some(template.id) {
+                            cat.template_id = Some(new_id);
+                        }
+                    }
+                    template.id = new_id;
+                }
+            }
+        }
+
+        // Sync categories (cards reference categories via FK)
         let existing_categories = repo.get_all_categories()?;
         let existing_cat_ids: std::collections::HashSet<i64> =
             existing_categories.iter().map(|c| c.id.0).collect();

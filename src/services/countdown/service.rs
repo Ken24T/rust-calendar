@@ -4,9 +4,10 @@ use chrono::{DateTime, Local};
 
 use super::models::{
     CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownCategory, CountdownCategoryId, CountdownDisplayMode,
+    CountdownCardTemplate, CountdownCardTemplateId, CountdownCardVisuals,
+    CountdownCategory, CountdownCategoryId, CountdownDisplayMode,
     CountdownNotificationConfig, CountdownPersistedState, RgbaColor, DEFAULT_CATEGORY_ID,
-    MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
+    DEFAULT_TEMPLATE_ID, MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
 };
 use super::palette::apply_event_palette_if_needed;
 
@@ -38,6 +39,7 @@ pub struct CountdownService {
     pub(super) container_geometry: Option<CountdownCardGeometry>,
     pub(super) card_order: Vec<CountdownCardId>,
     pub(super) categories: Vec<CountdownCategory>,
+    pub(super) templates: Vec<CountdownCardTemplate>,
 }
 
 impl Default for CountdownService {
@@ -73,6 +75,17 @@ impl CountdownService {
         snapshot.visual_defaults.use_default_body_bg = false;
         snapshot.visual_defaults.use_default_days_fg = false;
 
+        // Seed the default template if none exist (mirrors DB schema seed)
+        if snapshot.templates.is_empty() {
+            snapshot.templates.push(CountdownCardTemplate {
+                id: CountdownCardTemplateId(DEFAULT_TEMPLATE_ID),
+                name: "Default".to_string(),
+                visuals: snapshot.visual_defaults.clone(),
+                default_card_width: 120.0,
+                default_card_height: 110.0,
+            });
+        }
+
         Self {
             cards: snapshot.cards,
             next_id: snapshot.next_id.max(1),
@@ -87,6 +100,7 @@ impl CountdownService {
             container_geometry: snapshot.container_geometry,
             card_order: snapshot.card_order,
             categories: snapshot.categories,
+            templates: snapshot.templates,
         }
     }
 
@@ -100,15 +114,26 @@ impl CountdownService {
 
     /// Resolve effective visual defaults for a specific category.
     ///
-    /// If the category has `use_global_defaults = true`, the global visual
-    /// defaults are returned. Otherwise, the category's own `visual_defaults`
-    /// are returned. Falls back to global defaults when the category is not
-    /// found.
+    /// Resolution order:
+    /// 1. If the category has a `template_id`, use that template's visuals.
+    /// 2. (Legacy) If the category has `use_global_defaults = true` or no
+    ///    template, fall back to the global visual defaults.
+    /// 3. (Legacy) Otherwise use the category's own `visual_defaults`.
+    ///
+    /// Falls back to global defaults when the category is not found.
     pub fn effective_visual_defaults_for(
         &self,
         category_id: CountdownCategoryId,
     ) -> CountdownCardVisuals {
         if let Some(cat) = self.categories.iter().find(|c| c.id == category_id) {
+            // New path: resolve via template
+            if let Some(tid) = cat.template_id {
+                if let Some(tmpl) = self.templates.iter().find(|t| t.id == tid) {
+                    return tmpl.visuals.clone();
+                }
+                // Template not found — fall through to global
+            }
+            // Legacy path
             if cat.use_global_defaults {
                 self.visual_defaults.clone()
             } else {
@@ -131,6 +156,27 @@ impl CountdownService {
             .iter()
             .map(|c| (c.id, self.effective_visual_defaults_for(c.id)))
             .collect()
+    }
+
+    /// Resolve effective card dimensions (width, height) for a category,
+    /// walking the template chain.  Returns `None` when the category uses
+    /// global defaults and has no template.
+    pub fn effective_card_dimensions_for(
+        &self,
+        category_id: CountdownCategoryId,
+    ) -> Option<(f32, f32)> {
+        let cat = self.categories.iter().find(|c| c.id == category_id)?;
+        if let Some(tid) = cat.template_id {
+            if let Some(tmpl) = self.templates.iter().find(|t| t.id == tid) {
+                return Some((tmpl.default_card_width, tmpl.default_card_height));
+            }
+        }
+        // Legacy fallback
+        if !cat.use_global_defaults {
+            Some((cat.default_card_width, cat.default_card_height))
+        } else {
+            None
+        }
     }
 
     /// Find a countdown card by its associated event ID
@@ -202,10 +248,8 @@ impl CountdownService {
         const FALLBACK_HEIGHT: f32 = 110.0;
 
         // Use provided dimensions if valid, otherwise use fallbacks
-        // If the category has custom dimensions (not inheriting global), prefer those
-        let category_dims = self.categories.iter().find(|c| c.id == category_id)
-            .filter(|c| !c.use_global_defaults)
-            .map(|c| (c.default_card_width, c.default_card_height));
+        // Prefer template dimensions if the category has a template assigned
+        let category_dims = self.effective_card_dimensions_for(category_id);
 
         let (raw_width, raw_height) = category_dims.unwrap_or((default_width, default_height));
 
@@ -543,6 +587,81 @@ impl CountdownService {
             .map(|c| c.sort_mode)
             .unwrap_or_default()
     }
+
+    // ========== Template Management ==========
+
+    /// Get all templates.
+    #[allow(dead_code)]
+    pub fn templates(&self) -> &[CountdownCardTemplate] {
+        &self.templates
+    }
+
+    /// Get a template by ID.
+    #[allow(dead_code)]
+    pub fn template(&self, id: CountdownCardTemplateId) -> Option<&CountdownCardTemplate> {
+        self.templates.iter().find(|t| t.id == id)
+    }
+
+    /// Get a mutable reference to a template by ID.
+    #[allow(dead_code)]
+    pub fn template_mut(
+        &mut self,
+        id: CountdownCardTemplateId,
+    ) -> Option<&mut CountdownCardTemplate> {
+        self.templates.iter_mut().find(|t| t.id == id)
+    }
+
+    /// Add a new template.  Returns the template with an assigned ID.
+    #[allow(dead_code)]
+    pub fn add_template(
+        &mut self,
+        mut template: CountdownCardTemplate,
+    ) -> &CountdownCardTemplate {
+        let max_id = self
+            .templates
+            .iter()
+            .map(|t| t.id.0)
+            .max()
+            .unwrap_or(0);
+        template.id = CountdownCardTemplateId(max_id + 1);
+        self.templates.push(template);
+        self.dirty = true;
+        self.templates.last().unwrap()
+    }
+
+    /// Remove a template by ID.
+    ///
+    /// Categories that referenced this template have their `template_id`
+    /// cleared (falling back to global defaults).
+    #[allow(dead_code)]
+    pub fn remove_template(&mut self, id: CountdownCardTemplateId) -> bool {
+        if id.0 == DEFAULT_TEMPLATE_ID {
+            log::warn!("Cannot remove the default template");
+            return false;
+        }
+
+        let existed = self.templates.iter().any(|t| t.id == id);
+        if !existed {
+            return false;
+        }
+
+        // Clear references in categories
+        for cat in &mut self.categories {
+            if cat.template_id == Some(id) {
+                cat.template_id = None;
+            }
+        }
+
+        self.templates.retain(|t| t.id != id);
+        self.dirty = true;
+        true
+    }
+
+    /// Set the templates list directly (used when loading from database).
+    #[allow(dead_code)]
+    pub(super) fn set_templates(&mut self, templates: Vec<CountdownCardTemplate>) {
+        self.templates = templates;
+    }
 }
 
 #[cfg(test)]
@@ -708,6 +827,67 @@ mod tests {
         for cat in service.categories() {
             assert!(map.contains_key(&cat.id));
         }
+    }
+
+    #[test]
+    fn effective_visual_defaults_resolves_via_template() {
+
+        let mut service = CountdownService::new();
+        let tmpl_color = RgbaColor::new(42, 42, 42, 255);
+        let mut tmpl = CountdownCardTemplate::default();
+        tmpl.name = "Test Template".to_string();
+        tmpl.visuals.title_bg_color = tmpl_color;
+        tmpl.default_card_width = 200.0;
+        tmpl.default_card_height = 180.0;
+        let added_tmpl = service.add_template(tmpl);
+        let tmpl_id = added_tmpl.id;
+
+        // Create a category that references the template
+        let cat = CountdownCategory {
+            name: "Templated".to_string(),
+            template_id: Some(tmpl_id),
+            ..CountdownCategory::default()
+        };
+        let added_cat = service.add_category(cat);
+        let cat_id = added_cat.id;
+
+        // Visual defaults should come from the template
+        let resolved = service.effective_visual_defaults_for(cat_id);
+        assert_eq!(resolved.title_bg_color, tmpl_color);
+
+        // Card dimensions should also come from the template
+        let dims = service.effective_card_dimensions_for(cat_id);
+        assert_eq!(dims, Some((200.0, 180.0)));
+    }
+
+    #[test]
+    fn removing_template_clears_category_references() {
+
+        let mut service = CountdownService::new();
+        let tmpl = CountdownCardTemplate {
+            name: "Removable".to_string(),
+            ..CountdownCardTemplate::default()
+        };
+        let added = service.add_template(tmpl);
+        let tmpl_id = added.id;
+
+        let cat = CountdownCategory {
+            name: "RefCat".to_string(),
+            template_id: Some(tmpl_id),
+            ..CountdownCategory::default()
+        };
+        let added_cat = service.add_category(cat);
+        let cat_id = added_cat.id;
+
+        assert!(service.remove_template(tmpl_id));
+
+        // Category should no longer reference the deleted template
+        let cat = service.categories().iter().find(|c| c.id == cat_id).unwrap();
+        assert_eq!(cat.template_id, None);
+
+        // Falls back to global defaults
+        let resolved = service.effective_visual_defaults_for(cat_id);
+        assert_eq!(resolved.title_bg_color, service.visual_defaults().title_bg_color);
     }
 
 }

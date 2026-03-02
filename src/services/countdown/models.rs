@@ -423,6 +423,59 @@ pub struct CountdownCategoryId(pub i64);
 /// The default category ID (seeded as "General").
 pub const DEFAULT_CATEGORY_ID: i64 = 1;
 
+/// Unique identifier for card visual templates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CountdownCardTemplateId(pub i64);
+
+/// The default template ID (seeded as "Default").
+pub const DEFAULT_TEMPLATE_ID: i64 = 1;
+
+/// A reusable card visual template that defines colours, fonts, and card
+/// dimensions.  Categories reference templates by ID; cards inherit
+/// visuals through their category's template (falling back to the global
+/// defaults when no template is set).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CountdownCardTemplate {
+    pub id: CountdownCardTemplateId,
+    pub name: String,
+    /// Visual settings carried by this template.
+    #[serde(default)]
+    pub visuals: CountdownCardVisuals,
+    /// Default card width for new cards using this template.
+    #[serde(default = "default_category_card_width")]
+    pub default_card_width: f32,
+    /// Default card height for new cards using this template.
+    #[serde(default = "default_category_card_height")]
+    pub default_card_height: f32,
+}
+
+impl Default for CountdownCardTemplate {
+    fn default() -> Self {
+        Self {
+            id: CountdownCardTemplateId(DEFAULT_TEMPLATE_ID),
+            name: "Default".to_string(),
+            visuals: CountdownCardVisuals::default(),
+            default_card_width: default_category_card_width(),
+            default_card_height: default_category_card_height(),
+        }
+    }
+}
+
+/// Layout orientation for cards within a container.
+///
+/// Persisted per-category so users can lock a container to portrait or
+/// landscape regardless of its current aspect ratio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum LayoutOrientation {
+    /// Automatically choose based on container aspect ratio (legacy behaviour).
+    #[default]
+    Auto,
+    /// Cards stacked vertically (portrait / tall container).
+    Portrait,
+    /// Cards arranged horizontally (landscape / wide container).
+    Landscape,
+}
+
 /// A user-defined category for grouping countdown cards into containers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CountdownCategory {
@@ -433,20 +486,36 @@ pub struct CountdownCategory {
     /// Container geometry for this category in CategoryContainers mode
     #[serde(default)]
     pub container_geometry: Option<CountdownCardGeometry>,
-    /// Category-level visual defaults; cards inherit from these unless overridden.
-    /// When `use_global_defaults` is true the global defaults take precedence.
+
+    // -- Template-based visual inheritance --
+
+    /// Optional template that supplies visual defaults for cards in this
+    /// category.  `None` means "use global defaults" (equivalent to the
+    /// old `use_global_defaults = true`).
+    #[serde(default)]
+    pub template_id: Option<CountdownCardTemplateId>,
+
+    /// Layout orientation override for this category's container.
+    #[serde(default)]
+    pub orientation: LayoutOrientation,
+
+    // -- Legacy fields kept for migration / backwards compatibility --
+    // These are populated when loading old data and converted to a template
+    // on first save.  New code should not write to them.
+
+    /// **Deprecated** — use `template_id` instead.
     #[serde(default)]
     pub visual_defaults: CountdownCardVisuals,
-    /// Default card width for new cards in this category
+    /// **Deprecated** — default card width; moved to template.
     #[serde(default = "default_category_card_width")]
     pub default_card_width: f32,
-    /// Default card height for new cards in this category
+    /// **Deprecated** — default card height; moved to template.
     #[serde(default = "default_category_card_height")]
     pub default_card_height: f32,
-    /// When true, this category inherits the global visual defaults
-    /// rather than using its own `visual_defaults`.
+    /// **Deprecated** — replaced by `template_id == None`.
     #[serde(default = "default_use_global_defaults")]
     pub use_global_defaults: bool,
+
     /// Whether the container for this category is collapsed (title bar only)
     #[serde(default)]
     pub is_collapsed: bool,
@@ -474,6 +543,8 @@ impl Default for CountdownCategory {
             name: "General".to_string(),
             display_order: 0,
             container_geometry: None,
+            template_id: None,
+            orientation: LayoutOrientation::default(),
             visual_defaults: CountdownCardVisuals::default(),
             default_card_width: default_category_card_width(),
             default_card_height: default_category_card_height(),
@@ -512,6 +583,9 @@ pub struct CountdownPersistedState {
     /// User-defined categories for grouping cards
     #[serde(default)]
     pub categories: Vec<CountdownCategory>,
+    /// Reusable card visual templates
+    #[serde(default)]
+    pub templates: Vec<CountdownCardTemplate>,
 }
 
 pub(crate) fn default_visuals() -> CountdownCardVisuals {
@@ -666,6 +740,8 @@ mod tests {
             use_global_defaults: false,
             is_collapsed: false,
             sort_mode: ContainerSortMode::Manual,
+            template_id: None,
+            orientation: LayoutOrientation::Auto,
         };
 
         let json = serde_json::to_string(&cat).unwrap();

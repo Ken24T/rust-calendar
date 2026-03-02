@@ -255,10 +255,10 @@ Open Settings with `Ctrl+S` or **Edit → Settings**.
 
 - **Default card width/height** — default size for new countdown cards
 - **Auto-create countdown cards on ICS import**
+- **Open event dialog when importing/dragging ICS files**
 
 Per-container defaults (colours, fonts, dimensions) are configured via
 **Edit → Manage Countdown Categories…** rather than in Settings.
-- **Open event dialog when importing/dragging ICS files**
 
 ### Calendar Sync
 

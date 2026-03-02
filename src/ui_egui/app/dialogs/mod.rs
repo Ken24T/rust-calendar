@@ -7,6 +7,7 @@ use crate::ui_egui::commands::{CreateEventCommand, UpdateEventCommand};
 use crate::ui_egui::dialogs::backup_manager::render_backup_manager_dialog;
 use crate::ui_egui::dialogs::category_manager::render_category_manager_dialog;
 use crate::ui_egui::dialogs::countdown_category_manager::render_countdown_category_manager_dialog;
+use crate::ui_egui::dialogs::countdown_template_manager::render_countdown_template_manager_dialog;
 use crate::ui_egui::dialogs::export_dialog::{render_export_range_dialog, ExportDialogResult};
 use crate::ui_egui::dialogs::search_dialog::{render_search_dialog, SearchDialogAction};
 use crate::ui_egui::dialogs::template_manager::render_template_manager_dialog;
@@ -43,6 +44,7 @@ impl CalendarApp {
         self.render_template_manager_dialog(ctx);
         self.render_category_manager_dialog(ctx);
         self.render_countdown_category_manager_dialog(ctx);
+        self.render_countdown_template_manager_dialog(ctx);
 
         let should_reload_db =
             render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
@@ -425,6 +427,18 @@ impl CalendarApp {
 
         if response.categories_changed {
             log::info!("Countdown categories changed — will persist on next save cycle");
+        }
+    }
+
+    fn render_countdown_template_manager_dialog(&mut self, ctx: &egui::Context) {
+        let response = render_countdown_template_manager_dialog(
+            ctx,
+            &mut self.state.countdown_template_manager_state,
+            self.context.countdown_service_mut(),
+        );
+
+        if response.templates_changed {
+            log::info!("Countdown templates changed — will persist on next save cycle");
         }
     }
 }

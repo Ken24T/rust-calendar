@@ -12,6 +12,7 @@ pub use super::container_layout::{ContainerLayout, DragState};
 use crate::services::countdown::{
     ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
     CountdownCardVisuals, CountdownCategoryId, CountdownNotificationConfig,
+    LayoutOrientation,
 };
 use chrono::{DateTime, Local};
 use std::collections::HashMap;
@@ -141,6 +142,7 @@ pub fn render_container_window(
     current_category_id: Option<CountdownCategoryId>,
     is_collapsed: bool,
     sort_mode: ContainerSortMode,
+    orientation: LayoutOrientation,
 ) -> Vec<ContainerAction> {
     use std::time::Duration as StdDuration;
 
@@ -464,7 +466,7 @@ pub fn render_container_window(
                 };
 
                 // Calculate layout
-                layout.calculate_layout(available_rect, &ordered_ids);
+                layout.calculate_layout(available_rect, &ordered_ids, orientation);
 
                 // Render each card
                 for card_id in &ordered_ids {

@@ -8,7 +8,7 @@ use super::render::{
 use crate::services::countdown::{
     CardSettingsSnapshot, ContainerSortMode, CountdownCardGeometry, CountdownCardId,
     CountdownCardState, CountdownCardVisuals, CountdownCategoryId, CountdownDisplayMode,
-    CountdownService,
+    CountdownService, LayoutOrientation,
 };
 use chrono::Local;
 use egui::{self, Context};
@@ -269,6 +269,7 @@ impl CountdownUiState {
             None, // No cross-category drop zones in single-container mode
             false, // not collapsed
             ContainerSortMode::default(), // date sort
+            LayoutOrientation::Auto, // auto-detect for single container
         );
 
         // Collect delete requests
@@ -382,6 +383,7 @@ impl CountdownUiState {
             card_height: f32,
             is_collapsed: bool,
             sort_mode: ContainerSortMode,
+            orientation: LayoutOrientation,
         }
 
         let cat_snapshots: Vec<CategorySnapshot> = service
@@ -395,6 +397,7 @@ impl CountdownUiState {
                 card_height: c.default_card_height,
                 is_collapsed: c.is_collapsed,
                 sort_mode: c.sort_mode,
+                orientation: c.orientation,
             })
             .collect();
 
@@ -480,6 +483,7 @@ impl CountdownUiState {
                 Some(cat_snap.id),
                 cat_snap.is_collapsed,
                 cat_snap.sort_mode,
+                cat_snap.orientation,
             );
 
             // Process container actions for this category

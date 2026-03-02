@@ -1,11 +1,14 @@
 //! Layout computation and drag-and-drop state for the countdown container.
 
-use crate::services::countdown::CountdownCardId;
+use crate::services::countdown::{CountdownCardId, LayoutOrientation};
 use std::collections::HashMap;
 
-/// Layout orientation for cards within the container
+/// Effective layout direction after resolving [`LayoutOrientation::Auto`].
+///
+/// Internally the layout engine only deals with two concrete directions;
+/// auto-detection is resolved in [`ContainerLayout::calculate_layout`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum LayoutOrientation {
+pub enum ResolvedOrientation {
     /// Cards stacked vertically (tall/narrow container)
     #[default]
     Vertical,
@@ -27,8 +30,8 @@ pub const VISIBILITY_CHECK_FRAMES: u32 = 15;
 /// Layout calculator for arranging cards within the container
 #[derive(Debug, Clone)]
 pub struct ContainerLayout {
-    /// Current layout orientation (always recalculated from aspect ratio)
-    pub orientation: LayoutOrientation,
+    /// Current resolved layout orientation
+    pub orientation: ResolvedOrientation,
     /// Computed rectangles for each card
     pub card_rects: HashMap<CountdownCardId, egui::Rect>,
     /// Minimum card width
@@ -54,7 +57,7 @@ pub struct ContainerLayout {
 impl Default for ContainerLayout {
     fn default() -> Self {
         Self {
-            orientation: LayoutOrientation::Vertical,
+            orientation: ResolvedOrientation::Vertical,
             card_rects: HashMap::new(),
             min_card_width: MIN_CARD_WIDTH,
             min_card_height: MIN_CARD_HEIGHT,
@@ -72,16 +75,18 @@ impl Default for ContainerLayout {
 impl ContainerLayout {
     /// Calculate the layout for cards within the container.
     ///
-    /// Orientation is determined by the container's aspect ratio:
+    /// When `hint` is [`LayoutOrientation::Auto`], orientation is determined
+    /// by the container's aspect ratio:
     /// - Wide containers (aspect ratio > 1.5) use horizontal layout (landscape)
     /// - Tall/square containers use vertical layout (portrait)
     ///
-    /// Cards are evenly distributed within the available space, respecting minimum sizes.
-    /// When the user resizes the container, orientation updates to match the new aspect ratio.
+    /// When `hint` is Portrait or Landscape, the orientation is locked
+    /// regardless of aspect ratio.
     pub fn calculate_layout(
         &mut self,
         available_rect: egui::Rect,
         card_ids: &[CountdownCardId],
+        hint: LayoutOrientation,
     ) {
         self.card_rects.clear();
 
@@ -90,21 +95,26 @@ impl ContainerLayout {
             return;
         }
 
-        // Always determine orientation from current aspect ratio
-        // This allows the container to switch between portrait/landscape when resized
-        let aspect_ratio = available_rect.width() / available_rect.height();
-        self.orientation = if aspect_ratio > 1.5 {
-            LayoutOrientation::Horizontal
-        } else {
-            LayoutOrientation::Vertical
+        // Resolve orientation from hint
+        self.orientation = match hint {
+            LayoutOrientation::Auto => {
+                let aspect_ratio = available_rect.width() / available_rect.height();
+                if aspect_ratio > 1.5 {
+                    ResolvedOrientation::Horizontal
+                } else {
+                    ResolvedOrientation::Vertical
+                }
+            }
+            LayoutOrientation::Portrait => ResolvedOrientation::Vertical,
+            LayoutOrientation::Landscape => ResolvedOrientation::Horizontal,
         };
 
         // Calculate card positions
         match self.orientation {
-            LayoutOrientation::Vertical => {
+            ResolvedOrientation::Vertical => {
                 self.layout_vertical(available_rect, card_ids);
             }
-            LayoutOrientation::Horizontal => {
+            ResolvedOrientation::Horizontal => {
                 self.layout_horizontal(available_rect, card_ids);
             }
         }
@@ -178,7 +188,7 @@ impl ContainerLayout {
         }
 
         match self.orientation {
-            LayoutOrientation::Vertical => {
+            ResolvedOrientation::Vertical => {
                 // Find insertion point based on Y position
                 for (i, card_id) in card_order.iter().enumerate() {
                     if let Some(rect) = self.card_rects.get(card_id) {
@@ -190,7 +200,7 @@ impl ContainerLayout {
                 }
                 card_order.len()
             }
-            LayoutOrientation::Horizontal => {
+            ResolvedOrientation::Horizontal => {
                 // Find insertion point based on X position
                 for (i, card_id) in card_order.iter().enumerate() {
                     if let Some(rect) = self.card_rects.get(card_id) {
@@ -264,7 +274,7 @@ pub fn calculate_insertion_indicator_rect(
     let indicator_margin = 2.0;
 
     match layout.orientation {
-        LayoutOrientation::Vertical => {
+        ResolvedOrientation::Vertical => {
             let y = if insert_index == 0 {
                 // Insert at top
                 available_rect.top() + layout.padding - indicator_margin
@@ -297,7 +307,7 @@ pub fn calculate_insertion_indicator_rect(
                 egui::vec2(available_rect.width() - layout.padding * 2.0, indicator_thickness),
             ))
         }
-        LayoutOrientation::Horizontal => {
+        ResolvedOrientation::Horizontal => {
             let x = if insert_index == 0 {
                 // Insert at left
                 available_rect.left() + layout.padding - indicator_margin
@@ -340,13 +350,13 @@ mod tests {
     #[test]
     fn test_layout_orientation_default() {
         let orientation = LayoutOrientation::default();
-        assert_eq!(orientation, LayoutOrientation::Vertical);
+        assert_eq!(orientation, LayoutOrientation::Auto);
     }
 
     #[test]
     fn test_container_layout_default() {
         let layout = ContainerLayout::default();
-        assert_eq!(layout.orientation, LayoutOrientation::Vertical);
+        assert_eq!(layout.orientation, ResolvedOrientation::Vertical);
         assert!(layout.card_rects.is_empty());
         assert_eq!(layout.min_card_width, MIN_CARD_WIDTH);
         assert_eq!(layout.min_card_height, MIN_CARD_HEIGHT);
@@ -399,7 +409,7 @@ mod tests {
         let mut layout = ContainerLayout::default();
         let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 600.0));
 
-        layout.calculate_layout(rect, &[]);
+        layout.calculate_layout(rect, &[], LayoutOrientation::Auto);
 
         assert!(layout.card_rects.is_empty());
     }
@@ -411,9 +421,9 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 600.0));
         let cards = vec![CountdownCardId(1), CountdownCardId(2)];
 
-        layout.calculate_layout(rect, &cards);
+        layout.calculate_layout(rect, &cards, LayoutOrientation::Auto);
 
-        assert_eq!(layout.orientation, LayoutOrientation::Vertical);
+        assert_eq!(layout.orientation, ResolvedOrientation::Vertical);
         assert_eq!(layout.card_rects.len(), 2);
 
         // Cards should be stacked vertically
@@ -431,9 +441,9 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 300.0));
         let cards = vec![CountdownCardId(1), CountdownCardId(2)];
 
-        layout.calculate_layout(rect, &cards);
+        layout.calculate_layout(rect, &cards, LayoutOrientation::Auto);
 
-        assert_eq!(layout.orientation, LayoutOrientation::Horizontal);
+        assert_eq!(layout.orientation, ResolvedOrientation::Horizontal);
         assert_eq!(layout.card_rects.len(), 2);
 
         // Cards should be side by side
@@ -450,7 +460,7 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 600.0));
         let cards = vec![CountdownCardId(1), CountdownCardId(2), CountdownCardId(3)];
 
-        layout.calculate_layout(rect, &cards);
+        layout.calculate_layout(rect, &cards, LayoutOrientation::Auto);
 
         // Test insertion at various Y positions
         let top_insert = layout.calculate_insert_index(egui::pos2(150.0, 10.0), &cards);
@@ -466,7 +476,7 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(900.0, 300.0));
         let cards = vec![CountdownCardId(1), CountdownCardId(2), CountdownCardId(3)];
 
-        layout.calculate_layout(rect, &cards);
+        layout.calculate_layout(rect, &cards, LayoutOrientation::Auto);
 
         // Test insertion at various X positions
         let left_insert = layout.calculate_insert_index(egui::pos2(10.0, 150.0), &cards);
@@ -482,7 +492,7 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 300.0));
         let cards = vec![CountdownCardId(1)];
 
-        layout.calculate_layout(rect, &cards);
+        layout.calculate_layout(rect, &cards, LayoutOrientation::Auto);
 
         assert_eq!(layout.card_rects.len(), 1);
         let card_rect = layout.get_card_rect(CountdownCardId(1)).unwrap();

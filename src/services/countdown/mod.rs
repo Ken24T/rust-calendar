@@ -6,15 +6,19 @@ mod persistence;
 pub mod repository;
 mod repository_categories;
 mod repository_settings;
+mod repository_templates;
 mod service;
 mod storage;
 mod sync;
 mod visuals;
 
+#[allow(unused_imports)]
 pub use models::{
     ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownCategory, CountdownCategoryId, CountdownDisplayMode,
-    CountdownNotificationConfig, CountdownWarningState, RgbaColor, DEFAULT_CATEGORY_ID,
+    CountdownCardTemplate, CountdownCardTemplateId, CountdownCardVisuals,
+    CountdownCategory, CountdownCategoryId, CountdownDisplayMode,
+    CountdownNotificationConfig, CountdownWarningState, LayoutOrientation,
+    RgbaColor, DEFAULT_CATEGORY_ID, DEFAULT_TEMPLATE_ID,
     MAX_DAYS_FONT_SIZE,
 };
 pub use service::{CardSettingsSnapshot, CountdownService};

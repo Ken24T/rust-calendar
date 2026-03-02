@@ -105,6 +105,10 @@ impl CalendarApp {
                 self.state.countdown_category_manager_state.open();
                 ui.close_menu();
             }
+            if ui.button("🎨 Manage Card Templates...").clicked() {
+                self.state.countdown_template_manager_state.open();
+                ui.close_menu();
+            }
             if ui.button("📋 Manage Templates...").clicked() {
                 self.state.template_manager_state.open(self.context.database());
                 ui.close_menu();

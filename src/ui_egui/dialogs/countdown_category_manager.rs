@@ -2,7 +2,8 @@
 //! countdown card categories (separate from event categories).
 
 use crate::services::countdown::{
-    CountdownCardVisuals, CountdownCategory, CountdownCategoryId, CountdownService,
+    CountdownCardTemplate, CountdownCardTemplateId, CountdownCardVisuals,
+    CountdownCategory, CountdownCategoryId, CountdownService, LayoutOrientation,
     RgbaColor, DEFAULT_CATEGORY_ID,
 };
 use egui::{Color32, RichText};
@@ -13,6 +14,7 @@ fn rgba_to_color32(c: RgbaColor) -> Color32 {
 }
 
 /// Convert an egui [`Color32`] to an [`RgbaColor`].
+#[allow(dead_code)]
 fn color32_to_rgba(c: Color32) -> RgbaColor {
     RgbaColor {
         r: c.r(),
@@ -39,16 +41,20 @@ pub struct CountdownCategoryManagerState {
     pub success_message: Option<String>,
     /// Category to delete (confirmation pending)
     pub delete_pending: Option<(CountdownCategoryId, String, usize)>,
-    /// Working copy of the category's visual defaults.
+    /// Working copy of the category's visual defaults (legacy, kept for migration).
     pub visual_defaults: CountdownCardVisuals,
     /// Working copy of the default card width.
     pub default_card_width: f32,
     /// Working copy of the default card height.
     pub default_card_height: f32,
-    /// Working copy of the "use global defaults" toggle.
+    /// Working copy of the "use global defaults" toggle (legacy).
     pub use_global_defaults: bool,
     /// Whether the card-defaults section is expanded in the UI.
     pub defaults_expanded: bool,
+    /// Selected template ID for this category (None = inherit global).
+    pub template_id: Option<CountdownCardTemplateId>,
+    /// Layout orientation hint for this category's container.
+    pub orientation: LayoutOrientation,
 }
 
 impl CountdownCategoryManagerState {
@@ -83,6 +89,8 @@ impl CountdownCategoryManagerState {
         self.default_card_width = category.default_card_width;
         self.default_card_height = category.default_card_height;
         self.use_global_defaults = category.use_global_defaults;
+        self.template_id = category.template_id;
+        self.orientation = category.orientation;
         self.error_message = None;
         self.success_message = None;
     }
@@ -104,6 +112,8 @@ impl CountdownCategoryManagerState {
         self.default_card_height = 110.0;
         self.use_global_defaults = true;
         self.defaults_expanded = false;
+        self.template_id = None;
+        self.orientation = LayoutOrientation::Auto;
     }
 }
 
@@ -366,14 +376,87 @@ pub fn render_countdown_category_manager_dialog(
                         if state.defaults_expanded {
                             ui.add_space(4.0);
 
-                            // Use global defaults toggle
-                            ui.checkbox(
-                                &mut state.use_global_defaults,
-                                "Inherit global defaults",
-                            );
+                            // Template selection dropdown
+                            let templates: Vec<(CountdownCardTemplateId, String)> = service
+                                .templates()
+                                .iter()
+                                .map(|t| (t.id, t.name.clone()))
+                                .collect();
+
+                            ui.horizontal(|ui| {
+                                ui.label("Template:");
+                                let current_label = state
+                                    .template_id
+                                    .and_then(|tid| {
+                                        templates
+                                            .iter()
+                                            .find(|(id, _)| *id == tid)
+                                            .map(|(_, name)| name.clone())
+                                    })
+                                    .unwrap_or_else(|| "— Global defaults —".to_string());
+
+                                egui::ComboBox::from_id_source("category_template_combo")
+                                    .selected_text(current_label)
+                                    .width(160.0)
+                                    .show_ui(ui, |ui| {
+                                        // "None" option = inherit global defaults
+                                        if ui
+                                            .selectable_label(
+                                                state.template_id.is_none(),
+                                                "— Global defaults —",
+                                            )
+                                            .clicked()
+                                        {
+                                            state.template_id = None;
+                                            state.use_global_defaults = true;
+                                        }
+
+                                        for (tid, tname) in &templates {
+                                            if ui
+                                                .selectable_label(
+                                                    state.template_id == Some(*tid),
+                                                    tname,
+                                                )
+                                                .clicked()
+                                            {
+                                                state.template_id = Some(*tid);
+                                                state.use_global_defaults = false;
+                                            }
+                                        }
+                                    });
+                            });
                             ui.label(
                                 RichText::new(
-                                    "When enabled, cards use global visual defaults.",
+                                    "Templates define card colours, fonts, and default dimensions.",
+                                )
+                                .small()
+                                .weak(),
+                            );
+
+                            ui.add_space(8.0);
+
+                            // Orientation selector
+                            ui.horizontal(|ui| {
+                                ui.label("Orientation:");
+                                ui.radio_value(
+                                    &mut state.orientation,
+                                    LayoutOrientation::Auto,
+                                    "Auto",
+                                );
+                                ui.radio_value(
+                                    &mut state.orientation,
+                                    LayoutOrientation::Portrait,
+                                    "Portrait",
+                                );
+                                ui.radio_value(
+                                    &mut state.orientation,
+                                    LayoutOrientation::Landscape,
+                                    "Landscape",
+                                );
+                            });
+                            ui.label(
+                                RichText::new(
+                                    "Auto detects from container shape. Portrait stacks vertically; Landscape horizontally.",
                                 )
                                 .small()
                                 .weak(),
@@ -407,68 +490,15 @@ pub fn render_countdown_category_manager_dialog(
                                 );
                             });
 
-                            // Visual settings (disabled when inheriting globals)
-                            ui.add_space(8.0);
-                            ui.label(RichText::new("Colours & Fonts").strong().size(13.0));
-                            if state.use_global_defaults {
-                                ui.label(
-                                    RichText::new(
-                                        "Disable \"Inherit global defaults\" to customise.",
-                                    )
-                                    .small()
-                                    .weak()
-                                    .italics(),
-                                );
+                            // Template preview (show resolved colours)
+                            if let Some(tid) = state.template_id {
+                                if let Some(tmpl) = service.template(tid) {
+                                    ui.add_space(8.0);
+                                    ui.label(RichText::new("Template Preview").strong().size(13.0));
+                                    ui.add_space(2.0);
+                                    render_template_preview(ui, tmpl);
+                                }
                             }
-                            ui.add_space(2.0);
-
-                            let enabled = !state.use_global_defaults;
-
-                            ui.add_enabled_ui(enabled, |ui| {
-                                render_category_color_row(
-                                    ui,
-                                    "Title BG:",
-                                    &mut state.visual_defaults.title_bg_color,
-                                );
-                                render_category_color_row(
-                                    ui,
-                                    "Title Text:",
-                                    &mut state.visual_defaults.title_fg_color,
-                                );
-                                render_category_color_row(
-                                    ui,
-                                    "Body BG:",
-                                    &mut state.visual_defaults.body_bg_color,
-                                );
-                                render_category_color_row(
-                                    ui,
-                                    "Days Text:",
-                                    &mut state.visual_defaults.days_fg_color,
-                                );
-
-                                ui.add_space(4.0);
-
-                                ui.horizontal(|ui| {
-                                    ui.label("Title size:");
-                                    ui.add(
-                                        egui::Slider::new(
-                                            &mut state.visual_defaults.title_font_size,
-                                            10.0..=48.0,
-                                        )
-                                        .suffix(" pt"),
-                                    );
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Days size:");
-                                    ui.add(
-                                        egui::Slider::new(
-                                            &mut state.visual_defaults.days_font_size,
-                                            32.0..=220.0,
-                                        )
-                                        .suffix(" pt"),
-                                    );
-                                });
-                            });
                         }
                     }
                     }); // end ScrollArea
@@ -544,6 +574,8 @@ fn handle_save(
             cat.default_card_width = state.default_card_width;
             cat.default_card_height = state.default_card_height;
             cat.use_global_defaults = state.use_global_defaults;
+            cat.template_id = state.template_id;
+            cat.orientation = state.orientation;
             state.success_message = Some("Category updated".to_string());
             response.categories_changed = true;
         } else {
@@ -559,6 +591,8 @@ fn handle_save(
             default_card_width: state.default_card_width,
             default_card_height: state.default_card_height,
             use_global_defaults: state.use_global_defaults,
+            template_id: state.template_id,
+            orientation: state.orientation,
             ..CountdownCategory::default()
         };
         let added = service.add_category(new_cat);
@@ -574,6 +608,7 @@ fn handle_save(
 }
 
 /// Render a labelled colour-picker row for a category default colour.
+#[allow(dead_code)]
 fn render_category_color_row(ui: &mut egui::Ui, label: &str, color: &mut RgbaColor) {
     ui.horizontal(|ui| {
         ui.label(label);
@@ -588,4 +623,41 @@ fn render_category_color_row(ui: &mut egui::Ui, label: &str, color: &mut RgbaCol
             *color = color32_to_rgba(c32);
         }
     });
+}
+
+/// Render a read-only preview of a template's colours and fonts.
+fn render_template_preview(ui: &mut egui::Ui, tmpl: &CountdownCardTemplate) {
+    ui.horizontal(|ui| {
+        let swatch = |ui: &mut egui::Ui, label: &str, c: RgbaColor| {
+            ui.label(label);
+            let c32 = rgba_to_color32(c);
+            let (rect, _resp) =
+                ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+            ui.painter().rect_filled(rect, 2.0, c32);
+        };
+        swatch(ui, "Title BG:", tmpl.visuals.title_bg_color);
+        swatch(ui, "Body BG:", tmpl.visuals.body_bg_color);
+    });
+    ui.horizontal(|ui| {
+        let swatch = |ui: &mut egui::Ui, label: &str, c: RgbaColor| {
+            ui.label(label);
+            let c32 = rgba_to_color32(c);
+            let (rect, _resp) =
+                ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+            ui.painter().rect_filled(rect, 2.0, c32);
+        };
+        swatch(ui, "Title FG:", tmpl.visuals.title_fg_color);
+        swatch(ui, "Days FG:", tmpl.visuals.days_fg_color);
+    });
+    ui.label(
+        RichText::new(format!(
+            "Title: {:.0}pt  Days: {:.0}pt  Card: {:.0}×{:.0}",
+            tmpl.visuals.title_font_size,
+            tmpl.visuals.days_font_size,
+            tmpl.default_card_width,
+            tmpl.default_card_height,
+        ))
+        .small()
+        .weak(),
+    );
 }
