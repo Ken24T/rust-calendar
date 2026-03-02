@@ -18,9 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Countdown layout JSON export/import** — export the current category
-  structure, card templates, visual defaults, display mode, and container
-  geometry to a portable `.json` file; import on another machine with
-  merge-on-import strategy (match by name → update; new → add).
+  structure, card templates, visual defaults, and display mode to a portable
+  `.json` file; import on another machine with merge-on-import strategy
+  (match by name → update; new → add). Container geometry is excluded for
+  cross-screen portability.
 
 ## [2.4.0] - 2026-03-02
 

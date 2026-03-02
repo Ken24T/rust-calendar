@@ -50,6 +50,7 @@ with local-first data storage and no cloud dependencies.
 - Per-category layout orientation (Auto, Portrait, Landscape)
 - Cross-container drag-and-drop to re-categorise cards
 - Choose target container when creating from context menu or event dialog
+- Portable layout export/import (JSON) for cross-machine setup transfer
 
 ### Customisation
 
