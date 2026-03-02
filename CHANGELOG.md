@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-03-02
+
+### Added
+
+- **Card template system** — reusable visual templates (colours, fonts, default
+  card dimensions) that can be shared across countdown categories, separating
+  container geometry from card visuals.
+- **Template manager dialog** (Edit → Manage Card Templates) for creating,
+  editing, and deleting card templates with colour pickers, font sliders, and
+  default dimension controls.
+- **Template dropdown** in the category manager — categories select a template
+  instead of defining inline colours/fonts; "Global defaults" option retained.
+- **Layout orientation** per category — Auto (detect from container shape),
+  Portrait (vertical), and Landscape (horizontal) options in the category
+  manager.
+- **Template preview** in the category manager showing resolved colours, fonts,
+  and default dimensions from the selected template.
+- Database migration: `countdown_card_templates` table with seeded Default
+  template; existing categories with custom visuals are auto-migrated to
+  templates.
+- Template resolution chain: template → legacy category visuals → global
+  defaults.
+
+### Fixed
+
+- Markdown lint issue in USER_GUIDE.md (list surrounded by blank lines).
+
 ## [2.3.4] - 2026-03-02
 
 ### Fixed
