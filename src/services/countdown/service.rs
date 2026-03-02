@@ -418,6 +418,20 @@ impl CountdownService {
         false
     }
 
+    // ========== ID Generation Helpers ==========
+
+    /// Compute the next available template ID.
+    pub(super) fn next_template_id(&self) -> CountdownCardTemplateId {
+        let max_id = self.templates.iter().map(|t| t.id.0).max().unwrap_or(0);
+        CountdownCardTemplateId(max_id + 1)
+    }
+
+    /// Compute the next available category ID.
+    pub(super) fn next_category_id(&self) -> CountdownCategoryId {
+        let max_id = self.categories.iter().map(|c| c.id.0).max().unwrap_or(0);
+        CountdownCategoryId(max_id + 1)
+    }
+
     // ========== Category Management ==========
 
     /// Get all categories.
@@ -436,15 +450,7 @@ impl CountdownService {
     /// The real ID is assigned by the database on save.
     #[allow(dead_code)]
     pub fn add_category(&mut self, mut category: CountdownCategory) -> &CountdownCategory {
-        // Assign a temporary ID (negative to distinguish from DB-assigned)
-        // The real ID will be set when saved to the database
-        let max_id = self
-            .categories
-            .iter()
-            .map(|c| c.id.0)
-            .max()
-            .unwrap_or(0);
-        category.id = CountdownCategoryId(max_id + 1);
+        category.id = self.next_category_id();
         self.categories.push(category);
         self.dirty = true;
         self.categories.last().unwrap()
@@ -617,13 +623,7 @@ impl CountdownService {
         &mut self,
         mut template: CountdownCardTemplate,
     ) -> &CountdownCardTemplate {
-        let max_id = self
-            .templates
-            .iter()
-            .map(|t| t.id.0)
-            .max()
-            .unwrap_or(0);
-        template.id = CountdownCardTemplateId(max_id + 1);
+        template.id = self.next_template_id();
         self.templates.push(template);
         self.dirty = true;
         self.templates.last().unwrap()

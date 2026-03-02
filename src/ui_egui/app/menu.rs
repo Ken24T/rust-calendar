@@ -19,6 +19,40 @@ impl CalendarApp {
 
     fn render_file_menu(&mut self, ui: &mut egui::Ui, ctx: &Context) {
         ui.menu_button("File", |ui| {
+            // --- Import ---
+            if ui.button("📥 Import Events...").clicked() {
+                self.import_events_ics();
+                ui.close_menu();
+            }
+            if ui.button("📥 Import Countdown Layout...").clicked() {
+                self.import_countdown_layout();
+                ui.close_menu();
+            }
+
+            ui.separator();
+
+            // --- Export ---
+            ui.menu_button("📤 Export Events", |ui| {
+                if let Some(category) = &self.active_category_filter.clone() {
+                    let label = format!("Export '{}' Events...", category);
+                    if ui.button(&label).clicked() {
+                        self.export_filtered_events_ics();
+                        ui.close_menu();
+                    }
+                    if ui.button("Export All Events...").clicked() {
+                        self.export_all_events_ics();
+                        ui.close_menu();
+                    }
+                } else if ui.button("Export All Events...").clicked() {
+                    self.export_all_events_ics();
+                    ui.close_menu();
+                }
+                if ui.button("Export Date Range...").clicked() {
+                    self.state.show_export_range_dialog = true;
+                    ui.close_menu();
+                }
+            });
+
             ui.menu_button("📄 Export to PDF", |ui| {
                 if ui.button("Export Month View...").clicked() {
                     self.export_month_to_pdf();
@@ -33,7 +67,15 @@ impl CalendarApp {
                     ui.close_menu();
                 }
             });
+
+            if ui.button("📤 Export Countdown Layout...").clicked() {
+                self.export_countdown_layout();
+                ui.close_menu();
+            }
+
             ui.separator();
+
+            // --- Backups ---
             if ui.button("💾 Backup Database...    Ctrl+B").clicked() {
                 if let Err(e) = self.state.backup_manager_state.create_backup() {
                     log::error!("Failed to create backup: {}", e);
@@ -109,7 +151,7 @@ impl CalendarApp {
                 self.state.countdown_template_manager_state.open();
                 ui.close_menu();
             }
-            if ui.button("📋 Manage Templates...").clicked() {
+            if ui.button("📋 Manage Event Templates...").clicked() {
                 self.state.template_manager_state.open(self.context.database());
                 ui.close_menu();
             }
@@ -375,54 +417,6 @@ impl CalendarApp {
                 self.state.show_search_dialog = true;
                 ui.close_menu();
             }
-            if ui.button("📥 Import Event...").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("iCalendar", &["ics"])
-                    .pick_file()
-                {
-                    match std::fs::read_to_string(&path) {
-                        Ok(ics_content) => {
-                            use crate::services::icalendar::import;
-                            match import::from_str(&ics_content) {
-                                Ok(events) => {
-                                    self.handle_ics_import(events, "file import dialog");
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to parse ICS file: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Failed to read ICS file: {}", e);
-                        }
-                    }
-                }
-                ui.close_menu();
-            }
-            
-            ui.separator();
-            
-            ui.menu_button("📤 Export Events", |ui| {
-                // Show category-specific export if filter is active
-                if let Some(category) = &self.active_category_filter {
-                    let label = format!("Export '{}' Events...", category);
-                    if ui.button(&label).clicked() {
-                        self.export_filtered_events_ics();
-                        ui.close_menu();
-                    }
-                    if ui.button("Export All Events...").clicked() {
-                        self.export_all_events_ics();
-                        ui.close_menu();
-                    }
-                } else if ui.button("Export All Events...").clicked() {
-                    self.export_all_events_ics();
-                    ui.close_menu();
-                }
-                if ui.button("Export Date Range...").clicked() {
-                    self.state.show_export_range_dialog = true;
-                    ui.close_menu();
-                }
-            });
         });
     }
 
@@ -434,7 +428,7 @@ impl CalendarApp {
 
             if templates.is_empty() {
                 ui.label(egui::RichText::new("No templates yet").weak().italics());
-                ui.label(egui::RichText::new("Use Edit > Manage Templates").weak().small());
+                ui.label(egui::RichText::new("Use Edit > Manage Event Templates").weak().small());
             } else {
                 // Show each template as a button
                 for template in &templates {

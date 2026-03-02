@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the architecture of Rust Calendar as of v2.0.17.
+This document describes the architecture of Rust Calendar as of v2.4.1.
 
 ## High-Level Overview
 
@@ -77,7 +77,7 @@ Business logic that operates on models and the database. Each service borrows a
 - `theme/` — TOML-based theme loading from `assets/themes/`
 - `backup/` — database backup and restore
 - `countdown/` — countdown timer state, persistence, layout, visuals,
-  notifications, sync, category management
+  notifications, sync, category management, layout export/import (JSON)
 - `calendar_sync/` — external ICS feed sync engine, fetcher, mapping, scheduler
 - `icalendar/` — iCalendar import/export (`.ics` files)
 - `pdf/` — PDF calendar export
@@ -215,10 +215,10 @@ controls all colours used by the UI layer.
 
 ## Codebase Metrics
 
-As of v2.0.17:
+As of v2.4.1:
 
-- 144 source files, ~35,000 lines of Rust
+- 151 source files, ~35,800 lines of Rust
 - All files under 550 lines (target: 300; see
   [MODULARITY.md](MODULARITY.md) for guidelines)
-- 298 unit tests + 3 integration tests + 1 doc-test
+- 317 unit tests + 3 integration tests + 1 doc-test
 - Zero clippy warnings

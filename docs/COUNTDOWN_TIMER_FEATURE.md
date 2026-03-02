@@ -158,15 +158,22 @@ impl CountdownState {
 **New Files**:
 
 ```text
-src/
-├── ui/components/
-│   └── countdown_timer.rs          # Countdown window component
-├── models/ui/
-│   └── countdown_config.rs         # Countdown configuration
-└── services/countdown/
-    ├── mod.rs                      # Countdown service exports
-    ├── manager.rs                  # Countdown timer manager
-    └── window.rs                   # Window creation/management
+src/services/countdown/
+├── mod.rs                          # Module exports
+├── service.rs                      # CountdownService state & logic
+├── models.rs                       # Domain types (cards, templates, categories)
+├── layout.rs                       # Container layout computation
+├── layout_export.rs                # JSON export/import of layout configuration
+├── visuals.rs                      # Visual rendering helpers
+├── storage.rs                      # Persistence coordination
+├── persistence.rs                  # Load/save state
+├── repository.rs                   # Database CRUD
+├── repository_categories.rs        # Category DB operations
+├── repository_templates.rs         # Template DB operations
+├── repository_settings.rs          # Settings DB operations
+├── notifications.rs                # Warning-state notifications
+├── sync.rs                         # Event↔card synchronisation
+└── palette.rs                      # Colour palette helpers
 ```
 
 ### Countdown Service
@@ -672,6 +679,8 @@ custom visuals are auto-migrated to templates.
 - [x] Custom countdown timer appearance themes — shipped v2.4.0 (card templates)
 - [x] Countdown timer groups (category containers) — shipped v2.1.0–v2.1.8
 - [x] Countdown timer templates — shipped v2.4.0
+- [x] Countdown layout JSON export/import — shipped v2.4.1
+- [ ] Bundled export (layout + ICS events in one step)
 - [ ] Export countdown as image
 - [ ] Share countdown timer link (if cloud sync added)
 - [ ] Countdown timer widgets for multiple monitors
