@@ -20,7 +20,7 @@ pub fn from_str(ics_content: &str) -> Result<Vec<Event>> {
 
 pub fn from_str_with_metadata(ics_content: &str) -> Result<Vec<ImportedIcsEvent>> {
     let mut events = Vec::new();
-    let lines: Vec<&str> = ics_content.lines().collect();
+    let lines = unfold_ics_lines(ics_content);
 
     let mut in_event = false;
     let mut current_event: Option<ImportedIcsEvent> = None;
@@ -53,6 +53,26 @@ pub fn from_str_with_metadata(ics_content: &str) -> Result<Vec<ImportedIcsEvent>
     }
 
     Ok(events)
+}
+
+fn unfold_ics_lines(ics_content: &str) -> Vec<String> {
+    let mut unfolded: Vec<String> = Vec::new();
+
+    for raw_line in ics_content.lines() {
+        let is_single_space_continuation = raw_line.starts_with(' ') && !raw_line.starts_with("  ");
+        let is_tab_continuation = raw_line.starts_with('\t');
+
+        if is_single_space_continuation || is_tab_continuation {
+            if let Some(last) = unfolded.last_mut() {
+                last.push_str(raw_line[1..].trim_end());
+            }
+            continue;
+        }
+
+        unfolded.push(raw_line.trim_end().to_string());
+    }
+
+    unfolded
 }
 
 fn parse_event_property(line: &str, imported: &mut ImportedIcsEvent) -> Result<()> {
@@ -285,5 +305,14 @@ END:VCALENDAR"#;
             imported[0].event.end,
             imported[0].event.start + chrono::Duration::days(1)
         );
+    }
+
+    #[test]
+    fn test_import_unfolds_folded_property_lines() {
+        let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:folded-uid\r\nSUMMARY:Long\r\n continuation title\r\nDTSTART:20260227T090000\r\nDTEND:20260227T100000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let imported = from_str_with_metadata(ics).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(imported[0].event.title, "Longcontinuation title");
     }
 }

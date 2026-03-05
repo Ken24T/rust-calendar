@@ -166,7 +166,7 @@ pub fn is_visible_on_any_monitor(
 
 /// Find the monitor whose centre is closest to the given point.
 /// Returns the primary (first) monitor if the list has only one entry.
-pub fn nearest_monitor(monitors: &[MonitorRect], x: f32, y: f32) -> &MonitorRect {
+pub fn nearest_monitor(monitors: &[MonitorRect], x: f32, y: f32) -> Option<&MonitorRect> {
     monitors
         .iter()
         .min_by(|a, b| {
@@ -176,7 +176,6 @@ pub fn nearest_monitor(monitors: &[MonitorRect], x: f32, y: f32) -> &MonitorRect
             let db = (bx - x).powi(2) + (by - y).powi(2);
             da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
         })
-        .expect("monitors list must not be empty")
 }
 
 #[cfg(test)]
@@ -251,8 +250,14 @@ mod tests {
             monitor(0.0, 0.0, 1920.0, 1080.0),
             monitor(1920.0, 0.0, 2560.0, 1440.0),
         ];
-        let m = nearest_monitor(&monitors, 3000.0, 500.0);
+        let m = nearest_monitor(&monitors, 3000.0, 500.0).unwrap();
         assert_eq!(m.x, 1920.0);
+    }
+
+    #[test]
+    fn nearest_monitor_returns_none_for_empty_input() {
+        let monitors = Vec::<MonitorRect>::new();
+        assert!(nearest_monitor(&monitors, 10.0, 10.0).is_none());
     }
 
     #[test]

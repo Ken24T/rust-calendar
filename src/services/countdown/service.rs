@@ -789,7 +789,7 @@ mod tests {
 
     #[test]
     fn effective_visual_defaults_uses_global_when_category_flag_set() {
-        let mut service = CountdownService::new();
+        let service = CountdownService::new();
         // Default category (General) has use_global_defaults = true
         let defaults = service.effective_visual_defaults_for(CountdownCategoryId(DEFAULT_CATEGORY_ID));
         assert_eq!(defaults.title_bg_color, service.visual_defaults().title_bg_color);
@@ -834,11 +834,13 @@ mod tests {
 
         let mut service = CountdownService::new();
         let tmpl_color = RgbaColor::new(42, 42, 42, 255);
-        let mut tmpl = CountdownCardTemplate::default();
-        tmpl.name = "Test Template".to_string();
+        let mut tmpl = CountdownCardTemplate {
+            name: "Test Template".to_string(),
+            default_card_width: 200.0,
+            default_card_height: 180.0,
+            ..CountdownCardTemplate::default()
+        };
         tmpl.visuals.title_bg_color = tmpl_color;
-        tmpl.default_card_width = 200.0;
-        tmpl.default_card_height = 180.0;
         let added_tmpl = service.add_template(tmpl);
         let tmpl_id = added_tmpl.id;
 

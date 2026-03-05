@@ -26,6 +26,8 @@ pub enum ConfirmAction {
     DiscardChanges,
     /// Delete a custom theme
     DeleteTheme { theme_name: String },
+    /// Restart the application to reload critical resources (e.g. restored DB)
+    RestartApplication,
 }
 
 impl ConfirmAction {
@@ -37,6 +39,7 @@ impl ConfirmAction {
             ConfirmAction::DeleteCountdownCard { .. } => "Delete Countdown",
             ConfirmAction::DiscardChanges => "Discard Changes",
             ConfirmAction::DeleteTheme { .. } => "Delete Theme",
+            ConfirmAction::RestartApplication => "Restart Application",
         }
     }
 
@@ -62,6 +65,10 @@ impl ConfirmAction {
             ConfirmAction::DeleteTheme { theme_name } => {
                 format!("Are you sure you want to delete the theme \"{}\"?\n\nThis action cannot be undone.", theme_name)
             }
+            ConfirmAction::RestartApplication => {
+                "The database was restored from backup.\n\nRestart now to reload the restored data?"
+                    .to_string()
+            }
         }
     }
 
@@ -73,6 +80,7 @@ impl ConfirmAction {
             ConfirmAction::DeleteCountdownCard { .. } => "Delete",
             ConfirmAction::DiscardChanges => "Discard",
             ConfirmAction::DeleteTheme { .. } => "Delete",
+            ConfirmAction::RestartApplication => "Restart",
         }
     }
 
@@ -84,6 +92,7 @@ impl ConfirmAction {
             ConfirmAction::DeleteCountdownCard { .. } => true,
             ConfirmAction::DiscardChanges => false,
             ConfirmAction::DeleteTheme { .. } => true,
+            ConfirmAction::RestartApplication => false,
         }
     }
 }
@@ -235,13 +244,13 @@ impl CalendarApp {
         if result == ConfirmResult::Confirmed {
             // Get the action that was confirmed
             if let Some(action) = self.confirm_dialog.take_action() {
-                self.execute_confirmed_action(action);
+                self.execute_confirmed_action(action, ctx);
             }
         }
     }
     
     /// Execute an action that has been confirmed by the user
-    fn execute_confirmed_action(&mut self, action: ConfirmAction) {
+    fn execute_confirmed_action(&mut self, action: ConfirmAction, ctx: &Context) {
         match action {
             ConfirmAction::DeleteEvent { event_id, event_title } => {
                 if self.is_synced_event_id(event_id) {
@@ -305,6 +314,35 @@ impl CalendarApp {
                     log::info!("Deleted theme: {}", theme_name);
                     self.toast_manager.success(format!("Deleted theme \"{}\"", theme_name));
                 }
+            }
+            ConfirmAction::RestartApplication => {
+                self.restart_application(ctx);
+            }
+        }
+    }
+
+    fn restart_application(&mut self, ctx: &Context) {
+        let executable = match std::env::current_exe() {
+            Ok(path) => path,
+            Err(err) => {
+                log::error!("Failed to resolve current executable for restart: {}", err);
+                self.toast_manager
+                    .error(format!("Could not restart application: {}", err));
+                return;
+            }
+        };
+
+        let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+        match std::process::Command::new(&executable).args(args).spawn() {
+            Ok(_) => {
+                log::info!("Application relaunch started; closing current instance");
+                self.exit_requested = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Err(err) => {
+                log::error!("Failed to spawn relaunched process: {}", err);
+                self.toast_manager
+                    .error(format!("Could not restart application: {}", err));
             }
         }
     }

@@ -36,14 +36,21 @@ impl CalendarApp {
                 geometry
             } else {
                 // Window would be off-screen — centre it on the nearest monitor
-                let nearest = monitors::nearest_monitor(&monitors, geometry.x, geometry.y);
-                let centred = centre_on_monitor(nearest, geometry.width, geometry.height);
-                log::info!(
-                    "Persisted root geometry {:?} is not visible on any monitor; \
-                     centering on nearest monitor {:?} → {:?}",
-                    geometry, nearest, centred
-                );
-                centred
+                if let Some(nearest) = monitors::nearest_monitor(&monitors, geometry.x, geometry.y) {
+                    let centred = centre_on_monitor(nearest, geometry.width, geometry.height);
+                    log::info!(
+                        "Persisted root geometry {:?} is not visible on any monitor; \
+                         centering on nearest monitor {:?} → {:?}",
+                        geometry, nearest, centred
+                    );
+                    centred
+                } else {
+                    log::warn!(
+                        "No monitors available while restoring geometry; keeping saved geometry {:?}",
+                        geometry
+                    );
+                    geometry
+                }
             };
             
             if final_geom.width > 40.0 && final_geom.height > 40.0 {

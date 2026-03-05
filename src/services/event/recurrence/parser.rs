@@ -55,6 +55,8 @@ fn parse_until_date(value: &str) -> Option<NaiveDate> {
 }
 
 pub(super) fn parse_interval(rrule: &str, default: i64) -> i64 {
+    let fallback = default.max(1);
+
     rrule
         .find("INTERVAL=")
         .and_then(|idx| {
@@ -62,7 +64,8 @@ pub(super) fn parse_interval(rrule: &str, default: i64) -> i64 {
             let end = slice.find(';').unwrap_or(slice.len());
             slice[..end].parse::<i64>().ok()
         })
-        .unwrap_or(default)
+        .filter(|interval| *interval > 0)
+        .unwrap_or(fallback)
 }
 
 pub(super) fn parse_weekly_byday(rrule: &str, fallback: Weekday) -> Vec<Weekday> {
@@ -119,7 +122,7 @@ fn weekday_from_code(code: &str) -> Option<Weekday> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_until;
+    use super::{parse_interval, parse_until};
     use chrono::NaiveDate;
 
     #[test]
@@ -138,5 +141,11 @@ mod tests {
     fn parse_until_supports_datetime_local_value() {
         let parsed = parse_until("FREQ=MONTHLY;UNTIL=20241012T090000;BYDAY=2SA");
         assert_eq!(parsed, NaiveDate::from_ymd_opt(2024, 10, 12));
+    }
+
+    #[test]
+    fn parse_interval_rejects_zero_or_negative_values() {
+        assert_eq!(parse_interval("FREQ=DAILY;INTERVAL=0", 1), 1);
+        assert_eq!(parse_interval("FREQ=DAILY;INTERVAL=-3", 2), 2);
     }
 }

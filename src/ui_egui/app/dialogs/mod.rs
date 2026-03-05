@@ -49,8 +49,10 @@ impl CalendarApp {
         let should_reload_db =
             render_backup_manager_dialog(ctx, &mut self.state.backup_manager_state);
         if should_reload_db {
-            log::info!("Database restored. Application should be restarted.");
-            // TODO: Implement graceful restart or reload mechanism
+            use super::confirm::ConfirmAction;
+
+            log::info!("Database restored. Prompting user to restart application.");
+            self.confirm_dialog.request(ConfirmAction::RestartApplication);
         }
     }
 

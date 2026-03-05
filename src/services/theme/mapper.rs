@@ -16,6 +16,11 @@ pub fn row_to_theme(row: &Row) -> Result<CalendarTheme, rusqlite::Error> {
     // Header colors may be NULL in older databases, so use Option and fallback to base theme
     let header_background: Option<String> = row.get(11).ok();
     let header_text: Option<String> = row.get(12).ok();
+    let event_default: Option<String> = row.get(13).ok();
+    let event_work: Option<String> = row.get(14).ok();
+    let event_personal: Option<String> = row.get(15).ok();
+    let event_holiday: Option<String> = row.get(16).ok();
+    let event_birthday: Option<String> = row.get(17).ok();
 
     Ok(CalendarTheme {
         name,
@@ -44,6 +49,22 @@ pub fn row_to_theme(row: &Row) -> Result<CalendarTheme, rusqlite::Error> {
         header_text: header_text
             .and_then(|s| CalendarTheme::string_to_color(&s).ok())
             .unwrap_or(base.header_text),
-        event_colors: EventColors::default(), // TODO: Load from DB when schema supports it
+        event_colors: EventColors {
+            default: event_default
+                .and_then(|s| CalendarTheme::string_to_color(&s).ok())
+                .unwrap_or(base.event_colors.default),
+            work: event_work
+                .and_then(|s| CalendarTheme::string_to_color(&s).ok())
+                .unwrap_or(base.event_colors.work),
+            personal: event_personal
+                .and_then(|s| CalendarTheme::string_to_color(&s).ok())
+                .unwrap_or(base.event_colors.personal),
+            holiday: event_holiday
+                .and_then(|s| CalendarTheme::string_to_color(&s).ok())
+                .unwrap_or(base.event_colors.holiday),
+            birthday: event_birthday
+                .and_then(|s| CalendarTheme::string_to_color(&s).ok())
+                .unwrap_or(base.event_colors.birthday),
+        },
     })
 }

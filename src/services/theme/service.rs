@@ -1,6 +1,7 @@
 use crate::services::database::Database;
 use crate::ui_egui::theme::{CalendarTheme, ThemePreset};
 use anyhow::{anyhow, Result};
+use rusqlite::params;
 use std::path::Path;
 
 use super::mapper::row_to_theme;
@@ -64,7 +65,8 @@ impl<'a> ThemeService<'a> {
         let theme = conn.query_row(
             "SELECT name, is_dark, app_background, calendar_background, weekend_background,
                     today_background, today_border, day_background, day_border,
-                    text_primary, text_secondary, header_background, header_text
+                    text_primary, text_secondary, header_background, header_text,
+                    event_default, event_work, event_personal, event_holiday, event_birthday
              FROM custom_themes WHERE name = ?1",
             [name],
             row_to_theme,
@@ -89,9 +91,11 @@ impl<'a> ThemeService<'a> {
             "INSERT OR REPLACE INTO custom_themes \
              (name, is_dark, app_background, calendar_background, weekend_background,\
               today_background, today_border, day_background, day_border,\
-              text_primary, text_secondary, header_background, header_text, updated_at)\
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, CURRENT_TIMESTAMP)",
-            (
+              text_primary, text_secondary, header_background, header_text,\
+              event_default, event_work, event_personal, event_holiday, event_birthday,\
+              updated_at)\
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, CURRENT_TIMESTAMP)",
+            params![
                 name,
                 is_dark as i32,
                 CalendarTheme::color_to_string(theme.app_background),
@@ -105,7 +109,12 @@ impl<'a> ThemeService<'a> {
                 CalendarTheme::color_to_string(theme.text_secondary),
                 CalendarTheme::color_to_string(theme.header_background),
                 CalendarTheme::color_to_string(theme.header_text),
-            ),
+                CalendarTheme::color_to_string(theme.event_colors.default),
+                CalendarTheme::color_to_string(theme.event_colors.work),
+                CalendarTheme::color_to_string(theme.event_colors.personal),
+                CalendarTheme::color_to_string(theme.event_colors.holiday),
+                CalendarTheme::color_to_string(theme.event_colors.birthday),
+            ],
         )?;
 
         Ok(())
@@ -258,5 +267,28 @@ mod tests {
         
         let theme = service.get_theme("My Nord").unwrap();
         assert!(theme.is_dark);
+    }
+
+    #[test]
+    fn test_save_and_load_event_colors() {
+        let db = setup_test_db();
+        let service = ThemeService::new(&db);
+
+        let mut theme = CalendarTheme::light();
+        theme.name = "Colorful".to_string();
+        theme.event_colors.default = egui::Color32::from_rgb(10, 20, 30);
+        theme.event_colors.work = egui::Color32::from_rgb(40, 50, 60);
+        theme.event_colors.personal = egui::Color32::from_rgb(70, 80, 90);
+        theme.event_colors.holiday = egui::Color32::from_rgb(100, 110, 120);
+        theme.event_colors.birthday = egui::Color32::from_rgb(130, 140, 150);
+
+        service.save_theme(&theme, &theme.name).unwrap();
+        let loaded = service.get_theme(&theme.name).unwrap();
+
+        assert_eq!(loaded.event_colors.default, theme.event_colors.default);
+        assert_eq!(loaded.event_colors.work, theme.event_colors.work);
+        assert_eq!(loaded.event_colors.personal, theme.event_colors.personal);
+        assert_eq!(loaded.event_colors.holiday, theme.event_colors.holiday);
+        assert_eq!(loaded.event_colors.birthday, theme.event_colors.birthday);
     }
 }

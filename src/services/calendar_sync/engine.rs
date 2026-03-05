@@ -65,6 +65,13 @@ impl<'a> CalendarSyncEngine<'a> {
 
     pub fn sync_source_from_ics(&self, source_id: i64, ics_content: &str) -> Result<SyncRunResult> {
         let imported = import::from_str_with_metadata(ics_content)?;
+
+        if imported.is_empty() && ics_content.contains("BEGIN:VEVENT") {
+            return Err(anyhow!(
+                "ICS payload contained VEVENT markers but no events were parsed; aborting sync to avoid accidental deletions"
+            ));
+        }
+
         self.apply_imported(source_id, imported)
     }
 
@@ -355,5 +362,45 @@ mod tests {
 
         let event_service = EventService::new(conn);
         assert_eq!(event_service.list_all().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_sync_source_from_ics_aborts_when_vevent_present_but_nothing_parsed() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn, "Work", true);
+
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let good_ics = r#"BEGIN:VCALENDAR
+    VERSION:2.0
+    BEGIN:VEVENT
+    UID:uid-safe
+    DTSTART:20260227T090000
+    DTEND:20260227T100000
+    SUMMARY:Existing Event
+    END:VEVENT
+    END:VCALENDAR"#;
+
+        let initial = engine.sync_source_from_ics(source_id, good_ics).unwrap();
+        assert_eq!(initial.created, 1);
+
+        let suspicious_ics = r#"BEGIN:VCALENDAR
+    VERSION:2.0
+    BEGIN:VEVENT
+    UID:uid-safe
+    DTSTART:20260227T090000
+    DTEND:20260227T100000
+    END:VEVENT
+    END:VCALENDAR"#;
+
+        let result = engine.sync_source_from_ics(source_id, suspicious_ics);
+        assert!(result.is_err());
+
+        let event_service = EventService::new(conn);
+        let all_events = event_service.list_all().unwrap();
+        assert_eq!(all_events.len(), 1);
+        assert_eq!(all_events[0].title, "Existing Event");
     }
 }

@@ -194,6 +194,11 @@ fn create_custom_themes_table(conn: &Connection) -> Result<()> {
             text_secondary TEXT NOT NULL,
             header_background TEXT,
             header_text TEXT,
+            event_default TEXT,
+            event_work TEXT,
+            event_personal TEXT,
+            event_holiday TEXT,
+            event_birthday TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",
@@ -213,6 +218,36 @@ fn create_custom_themes_table(conn: &Connection) -> Result<()> {
         "custom_themes",
         "header_text",
         "ALTER TABLE custom_themes ADD COLUMN header_text TEXT",
+    )?;
+    migrations::ensure_column(
+        conn,
+        "custom_themes",
+        "event_default",
+        "ALTER TABLE custom_themes ADD COLUMN event_default TEXT",
+    )?;
+    migrations::ensure_column(
+        conn,
+        "custom_themes",
+        "event_work",
+        "ALTER TABLE custom_themes ADD COLUMN event_work TEXT",
+    )?;
+    migrations::ensure_column(
+        conn,
+        "custom_themes",
+        "event_personal",
+        "ALTER TABLE custom_themes ADD COLUMN event_personal TEXT",
+    )?;
+    migrations::ensure_column(
+        conn,
+        "custom_themes",
+        "event_holiday",
+        "ALTER TABLE custom_themes ADD COLUMN event_holiday TEXT",
+    )?;
+    migrations::ensure_column(
+        conn,
+        "custom_themes",
+        "event_birthday",
+        "ALTER TABLE custom_themes ADD COLUMN event_birthday TEXT",
     )?;
 
     Ok(())

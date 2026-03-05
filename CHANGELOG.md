@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.2] - 2026-03-06
+
+### Fixed
+
+- Hardened recurrence expansion to avoid malformed RRULE interval lockups by
+  clamping `INTERVAL` to positive values and corrected weekly `COUNT` handling
+  to limit total occurrences rather than weeks.
+- Improved yearly recurrence date advancement for invalid day-of-month rollover
+  scenarios (for example leap-year edges) to avoid 365-day drift fallbacks.
+- Added ICS line unfolding support and guarded sync reconciliation from
+  accidental deletions when VEVENT markers are present but parsing yields zero
+  events.
+- Reduced SQLite lock contention during concurrent UI/scheduler writes by
+  configuring busy timeout and enabling WAL mode for file-backed databases.
+- Implemented an explicit post-backup-restore restart flow with confirmation,
+  relaunching the app and closing the current process when confirmed.
+- Implemented countdown auto-dismiss on event end when end timestamps are
+  available and enabled.
+- Persisted and restored theme event category colours for custom themes.
+- Hardened runtime safety by removing panic-prone icon/date/monitor edge-paths
+  and adding monitor-empty fallbacks.
+
 ## [2.4.1] - 2026-03-02
 
 ### Fixed

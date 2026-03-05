@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use rusqlite::Connection;
+use std::time::Duration;
 
 use super::schema;
 
@@ -18,6 +19,14 @@ impl Database {
 
         conn.execute("PRAGMA foreign_keys = ON", [])
             .context("Failed to enable foreign keys")?;
+
+        // Reduce transient lock errors when background sync and UI writes overlap.
+        conn.busy_timeout(Duration::from_secs(5))
+            .context("Failed to configure SQLite busy timeout")?;
+
+        if path != ":memory:" {
+            let _ = conn.execute("PRAGMA journal_mode = WAL", []);
+        }
 
         Ok(Self {
             conn,

@@ -43,10 +43,7 @@ pub(super) fn generate(
             );
         }
 
-        let new_year = current_start.year() + interval;
-        current_start = current_start
-            .with_year(new_year)
-            .unwrap_or(current_start + Duration::days(365 * interval as i64));
+        current_start = advance_year_with_day_clamp(current_start, interval);
 
         if current_start > range_end + Duration::days(365) {
             break;
@@ -54,4 +51,28 @@ pub(super) fn generate(
     }
 
     occurrences
+}
+
+fn advance_year_with_day_clamp(current_start: DateTime<Local>, year_interval: i32) -> DateTime<Local> {
+    let target_year = current_start.year() + year_interval;
+    let month = current_start.month();
+    let day = current_start.day();
+    let time = current_start.time();
+
+    // Keep month/time stable and clamp day to the target month's valid range.
+    let mut clamped_day = day;
+    while clamped_day > 28 {
+        if let Some(candidate) = NaiveDate::from_ymd_opt(target_year, month, clamped_day)
+            .and_then(|date| {
+                date.and_time(time)
+                    .and_local_timezone(Local)
+                    .single()
+            })
+        {
+            return candidate;
+        }
+        clamped_day -= 1;
+    }
+
+    current_start + Duration::days(365 * year_interval as i64)
 }

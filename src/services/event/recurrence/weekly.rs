@@ -24,11 +24,11 @@ pub(super) fn generate(
     let mut current_week_start = event.start.date_naive()
         - Duration::days(event.start.weekday().num_days_from_monday() as i64);
     let week_start_time = event.start.time();
-    let mut week_count = 0usize;
+    let mut occurrence_count = 0usize;
 
     loop {
         if let Some(max) = max_count {
-            if week_count >= max {
+            if occurrence_count >= max {
                 break;
             }
         }
@@ -38,8 +38,6 @@ pub(super) fn generate(
                 break;
             }
         }
-
-        let mut week_has_valid_occurrence = false;
 
         for &target_weekday in &byday_days {
             let days_offset = target_weekday.num_days_from_monday() as i64;
@@ -59,7 +57,12 @@ pub(super) fn generate(
                 if occurrence_datetime >= event.start
                     && is_valid_occurrence(event, occurrence_datetime)
                 {
-                    week_has_valid_occurrence = true;
+                    if let Some(max) = max_count {
+                        if occurrence_count >= max {
+                            break;
+                        }
+                    }
+
                     push_if_in_range(
                         &mut occurrences,
                         event,
@@ -68,12 +71,9 @@ pub(super) fn generate(
                         range_start,
                         range_end,
                     );
+                    occurrence_count += 1;
                 }
             }
-        }
-
-        if week_has_valid_occurrence {
-            week_count += 1;
         }
 
         current_week_start += Duration::weeks(interval);
@@ -84,4 +84,32 @@ pub(super) fn generate(
     }
 
     occurrences
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generate;
+    use crate::models::event::Event;
+    use chrono::{Datelike, Duration, Local, TimeZone, Weekday};
+
+    #[test]
+    fn weekly_count_limits_total_occurrences_not_weeks() {
+        let start = Local.with_ymd_and_hms(2026, 3, 2, 9, 0, 0).unwrap(); // Monday
+        let end = start + Duration::hours(1);
+        let event = Event::new("Weekly", start, end).unwrap();
+
+        let occurrences = generate(
+            &event,
+            "FREQ=WEEKLY;BYDAY=MO,WE",
+            start,
+            start + Duration::days(21),
+            Duration::hours(1),
+            Some(2),
+            None,
+        );
+
+        assert_eq!(occurrences.len(), 2);
+        assert_eq!(occurrences[0].start.weekday(), Weekday::Mon);
+        assert_eq!(occurrences[1].start.weekday(), Weekday::Wed);
+    }
 }

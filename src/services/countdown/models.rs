@@ -387,7 +387,14 @@ impl CountdownCardState {
             return true;
         }
 
-        // TODO: Implement on_event_end when we have event end times
+        if self.auto_dismiss.on_event_end {
+            if let Some(event_end) = self.event_end {
+                let seconds_past_end = now.signed_duration_since(event_end).num_seconds();
+                if seconds_past_end >= self.auto_dismiss.delay_seconds as i64 {
+                    return true;
+                }
+            }
+        }
 
         false
     }
@@ -595,11 +602,64 @@ pub(crate) fn default_visuals() -> CountdownCardVisuals {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Duration;
+
+    fn sample_card(now: chrono::DateTime<Local>) -> CountdownCardState {
+        CountdownCardState {
+            id: CountdownCardId(1),
+            event_id: Some(1),
+            event_title: "Sample".to_string(),
+            start_at: now,
+            event_start: Some(now),
+            event_end: None,
+            title_override: None,
+            auto_title_override: false,
+            geometry: CountdownCardGeometry {
+                x: 0.0,
+                y: 0.0,
+                width: 120.0,
+                height: 110.0,
+            },
+            visuals: CountdownCardVisuals::default(),
+            last_computed_days: None,
+            comment: None,
+            event_color: None,
+            last_warning_state: None,
+            last_notification_time: None,
+            auto_dismiss: CountdownAutoDismissConfig::default(),
+            category_id: CountdownCategoryId(DEFAULT_CATEGORY_ID),
+        }
+    }
 
     #[test]
     fn test_countdown_display_mode_default() {
         let mode = CountdownDisplayMode::default();
         assert_eq!(mode, CountdownDisplayMode::IndividualWindows);
+    }
+
+    #[test]
+    fn auto_dismiss_triggers_on_event_end_when_enabled() {
+        let now = Local::now();
+        let mut card = sample_card(now - Duration::minutes(30));
+        card.event_end = Some(now - Duration::seconds(20));
+        card.auto_dismiss.enabled = true;
+        card.auto_dismiss.on_event_start = false;
+        card.auto_dismiss.on_event_end = true;
+        card.auto_dismiss.delay_seconds = 10;
+
+        assert!(card.should_auto_dismiss(now));
+    }
+
+    #[test]
+    fn auto_dismiss_on_event_end_requires_end_timestamp() {
+        let now = Local::now();
+        let mut card = sample_card(now - Duration::minutes(30));
+        card.auto_dismiss.enabled = true;
+        card.auto_dismiss.on_event_start = false;
+        card.auto_dismiss.on_event_end = true;
+        card.auto_dismiss.delay_seconds = 10;
+
+        assert!(!card.should_auto_dismiss(now));
     }
 
     #[test]
