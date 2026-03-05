@@ -81,3 +81,23 @@ pub(super) fn select_positional_weekday(
         None
     }
 }
+
+pub(super) fn all_weekdays_in_month(current_date: NaiveDate, weekday: Weekday) -> Vec<NaiveDate> {
+    let mut dates = Vec::new();
+    let Some(mut cursor) = NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1) else {
+        return dates;
+    };
+
+    while cursor.month() == current_date.month() {
+        if cursor.weekday() == weekday {
+            dates.push(cursor);
+        }
+
+        let Some(next) = cursor.succ_opt() else {
+            break;
+        };
+        cursor = next;
+    }
+
+    dates
+}

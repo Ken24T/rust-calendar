@@ -1,5 +1,11 @@
 use chrono::{NaiveDate, Weekday};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct MonthlyByDayEntry {
+    pub position: Option<i32>,
+    pub weekday: Weekday,
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum RecurrenceFrequency {
     Weekly,
@@ -92,20 +98,37 @@ pub(super) fn parse_bymonthday(rrule: &str) -> Option<i32> {
     })
 }
 
-pub(super) fn parse_positional_byday(rrule: &str) -> Option<(i32, Weekday)> {
-    rrule.find("BYDAY=").and_then(|idx| {
-        let slice = &rrule[idx + 6..];
-        let end = slice.find(';').unwrap_or(slice.len());
-        let day_str = &slice[..end];
-        if day_str.len() > 2 {
-            let (position, weekday_code) = day_str.split_at(day_str.len() - 2);
-            let weekday = weekday_from_code(weekday_code)?;
-            let pos = position.parse::<i32>().ok()?;
-            Some((pos, weekday))
-        } else {
-            None
-        }
-    })
+pub(super) fn parse_monthly_byday(rrule: &str) -> Vec<MonthlyByDayEntry> {
+    rrule
+        .find("BYDAY=")
+        .map(|idx| {
+            let slice = &rrule[idx + 6..];
+            let end = slice.find(';').unwrap_or(slice.len());
+            let values = &slice[..end];
+
+            values
+                .split(',')
+                .filter_map(parse_monthly_byday_token)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_monthly_byday_token(token: &str) -> Option<MonthlyByDayEntry> {
+    let trimmed = token.trim();
+    if trimmed.len() < 2 {
+        return None;
+    }
+
+    let (position_part, weekday_code) = trimmed.split_at(trimmed.len() - 2);
+    let weekday = weekday_from_code(weekday_code)?;
+    let position = if position_part.is_empty() {
+        None
+    } else {
+        position_part.parse::<i32>().ok()
+    };
+
+    Some(MonthlyByDayEntry { position, weekday })
 }
 fn weekday_from_code(code: &str) -> Option<Weekday> {
     match code {
@@ -122,8 +145,8 @@ fn weekday_from_code(code: &str) -> Option<Weekday> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_interval, parse_until};
-    use chrono::NaiveDate;
+    use super::{parse_interval, parse_monthly_byday, parse_until};
+    use chrono::{NaiveDate, Weekday};
 
     #[test]
     fn parse_until_supports_date_only_value() {
@@ -147,5 +170,20 @@ mod tests {
     fn parse_interval_rejects_zero_or_negative_values() {
         assert_eq!(parse_interval("FREQ=DAILY;INTERVAL=0", 1), 1);
         assert_eq!(parse_interval("FREQ=DAILY;INTERVAL=-3", 2), 2);
+    }
+
+    #[test]
+    fn parse_monthly_byday_supports_multiple_and_positional_tokens() {
+        let parsed = parse_monthly_byday("FREQ=MONTHLY;BYDAY=MO,WE,1FR,-1SU");
+
+        assert_eq!(parsed.len(), 4);
+        assert_eq!(parsed[0].position, None);
+        assert_eq!(parsed[0].weekday, Weekday::Mon);
+        assert_eq!(parsed[1].position, None);
+        assert_eq!(parsed[1].weekday, Weekday::Wed);
+        assert_eq!(parsed[2].position, Some(1));
+        assert_eq!(parsed[2].weekday, Weekday::Fri);
+        assert_eq!(parsed[3].position, Some(-1));
+        assert_eq!(parsed[3].weekday, Weekday::Sun);
     }
 }
