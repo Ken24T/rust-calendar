@@ -12,6 +12,7 @@ use crate::models::outbound_sync_operation::{
 
 const DEFAULT_BACKOFF_BASE_MINUTES: i64 = 1;
 const DEFAULT_MAX_BACKOFF_MINUTES: i64 = 60;
+const BROKEN_REMOTE_METADATA_ERROR_FRAGMENT: &str = "missing remote_event_id";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct OutboundQueueStats {
@@ -133,12 +134,14 @@ impl<'a> OutboundSyncService<'a> {
                      last_error = NULL,
                      updated_at = ?2
                  WHERE source_id = ?3
-                   AND status = ?4",
+                   AND status = ?4
+                   AND COALESCE(last_error, '') NOT LIKE ?5",
                 params![
                     OUTBOUND_STATUS_PENDING,
                     Local::now().to_rfc3339(),
                     source_id,
                     OUTBOUND_STATUS_FAILED,
+                    format!("%{}%", BROKEN_REMOTE_METADATA_ERROR_FRAGMENT),
                 ],
             )
             .context("Failed to reset failed outbound sync operations")?;
@@ -574,7 +577,7 @@ impl<'a> OutboundSyncService<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::OutboundSyncService;
+    use super::{OutboundSyncService, BROKEN_REMOTE_METADATA_ERROR_FRAGMENT};
     use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
     use crate::services::database::Database;
     use rusqlite::params;
@@ -667,6 +670,46 @@ mod tests {
             status,
             crate::models::outbound_sync_operation::OUTBOUND_STATUS_PENDING
         );
+    }
+
+    #[test]
+    fn test_reset_failed_for_source_skips_broken_remote_metadata_failures() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (
+                source_id, local_event_id, external_uid, operation_type, payload_json,
+                status, attempt_count, last_error
+             ) VALUES (?1, NULL, ?2, 'update', '{}', 'failed', 2, ?3)",
+            params![
+                source_id,
+                "uid-broken",
+                "Remote metadata for 'uid-broken' is missing remote_event_id"
+            ],
+        )
+        .unwrap();
+
+        let service = OutboundSyncService::new(conn);
+        let reset = service.reset_failed_for_source(source_id).unwrap();
+        assert_eq!(reset, 0);
+
+        let (status, error): (String, Option<String>) = conn
+            .query_row(
+                "SELECT status, last_error FROM outbound_sync_operations WHERE source_id = ?1",
+                [source_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED
+        );
+        assert!(error
+            .as_deref()
+            .is_some_and(|value| value.contains(BROKEN_REMOTE_METADATA_ERROR_FRAGMENT)));
     }
 
     #[test]

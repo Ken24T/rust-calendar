@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.30] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 bulk-retry hygiene for broken mappings:
+  - source-level failed-push resets now leave broken remote-metadata failures in place instead of requeueing them
+  - regression coverage now protects bulk retry from reviving doomed broken-mapping operations
+
+### Changed
+
+- Calendar sync settings now report when failed pushes require manual broken-mapping recovery rather than a normal retry.
+
 ## [2.4.29] - 2026-03-06
 
 ### Added

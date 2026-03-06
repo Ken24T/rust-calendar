@@ -745,10 +745,15 @@ pub fn render_calendar_sync_section(
                             if ui.button("Retry Failed Pushes").clicked() {
                                 match outbound_service.reset_failed_for_source(source_id) {
                                     Ok(reset_count) => {
-                                        state.source_status_message = Some(format!(
-                                            "Reset {} failed outbound operation(s) to pending",
-                                            reset_count
-                                        ));
+                                        state.source_status_message = Some(if reset_count > 0 {
+                                            format!(
+                                                "Reset {} failed outbound operation(s) to pending",
+                                                reset_count
+                                            )
+                                        } else {
+                                            "No retryable failed outbound operations were reset; broken mappings need manual recovery"
+                                                .to_string()
+                                        });
                                         state.source_error_message = None;
                                     }
                                     Err(err) => {
