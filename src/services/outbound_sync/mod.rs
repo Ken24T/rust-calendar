@@ -186,6 +186,49 @@ impl<'a> OutboundSyncService<'a> {
             .context("Failed to load failed outbound operations")
     }
 
+    pub fn list_pending_for_source(
+        &self,
+        source_id: i64,
+        limit: i64,
+    ) -> Result<Vec<OutboundSyncOperation>> {
+        let safe_limit = limit.clamp(1, 1000);
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, source_id, local_event_id, external_uid, operation_type,
+                        payload_json, status, attempt_count, next_retry_at, last_error,
+                        created_at, updated_at
+                 FROM outbound_sync_operations
+                 WHERE source_id = ?1 AND status = ?2
+                 ORDER BY updated_at ASC
+                 LIMIT ?3",
+            )
+            .context("Failed to prepare pending outbound operations query")?;
+
+        let rows = stmt.query_map(
+            params![source_id, OUTBOUND_STATUS_PENDING, safe_limit],
+            |row| {
+                Ok(OutboundSyncOperation {
+                    id: Some(row.get(0)?),
+                    source_id: row.get(1)?,
+                    local_event_id: row.get(2)?,
+                    external_uid: row.get(3)?,
+                    operation_type: row.get(4)?,
+                    payload_json: row.get(5)?,
+                    status: row.get(6)?,
+                    attempt_count: row.get(7)?,
+                    next_retry_at: row.get(8)?,
+                    last_error: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            },
+        )?;
+
+        rows.collect::<Result<Vec<_>, _>>()
+            .context("Failed to load pending outbound operations")
+    }
+
     pub fn active_operation_for_identity(
         &self,
         source_id: i64,
@@ -239,6 +282,34 @@ impl<'a> OutboundSyncService<'a> {
 
     pub fn mark_operation_completed(&self, operation_id: i64) -> Result<()> {
         self.update_operation_status(operation_id, OUTBOUND_STATUS_COMPLETED, None)
+    }
+
+    pub fn mark_operation_processing(&self, operation_id: i64) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE outbound_sync_operations
+                 SET status = ?1,
+                     attempt_count = attempt_count + 1,
+                     last_error = NULL,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![
+                    OUTBOUND_STATUS_PROCESSING,
+                    Local::now().to_rfc3339(),
+                    operation_id,
+                ],
+            )
+            .context("Failed to mark outbound sync operation as processing")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Outbound sync operation with id {} not found",
+                operation_id
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn reset_operation_to_pending(&self, operation_id: i64) -> Result<()> {

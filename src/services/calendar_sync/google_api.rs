@@ -8,6 +8,7 @@ use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Tim
 use chrono_tz::Tz;
 use reqwest::blocking::Client;
 use serde::Deserialize;
+use serde_json::{json, Map, Value};
 use thiserror::Error;
 
 use crate::models::calendar_source::CalendarSource;
@@ -47,6 +48,25 @@ pub struct GoogleEventsSyncPayload {
 pub struct GoogleCalendarApiClient {
     client: Client,
     access_token: String,
+}
+
+pub(crate) trait GoogleOutboundWriter {
+    fn update_event(
+        &self,
+        source: &CalendarSource,
+        remote_event_id: &str,
+        payload_json: &str,
+    ) -> Result<GoogleRemoteEvent>;
+
+    fn delete_event(&self, source: &CalendarSource, remote_event_id: &str) -> Result<()>;
+
+    fn patch_detached_instance(
+        &self,
+        source: &CalendarSource,
+        parent_remote_event_id: &str,
+        detached_external_uid: &str,
+        payload_json: &str,
+    ) -> Result<GoogleRemoteEvent>;
 }
 
 impl GoogleCalendarApiClient {
@@ -143,6 +163,289 @@ impl GoogleCalendarApiClient {
             next_sync_token: payload.next_sync_token,
         })
     }
+
+    fn parse_single_event_response_body(body: &str) -> Result<GoogleRemoteEvent> {
+        let item: GoogleEventItem =
+            serde_json::from_str(body).context("Failed to parse Google event response body")?;
+
+        item.try_into_remote_event()?
+            .ok_or_else(|| anyhow!("Google event response did not contain a usable event identity"))
+    }
+
+    fn calendar_id(source: &CalendarSource) -> Result<String> {
+        source.google_calendar_id().ok_or_else(|| {
+            anyhow!("Calendar source does not contain a valid Google calendar ID")
+        })
+    }
+
+    fn event_request_url(source: &CalendarSource, remote_event_id: &str) -> Result<String> {
+        let calendar_id = Self::calendar_id(source)?;
+        Ok(format!(
+            "{}/{}/events/{}",
+            GOOGLE_CALENDAR_EVENTS_ENDPOINT,
+            urlencoding::encode(&calendar_id),
+            urlencoding::encode(remote_event_id)
+        ))
+    }
+
+    fn instances_request_url(source: &CalendarSource, remote_event_id: &str) -> Result<String> {
+        let calendar_id = Self::calendar_id(source)?;
+        Ok(format!(
+            "{}/{}/events/{}/instances",
+            GOOGLE_CALENDAR_EVENTS_ENDPOINT,
+            urlencoding::encode(&calendar_id),
+            urlencoding::encode(remote_event_id)
+        ))
+    }
+
+    fn find_detached_instance_remote(
+        &self,
+        source: &CalendarSource,
+        parent_remote_event_id: &str,
+        detached_external_uid: &str,
+    ) -> Result<GoogleRemoteEvent> {
+        let url = Self::instances_request_url(source, parent_remote_event_id)?;
+        let recurrence_token = detached_external_uid
+            .split("::RID::")
+            .nth(1)
+            .ok_or_else(|| anyhow!("Detached instance identity '{}' is missing recurrence token", detached_external_uid))?;
+        let (time_min, time_max) = detached_instance_window(recurrence_token)?;
+
+        let response = self
+            .client
+            .get(url)
+            .bearer_auth(&self.access_token)
+            .query(&[
+                ("showDeleted", "true"),
+                ("timeMin", time_min.as_str()),
+                ("timeMax", time_max.as_str()),
+                ("maxResults", "250"),
+            ])
+            .send()
+            .context("Failed to call Google Calendar instances API")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            return Err(anyhow!(
+                "Google Calendar instances API failed ({status}): {}",
+                body.trim()
+            ));
+        }
+
+        let payload: GoogleEventsResponse = response
+            .json()
+            .context("Failed to parse Google Calendar instances response")?;
+
+        payload
+            .to_remote_events()?
+            .into_iter()
+            .find(|event| event.external_uid == detached_external_uid)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Could not find Google instance matching detached identity '{}'",
+                    detached_external_uid
+                )
+            })
+    }
+}
+
+impl GoogleOutboundWriter for GoogleCalendarApiClient {
+    fn update_event(
+        &self,
+        source: &CalendarSource,
+        remote_event_id: &str,
+        payload_json: &str,
+    ) -> Result<GoogleRemoteEvent> {
+        let url = Self::event_request_url(source, remote_event_id)?;
+        let body = build_google_event_request_body(payload_json)?;
+        let response = self
+            .client
+            .patch(url)
+            .bearer_auth(&self.access_token)
+            .json(&body)
+            .send()
+            .context("Failed to call Google Calendar event update API")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            return Err(anyhow!(
+                "Google Calendar event update failed ({status}): {}",
+                body.trim()
+            ));
+        }
+
+        Self::parse_single_event_response_body(&response.text().unwrap_or_default())
+    }
+
+    fn delete_event(&self, source: &CalendarSource, remote_event_id: &str) -> Result<()> {
+        let url = Self::event_request_url(source, remote_event_id)?;
+        let response = self
+            .client
+            .delete(url)
+            .bearer_auth(&self.access_token)
+            .send()
+            .context("Failed to call Google Calendar event delete API")?;
+
+        if response.status().as_u16() == 404 {
+            return Ok(());
+        }
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+            return Err(anyhow!(
+                "Google Calendar event delete failed ({status}): {}",
+                body.trim()
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn patch_detached_instance(
+        &self,
+        source: &CalendarSource,
+        parent_remote_event_id: &str,
+        detached_external_uid: &str,
+        payload_json: &str,
+    ) -> Result<GoogleRemoteEvent> {
+        let instance =
+            self.find_detached_instance_remote(source, parent_remote_event_id, detached_external_uid)?;
+        let remote_event_id = instance.remote_event_id.clone();
+        self.update_event(source, &remote_event_id, payload_json)
+    }
+}
+
+fn build_google_event_request_body(payload_json: &str) -> Result<Value> {
+    let payload: Value =
+        serde_json::from_str(payload_json).context("Failed to parse outbound payload JSON")?;
+
+    let title = payload
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("Untitled event");
+    let start = payload
+        .get("start")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Outbound payload missing start"))?;
+    let end = payload
+        .get("end")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Outbound payload missing end"))?;
+    let all_day = payload
+        .get("all_day")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    let mut body = Map::new();
+    body.insert("summary".to_string(), Value::String(title.to_string()));
+
+    if let Some(description) = payload.get("description").and_then(Value::as_str) {
+        if !description.trim().is_empty() {
+            body.insert("description".to_string(), Value::String(description.to_string()));
+        }
+    }
+
+    if let Some(location) = payload.get("location").and_then(Value::as_str) {
+        if !location.trim().is_empty() {
+            body.insert("location".to_string(), Value::String(location.to_string()));
+        }
+    }
+
+    if all_day {
+        let start_date = DateTime::parse_from_rfc3339(start)
+            .with_context(|| format!("Invalid outbound start datetime '{}'", start))?
+            .with_timezone(&Local)
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+        let end_date = DateTime::parse_from_rfc3339(end)
+            .with_context(|| format!("Invalid outbound end datetime '{}'", end))?
+            .with_timezone(&Local)
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+        body.insert("start".to_string(), json!({ "date": start_date }));
+        body.insert("end".to_string(), json!({ "date": end_date }));
+    } else {
+        body.insert("start".to_string(), json!({ "dateTime": start }));
+        body.insert("end".to_string(), json!({ "dateTime": end }));
+    }
+
+    let mut recurrence = Vec::new();
+    if let Some(rule) = payload.get("recurrence_rule").and_then(Value::as_str) {
+        if !rule.trim().is_empty() {
+            recurrence.push(Value::String(format!("RRULE:{}", rule)));
+        }
+    }
+
+    if let Some(exceptions) = payload
+        .get("recurrence_exceptions")
+        .and_then(Value::as_array)
+        .filter(|values| !values.is_empty())
+    {
+        let exdate_values = exceptions
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|value| {
+                DateTime::parse_from_rfc3339(value)
+                    .with_context(|| format!("Invalid outbound recurrence exception '{}'", value))
+                    .map(|dt| {
+                        if all_day {
+                            dt.with_timezone(&Local).format("%Y%m%d").to_string()
+                        } else {
+                            dt.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ").to_string()
+                        }
+                    })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        if !exdate_values.is_empty() {
+            let exdate_prefix = if all_day {
+                "EXDATE;VALUE=DATE:"
+            } else {
+                "EXDATE:"
+            };
+            recurrence.push(Value::String(format!(
+                "{}{}",
+                exdate_prefix,
+                exdate_values.join(",")
+            )));
+        }
+    }
+
+    if !recurrence.is_empty() {
+        body.insert("recurrence".to_string(), Value::Array(recurrence));
+    }
+
+    Ok(Value::Object(body))
+}
+
+fn detached_instance_window(recurrence_token: &str) -> Result<(String, String)> {
+    if recurrence_token.len() == 8 {
+        let date = NaiveDate::parse_from_str(recurrence_token, "%Y%m%d")
+            .with_context(|| format!("Invalid detached recurrence token '{}'", recurrence_token))?;
+        let time_min = date
+            .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+            .and_local_timezone(Local)
+            .earliest()
+            .ok_or_else(|| anyhow!("Detached recurrence token '{}' is invalid in local timezone", recurrence_token))?;
+        let time_max = (date + Duration::days(1))
+            .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+            .and_local_timezone(Local)
+            .earliest()
+            .ok_or_else(|| anyhow!("Detached recurrence token '{}' is invalid in local timezone", recurrence_token))?;
+        return Ok((time_min.to_rfc3339(), time_max.to_rfc3339()));
+    }
+
+    let parsed = NaiveDateTime::parse_from_str(recurrence_token, "%Y%m%dT%H%M%SZ")
+        .with_context(|| format!("Invalid detached recurrence token '{}'", recurrence_token))?;
+    let parsed = Utc.from_utc_datetime(&parsed);
+    let time_min = (parsed - Duration::hours(12)).to_rfc3339();
+    let time_max = (parsed + Duration::hours(12)).to_rfc3339();
+    Ok((time_min, time_max))
 }
 
 #[derive(Debug, Deserialize)]
@@ -449,7 +752,7 @@ impl GoogleEventDateTime {
 
 #[cfg(test)]
 mod tests {
-    use super::GoogleCalendarApiClient;
+    use super::{build_google_event_request_body, detached_instance_window, GoogleCalendarApiClient};
     use chrono::Utc;
 
     #[test]
@@ -561,5 +864,32 @@ mod tests {
         assert!(event.all_day);
         assert_eq!(exceptions.len(), 1);
         assert_eq!(exceptions[0].format("%Y%m%d").to_string(), "20260311");
+    }
+
+    #[test]
+    fn build_google_event_request_body_includes_recurrence_and_exdates() {
+        let body = build_google_event_request_body(
+            r#"{
+                "title":"Recurring",
+                "start":"2026-03-10T09:00:00+00:00",
+                "end":"2026-03-10T10:00:00+00:00",
+                "all_day":false,
+                "recurrence_rule":"FREQ=WEEKLY;BYDAY=TU",
+                "recurrence_exceptions":["2026-03-17T09:00:00+00:00"]
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(body["summary"], "Recurring");
+        assert_eq!(body["start"]["dateTime"], "2026-03-10T09:00:00+00:00");
+        assert_eq!(body["recurrence"][0], "RRULE:FREQ=WEEKLY;BYDAY=TU");
+        assert_eq!(body["recurrence"][1], "EXDATE:20260317T090000Z");
+    }
+
+    #[test]
+    fn detached_instance_window_handles_timed_tokens() {
+        let (time_min, time_max) = detached_instance_window("20260407T090000Z").unwrap();
+        assert_eq!(time_min, "2026-04-06T21:00:00+00:00");
+        assert_eq!(time_max, "2026-04-07T21:00:00+00:00");
     }
 }

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.20] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 outbound recurrence execution:
+  - pending Google read/write queue items now execute during RW source syncs for series updates, mapped deletes, and detached occurrence instance patching
+  - regression coverage for parent-series update pushes and detached occurrence create pushes
+
+### Changed
+
+- Successful Google outbound recurrence pushes now refresh remote metadata and source `last_push_at` instead of leaving queue items pending indefinitely.
+
 ## [2.4.19] - 2026-03-06
 
 ### Added
