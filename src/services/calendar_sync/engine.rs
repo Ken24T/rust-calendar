@@ -406,7 +406,7 @@ impl<'a> CalendarSyncEngine<'a> {
 
         match client.fetch_events_incremental(&source) {
             Ok(payload) => self.sync_source_from_google_payload(source_id, payload),
-            Err(err) if err.downcast_ref::<GoogleCalendarApiError>().is_some() => {
+            Err(err) if Self::should_reset_api_sync_token(&err) => {
                 source_service.set_api_sync_token(source_id, None)?;
                 let refreshed_source = source_service
                     .get_by_id(source_id)?
@@ -430,7 +430,7 @@ impl<'a> CalendarSyncEngine<'a> {
 
         let payload = match client.fetch_events_incremental(&source) {
             Ok(payload) => payload,
-            Err(err) if err.downcast_ref::<GoogleCalendarApiError>().is_some() => {
+            Err(err) if Self::should_reset_api_sync_token(&err) => {
                 let mut preview_source = source.clone();
                 preview_source.api_sync_token = None;
                 client.fetch_events_incremental(&preview_source)?
@@ -992,11 +992,17 @@ impl<'a> CalendarSyncEngine<'a> {
             _ => SYNC_CONFLICT_REASON_LOCAL_UPDATE_PENDING,
         }
     }
+
+    fn should_reset_api_sync_token(err: &anyhow::Error) -> bool {
+        err.downcast_ref::<GoogleCalendarApiError>()
+            .is_some_and(GoogleCalendarApiError::is_sync_token_expired)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CalendarSyncEngine;
+    use anyhow::anyhow;
     use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
     use crate::models::outbound_sync_operation::{
         OUTBOUND_OPERATION_CREATE, OUTBOUND_OPERATION_DELETE, OUTBOUND_OPERATION_UPDATE,
@@ -1008,6 +1014,7 @@ mod tests {
     use crate::services::calendar_sync::mapping::EventSyncMapService;
     use crate::services::database::Database;
     use crate::services::event::EventService;
+    use crate::services::calendar_sync::google_api::GoogleCalendarApiError;
     use chrono::{Duration, Local, TimeZone, Utc};
     use rusqlite::{params, Connection};
     use crate::models::calendar_source::CalendarSource;
@@ -1041,6 +1048,18 @@ mod tests {
         )
         .unwrap();
         conn.last_insert_rowid()
+    }
+
+    #[test]
+    fn test_should_reset_api_sync_token_only_for_expired_sync_token_errors() {
+        let expired = anyhow!(GoogleCalendarApiError::SyncTokenExpired);
+        let rate_limited = anyhow!(GoogleCalendarApiError::RetryAfter {
+            status_code: 429,
+            retry_after_minutes: 30,
+        });
+
+        assert!(CalendarSyncEngine::should_reset_api_sync_token(&expired));
+        assert!(!CalendarSyncEngine::should_reset_api_sync_token(&rate_limited));
     }
 
     fn set_source_windows(conn: &Connection, source_id: i64, past_days: i64, future_days: i64) {

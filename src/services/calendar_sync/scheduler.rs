@@ -7,6 +7,7 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
 use rusqlite::Connection;
 
+use super::google_api::GoogleCalendarApiError;
 use super::engine::{CalendarSyncEngine, SyncRunResult};
 use super::sanitizer;
 use super::CalendarSourceService;
@@ -131,10 +132,11 @@ impl CalendarSyncScheduler {
                 }
                 Err(err) => {
                     state.consecutive_failures = state.consecutive_failures.saturating_add(1);
-                    let backoff_minutes = Self::calculate_backoff_minutes(
+                    let backoff_minutes = Self::calculate_backoff_minutes_for_error(
                         source.poll_interval_minutes,
                         state.consecutive_failures,
                         self.max_backoff_minutes,
+                        &err,
                     );
                     state.next_run_at = Some(now + Duration::minutes(backoff_minutes));
 
@@ -177,12 +179,29 @@ impl CalendarSyncScheduler {
         let backoff = base.saturating_mul(factor);
         backoff.min(max_backoff_minutes.max(base))
     }
+
+    fn calculate_backoff_minutes_for_error(
+        base_poll_minutes: i64,
+        failures: u32,
+        max_backoff_minutes: i64,
+        err: &anyhow::Error,
+    ) -> i64 {
+        if let Some(retry_after_minutes) = err
+            .downcast_ref::<GoogleCalendarApiError>()
+            .and_then(GoogleCalendarApiError::retry_after_minutes)
+        {
+            return retry_after_minutes.max(1);
+        }
+
+        Self::calculate_backoff_minutes(base_poll_minutes, failures, max_backoff_minutes)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CalendarSyncScheduler;
     use crate::services::calendar_sync::engine::SyncRunResult;
+    use crate::services::calendar_sync::google_api::GoogleCalendarApiError;
     use crate::services::database::Database;
     use chrono::{Local, TimeZone};
     use rusqlite::params;
@@ -303,6 +322,48 @@ mod tests {
             .unwrap();
 
         assert!(third.attempted_source_ids.contains(&failing));
+    }
+
+    #[test]
+    fn tick_uses_retry_after_minutes_for_rate_limited_errors() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        let source_id = create_source(conn, "rate-limited", 10, true);
+
+        let mut scheduler = CalendarSyncScheduler::with_startup_delay(chrono::Duration::zero());
+        let now = Local.with_ymd_and_hms(2026, 2, 27, 13, 0, 0).unwrap();
+
+        let first = scheduler
+            .tick_with_runner_at(conn, now, |_source_id| {
+                Err(anyhow::anyhow!(GoogleCalendarApiError::RetryAfter {
+                    status_code: 429,
+                    retry_after_minutes: 25,
+                }))
+            })
+            .unwrap();
+
+        assert_eq!(first.attempted_source_ids, vec![source_id]);
+        assert_eq!(first.failed_sources.len(), 1);
+        assert!(first.failed_sources[0].1.contains("retry after 25 minute"));
+
+        let before_retry = scheduler
+            .tick_with_runner_at(conn, now + chrono::Duration::minutes(24), |_source_id| {
+                Ok(SyncRunResult::default())
+            })
+            .unwrap();
+        assert_eq!(before_retry.attempted_count(), 0);
+
+        let at_retry = scheduler
+            .tick_with_runner_at(conn, now + chrono::Duration::minutes(25), |sid| {
+                Ok(SyncRunResult {
+                    source_id: sid,
+                    ..SyncRunResult::default()
+                })
+            })
+            .unwrap();
+        assert_eq!(at_retry.attempted_source_ids, vec![source_id]);
     }
 
     #[test]

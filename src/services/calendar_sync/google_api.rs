@@ -6,6 +6,7 @@ use std::time::Duration as StdDuration;
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
+use reqwest::header::RETRY_AFTER;
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -15,11 +16,35 @@ use crate::models::calendar_source::CalendarSource;
 use crate::models::event::Event;
 
 const GOOGLE_CALENDAR_EVENTS_ENDPOINT: &str = "https://www.googleapis.com/calendar/v3/calendars";
+const DEFAULT_GOOGLE_API_BACKOFF_MINUTES: i64 = 15;
 
 #[derive(Debug, Error)]
 pub enum GoogleCalendarApiError {
     #[error("Google API sync token expired")]
     SyncTokenExpired,
+    #[error(
+        "Google Calendar API requested backoff ({status_code}); retry after {retry_after_minutes} minute(s)"
+    )]
+    RetryAfter {
+        status_code: u16,
+        retry_after_minutes: i64,
+    },
+}
+
+impl GoogleCalendarApiError {
+    pub fn is_sync_token_expired(&self) -> bool {
+        matches!(self, Self::SyncTokenExpired)
+    }
+
+    pub fn retry_after_minutes(&self) -> Option<i64> {
+        match self {
+            Self::RetryAfter {
+                retry_after_minutes,
+                ..
+            } => Some(*retry_after_minutes),
+            Self::SyncTokenExpired => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,6 +153,22 @@ impl GoogleCalendarApiClient {
 
             if response.status().as_u16() == 410 {
                 return Err(GoogleCalendarApiError::SyncTokenExpired.into());
+            }
+
+            if matches!(response.status().as_u16(), 429 | 503) {
+                let status_code = response.status().as_u16();
+                let retry_after_minutes = parse_retry_after_minutes(
+                    response
+                        .headers()
+                        .get(RETRY_AFTER)
+                        .and_then(|value| value.to_str().ok()),
+                )
+                .unwrap_or(DEFAULT_GOOGLE_API_BACKOFF_MINUTES);
+                return Err(GoogleCalendarApiError::RetryAfter {
+                    status_code,
+                    retry_after_minutes,
+                }
+                .into());
             }
 
             if !response.status().is_success() {
@@ -421,6 +462,20 @@ fn build_google_event_request_body(payload_json: &str) -> Result<Value> {
     }
 
     Ok(Value::Object(body))
+}
+
+fn parse_retry_after_minutes(value: Option<&str>) -> Option<i64> {
+    let raw = value?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    let seconds: i64 = raw.parse().ok()?;
+    if seconds <= 0 {
+        return Some(1);
+    }
+
+    Some(((seconds + 59) / 60).max(1))
 }
 
 fn detached_instance_window(recurrence_token: &str) -> Result<(String, String)> {
@@ -752,7 +807,10 @@ impl GoogleEventDateTime {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_google_event_request_body, detached_instance_window, GoogleCalendarApiClient};
+    use super::{
+        build_google_event_request_body, detached_instance_window, parse_retry_after_minutes,
+        GoogleCalendarApiClient, GoogleCalendarApiError,
+    };
     use chrono::Utc;
 
     #[test]
@@ -902,6 +960,25 @@ mod tests {
 
         assert_eq!(body["recurrence"][0], "RRULE:FREQ=WEEKLY;BYDAY=WE");
         assert_eq!(body["recurrence"][1], "EXDATE;VALUE=DATE:20260311,20260318");
+    }
+
+    #[test]
+    fn parse_retry_after_minutes_rounds_seconds_up_to_minutes() {
+        assert_eq!(parse_retry_after_minutes(Some("1")), Some(1));
+        assert_eq!(parse_retry_after_minutes(Some("61")), Some(2));
+        assert_eq!(parse_retry_after_minutes(Some("120")), Some(2));
+    }
+
+    #[test]
+    fn google_api_error_exposes_retry_after_minutes() {
+        let error = GoogleCalendarApiError::RetryAfter {
+            status_code: 429,
+            retry_after_minutes: 25,
+        };
+
+        assert_eq!(error.retry_after_minutes(), Some(25));
+        assert!(!error.is_sync_token_expired());
+        assert!(GoogleCalendarApiError::SyncTokenExpired.is_sync_token_expired());
     }
 
     #[test]

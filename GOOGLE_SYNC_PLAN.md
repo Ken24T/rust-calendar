@@ -307,7 +307,7 @@ Stage 1 acceptance criteria checkpoint:
 
 - Status: in progress
 - Branch: `feature/google-sync-stage2-full-crud`
-- Latest Stage 2 release tag: `v2.4.25`
+- Latest Stage 2 release tag: `v2.4.26`
 
 Slices shipped:
 
@@ -331,6 +331,10 @@ Current S2.6 slices shipped:
 - [x] Detached instance create convergence and round-trip sync hardening (`v2.4.23`)
 - [x] Detached instance delete convergence and cancellation hardening (`v2.4.24`)
 - [x] Timed and all-day recurrence exception round-trip hardening (`v2.4.25`)
+
+Current S2.7 slices shipped:
+
+- [x] Google API rate-limit handling and adaptive backoff (`v2.4.26`)
 
 ## Decision Log (Initial)
 

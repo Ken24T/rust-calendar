@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.26] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 rate-limit backoff hardening:
+  - Google Calendar API errors now preserve explicit retry-after backoff windows for rate-limit and temporary-unavailable responses
+  - scheduler coverage now verifies server-directed retry windows override generic exponential backoff
+
+### Changed
+
+- Sync token recovery now applies only to expired Google sync tokens, not to rate-limited API responses.
+
 ## [2.4.25] - 2026-03-06
 
 ### Added
