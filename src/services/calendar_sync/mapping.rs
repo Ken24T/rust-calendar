@@ -11,6 +11,15 @@ pub struct EventSyncMapService<'a> {
     conn: &'a Connection,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteEventMetadata {
+    pub source_id: i64,
+    pub external_uid: String,
+    pub remote_event_id: Option<String>,
+    pub remote_etag: Option<String>,
+    pub remote_payload_hash: Option<String>,
+}
+
 impl<'a> EventSyncMapService<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
@@ -268,6 +277,59 @@ impl<'a> EventSyncMapService<'a> {
         Ok(())
     }
 
+    pub fn upsert_remote_metadata(&self, metadata: &RemoteEventMetadata) -> Result<()> {
+        self.conn
+            .execute(
+                "INSERT INTO event_remote_metadata (
+                    source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(source_id, external_uid) DO UPDATE SET
+                   remote_event_id = excluded.remote_event_id,
+                   remote_etag = excluded.remote_etag,
+                   remote_payload_hash = excluded.remote_payload_hash,
+                   updated_at = excluded.updated_at",
+                params![
+                    metadata.source_id,
+                    metadata.external_uid,
+                    metadata.remote_event_id,
+                    metadata.remote_etag,
+                    metadata.remote_payload_hash,
+                    Local::now().to_rfc3339(),
+                ],
+            )
+            .context("Failed to upsert remote event metadata")?;
+
+        Ok(())
+    }
+
+    pub fn get_remote_metadata(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+    ) -> Result<Option<RemoteEventMetadata>> {
+        let result = self.conn.query_row(
+            "SELECT source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash
+             FROM event_remote_metadata
+             WHERE source_id = ?1 AND external_uid = ?2",
+            params![source_id, external_uid],
+            |row| {
+                Ok(RemoteEventMetadata {
+                    source_id: row.get(0)?,
+                    external_uid: row.get(1)?,
+                    remote_event_id: row.get(2)?,
+                    remote_etag: row.get(3)?,
+                    remote_payload_hash: row.get(4)?,
+                })
+            },
+        );
+
+        match result {
+            Ok(metadata) => Ok(Some(metadata)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err).context("Failed to fetch remote event metadata"),
+        }
+    }
+
     fn row_to_mapping(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventSyncMap> {
         Ok(EventSyncMap {
             id: Some(row.get(0)?),
@@ -285,7 +347,7 @@ impl<'a> EventSyncMapService<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::EventSyncMapService;
+    use super::{EventSyncMapService, RemoteEventMetadata};
     use crate::models::event_sync_map::EventSyncMap;
     use crate::services::database::Database;
     use rusqlite::{params, Connection};
@@ -648,5 +710,43 @@ mod tests {
 
         assert!(source_a_ids.contains(&event_a));
         assert!(!source_a_ids.contains(&event_b));
+    }
+
+    #[test]
+    fn test_remote_metadata_upsert_and_get() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+        let service = EventSyncMapService::new(conn);
+
+        let metadata = RemoteEventMetadata {
+            source_id,
+            external_uid: "uid-remote-1".to_string(),
+            remote_event_id: Some("google-event-123".to_string()),
+            remote_etag: Some("etag-1".to_string()),
+            remote_payload_hash: Some("hash-1".to_string()),
+        };
+
+        service.upsert_remote_metadata(&metadata).unwrap();
+
+        let fetched = service
+            .get_remote_metadata(source_id, "uid-remote-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(fetched.remote_event_id.as_deref(), Some("google-event-123"));
+
+        let updated = RemoteEventMetadata {
+            remote_etag: Some("etag-2".to_string()),
+            ..metadata
+        };
+
+        service.upsert_remote_metadata(&updated).unwrap();
+
+        let fetched_updated = service
+            .get_remote_metadata(source_id, "uid-remote-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(fetched_updated.remote_etag.as_deref(), Some("etag-2"));
     }
 }

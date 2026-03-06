@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 pub const GOOGLE_ICS_SOURCE_TYPE: &str = "google_ics";
+pub const SYNC_CAPABILITY_READ_ONLY: &str = "read_only";
+pub const SYNC_CAPABILITY_READ_WRITE: &str = "read_write";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarSource {
@@ -17,6 +19,9 @@ pub struct CalendarSource {
     pub last_sync_at: Option<String>,
     pub last_sync_status: Option<String>,
     pub last_error: Option<String>,
+    pub sync_capability: String,
+    pub api_sync_token: Option<String>,
+    pub last_push_at: Option<String>,
 }
 
 impl CalendarSource {
@@ -44,6 +49,12 @@ impl CalendarSource {
 
         if self.sync_future_days <= 0 {
             return Err("Future sync window must be greater than 0 days".to_string());
+        }
+
+        if self.sync_capability != SYNC_CAPABILITY_READ_ONLY
+            && self.sync_capability != SYNC_CAPABILITY_READ_WRITE
+        {
+            return Err("Sync capability must be either 'read_only' or 'read_write'".to_string());
         }
 
         Ok(())
@@ -74,13 +85,18 @@ impl Default for CalendarSource {
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
+            sync_capability: SYNC_CAPABILITY_READ_ONLY.to_string(),
+            api_sync_token: None,
+            last_push_at: None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE};
+    use super::{
+        CalendarSource, GOOGLE_ICS_SOURCE_TYPE, SYNC_CAPABILITY_READ_ONLY,
+    };
 
     fn valid_source() -> CalendarSource {
         CalendarSource {
@@ -95,6 +111,9 @@ mod tests {
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
+            sync_capability: SYNC_CAPABILITY_READ_ONLY.to_string(),
+            api_sync_token: None,
+            last_push_at: None,
         }
     }
 
@@ -153,6 +172,15 @@ mod tests {
     fn test_validate_invalid_future_window() {
         let source = CalendarSource {
             sync_future_days: 0,
+            ..valid_source()
+        };
+        assert!(source.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_sync_capability() {
+        let source = CalendarSource {
+            sync_capability: "invalid".to_string(),
             ..valid_source()
         };
         assert!(source.validate().is_err());

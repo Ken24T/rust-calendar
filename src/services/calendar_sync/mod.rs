@@ -46,8 +46,9 @@ impl<'a> CalendarSourceService<'a> {
                 "INSERT INTO calendar_sources (
                     name, source_type, ics_url, enabled, poll_interval_minutes,
                     sync_past_days, sync_future_days,
+                    sync_capability, api_sync_token, last_push_at,
                     last_sync_at, last_sync_status, last_error, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
                 params![
                     source.name,
                     source.source_type,
@@ -56,6 +57,9 @@ impl<'a> CalendarSourceService<'a> {
                     source.poll_interval_minutes,
                     source.sync_past_days,
                     source.sync_future_days,
+                    source.sync_capability,
+                    source.api_sync_token,
+                    source.last_push_at,
                     source.last_sync_at,
                     source.last_sync_status,
                     source.last_error,
@@ -75,6 +79,7 @@ impl<'a> CalendarSourceService<'a> {
             .prepare(
                 "SELECT id, name, source_type, ics_url, enabled, poll_interval_minutes,
                     sync_past_days, sync_future_days,
+                    sync_capability, api_sync_token, last_push_at,
                     last_sync_at, last_sync_status, last_error
                  FROM calendar_sources
                  ORDER BY name COLLATE NOCASE ASC",
@@ -90,6 +95,7 @@ impl<'a> CalendarSourceService<'a> {
         let result = self.conn.query_row(
             "SELECT id, name, source_type, ics_url, enabled, poll_interval_minutes,
                     sync_past_days, sync_future_days,
+                    sync_capability, api_sync_token, last_push_at,
                     last_sync_at, last_sync_status, last_error
              FROM calendar_sources
              WHERE id = ?1",
@@ -122,8 +128,11 @@ impl<'a> CalendarSourceService<'a> {
                  poll_interval_minutes = ?5,
                  sync_past_days = ?6,
                  sync_future_days = ?7,
-                 updated_at = ?8
-             WHERE id = ?9",
+                 sync_capability = ?8,
+                 api_sync_token = ?9,
+                 last_push_at = ?10,
+                 updated_at = ?11
+             WHERE id = ?12",
                 params![
                     source.name,
                     source.source_type,
@@ -132,6 +141,9 @@ impl<'a> CalendarSourceService<'a> {
                     source.poll_interval_minutes,
                     source.sync_past_days,
                     source.sync_future_days,
+                    source.sync_capability,
+                    source.api_sync_token,
+                    source.last_push_at,
                     Local::now().to_rfc3339(),
                     id,
                 ],
@@ -153,6 +165,73 @@ impl<'a> CalendarSourceService<'a> {
                 params![enabled as i32, Local::now().to_rfc3339(), id],
             )
             .context("Failed to update calendar source enabled state")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!("Calendar source with id {} not found", id));
+        }
+
+        Ok(())
+    }
+
+    pub fn set_sync_capability(&self, id: i64, capability: &str) -> Result<()> {
+        if capability != crate::models::calendar_source::SYNC_CAPABILITY_READ_ONLY
+            && capability != crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE
+        {
+            return Err(anyhow!(
+                "Invalid sync capability '{}': expected read_only or read_write",
+                capability
+            ));
+        }
+
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE calendar_sources
+                 SET sync_capability = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![capability, Local::now().to_rfc3339(), id],
+            )
+            .context("Failed to update calendar source sync capability")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!("Calendar source with id {} not found", id));
+        }
+
+        Ok(())
+    }
+
+    pub fn set_api_sync_token(&self, id: i64, sync_token: Option<&str>) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE calendar_sources
+                 SET api_sync_token = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![sync_token, Local::now().to_rfc3339(), id],
+            )
+            .context("Failed to update calendar source API sync token")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!("Calendar source with id {} not found", id));
+        }
+
+        Ok(())
+    }
+
+    pub fn mark_last_push_now(&self, id: i64) -> Result<()> {
+        let now = Local::now().to_rfc3339();
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE calendar_sources
+                 SET last_push_at = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![now, Local::now().to_rfc3339(), id],
+            )
+            .context("Failed to update calendar source last_push_at")?;
 
         if rows_affected == 0 {
             return Err(anyhow!("Calendar source with id {} not found", id));
@@ -278,9 +357,12 @@ impl<'a> CalendarSourceService<'a> {
             poll_interval_minutes: row.get(5)?,
             sync_past_days: row.get(6)?,
             sync_future_days: row.get(7)?,
-            last_sync_at: row.get(8)?,
-            last_sync_status: row.get(9)?,
-            last_error: row.get(10)?,
+            sync_capability: row.get(8)?,
+            api_sync_token: row.get(9)?,
+            last_push_at: row.get(10)?,
+            last_sync_at: row.get(11)?,
+            last_sync_status: row.get(12)?,
+            last_error: row.get(13)?,
         })
     }
 
@@ -321,6 +403,9 @@ mod tests {
             poll_interval_minutes: 15,
             sync_past_days: 90,
             sync_future_days: 365,
+            sync_capability: crate::models::calendar_source::SYNC_CAPABILITY_READ_ONLY.to_string(),
+            api_sync_token: None,
+            last_push_at: None,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
@@ -371,6 +456,9 @@ mod tests {
             poll_interval_minutes: 30,
             sync_past_days: 30,
             sync_future_days: 180,
+            sync_capability: crate::models::calendar_source::SYNC_CAPABILITY_READ_ONLY.to_string(),
+            api_sync_token: None,
+            last_push_at: None,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
@@ -397,6 +485,35 @@ mod tests {
         service.set_enabled(source_id, false).unwrap();
         let fetched = service.get_by_id(source_id).unwrap().unwrap();
         assert!(!fetched.enabled);
+    }
+
+    #[test]
+    fn test_source_metadata_helpers() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let service = CalendarSourceService::new(db.connection());
+
+        let created = service.create(build_source("Meta")).unwrap();
+        let source_id = created.id.unwrap();
+
+        service
+            .set_sync_capability(
+                source_id,
+                crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE,
+            )
+            .unwrap();
+        service
+            .set_api_sync_token(source_id, Some("next-page-token"))
+            .unwrap();
+        service.mark_last_push_now(source_id).unwrap();
+
+        let fetched = service.get_by_id(source_id).unwrap().unwrap();
+        assert_eq!(
+            fetched.sync_capability,
+            crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE
+        );
+        assert_eq!(fetched.api_sync_token.as_deref(), Some("next-page-token"));
+        assert!(fetched.last_push_at.is_some());
     }
 
     #[test]

@@ -3,6 +3,7 @@
 //! Handles Google Calendar ICS source management: adding, editing,
 //! deleting sources and triggering manual sync operations.
 
+use crate::models::calendar_source::SYNC_CAPABILITY_READ_ONLY;
 use crate::models::calendar_source::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE};
 use crate::models::google_account::GoogleAccount;
 use crate::models::settings::Settings;
@@ -479,6 +480,9 @@ pub fn render_calendar_sync_section(
                 poll_interval_minutes: state.new_source_poll_interval,
                 sync_past_days: state.new_source_sync_past_days,
                 sync_future_days: state.new_source_sync_future_days,
+                sync_capability: SYNC_CAPABILITY_READ_ONLY.to_string(),
+                api_sync_token: None,
+                last_push_at: None,
                 last_sync_at: None,
                 last_sync_status: None,
                 last_error: None,
@@ -576,6 +580,9 @@ pub fn render_calendar_sync_section(
                         poll_interval_minutes: draft.poll_interval_minutes,
                         sync_past_days: draft.sync_past_days,
                         sync_future_days: draft.sync_future_days,
+                        sync_capability: source.sync_capability.clone(),
+                        api_sync_token: source.api_sync_token.clone(),
+                        last_push_at: source.last_push_at.clone(),
                         last_sync_at: source.last_sync_at.clone(),
                         last_sync_status: source.last_sync_status.clone(),
                         last_error: source.last_error.clone(),
@@ -679,8 +686,12 @@ pub fn render_calendar_sync_section(
             if let Some(status) = &source.last_sync_status {
                 ui.label(format!("Last status: {}", status));
             }
+            ui.label(format!("Capability: {}", source.sync_capability));
             if let Some(last_sync_at) = &source.last_sync_at {
                 ui.label(format!("Last sync: {}", last_sync_at));
+            }
+            if let Some(last_push_at) = &source.last_push_at {
+                ui.label(format!("Last push: {}", last_push_at));
             }
             if let Some(last_error) = &source.last_error {
                 ui.colored_label(Color32::LIGHT_RED, format!("Last error: {}", last_error));
