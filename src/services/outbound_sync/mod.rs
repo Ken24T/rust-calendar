@@ -79,6 +79,23 @@ impl<'a> OutboundSyncService<'a> {
         )
     }
 
+    pub fn enqueue_upsert_for_identity(
+        &self,
+        source_id: i64,
+        local_event_id: i64,
+        external_uid: &str,
+        operation_type: &str,
+        payload_json: Option<&str>,
+    ) -> Result<()> {
+        self.enqueue_for_identity(
+            source_id,
+            Some(local_event_id),
+            external_uid,
+            operation_type,
+            payload_json,
+        )
+    }
+
     pub fn queue_stats_for_source(&self, source_id: i64) -> Result<OutboundQueueStats> {
         let stats = self.conn.query_row(
             "SELECT

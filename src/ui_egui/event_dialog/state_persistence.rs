@@ -18,10 +18,11 @@ impl EventDialogState {
         let mut event = self.to_event()?;
         let service = EventService::new(database.connection());
         let sync_map_service = EventSyncMapService::new(database.connection());
+        let guarded_event_id = self.detached_occurrence_parent_id.or(self.event_id);
 
-        if let Some(id) = self.event_id {
+        if let Some(id) = guarded_event_id {
             if sync_map_service
-                .is_synced_local_event(id)
+                .is_read_only_synced_local_event(id)
                 .map_err(|e| format!("Failed to check sync status: {}", e))?
             {
                 let source_name = sync_map_service
@@ -41,7 +42,18 @@ impl EventDialogState {
                     });
                 return Err(message);
             }
+        }
 
+        if let (Some(parent_event_id), Some(occurrence_date)) = (
+            self.detached_occurrence_parent_id,
+            self.detached_occurrence_date,
+        ) {
+            return service
+                .detach_occurrence_local(parent_event_id, occurrence_date, event)
+                .map_err(|e| format!("Failed to update occurrence: {}", e));
+        }
+
+        if let Some(id) = self.event_id {
             event.id = Some(id);
             service
                 .update_local(&event)

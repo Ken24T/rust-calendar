@@ -26,7 +26,7 @@ impl CalendarApp {
         &mut self,
         request: DeleteConfirmRequest,
     ) {
-        if self.is_synced_event_id(request.event_id) {
+        if self.is_read_only_synced_event_id(request.event_id) {
             self.notify_synced_event_read_only_for(request.event_id);
             return;
         }
@@ -56,10 +56,20 @@ impl CalendarApp {
 
     /// Handle the common result fields returned by day, week, and workweek views.
     fn handle_timed_view_result(&mut self, view_result: EventInteractionResult) {
+        if let Some(occurrence_event) = view_result.occurrence_to_edit {
+            if let Some(event_id) = occurrence_event.id {
+                if self.is_read_only_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only_for(event_id);
+                } else {
+                    self.open_event_dialog_for_occurrence(occurrence_event);
+                }
+            }
+        }
+
         // Handle clicked event - open edit dialog
         if let Some(clicked_event) = view_result.event_to_edit {
             if let Some(event_id) = clicked_event.id {
-                if self.is_synced_event_id(event_id) {
+                if self.is_read_only_synced_event_id(event_id) {
                     self.notify_synced_event_read_only_for(event_id);
                 } else {
                     self.event_to_edit = Some(event_id);

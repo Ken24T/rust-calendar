@@ -43,10 +43,10 @@ pub fn render_search_dialog(
 ) -> SearchDialogAction {
     let mut action = SearchDialogAction::None;
     let mut dialog_open = *open;
-    let synced_event_ids = EventSyncMapService::new(database.connection())
-        .list_synced_local_event_ids_for_enabled_sources()
-        .unwrap_or_default();
     let sync_map_service = EventSyncMapService::new(database.connection());
+    let synced_event_ids = sync_map_service
+        .list_read_only_synced_local_event_ids_for_enabled_sources()
+        .unwrap_or_default();
     let mut synced_source_names: HashMap<i64, String> = HashMap::new();
 
     for event in &state.results {

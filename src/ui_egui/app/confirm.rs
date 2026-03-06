@@ -269,7 +269,7 @@ impl CalendarApp {
                 event_id,
                 event_title,
             } => {
-                if self.is_synced_event_id(event_id) {
+                if self.is_read_only_synced_event_id(event_id) {
                     self.notify_synced_event_read_only_for(event_id);
                     return;
                 }
@@ -305,13 +305,13 @@ impl CalendarApp {
                 event_title,
                 occurrence_date,
             } => {
-                if self.is_synced_event_id(event_id) {
+                if self.is_read_only_synced_event_id(event_id) {
                     self.notify_synced_event_read_only_for(event_id);
                     return;
                 }
 
                 let event_service = self.context.event_service();
-                if let Err(e) = event_service.delete_occurrence(event_id, occurrence_date) {
+                if let Err(e) = event_service.delete_occurrence_local(event_id, occurrence_date) {
                     log::error!("Failed to delete occurrence: {}", e);
                     self.toast_manager
                         .error(format!("Failed to delete occurrence: {}", e));

@@ -45,6 +45,8 @@ pub struct DeleteConfirmRequest {
 pub struct EventInteractionResult {
     /// Event that was clicked for editing
     pub event_to_edit: Option<Event>,
+    /// Recurring instance to detach and edit as a single occurrence
+    pub occurrence_to_edit: Option<Event>,
     /// IDs of events that were deleted (need countdown card cleanup)
     pub deleted_event_ids: Vec<i64>,
     /// Events that were moved via drag-and-drop (need countdown card sync)
@@ -61,6 +63,9 @@ impl EventInteractionResult {
     pub fn merge(&mut self, other: EventInteractionResult) {
         if other.event_to_edit.is_some() {
             self.event_to_edit = other.event_to_edit;
+        }
+        if other.occurrence_to_edit.is_some() {
+            self.occurrence_to_edit = other.occurrence_to_edit;
         }
         self.deleted_event_ids.extend(other.deleted_event_ids);
         self.moved_events.extend(other.moved_events);
@@ -297,6 +302,15 @@ pub fn render_ribbon_event_with_handles(
                     .size(11.0),
             );
             ui.add_enabled(false, egui::Button::new("✏ Edit"));
+        } else if event.recurrence_rule.is_some() {
+            if ui.button("✏ Edit This Occurrence").clicked() {
+                result.occurrence_to_edit = Some(event.clone());
+                ui.close_menu();
+            }
+            if ui.button("✏ Edit All Occurrences").clicked() {
+                result.event_to_edit = Some(event.clone());
+                ui.close_menu();
+            }
         } else if ui.button("✏ Edit").clicked() {
             result.event_to_edit = Some(event.clone());
             ui.close_menu();

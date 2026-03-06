@@ -11,7 +11,9 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::theme::CalendarTheme;
 
-use super::{filter_events_by_category, filter_events_by_sync_scope, load_synced_event_ids};
+use super::{
+    filter_events_by_category, filter_events_by_sync_scope, load_read_only_synced_event_ids,
+};
 
 pub struct DayView;
 
@@ -45,7 +47,7 @@ impl DayView {
         let events = Self::get_events_for_day(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
         let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
-        let synced_event_ids = load_synced_event_ids(database, None);
+        let synced_event_ids = load_read_only_synced_event_ids(database, None);
 
         // Day header
         let day_name = current_date.format("%A").to_string();

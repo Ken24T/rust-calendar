@@ -63,7 +63,7 @@ impl CalendarApp {
         }
 
         if let Some(event_id) = self.event_to_edit {
-            if self.is_synced_event_id(event_id) {
+            if self.is_read_only_synced_event_id(event_id) {
                 self.notify_synced_event_read_only_for(event_id);
                 self.show_event_dialog = false;
                 self.event_to_edit = None;
@@ -298,7 +298,7 @@ impl CalendarApp {
             }
         };
 
-        if self.is_synced_event_id(request.event_id) {
+        if self.is_read_only_synced_event_id(request.event_id) {
             self.notify_synced_event_read_only_for(request.event_id);
             return;
         }
@@ -318,6 +318,29 @@ impl CalendarApp {
             request.card_id,
             request.event_id
         );
+    }
+
+    pub(super) fn open_event_dialog_for_occurrence(&mut self, occurrence: Event) {
+        let Some(parent_event_id) = occurrence.id else {
+            return;
+        };
+
+        if self.is_read_only_synced_event_id(parent_event_id) {
+            self.notify_synced_event_read_only_for(parent_event_id);
+            return;
+        }
+
+        self.event_to_edit = None;
+        self.event_dialog_date = Some(occurrence.start.date_naive());
+        self.event_dialog_time = (!occurrence.all_day).then_some(occurrence.start.time());
+        self.event_dialog_recurrence = None;
+        self.event_dialog_state = Some(EventDialogState::from_occurrence(
+            &occurrence,
+            &self.settings,
+            parent_event_id,
+            occurrence.start,
+        ));
+        self.show_event_dialog = true;
     }
 
     pub(super) fn render_settings_dialog(&mut self, ctx: &egui::Context) {
@@ -355,7 +378,7 @@ impl CalendarApp {
                 self.state.show_search_dialog = false;
             }
             SearchDialogAction::EditEvent(event_id) => {
-                if self.is_synced_event_id(event_id) {
+                if self.is_read_only_synced_event_id(event_id) {
                     self.notify_synced_event_read_only_for(event_id);
                 } else {
                     self.event_to_edit = Some(event_id);

@@ -102,6 +102,15 @@ pub fn render_slot_context_menu(
                             .size(11.0),
                     );
                     ui.add_enabled(false, egui::Button::new("✏ Edit"));
+                } else if event.recurrence_rule.is_some() {
+                    if ui.button("✏ Edit This Occurrence").clicked() {
+                        result.occurrence_to_edit = Some(event.clone());
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    if ui.button("✏ Edit All Occurrences").clicked() {
+                        context_clicked_event = Some(event.clone());
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
                 } else if ui.button("✏ Edit").clicked() {
                     context_clicked_event = Some(event.clone());
                     ui.memory_mut(|mem| mem.close_popup());

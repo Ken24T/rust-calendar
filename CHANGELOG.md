@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.16] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 single-occurrence edit groundwork:
+  - detachable occurrence edit flow for recurring events in timed view context menus
+  - standalone detached-instance creation that preserves the parent series as an exception
+  - outbound queue + mapping coverage for writable recurring-instance edits
+
+### Changed
+
+- Writable synced recurring events can now be edited as either the whole series or a single occurrence from timed view context menus.
+- Saving a single-occurrence edit now creates a detached local event, queues an instance create for the writable source, and updates the parent series exceptions in the same flow.
+
 ## [2.4.15] - 2026-03-06
 
 ### Added

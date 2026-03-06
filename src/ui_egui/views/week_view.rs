@@ -8,7 +8,7 @@ use super::week_shared::{
     render_time_grid, EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
 use super::{
-    filter_events_by_category, filter_events_by_sync_scope, load_synced_event_ids,
+    filter_events_by_category, filter_events_by_sync_scope, load_read_only_synced_event_ids,
     AutoFocusRequest, CountdownRequest,
 };
 use crate::models::event::Event;
@@ -66,7 +66,7 @@ impl WeekView {
         let events = Self::get_events_for_week(&event_service, week_start);
         let events = filter_events_by_category(events, category_filter);
         let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
-        let synced_event_ids = load_synced_event_ids(database, None);
+        let synced_event_ids = load_read_only_synced_event_ids(database, None);
 
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let total_spacing = COLUMN_SPACING * 6.0; // 6 gaps between 7 columns

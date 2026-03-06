@@ -8,7 +8,7 @@ use super::week_shared::{
     render_time_grid, EventInteractionResult, TimeCellConfig, COLUMN_SPACING, TIME_LABEL_WIDTH,
 };
 use super::{
-    filter_events_by_category, filter_events_by_sync_scope, load_synced_event_ids,
+    filter_events_by_category, filter_events_by_sync_scope, load_read_only_synced_event_ids,
     AutoFocusRequest, CountdownRequest,
 };
 use crate::models::event::Event;
@@ -66,7 +66,7 @@ impl WorkWeekView {
         let events = Self::get_events_for_dates(&event_service, &work_week_dates);
         let events = filter_events_by_category(events, category_filter);
         let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
-        let synced_event_ids = load_synced_event_ids(database, None);
+        let synced_event_ids = load_read_only_synced_event_ids(database, None);
 
         // Calculate column width accounting for scrollbar (16px typical)
         let scrollbar_width = 16.0;

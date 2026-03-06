@@ -55,7 +55,9 @@ pub fn render_event_dialog(
     // Check for warnings (overlap detection, etc.) - this updates state.warning_messages
     state.check_warnings(database);
 
-    egui::Window::new(if state.event_id.is_some() {
+    egui::Window::new(if state.is_occurrence_edit() {
+        "Edit Occurrence"
+    } else if state.event_id.is_some() {
         "Edit Event"
     } else {
         "New Event"
@@ -176,7 +178,7 @@ fn render_basic_information_section(
         );
     });
 
-    if state.event_id.is_none() {
+    if state.event_id.is_none() && !state.is_occurrence_edit() {
         ui.add_space(8.0);
         let today = Local::now().date_naive();
         let is_future_event = state.date > today;
@@ -362,7 +364,7 @@ fn render_action_buttons(
             *show_dialog = false;
         }
 
-        if state.event_id.is_some() {
+        if state.event_id.is_some() && !state.is_occurrence_edit() {
             ui.add_space(20.0);
             if ui
                 .button(RichText::new("Delete").color(Color32::RED))

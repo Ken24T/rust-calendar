@@ -2,13 +2,13 @@ use super::CalendarApp;
 use crate::services::calendar_sync::mapping::EventSyncMapService;
 
 impl CalendarApp {
-    pub(super) fn is_synced_event_id(&self, event_id: i64) -> bool {
+    pub(super) fn is_read_only_synced_event_id(&self, event_id: i64) -> bool {
         let service = EventSyncMapService::new(self.context.database().connection());
         service
-            .is_synced_local_event(event_id)
+            .is_read_only_synced_local_event(event_id)
             .unwrap_or_else(|err| {
                 log::warn!(
-                    "Failed to check synced status for event {}: {}",
+                    "Failed to check read-only synced status for event {}: {}",
                     event_id,
                     err
                 );

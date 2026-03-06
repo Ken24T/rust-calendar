@@ -81,7 +81,7 @@ impl MonthView {
         let events = Self::get_events_for_month(&event_service, *current_date);
         let events = filter_events_by_category(events, category_filter);
         let events = filter_events_by_sync_scope(events, database, synced_only, synced_source_id);
-        let synced_event_ids = super::load_synced_event_ids(database, synced_source_id);
+        let synced_event_ids = super::load_read_only_synced_event_ids(database, synced_source_id);
 
         // Day of week headers - use Grid to match column widths below
         let day_names = Self::get_day_names(settings.first_day_of_week);

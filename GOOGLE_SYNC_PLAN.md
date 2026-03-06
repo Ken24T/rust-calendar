@@ -307,7 +307,7 @@ Stage 1 acceptance criteria checkpoint:
 
 - Status: in progress
 - Branch: `feature/google-sync-stage2-full-crud`
-- Latest Stage 2 release tag: `v2.4.15`
+- Latest Stage 2 release tag: `v2.4.16`
 
 Slices shipped:
 
@@ -318,6 +318,10 @@ Slices shipped:
 - [x] S2.5 Conflict Policy and Resolution UX (`v2.4.15`)
 - [ ] S2.6 Recurrence + Exceptions CRUD Parity
 - [ ] S2.7 Operational Hardening
+
+Current S2.6 slices shipped:
+
+- [x] Writable recurring series updates and occurrence delete queueing (`v2.4.16`)
 
 ## Decision Log (Initial)
 
