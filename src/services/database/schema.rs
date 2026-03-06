@@ -15,6 +15,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_event_templates_table(conn)?;
     create_categories_table(conn)?;
     create_calendar_sources_table(conn)?;
+    create_google_account_table(conn)?;
     create_event_sync_map_table(conn)?;
     create_calendar_sync_runs_table(conn)?;
     initialize_default_categories(conn)?;
@@ -440,6 +441,98 @@ fn create_event_sync_map_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create event_sync_map source index")?;
+
+    Ok(())
+}
+
+fn create_google_account_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS google_account (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            oauth_client_id TEXT,
+            account_email TEXT,
+            access_token TEXT,
+            refresh_token TEXT,
+            token_type TEXT,
+            scope TEXT,
+            expires_at TEXT,
+            last_error TEXT,
+            connected_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create google_account table")?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "oauth_client_id",
+        "ALTER TABLE google_account ADD COLUMN oauth_client_id TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "account_email",
+        "ALTER TABLE google_account ADD COLUMN account_email TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "access_token",
+        "ALTER TABLE google_account ADD COLUMN access_token TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "refresh_token",
+        "ALTER TABLE google_account ADD COLUMN refresh_token TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "token_type",
+        "ALTER TABLE google_account ADD COLUMN token_type TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "scope",
+        "ALTER TABLE google_account ADD COLUMN scope TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "expires_at",
+        "ALTER TABLE google_account ADD COLUMN expires_at TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "last_error",
+        "ALTER TABLE google_account ADD COLUMN last_error TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "connected_at",
+        "ALTER TABLE google_account ADD COLUMN connected_at TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "updated_at",
+        "ALTER TABLE google_account ADD COLUMN updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    )?;
 
     Ok(())
 }

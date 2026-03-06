@@ -5,6 +5,7 @@ pub mod calendar_source;
 pub mod category;
 pub mod event;
 pub mod event_sync_map;
+pub mod google_account;
 pub mod recurrence;
 pub mod reminder;
 pub mod settings;

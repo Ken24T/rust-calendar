@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.11] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.1 account-linking foundation:
+  - persisted Google account state model/service
+  - device-code OAuth connect/reconnect flow
+  - token refresh and disconnect actions in Settings
+
+### Changed
+
+- Added a dedicated `google_account` database table and schema coverage tests.
+- Extended calendar sync settings UI with a new "Google Account (Read/Write
+  Preview)" section showing link state, token expiry, and auth errors.
+
 ## [2.4.10] - 2026-03-06
 
 ### Added

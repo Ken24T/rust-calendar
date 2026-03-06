@@ -4,10 +4,12 @@
 //! deleting sources and triggering manual sync operations.
 
 use crate::models::calendar_source::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE};
+use crate::models::google_account::GoogleAccount;
 use crate::models::settings::Settings;
 use crate::services::calendar_sync::engine::{CalendarSyncEngine, SyncRunResult};
 use crate::services::calendar_sync::CalendarSourceService;
 use crate::services::database::Database;
+use crate::services::google_account::GoogleAccountService;
 use egui::{Color32, RichText};
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -31,7 +33,14 @@ enum SyncJobKind {
     Apply,
 }
 
+#[derive(Clone, Copy)]
+enum OAuthJobKind {
+    Connect,
+    Refresh,
+}
+
 type SyncWorkerMessage = Result<(String, SyncJobKind, SyncRunResult), String>;
+type OAuthWorkerMessage = Result<(OAuthJobKind, GoogleAccount), String>;
 
 /// Mutable state for the calendar sync section of the settings dialog.
 #[derive(Default)]
@@ -46,6 +55,12 @@ pub struct CalendarSyncState {
     source_error_message: Option<String>,
     source_sync_in_progress_id: Option<i64>,
     source_sync_result_rx: Option<Receiver<SyncWorkerMessage>>,
+    oauth_client_id: String,
+    oauth_client_id_loaded: bool,
+    oauth_status_message: Option<String>,
+    oauth_error_message: Option<String>,
+    oauth_job_in_progress: Option<OAuthJobKind>,
+    oauth_result_rx: Option<Receiver<OAuthWorkerMessage>>,
 }
 
 impl CalendarSyncState {
@@ -108,6 +123,48 @@ pub fn poll_sync_result(ctx: &egui::Context, state: &mut CalendarSyncState) {
             }
         }
     }
+
+    if let Some(rx) = &state.oauth_result_rx {
+        match rx.try_recv() {
+            Ok(Ok((kind, account))) => {
+                state.oauth_result_rx = None;
+                state.oauth_job_in_progress = None;
+                state.oauth_error_message = None;
+                state.oauth_status_message = Some(match kind {
+                    OAuthJobKind::Connect => {
+                        let email = account
+                            .account_email
+                            .as_deref()
+                            .unwrap_or("unknown account");
+                        format!("Connected Google account: {}", email)
+                    }
+                    OAuthJobKind::Refresh => {
+                        let email = account
+                            .account_email
+                            .as_deref()
+                            .unwrap_or("unknown account");
+                        format!("Refreshed Google token for {}", email)
+                    }
+                });
+            }
+            Ok(Err(err)) => {
+                state.oauth_result_rx = None;
+                state.oauth_job_in_progress = None;
+                state.oauth_status_message = None;
+                state.oauth_error_message = Some(err);
+            }
+            Err(TryRecvError::Empty) => {
+                ctx.request_repaint_after(Duration::from_millis(200));
+            }
+            Err(TryRecvError::Disconnected) => {
+                state.oauth_result_rx = None;
+                state.oauth_job_in_progress = None;
+                state.oauth_status_message = None;
+                state.oauth_error_message =
+                    Some("OAuth worker disconnected unexpectedly".to_string());
+            }
+        }
+    }
 }
 
 /// Render the Google Calendar Sync section of the settings dialog.
@@ -118,6 +175,187 @@ pub fn render_calendar_sync_section(
     database: &Database,
     state: &mut CalendarSyncState,
 ) {
+    ui.heading("Google Account (Read/Write Preview)");
+    ui.add_space(4.0);
+
+    let account_service = match GoogleAccountService::new(database.connection()) {
+        Ok(service) => Some(service),
+        Err(err) => {
+            state.oauth_error_message = Some(format!(
+                "Failed to initialize Google account service: {}",
+                err
+            ));
+            None
+        }
+    };
+
+    if let Some(service) = &account_service {
+        if !state.oauth_client_id_loaded {
+            match service.load() {
+                Ok(account) => {
+                    if state.oauth_client_id.trim().is_empty() {
+                        state.oauth_client_id = account.oauth_client_id.unwrap_or_default();
+                    }
+                }
+                Err(err) => {
+                    state.oauth_error_message =
+                        Some(format!("Failed to load Google account state: {}", err));
+                }
+            }
+            state.oauth_client_id_loaded = true;
+        }
+    }
+
+    if let Some(message) = &state.oauth_status_message {
+        ui.colored_label(Color32::LIGHT_GREEN, message);
+    }
+    if let Some(message) = &state.oauth_error_message {
+        ui.colored_label(Color32::LIGHT_RED, message);
+    }
+
+    let account_snapshot = account_service
+        .as_ref()
+        .and_then(|service| service.load().ok());
+
+    ui.horizontal(|ui| {
+        ui.allocate_ui_with_layout(
+            egui::Vec2::new(label_width, 20.0),
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                ui.label("OAuth client ID:");
+            },
+        );
+        ui.add_sized(
+            [360.0, 20.0],
+            egui::TextEdit::singleline(&mut state.oauth_client_id)
+                .hint_text("Desktop OAuth client ID (*.apps.googleusercontent.com)"),
+        );
+    });
+
+    let any_oauth_in_progress = state.oauth_job_in_progress.is_some();
+
+    ui.horizontal(|ui| {
+        ui.add_space(label_width);
+
+        let connect_label = if matches!(state.oauth_job_in_progress, Some(OAuthJobKind::Connect)) {
+            "Connecting..."
+        } else {
+            "Connect / Reconnect"
+        };
+
+        if ui
+            .add_enabled(!any_oauth_in_progress, egui::Button::new(connect_label))
+            .clicked()
+        {
+            state.oauth_status_message = Some(
+                "Starting Google device login. Complete the browser prompt to finish linking."
+                    .to_string(),
+            );
+            state.oauth_error_message = None;
+            state.oauth_job_in_progress = Some(OAuthJobKind::Connect);
+
+            let client_id = state.oauth_client_id.trim().to_string();
+            let db_path = database.path().to_string();
+            let (tx, rx) = mpsc::channel();
+            state.oauth_result_rx = Some(rx);
+
+            thread::spawn(move || {
+                let result = (|| -> OAuthWorkerMessage {
+                    if client_id.trim().is_empty() {
+                        return Err("OAuth client ID cannot be empty".to_string());
+                    }
+                    let db = Database::new(&db_path).map_err(|err| err.to_string())?;
+                    let service = GoogleAccountService::new(db.connection())
+                        .map_err(|err| err.to_string())?;
+                    let account = service
+                        .connect_with_device_flow(&client_id)
+                        .map_err(|err| err.to_string())?;
+                    Ok((OAuthJobKind::Connect, account))
+                })();
+
+                let _ = tx.send(result);
+            });
+        }
+
+        let refresh_label = if matches!(state.oauth_job_in_progress, Some(OAuthJobKind::Refresh)) {
+            "Refreshing..."
+        } else {
+            "Refresh Token"
+        };
+
+        if ui
+            .add_enabled(!any_oauth_in_progress, egui::Button::new(refresh_label))
+            .clicked()
+        {
+            state.oauth_status_message = Some("Refreshing Google access token...".to_string());
+            state.oauth_error_message = None;
+            state.oauth_job_in_progress = Some(OAuthJobKind::Refresh);
+
+            let db_path = database.path().to_string();
+            let (tx, rx) = mpsc::channel();
+            state.oauth_result_rx = Some(rx);
+
+            thread::spawn(move || {
+                let result = (|| -> OAuthWorkerMessage {
+                    let db = Database::new(&db_path).map_err(|err| err.to_string())?;
+                    let service = GoogleAccountService::new(db.connection())
+                        .map_err(|err| err.to_string())?;
+                    let account = service
+                        .refresh_access_token()
+                        .map_err(|err| err.to_string())?;
+                    Ok((OAuthJobKind::Refresh, account))
+                })();
+
+                let _ = tx.send(result);
+            });
+        }
+
+        if ui
+            .add_enabled(!any_oauth_in_progress, egui::Button::new("Disconnect"))
+            .clicked()
+        {
+            state.oauth_status_message = None;
+            state.oauth_error_message = None;
+
+            if let Some(service) = &account_service {
+                match service.disconnect() {
+                    Ok(_) => {
+                        state.oauth_status_message =
+                            Some("Disconnected Google account".to_string());
+                    }
+                    Err(err) => {
+                        state.oauth_error_message =
+                            Some(format!("Failed to disconnect account: {}", err));
+                    }
+                }
+            }
+        }
+    });
+
+    if let Some(account) = account_snapshot {
+        if account.is_connected() {
+            if let Some(email) = account.account_email.as_deref() {
+                ui.label(format!("Linked account: {}", email));
+            }
+            if let Some(expires_at) = account.expires_at.as_deref() {
+                ui.label(format!("Token expiry: {}", expires_at));
+            }
+        } else {
+            ui.label("No Google account linked");
+        }
+
+        if let Some(last_error) = account.last_error.as_deref() {
+            ui.colored_label(
+                Color32::LIGHT_RED,
+                format!("Last auth error: {}", last_error),
+            );
+        }
+    }
+
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+
     ui.heading("Google Calendar Sync (Read-Only)");
     ui.add_space(4.0);
 

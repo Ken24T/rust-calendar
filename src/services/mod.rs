@@ -7,6 +7,7 @@ pub mod category;
 pub mod countdown;
 pub mod database;
 pub mod event;
+pub mod google_account;
 pub mod icalendar;
 pub mod notification;
 pub mod pdf;
