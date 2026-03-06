@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.28] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 broken-mapping recovery hardening:
+  - outbound operations with missing remote identifiers now fail terminally instead of retrying forever
+  - regression coverage now distinguishes terminal broken-mapping failures from retriable transient failures
+
+### Changed
+
+- Failed outbound operations only re-enter the runnable queue when they have an explicit retry schedule.
+
 ## [2.4.27] - 2026-03-06
 
 ### Added

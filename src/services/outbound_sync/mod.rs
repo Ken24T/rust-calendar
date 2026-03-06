@@ -249,7 +249,7 @@ impl<'a> OutboundSyncService<'a> {
                  WHERE source_id = ?1
                    AND (
                         status = ?2
-                        OR (status = ?3 AND (next_retry_at IS NULL OR next_retry_at <= ?4))
+                        OR (status = ?3 AND next_retry_at IS NOT NULL AND next_retry_at <= ?4)
                    )
                  ORDER BY CASE WHEN status = ?2 THEN 0 ELSE 1 END, updated_at ASC
                  LIMIT ?5",
@@ -334,7 +334,32 @@ impl<'a> OutboundSyncService<'a> {
     }
 
     pub fn mark_operation_failed(&self, operation_id: i64, error: &str) -> Result<()> {
-        self.update_operation_status(operation_id, OUTBOUND_STATUS_FAILED, Some(error))
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE outbound_sync_operations
+                 SET status = ?1,
+                     next_retry_at = NULL,
+                     last_error = ?2,
+                     updated_at = ?3
+                 WHERE id = ?4",
+                params![
+                    OUTBOUND_STATUS_FAILED,
+                    error,
+                    Local::now().to_rfc3339(),
+                    operation_id,
+                ],
+            )
+            .context("Failed to mark outbound sync operation as terminal failed")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Outbound sync operation with id {} not found",
+                operation_id
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn mark_operation_failed_with_retry(
@@ -390,6 +415,7 @@ impl<'a> OutboundSyncService<'a> {
                 "UPDATE outbound_sync_operations
                  SET status = ?1,
                      attempt_count = attempt_count + 1,
+                     next_retry_at = NULL,
                      last_error = NULL,
                      updated_at = ?2
                  WHERE id = ?3",
@@ -753,6 +779,26 @@ mod tests {
     }
 
     #[test]
+    fn test_list_runnable_for_source_excludes_terminal_failed_operations() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (source_id, external_uid, operation_type, status, next_retry_at)
+             VALUES (?1, 'uid-terminal', 'update', 'failed', NULL)",
+            [source_id],
+        )
+        .unwrap();
+
+        let service = OutboundSyncService::new(conn);
+        let runnable = service.list_runnable_for_source(source_id, 10).unwrap();
+
+        assert!(runnable.is_empty());
+    }
+
+    #[test]
     fn test_mark_operation_failed_with_retry_sets_next_retry_at() {
         let db = Database::new(":memory:").unwrap();
         db.initialize_schema().unwrap();
@@ -783,5 +829,38 @@ mod tests {
         assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED);
         assert!(next_retry_at.is_some());
         assert_eq!(error.as_deref(), Some("temporary outage"));
+    }
+
+    #[test]
+    fn test_mark_operation_failed_clears_next_retry_at() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (source_id, external_uid, operation_type, status, next_retry_at)
+             VALUES (?1, 'uid-terminal-fail', 'update', 'processing', '2999-01-01T00:00:00+00:00')",
+            [source_id],
+        )
+        .unwrap();
+        let operation_id = conn.last_insert_rowid();
+
+        let service = OutboundSyncService::new(conn);
+        service
+            .mark_operation_failed(operation_id, "broken mapping")
+            .unwrap();
+
+        let (status, next_retry_at, error): (String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT status, next_retry_at, last_error FROM outbound_sync_operations WHERE id = ?1",
+                [operation_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+
+        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED);
+        assert!(next_retry_at.is_none());
+        assert_eq!(error.as_deref(), Some("broken mapping"));
     }
 }

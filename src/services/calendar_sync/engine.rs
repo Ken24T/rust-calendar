@@ -32,6 +32,7 @@ use super::mapping::EventSyncMapService;
 use super::sanitizer;
 use super::{CalendarSourceService, SyncRunDiagnostics};
 use crate::models::calendar_source::CalendarSource;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncRunResult {
@@ -59,6 +60,14 @@ pub struct SyncBatchResult {
 pub struct CalendarSyncEngine<'a> {
     conn: &'a Connection,
     fetcher: IcsFetcher,
+}
+
+#[derive(Debug, Error)]
+enum OutboundOperationError {
+    #[error("Parent remote metadata for '{external_uid}' is missing remote_event_id")]
+    MissingParentRemoteEventId { external_uid: String },
+    #[error("Remote metadata for '{external_uid}' is missing remote_event_id")]
+    MissingRemoteEventId { external_uid: String },
 }
 
 impl<'a> CalendarSyncEngine<'a> {
@@ -467,12 +476,16 @@ impl<'a> CalendarSyncEngine<'a> {
                     CalendarSourceService::new(self.conn).mark_last_push_now(source_id)?;
                 }
                 Err(err) => {
-                    outbound_service.mark_operation_failed_with_retry(
-                        operation_id,
-                        operation.attempt_count + 1,
-                        source.poll_interval_minutes,
-                        &err.to_string(),
-                    )?;
+                    if Self::is_terminal_outbound_error(&err) {
+                        outbound_service.mark_operation_failed(operation_id, &err.to_string())?;
+                    } else {
+                        outbound_service.mark_operation_failed_with_retry(
+                            operation_id,
+                            operation.attempt_count + 1,
+                            source.poll_interval_minutes,
+                            &err.to_string(),
+                        )?;
+                    }
                 }
             }
         }
@@ -511,10 +524,9 @@ impl<'a> CalendarSyncEngine<'a> {
                     .get_remote_metadata(source_id, parent_external_uid)?
                     .and_then(|metadata| metadata.remote_event_id)
                     .ok_or_else(|| {
-                        anyhow!(
-                            "Parent remote metadata for '{}' is missing remote_event_id",
-                            parent_external_uid
-                        )
+                        OutboundOperationError::MissingParentRemoteEventId {
+                            external_uid: parent_external_uid.to_string(),
+                        }
                     })?;
                 let remote = writer.patch_detached_instance(
                     source,
@@ -529,10 +541,9 @@ impl<'a> CalendarSyncEngine<'a> {
                     .get_remote_metadata(source_id, external_uid)?
                     .and_then(|metadata| metadata.remote_event_id)
                     .ok_or_else(|| {
-                        anyhow!(
-                            "Remote metadata for '{}' is missing remote_event_id",
-                            external_uid
-                        )
+                        OutboundOperationError::MissingRemoteEventId {
+                            external_uid: external_uid.to_string(),
+                        }
                     })?;
                 writer.delete_event(source, &remote_event_id)?;
                 map_service.delete_remote_metadata(source_id, external_uid)?;
@@ -548,10 +559,9 @@ impl<'a> CalendarSyncEngine<'a> {
                     .get_remote_metadata(source_id, external_uid)?
                     .and_then(|metadata| metadata.remote_event_id)
                     .ok_or_else(|| {
-                        anyhow!(
-                            "Remote metadata for '{}' is missing remote_event_id",
-                            external_uid
-                        )
+                        OutboundOperationError::MissingRemoteEventId {
+                            external_uid: external_uid.to_string(),
+                        }
                     })?;
                 let remote = writer.update_event(source, &remote_event_id, payload_json)?;
                 self.complete_outbound_upsert(source_id, external_uid, operation.local_event_id, &remote)
@@ -1010,11 +1020,15 @@ impl<'a> CalendarSyncEngine<'a> {
 
         "failed"
     }
+
+    fn is_terminal_outbound_error(err: &anyhow::Error) -> bool {
+        err.downcast_ref::<OutboundOperationError>().is_some()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::CalendarSyncEngine;
+    use super::{CalendarSyncEngine, OutboundOperationError};
     use anyhow::anyhow;
     use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
     use crate::models::outbound_sync_operation::{
@@ -1085,6 +1099,17 @@ mod tests {
 
         assert_eq!(CalendarSyncEngine::sync_status_for_error(&rate_limited), "backoff");
         assert_eq!(CalendarSyncEngine::sync_status_for_error(&generic), "failed");
+    }
+
+    #[test]
+    fn test_is_terminal_outbound_error_detects_broken_remote_metadata() {
+        let broken = anyhow!(OutboundOperationError::MissingRemoteEventId {
+            external_uid: "uid-broken".to_string(),
+        });
+        let transient = anyhow!("temporary outage");
+
+        assert!(CalendarSyncEngine::is_terminal_outbound_error(&broken));
+        assert!(!CalendarSyncEngine::is_terminal_outbound_error(&transient));
     }
 
     fn set_source_windows(conn: &Connection, source_id: i64, past_days: i64, future_days: i64) {
@@ -2364,6 +2389,75 @@ END:VCALENDAR"#;
             )
             .unwrap();
         assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+    }
+
+    #[test]
+    fn test_process_pending_outbound_operations_marks_missing_remote_metadata_as_terminal_failed() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series-broken-1",
+                        "etag": "\"etag-broken-1\"",
+                        "status": "confirmed",
+                        "summary": "Series",
+                        "iCalUID": "uid-api-broken",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-broken"
+            }"#,
+            )
+            .unwrap();
+        engine
+            .sync_source_from_google_payload(source_id, initial_payload)
+            .unwrap();
+
+        conn.execute(
+            "UPDATE event_remote_metadata SET remote_event_id = NULL WHERE source_id = ?1 AND external_uid = ?2",
+            params![source_id, "uid-api-broken"],
+        )
+        .unwrap();
+
+        let existing = EventService::new(conn).list_all().unwrap().remove(0);
+        let mut local_edit = existing.clone();
+        local_edit.title = "Broken Metadata Edit".to_string();
+        EventService::new(conn).update_local(&local_edit).unwrap();
+
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let (status, next_retry_at, last_error): (String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT status, next_retry_at, last_error FROM outbound_sync_operations WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-api-broken"],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+
+        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED);
+        assert!(next_retry_at.is_none());
+        assert!(last_error
+            .as_deref()
+            .is_some_and(|error| error.contains("missing remote_event_id")));
+
+        let updated_ids = writer.updated_ids.lock().unwrap().clone();
+        assert!(updated_ids.is_empty());
     }
 
     #[test]
