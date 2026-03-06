@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.17] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 month-view recurrence parity:
+  - month-view context menus now distinguish single-occurrence edit/delete from whole-series actions
+  - month-view recurring instances can open the detached occurrence edit flow used by timed views
+
+### Changed
+
+- Recurring events in month view no longer collapse to a generic series-only context menu path.
+- Month-view delete requests now preserve occurrence dates so writable recurring instances can delete just one occurrence.
+
 ## [2.4.16] - 2026-03-06
 
 ### Added

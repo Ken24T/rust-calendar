@@ -311,6 +311,16 @@ impl CalendarApp {
             synced_source_id,
         );
 
+        if let Some(occurrence_event) = result.occurrence_to_edit {
+            if let Some(event_id) = occurrence_event.id {
+                if self.is_read_only_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only_for(event_id);
+                } else {
+                    self.open_event_dialog_for_occurrence(occurrence_event);
+                }
+            }
+        }
+
         // Handle month view actions
         match result.action {
             MonthViewAction::SwitchToDayView(date) => {

@@ -92,7 +92,7 @@ impl MonthView {
         active_countdown_events: &HashSet<i64>,
         palette: CalendarCellPalette,
         col_width: f32,
-    ) -> (MonthViewAction, Option<Event>, Option<DeleteConfirmRequest>) {
+    ) -> (MonthViewAction, Option<DeleteConfirmRequest>, Option<Event>) {
         let desired_size = Vec2::new(col_width, 80.0);
         let (rect, response) =
             ui.allocate_exact_size(desired_size, Sense::click().union(Sense::hover()));
@@ -412,10 +412,11 @@ impl MonthView {
         );
 
         let delete_confirm_request = context_result.delete_confirm_request;
+        let occurrence_to_edit = context_result.occurrence_to_edit;
 
         // Handle pending template selection (return action)
         if let Some(template_action) = context_result.template_action {
-            return (template_action, None, delete_confirm_request);
+            return (template_action, delete_confirm_request, occurrence_to_edit);
         }
 
         // Double-click on event opens edit dialog, on empty space creates new event
@@ -424,19 +425,31 @@ impl MonthView {
                 // Double-click on event - edit it
                 if let Some(id) = event.id {
                     if is_synced_event(Some(id), synced_event_ids) {
-                        return (MonthViewAction::None, Some(event), delete_confirm_request);
+                        return (
+                            MonthViewAction::None,
+                            delete_confirm_request,
+                            occurrence_to_edit,
+                        );
                     }
                     *show_event_dialog = true;
                     *event_to_edit = Some(id);
                     *event_dialog_date = Some(date);
                 }
-                return (MonthViewAction::None, Some(event), delete_confirm_request);
+                return (
+                    MonthViewAction::None,
+                    delete_confirm_request,
+                    occurrence_to_edit,
+                );
             } else {
                 // Double-click on empty space - create new event for this date
                 *show_event_dialog = true;
                 *event_dialog_date = Some(date);
                 *event_dialog_recurrence = None;
-                return (MonthViewAction::None, None, delete_confirm_request);
+                return (
+                    MonthViewAction::None,
+                    delete_confirm_request,
+                    occurrence_to_edit,
+                );
             }
         }
 
@@ -444,8 +457,8 @@ impl MonthView {
         if response.clicked() {
             return (
                 MonthViewAction::SwitchToDefaultView(date),
-                None,
                 delete_confirm_request,
+                occurrence_to_edit,
             );
         }
 
@@ -453,11 +466,15 @@ impl MonthView {
         if more_clicked {
             return (
                 MonthViewAction::SwitchToDayView(date),
-                None,
                 delete_confirm_request,
+                occurrence_to_edit,
             );
         }
 
-        (MonthViewAction::None, None, delete_confirm_request)
+        (
+            MonthViewAction::None,
+            delete_confirm_request,
+            occurrence_to_edit,
+        )
     }
 }

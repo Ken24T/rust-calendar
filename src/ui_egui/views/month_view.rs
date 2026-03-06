@@ -20,6 +20,8 @@ pub struct MonthViewResult {
     pub action: MonthViewAction,
     /// Request to show delete confirmation dialog
     pub delete_confirm_request: Option<DeleteConfirmRequest>,
+    /// Recurring instance to detach and edit as a single occurrence
+    pub occurrence_to_edit: Option<Event>,
 }
 
 impl Default for MonthViewResult {
@@ -27,6 +29,7 @@ impl Default for MonthViewResult {
         Self {
             action: MonthViewAction::None,
             delete_confirm_request: None,
+            occurrence_to_edit: None,
         }
     }
 }
@@ -265,7 +268,7 @@ impl MonthView {
                                 })
                                 .collect();
 
-                            let (cell_action, _clicked_event, delete_request) =
+                            let (cell_action, delete_request, occurrence_to_edit) =
                                 Self::render_day_cell(
                                     ui,
                                     day_counter,
@@ -293,6 +296,10 @@ impl MonthView {
                             // Check if there's a delete confirmation request
                             if delete_request.is_some() {
                                 result.delete_confirm_request = delete_request;
+                            }
+
+                            if occurrence_to_edit.is_some() {
+                                result.occurrence_to_edit = occurrence_to_edit;
                             }
                         }
                         day_counter += 1;
