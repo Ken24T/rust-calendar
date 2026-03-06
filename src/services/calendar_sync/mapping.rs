@@ -108,6 +108,49 @@ impl<'a> EventSyncMapService<'a> {
         Ok(())
     }
 
+    pub fn update_mapping_state(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+        local_event_id: i64,
+        external_last_modified: Option<&str>,
+        external_etag_hash: Option<&str>,
+    ) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE event_sync_map
+                 SET local_event_id = ?1,
+                     external_last_modified = ?2,
+                     external_etag_hash = ?3,
+                     last_seen_at = ?4,
+                     first_missing_at = NULL,
+                     purge_after_at = NULL,
+                     updated_at = ?5
+                 WHERE source_id = ?6 AND external_uid = ?7",
+                params![
+                    local_event_id,
+                    external_last_modified,
+                    external_etag_hash,
+                    Local::now().to_rfc3339(),
+                    Local::now().to_rfc3339(),
+                    source_id,
+                    external_uid,
+                ],
+            )
+            .context("Failed to update event sync map state")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Event sync map row not found for source_id={} external_uid={}",
+                source_id,
+                external_uid
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn list_by_source_id(&self, source_id: i64) -> Result<Vec<EventSyncMap>> {
         let mut stmt = self
             .conn
@@ -328,6 +371,17 @@ impl<'a> EventSyncMapService<'a> {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(err) => Err(err).context("Failed to fetch remote event metadata"),
         }
+    }
+
+    pub fn delete_remote_metadata(&self, source_id: i64, external_uid: &str) -> Result<()> {
+        self.conn
+            .execute(
+                "DELETE FROM event_remote_metadata WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, external_uid],
+            )
+            .context("Failed to delete remote event metadata")?;
+
+        Ok(())
     }
 
     fn row_to_mapping(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventSyncMap> {

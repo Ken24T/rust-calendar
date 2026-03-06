@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.14] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.4 inbound incremental Google API sync:
+  - Google Calendar API incremental pull client with sync-token support
+  - calendar ID extraction from existing Google ICS source URLs
+  - account service helper for retrieving/refreshing a valid access token
+  - reconciliation tests for API-driven create/delete flows and token persistence
+
+### Changed
+
+- Read/write sources now use the Google Calendar API for inbound sync and preview
+  instead of the ICS fetch path.
+- Incremental sync updates local events, mappings, and remote metadata from API
+  responses and clears expired sync tokens automatically before retrying.
+- Sync settings heading now reflects mixed read-only/read-write operation.
+
 ## [2.4.13] - 2026-03-06
 
 ### Added

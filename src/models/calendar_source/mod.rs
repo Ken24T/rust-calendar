@@ -69,6 +69,26 @@ impl CalendarSource {
         trimmed.starts_with("https://calendar.google.com/calendar/ical/")
             && trimmed.ends_with(".ics")
     }
+
+    pub fn google_calendar_id(&self) -> Option<String> {
+        Self::extract_google_calendar_id(&self.ics_url)
+    }
+
+    pub fn extract_google_calendar_id(url: &str) -> Option<String> {
+        let trimmed = url.trim();
+        let marker = "/calendar/ical/";
+        let start = trimmed.find(marker)? + marker.len();
+        let remainder = &trimmed[start..];
+        let encoded_calendar_id = remainder.split('/').next()?.trim();
+        if encoded_calendar_id.is_empty() {
+            return None;
+        }
+
+        urlencoding::decode(encoded_calendar_id)
+            .ok()
+            .map(|value| value.into_owned())
+            .filter(|value| !value.trim().is_empty())
+    }
 }
 
 impl Default for CalendarSource {
@@ -198,5 +218,14 @@ mod tests {
         assert!(!CalendarSource::is_valid_google_ics_url(
             "https://example.com/calendar.ics"
         ));
+    }
+
+    #[test]
+    fn test_extract_google_calendar_id() {
+        let calendar_id = CalendarSource::extract_google_calendar_id(
+            "https://calendar.google.com/calendar/ical/test%40gmail.com/private-abcdef/basic.ics",
+        );
+
+        assert_eq!(calendar_id.as_deref(), Some("test@gmail.com"));
     }
 }

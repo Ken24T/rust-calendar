@@ -199,6 +199,35 @@ impl<'a> GoogleAccountService<'a> {
         self.load()
     }
 
+    pub fn valid_access_token(&self) -> Result<String> {
+        let state = self.load()?;
+        if !state.is_connected() {
+            return Err(anyhow!("Google account is not connected"));
+        }
+
+        let should_refresh = state
+            .expires_at
+            .as_deref()
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+            .map(|expires_at| {
+                expires_at.with_timezone(&Local) <= Local::now() + Duration::minutes(1)
+            })
+            .unwrap_or(false);
+
+        if should_refresh {
+            let refreshed = self.refresh_access_token()?;
+            return refreshed
+                .access_token
+                .filter(|token| !token.trim().is_empty())
+                .ok_or_else(|| anyhow!("Google account refresh did not return an access token"));
+        }
+
+        state
+            .access_token
+            .filter(|token| !token.trim().is_empty())
+            .ok_or_else(|| anyhow!("Google account is missing an access token; refresh required"))
+    }
+
     pub fn connect_with_device_flow(&self, client_id: &str) -> Result<GoogleAccount> {
         let client_id = client_id.trim();
         if client_id.is_empty() {

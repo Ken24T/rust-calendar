@@ -307,14 +307,14 @@ Stage 1 acceptance criteria checkpoint:
 
 - Status: in progress
 - Branch: `feature/google-sync-stage2-full-crud`
-- Latest Stage 2 release tag: `v2.4.13`
+- Latest Stage 2 release tag: `v2.4.14`
 
 Slices shipped:
 
 - [x] S2.1 OAuth and Account Linking (`v2.4.11`)
 - [x] S2.2 Remote Identity and Sync Metadata (`v2.4.12`)
 - [x] S2.3 Outbound Local -> Google Writes (foundation) (`v2.4.13`)
-- [ ] S2.4 Inbound Incremental Google -> Local Sync
+- [x] S2.4 Inbound Incremental Google -> Local Sync (`v2.4.14`)
 - [ ] S2.5 Conflict Policy and Resolution UX
 - [ ] S2.6 Recurrence + Exceptions CRUD Parity
 - [ ] S2.7 Operational Hardening

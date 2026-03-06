@@ -10,9 +10,13 @@ use rusqlite::Connection;
 use crate::models::event::Event;
 use crate::models::event_sync_map::EventSyncMap;
 use crate::services::event::EventService;
+use crate::services::google_account::GoogleAccountService;
 use crate::services::icalendar::import::{self, ImportedIcsEvent};
 
 use super::fetcher::IcsFetcher;
+use super::google_api::{
+    GoogleCalendarApiClient, GoogleCalendarApiError, GoogleEventsSyncPayload, GoogleRemoteEvent,
+};
 use super::mapping::EventSyncMapService;
 use super::sanitizer;
 use super::{CalendarSourceService, SyncRunDiagnostics};
@@ -61,10 +65,15 @@ impl<'a> CalendarSyncEngine<'a> {
         let started_at = chrono::Local::now();
         let timer = Instant::now();
 
-        let result = self
-            .fetcher
-            .fetch_ics(&source.ics_url)
-            .and_then(|ics| self.sync_source_from_ics(source_id, &ics));
+        let result = if source.sync_capability
+            == crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE
+        {
+            self.sync_source_from_google_api(source_id)
+        } else {
+            self.fetcher
+                .fetch_ics(&source.ics_url)
+                .and_then(|ics| self.sync_source_from_ics(source_id, &ics))
+        };
 
         match result {
             Ok(mut success) => {
@@ -157,9 +166,13 @@ impl<'a> CalendarSyncEngine<'a> {
             .get_by_id(source_id)?
             .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
 
-        self.fetcher
-            .fetch_ics(&source.ics_url)
-            .and_then(|ics| self.preview_source_from_ics(source_id, &ics))
+        if source.sync_capability == crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE {
+            self.preview_source_from_google_api(source_id)
+        } else {
+            self.fetcher
+                .fetch_ics(&source.ics_url)
+                .and_then(|ics| self.preview_source_from_ics(source_id, &ics))
+        }
     }
 
     pub fn preview_source_from_ics(
@@ -203,6 +216,26 @@ impl<'a> CalendarSyncEngine<'a> {
         }
 
         Ok(batch)
+    }
+
+    pub(crate) fn sync_source_from_google_payload(
+        &self,
+        source_id: i64,
+        payload: GoogleEventsSyncPayload,
+    ) -> Result<SyncRunResult> {
+        let mut result = self.reconcile_google_payload(source_id, &payload, true)?;
+        let source_service = CalendarSourceService::new(self.conn);
+        source_service.set_api_sync_token(source_id, payload.next_sync_token.as_deref())?;
+        result.source_id = source_id;
+        Ok(result)
+    }
+
+    pub(crate) fn preview_source_from_google_payload(
+        &self,
+        source_id: i64,
+        payload: GoogleEventsSyncPayload,
+    ) -> Result<SyncRunResult> {
+        self.reconcile_google_payload(source_id, &payload, false)
     }
 
     fn apply_imported(
@@ -346,6 +379,167 @@ impl<'a> CalendarSyncEngine<'a> {
         Ok(result)
     }
 
+    fn sync_source_from_google_api(&self, source_id: i64) -> Result<SyncRunResult> {
+        let source_service = CalendarSourceService::new(self.conn);
+        let source = source_service
+            .get_by_id(source_id)?
+            .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
+
+        let account_service = GoogleAccountService::new(self.conn)?;
+        let access_token = account_service.valid_access_token()?;
+        let client = GoogleCalendarApiClient::new(access_token)?;
+
+        match client.fetch_events_incremental(&source) {
+            Ok(payload) => self.sync_source_from_google_payload(source_id, payload),
+            Err(err) if err.downcast_ref::<GoogleCalendarApiError>().is_some() => {
+                source_service.set_api_sync_token(source_id, None)?;
+                let refreshed_source = source_service
+                    .get_by_id(source_id)?
+                    .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
+                let payload = client.fetch_events_incremental(&refreshed_source)?;
+                self.sync_source_from_google_payload(source_id, payload)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    fn preview_source_from_google_api(&self, source_id: i64) -> Result<SyncRunResult> {
+        let source_service = CalendarSourceService::new(self.conn);
+        let source = source_service
+            .get_by_id(source_id)?
+            .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
+
+        let account_service = GoogleAccountService::new(self.conn)?;
+        let access_token = account_service.valid_access_token()?;
+        let client = GoogleCalendarApiClient::new(access_token)?;
+
+        let payload = match client.fetch_events_incremental(&source) {
+            Ok(payload) => payload,
+            Err(err) if err.downcast_ref::<GoogleCalendarApiError>().is_some() => {
+                let mut preview_source = source.clone();
+                preview_source.api_sync_token = None;
+                client.fetch_events_incremental(&preview_source)?
+            }
+            Err(err) => return Err(err),
+        };
+
+        self.preview_source_from_google_payload(source_id, payload)
+    }
+
+    fn reconcile_google_payload(
+        &self,
+        source_id: i64,
+        payload: &GoogleEventsSyncPayload,
+        apply: bool,
+    ) -> Result<SyncRunResult> {
+        let map_service = EventSyncMapService::new(self.conn);
+        let event_service = EventService::new(self.conn);
+        let mut result = SyncRunResult {
+            source_id,
+            ..SyncRunResult::default()
+        };
+
+        for remote in &payload.items {
+            let external_uid = remote.external_uid.clone();
+            let existing_map = map_service.get_by_source_and_uid(source_id, &external_uid)?;
+
+            if remote.is_cancelled() {
+                if let Some(mapping) = existing_map {
+                    if apply {
+                        map_service.delete_by_source_and_uid(source_id, &external_uid)?;
+                        map_service.delete_remote_metadata(source_id, &external_uid)?;
+                        if event_service.get(mapping.local_event_id)?.is_some() {
+                            event_service.delete(mapping.local_event_id)?;
+                        }
+                    }
+                    result.deleted += 1;
+                }
+                continue;
+            }
+
+            let incoming_event = remote.event.clone().ok_or_else(|| {
+                anyhow!("Google event payload missing local event representation")
+            })?;
+
+            match existing_map {
+                Some(mapping) => {
+                    if let Some(existing_event) = event_service.get(mapping.local_event_id)? {
+                        if Self::is_effectively_unchanged(&existing_event, &incoming_event) {
+                            if apply {
+                                self.update_remote_tracking(
+                                    &map_service,
+                                    source_id,
+                                    &external_uid,
+                                    existing_event.id.unwrap_or(mapping.local_event_id),
+                                    remote,
+                                )?;
+                            }
+                            result.unchanged += 1;
+                        } else {
+                            if apply {
+                                let mut updated_event = incoming_event.clone();
+                                updated_event.id = existing_event.id;
+                                updated_event.created_at = existing_event.created_at;
+                                event_service.update(&updated_event)?;
+                                self.update_remote_tracking(
+                                    &map_service,
+                                    source_id,
+                                    &external_uid,
+                                    updated_event.id.unwrap_or(mapping.local_event_id),
+                                    remote,
+                                )?;
+                            }
+                            result.updated += 1;
+                        }
+                    } else {
+                        if apply {
+                            let created_event = event_service.create(incoming_event.clone())?;
+                            self.update_remote_tracking(
+                                &map_service,
+                                source_id,
+                                &external_uid,
+                                created_event
+                                    .id
+                                    .ok_or_else(|| anyhow!("Created event missing ID"))?,
+                                remote,
+                            )?;
+                        }
+                        result.created += 1;
+                    }
+                }
+                None => {
+                    if apply {
+                        let created_event = event_service.create(incoming_event.clone())?;
+                        let local_event_id = created_event
+                            .id
+                            .ok_or_else(|| anyhow!("Created event missing ID for mapping"))?;
+                        map_service.create(EventSyncMap {
+                            id: None,
+                            source_id,
+                            external_uid: external_uid.clone(),
+                            local_event_id,
+                            external_last_modified: remote.updated_at.clone(),
+                            external_etag_hash: remote.etag.clone(),
+                            last_seen_at: Some(Local::now().to_rfc3339()),
+                            first_missing_at: None,
+                            purge_after_at: None,
+                        })?;
+                        self.update_remote_tracking(
+                            &map_service,
+                            source_id,
+                            &external_uid,
+                            local_event_id,
+                            remote,
+                        )?;
+                    }
+                    result.created += 1;
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
     fn preview_imported(
         &self,
         source_id: i64,
@@ -461,11 +655,39 @@ impl<'a> CalendarSyncEngine<'a> {
             None => Some(base_uid),
         }
     }
+
+    fn update_remote_tracking(
+        &self,
+        map_service: &EventSyncMapService<'_>,
+        source_id: i64,
+        external_uid: &str,
+        local_event_id: i64,
+        remote: &GoogleRemoteEvent,
+    ) -> Result<()> {
+        map_service.update_mapping_state(
+            source_id,
+            external_uid,
+            local_event_id,
+            remote.updated_at.as_deref(),
+            remote.etag.as_deref(),
+        )?;
+
+        map_service.upsert_remote_metadata(&super::mapping::RemoteEventMetadata {
+            source_id,
+            external_uid: external_uid.to_string(),
+            remote_event_id: Some(remote.remote_event_id.clone()),
+            remote_etag: remote.etag.clone(),
+            remote_payload_hash: Some(remote.payload_hash.clone()),
+        })?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CalendarSyncEngine;
+    use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
     use crate::services::calendar_sync::mapping::EventSyncMapService;
     use crate::services::database::Database;
     use crate::services::event::EventService;
@@ -481,6 +703,21 @@ mod tests {
                 "google_ics",
                 "https://calendar.google.com/calendar/ical/test%40gmail.com/private-token/basic.ics",
                 enabled as i32,
+            ],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    fn create_rw_source(conn: &Connection, name: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO calendar_sources (
+                name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability
+             ) VALUES (?1, 'google_ics', ?2, 1, 15, ?3)",
+            params![
+                name,
+                "https://calendar.google.com/calendar/ical/test%40gmail.com/private-token/basic.ics",
+                SYNC_CAPABILITY_READ_WRITE,
             ],
         )
         .unwrap();
@@ -850,5 +1087,106 @@ END:VCALENDAR"#;
         let event_service = EventService::new(conn);
         let events = event_service.list_all().unwrap();
         assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn test_sync_source_from_google_payload_creates_event_and_sets_sync_token() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-1",
+                        "etag": "\"etag-1\"",
+                        "status": "confirmed",
+                        "summary": "Inbound API Event",
+                        "iCalUID": "uid-api-1",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-1"
+            }"#,
+            )
+            .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, payload)
+            .unwrap();
+        assert_eq!(result.created, 1);
+
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(source.api_sync_token.as_deref(), Some("sync-token-1"));
+
+        let events = EventService::new(conn).list_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].title, "Inbound API Event");
+    }
+
+    #[test]
+    fn test_sync_source_from_google_payload_deletes_cancelled_event() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-2",
+                        "etag": "\"etag-2\"",
+                        "status": "confirmed",
+                        "summary": "Delete Me",
+                        "iCalUID": "uid-api-2",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-2"
+            }"#,
+            )
+            .unwrap();
+        engine
+            .sync_source_from_google_payload(source_id, initial_payload)
+            .unwrap();
+
+        let delete_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-2",
+                        "status": "cancelled",
+                        "iCalUID": "uid-api-2"
+                    }
+                ],
+                "nextSyncToken": "sync-token-3"
+            }"#,
+            )
+            .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, delete_payload)
+            .unwrap();
+        assert_eq!(result.deleted, 1);
+        assert!(EventService::new(conn).list_all().unwrap().is_empty());
+        assert!(EventSyncMapService::new(conn)
+            .list_by_source_id(source_id)
+            .unwrap()
+            .is_empty());
     }
 }

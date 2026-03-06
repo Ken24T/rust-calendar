@@ -361,7 +361,7 @@ pub fn render_calendar_sync_section(
     ui.separator();
     ui.add_space(8.0);
 
-    ui.heading("Google Calendar Sync (Read-Only)");
+    ui.heading("Google Calendar Sync");
     ui.add_space(4.0);
 
     ui.horizontal(|ui| {
