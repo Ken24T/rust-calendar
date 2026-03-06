@@ -270,6 +270,14 @@ assigned per-category in **Edit → Manage Countdown Categories…**.
 
 - Google Calendar sync configuration (ICS feed URL, sync interval, startup
   delay)
+- Writable Google sync shows source health, recent sync runs, outbound queue
+  counts, and the latest outbound error in settings
+- `Retry Failed Pushes` is for transient failures only
+- `Disconnect Broken Mapping` clears a broken remote link and keeps the event
+  locally when a synced event is stuck with `missing remote_event_id`
+
+For operational guidance, see
+[GOOGLE_CALENDAR_STAGE2_OPERATIONS.md](GOOGLE_CALENDAR_STAGE2_OPERATIONS.md).
 
 ## Keyboard Shortcuts
 

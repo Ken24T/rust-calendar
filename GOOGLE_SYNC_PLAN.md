@@ -305,7 +305,7 @@ Stage 1 acceptance criteria checkpoint:
 
 ### Stage 2 Progress (2026-03-06)
 
-- Status: in progress
+- Status: complete
 - Branch: `feature/google-sync-stage2-full-crud`
 - Latest Stage 2 release tag: `v2.4.32`
 
@@ -317,7 +317,7 @@ Slices shipped:
 - [x] S2.4 Inbound Incremental Google -> Local Sync (`v2.4.14`)
 - [x] S2.5 Conflict Policy and Resolution UX (`v2.4.15`)
 - [x] S2.6 Recurrence + Exceptions CRUD Parity
-- [ ] S2.7 Operational Hardening
+- [x] S2.7 Operational Hardening
 
 Current S2.6 slices shipped:
 
@@ -341,6 +341,20 @@ Current S2.7 slices shipped:
 - [x] Bulk retry skips broken-mapping failures and surfaces manual recovery (`v2.4.30`)
 - [x] Manual disconnect flow for broken non-delete mappings (`v2.4.31`)
 - [x] Recent sync-run audit history in settings (`v2.4.32`)
+
+Stage 2 acceptance criteria checkpoint:
+
+- [x] Full local CRUD propagates to Google reliably
+- [x] Remote CRUD reflects to local reliably
+- [x] Conflict policy is deterministic and user-visible
+- [x] Recurrence CRUD behavior is stable for series and instances
+- [x] OAuth/token lifecycle is production-safe
+- [x] Quality gates (`clippy`, `test`, `build`) for each shipped slice
+
+Operational closure notes:
+
+- Backoff and quota handling are surfaced in sync status and recent run history.
+- Broken mapping recovery is both practical in settings and documented in `docs/GOOGLE_CALENDAR_STAGE2_OPERATIONS.md`.
 
 ## Decision Log (Initial)
 
