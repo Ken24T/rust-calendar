@@ -9,6 +9,7 @@ use crate::models::outbound_sync_operation::{
     OutboundSyncOperation, OUTBOUND_STATUS_COMPLETED, OUTBOUND_STATUS_FAILED,
     OUTBOUND_STATUS_PENDING, OUTBOUND_STATUS_PROCESSING,
 };
+use crate::services::calendar_sync::mapping::EventSyncMapService;
 
 const DEFAULT_BACKOFF_BASE_MINUTES: i64 = 1;
 const DEFAULT_MAX_BACKOFF_MINUTES: i64 = 60;
@@ -147,6 +148,44 @@ impl<'a> OutboundSyncService<'a> {
             .context("Failed to reset failed outbound sync operations")?;
 
         Ok(rows_affected)
+    }
+
+    pub fn resolve_broken_mapping_failure(&self, operation_id: i64) -> Result<()> {
+        let operation = self.get_operation_by_id(operation_id)?;
+        let error = operation
+            .last_error
+            .as_deref()
+            .ok_or_else(|| anyhow!("Outbound sync operation has no error to recover from"))?;
+
+        if operation.status != OUTBOUND_STATUS_FAILED {
+            return Err(anyhow!(
+                "Outbound sync operation {} is not in a failed state",
+                operation_id
+            ));
+        }
+
+        if !Self::is_broken_remote_metadata_error(error) {
+            return Err(anyhow!(
+                "Outbound sync operation {} is not a broken-mapping failure",
+                operation_id
+            ));
+        }
+
+        let external_uid = operation
+            .external_uid
+            .as_deref()
+            .ok_or_else(|| anyhow!("Outbound sync operation is missing external_uid"))?;
+        let mapping_service = EventSyncMapService::new(self.conn);
+
+        mapping_service.delete_remote_metadata(operation.source_id, external_uid)?;
+        if mapping_service
+            .get_by_source_and_uid(operation.source_id, external_uid)?
+            .is_some()
+        {
+            mapping_service.delete_by_source_and_uid(operation.source_id, external_uid)?;
+        }
+
+        self.mark_operation_completed(operation_id)
     }
 
     pub fn list_failed_for_source(
@@ -469,6 +508,39 @@ impl<'a> OutboundSyncService<'a> {
         Ok(())
     }
 
+    pub fn is_broken_remote_metadata_error(error: &str) -> bool {
+        error.contains(BROKEN_REMOTE_METADATA_ERROR_FRAGMENT)
+    }
+
+    fn get_operation_by_id(&self, operation_id: i64) -> Result<OutboundSyncOperation> {
+        self.conn
+            .query_row(
+                "SELECT id, source_id, local_event_id, external_uid, operation_type,
+                        payload_json, status, attempt_count, next_retry_at, last_error,
+                        created_at, updated_at
+                 FROM outbound_sync_operations
+                 WHERE id = ?1",
+                [operation_id],
+                |row| {
+                    Ok(OutboundSyncOperation {
+                        id: Some(row.get(0)?),
+                        source_id: row.get(1)?,
+                        local_event_id: row.get(2)?,
+                        external_uid: row.get(3)?,
+                        operation_type: row.get(4)?,
+                        payload_json: row.get(5)?,
+                        status: row.get(6)?,
+                        attempt_count: row.get(7)?,
+                        next_retry_at: row.get(8)?,
+                        last_error: row.get(9)?,
+                        created_at: row.get(10)?,
+                        updated_at: row.get(11)?,
+                    })
+                },
+            )
+            .context("Failed to load outbound sync operation by id")
+    }
+
     fn lookup_writable_mapping(&self, local_event_id: i64) -> Result<Option<(i64, String)>> {
         let result = self.conn.query_row(
             "SELECT esm.source_id, esm.external_uid
@@ -577,7 +649,9 @@ impl<'a> OutboundSyncService<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{OutboundSyncService, BROKEN_REMOTE_METADATA_ERROR_FRAGMENT};
+    use super::{
+        OutboundSyncService, BROKEN_REMOTE_METADATA_ERROR_FRAGMENT, OUTBOUND_STATUS_COMPLETED,
+    };
     use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
     use crate::services::database::Database;
     use rusqlite::params;
@@ -710,6 +784,83 @@ mod tests {
         assert!(error
             .as_deref()
             .is_some_and(|value| value.contains(BROKEN_REMOTE_METADATA_ERROR_FRAGMENT)));
+    }
+
+    #[test]
+    fn test_resolve_broken_mapping_failure_clears_tracking_and_completes_operation() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+
+        conn.execute(
+            "INSERT INTO events (title, start_datetime, end_datetime, is_all_day, created_at, updated_at)
+             VALUES ('Broken Sync Event', '2026-03-06T09:00:00+00:00', '2026-03-06T10:00:00+00:00', 0, '2026-03-06T00:00:00+00:00', '2026-03-06T00:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        let event_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO event_sync_map (
+                source_id, external_uid, local_event_id, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, '2026-03-06T00:00:00+00:00', '2026-03-06T00:00:00+00:00')",
+            params![source_id, "uid-broken-recover", event_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_remote_metadata (
+                source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at
+             ) VALUES (?1, ?2, NULL, 'etag', 'hash', '2026-03-06T00:00:00+00:00')",
+            params![source_id, "uid-broken-recover"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (
+                source_id, local_event_id, external_uid, operation_type, payload_json,
+                status, attempt_count, last_error
+             ) VALUES (?1, ?2, ?3, 'update', '{}', 'failed', 1, ?4)",
+            params![
+                source_id,
+                event_id,
+                "uid-broken-recover",
+                "Remote metadata for 'uid-broken-recover' is missing remote_event_id"
+            ],
+        )
+        .unwrap();
+        let operation_id = conn.last_insert_rowid();
+
+        let service = OutboundSyncService::new(conn);
+        service
+            .resolve_broken_mapping_failure(operation_id)
+            .unwrap();
+
+        let status: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE id = ?1",
+                [operation_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(status, OUTBOUND_STATUS_COMPLETED);
+
+        let metadata_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_remote_metadata WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-broken-recover"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(metadata_count, 0);
+
+        let mapping_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_sync_map WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-broken-recover"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(mapping_count, 0);
     }
 
     #[test]

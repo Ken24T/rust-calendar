@@ -742,6 +742,10 @@ pub fn render_calendar_sync_section(
                         ));
 
                         if stats.failed > 0 {
+                            let failed_ops = outbound_service
+                                .list_failed_for_source(source_id, 1)
+                                .ok();
+
                             if ui.button("Retry Failed Pushes").clicked() {
                                 match outbound_service.reset_failed_for_source(source_id) {
                                     Ok(reset_count) => {
@@ -765,15 +769,38 @@ pub fn render_calendar_sync_section(
                                 }
                             }
 
-                            if let Ok(failed_ops) =
-                                outbound_service.list_failed_for_source(source_id, 1)
-                            {
+                            if let Some(failed_ops) = failed_ops.as_ref() {
                                 if let Some(last_failed) = failed_ops.first() {
                                     if let Some(error) = &last_failed.last_error {
                                         ui.colored_label(
                                             Color32::LIGHT_RED,
                                             format!("Last outbound error: {}", error),
                                         );
+
+                                        if OutboundSyncService::is_broken_remote_metadata_error(error)
+                                        {
+                                            if let Some(operation_id) = last_failed.id {
+                                                if ui.button("Disconnect Broken Mapping").clicked() {
+                                                    match outbound_service
+                                                        .resolve_broken_mapping_failure(operation_id)
+                                                    {
+                                                        Ok(()) => {
+                                                            state.source_status_message = Some(
+                                                                "Cleared broken sync mapping; the local event remains and is no longer linked to this source"
+                                                                    .to_string(),
+                                                            );
+                                                            state.source_error_message = None;
+                                                        }
+                                                        Err(err) => {
+                                                            state.source_error_message = Some(format!(
+                                                                "Failed to clear broken sync mapping: {}",
+                                                                err
+                                                            ));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

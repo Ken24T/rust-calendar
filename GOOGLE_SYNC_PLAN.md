@@ -307,7 +307,7 @@ Stage 1 acceptance criteria checkpoint:
 
 - Status: in progress
 - Branch: `feature/google-sync-stage2-full-crud`
-- Latest Stage 2 release tag: `v2.4.30`
+- Latest Stage 2 release tag: `v2.4.31`
 
 Slices shipped:
 
@@ -339,6 +339,7 @@ Current S2.7 slices shipped:
 - [x] Broken mapping terminal failure and retry-queue hardening (`v2.4.28`)
 - [x] Broken delete cleanup for stale remote metadata (`v2.4.29`)
 - [x] Bulk retry skips broken-mapping failures and surfaces manual recovery (`v2.4.30`)
+- [x] Manual disconnect flow for broken non-delete mappings (`v2.4.31`)
 
 ## Decision Log (Initial)
 
