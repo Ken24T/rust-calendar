@@ -307,7 +307,7 @@ Stage 1 acceptance criteria checkpoint:
 
 - Status: in progress
 - Branch: `feature/google-sync-stage2-full-crud`
-- Latest Stage 2 release tag: `v2.4.24`
+- Latest Stage 2 release tag: `v2.4.25`
 
 Slices shipped:
 
@@ -316,7 +316,7 @@ Slices shipped:
 - [x] S2.3 Outbound Local -> Google Writes (foundation) (`v2.4.13`)
 - [x] S2.4 Inbound Incremental Google -> Local Sync (`v2.4.14`)
 - [x] S2.5 Conflict Policy and Resolution UX (`v2.4.15`)
-- [ ] S2.6 Recurrence + Exceptions CRUD Parity
+- [x] S2.6 Recurrence + Exceptions CRUD Parity
 - [ ] S2.7 Operational Hardening
 
 Current S2.6 slices shipped:
@@ -330,6 +330,7 @@ Current S2.6 slices shipped:
 - [x] Detached instance outbound lifecycle and round-trip sync hardening (`v2.4.22`)
 - [x] Detached instance create convergence and round-trip sync hardening (`v2.4.23`)
 - [x] Detached instance delete convergence and cancellation hardening (`v2.4.24`)
+- [x] Timed and all-day recurrence exception round-trip hardening (`v2.4.25`)
 
 ## Decision Log (Initial)
 

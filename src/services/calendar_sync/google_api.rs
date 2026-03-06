@@ -887,6 +887,24 @@ mod tests {
     }
 
     #[test]
+    fn build_google_event_request_body_includes_all_day_exdates() {
+        let body = build_google_event_request_body(
+            r#"{
+                "title":"All Day Series",
+                "start":"2026-03-04T00:00:00+00:00",
+                "end":"2026-03-05T00:00:00+00:00",
+                "all_day":true,
+                "recurrence_rule":"FREQ=WEEKLY;BYDAY=WE",
+                "recurrence_exceptions":["2026-03-11T00:00:00+00:00","2026-03-18T00:00:00+00:00"]
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(body["recurrence"][0], "RRULE:FREQ=WEEKLY;BYDAY=WE");
+        assert_eq!(body["recurrence"][1], "EXDATE;VALUE=DATE:20260311,20260318");
+    }
+
+    #[test]
     fn detached_instance_window_handles_timed_tokens() {
         let (time_min, time_max) = detached_instance_window("20260407T090000Z").unwrap();
         assert_eq!(time_min, "2026-04-06T21:00:00+00:00");

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.25] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 recurrence-exception round-trip coverage:
+  - timed recurring series now have end-to-end exception round-trip tests across local edit, outbound push, and inbound Google reconciliation
+  - all-day recurring series now have the same round-trip coverage plus explicit outbound `EXDATE;VALUE=DATE` request-body validation
+
+### Changed
+
+- Recurrence exception lifecycle is now proven across both timed and all-day Google series update flows.
+
 ## [2.4.24] - 2026-03-06
 
 ### Added

@@ -1733,6 +1733,198 @@ END:VCALENDAR"#;
     }
 
     #[test]
+    fn test_sync_source_from_google_payload_round_trips_timed_series_recurrence_exceptions_after_outbound_update() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series-exdate-timed",
+                        "etag": "\"etag-series-timed-1\"",
+                        "status": "confirmed",
+                        "summary": "Timed Series",
+                        "iCalUID": "uid-series-exdate-timed",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "recurrence": [
+                            "RRULE:FREQ=WEEKLY;BYDAY=TU",
+                            "EXDATE:20260317T090000Z"
+                        ],
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-series-timed-1"
+            }"#,
+            )
+            .unwrap();
+        engine
+            .sync_source_from_google_payload(source_id, initial_payload)
+            .unwrap();
+
+        let existing = EventService::new(conn).list_all().unwrap().remove(0);
+        let mut local_edit = existing.clone();
+        local_edit.recurrence_exceptions = Some(vec![
+            chrono::Utc
+                .with_ymd_and_hms(2026, 3, 17, 9, 0, 0)
+                .unwrap()
+                .with_timezone(&Local),
+            chrono::Utc
+                .with_ymd_and_hms(2026, 3, 24, 9, 0, 0)
+                .unwrap()
+                .with_timezone(&Local),
+        ]);
+        EventService::new(conn).update_local(&local_edit).unwrap();
+
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let round_trip_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series-exdate-timed",
+                        "etag": "\"etag-series-timed-2\"",
+                        "status": "confirmed",
+                        "summary": "Timed Series",
+                        "iCalUID": "uid-series-exdate-timed",
+                        "updated": "2026-03-06T03:00:00Z",
+                        "recurrence": [
+                            "RRULE:FREQ=WEEKLY;BYDAY=TU",
+                            "EXDATE:20260317T090000Z,20260324T090000Z"
+                        ],
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-series-timed-2"
+            }"#,
+            )
+            .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, round_trip_payload)
+            .unwrap();
+
+        assert_eq!(result.unchanged, 1);
+        assert_eq!(result.conflicts, 0);
+
+        let refreshed = EventService::new(conn).get(existing.id.unwrap()).unwrap().unwrap();
+        let exceptions = refreshed.recurrence_exceptions.unwrap();
+        assert_eq!(exceptions.len(), 2);
+        assert_eq!(
+            exceptions[0].with_timezone(&chrono::Utc).to_rfc3339(),
+            "2026-03-17T09:00:00+00:00"
+        );
+        assert_eq!(
+            exceptions[1].with_timezone(&chrono::Utc).to_rfc3339(),
+            "2026-03-24T09:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_sync_source_from_google_payload_round_trips_all_day_series_recurrence_exceptions_after_outbound_update() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series-exdate-allday",
+                        "etag": "\"etag-series-allday-1\"",
+                        "status": "confirmed",
+                        "summary": "All Day Series",
+                        "iCalUID": "uid-series-exdate-allday",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "recurrence": [
+                            "RRULE:FREQ=WEEKLY;BYDAY=WE",
+                            "EXDATE;VALUE=DATE:20260311"
+                        ],
+                        "start": { "date": "2026-03-04" },
+                        "end": { "date": "2026-03-05" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-series-allday-1"
+            }"#,
+            )
+            .unwrap();
+        engine
+            .sync_source_from_google_payload(source_id, initial_payload)
+            .unwrap();
+
+        let existing = EventService::new(conn).list_all().unwrap().remove(0);
+        let mut local_edit = existing.clone();
+        local_edit.recurrence_exceptions = Some(vec![
+            Local.with_ymd_and_hms(2026, 3, 11, 0, 0, 0).unwrap(),
+            Local.with_ymd_and_hms(2026, 3, 18, 0, 0, 0).unwrap(),
+        ]);
+        EventService::new(conn).update_local(&local_edit).unwrap();
+
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let round_trip_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series-exdate-allday",
+                        "etag": "\"etag-series-allday-2\"",
+                        "status": "confirmed",
+                        "summary": "All Day Series",
+                        "iCalUID": "uid-series-exdate-allday",
+                        "updated": "2026-03-06T03:00:00Z",
+                        "recurrence": [
+                            "RRULE:FREQ=WEEKLY;BYDAY=WE",
+                            "EXDATE;VALUE=DATE:20260311,20260318"
+                        ],
+                        "start": { "date": "2026-03-04" },
+                        "end": { "date": "2026-03-05" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-series-allday-2"
+            }"#,
+            )
+            .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, round_trip_payload)
+            .unwrap();
+
+        assert_eq!(result.unchanged, 1);
+        assert_eq!(result.conflicts, 0);
+
+        let refreshed = EventService::new(conn).get(existing.id.unwrap()).unwrap().unwrap();
+        let exceptions = refreshed.recurrence_exceptions.unwrap();
+        assert_eq!(exceptions.len(), 2);
+        assert_eq!(exceptions[0].date_naive().to_string(), "2026-03-11");
+        assert_eq!(exceptions[1].date_naive().to_string(), "2026-03-18");
+    }
+
+    #[test]
     fn test_process_pending_outbound_operations_updates_series_and_marks_push_time() {
         let db = Database::new(":memory:").unwrap();
         db.initialize_schema().unwrap();
