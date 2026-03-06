@@ -14,6 +14,7 @@ use crate::services::icalendar::import::{self, ImportedIcsEvent};
 
 use super::fetcher::IcsFetcher;
 use super::mapping::EventSyncMapService;
+use super::sanitizer;
 use super::{CalendarSourceService, SyncRunDiagnostics};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -102,7 +103,7 @@ impl<'a> CalendarSyncEngine<'a> {
             Err(err) => {
                 let finished_at = chrono::Local::now();
                 let redacted_error =
-                    Self::sanitize_error_message(&err.to_string(), &source.ics_url);
+                    sanitizer::sanitize_error_message(&err.to_string(), &source.ics_url);
 
                 let diagnostics = SyncRunDiagnostics {
                     source_id,
@@ -416,14 +417,6 @@ impl<'a> CalendarSyncEngine<'a> {
             && existing.color == incoming.color
             && existing.recurrence_rule == incoming.recurrence_rule
             && existing.recurrence_exceptions == incoming.recurrence_exceptions
-    }
-
-    fn sanitize_error_message(message: &str, source_url: &str) -> String {
-        if source_url.is_empty() {
-            return message.to_string();
-        }
-
-        message.replace(source_url, "***redacted-url***")
     }
 
     fn filter_imported_by_window(

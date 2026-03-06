@@ -8,6 +8,7 @@ use chrono::{DateTime, Duration, Local};
 use rusqlite::Connection;
 
 use super::engine::{CalendarSyncEngine, SyncRunResult};
+use super::sanitizer;
 use super::CalendarSourceService;
 
 #[derive(Debug, Clone, Default)]
@@ -138,7 +139,7 @@ impl CalendarSyncScheduler {
                     state.next_run_at = Some(now + Duration::minutes(backoff_minutes));
 
                     let redacted_error =
-                        Self::redact_error_message(&err.to_string(), &source.ics_url);
+                        sanitizer::sanitize_error_message(&err.to_string(), &source.ics_url);
                     result.failed_sources.push((source_id, redacted_error));
                 }
             }
@@ -175,14 +176,6 @@ impl CalendarSyncScheduler {
         let factor = 2_i64.saturating_pow(failures.min(10));
         let backoff = base.saturating_mul(factor);
         backoff.min(max_backoff_minutes.max(base))
-    }
-
-    fn redact_error_message(message: &str, source_url: &str) -> String {
-        if source_url.is_empty() {
-            return message.to_string();
-        }
-
-        message.replace(source_url, "***redacted-url***")
     }
 }
 
@@ -317,7 +310,7 @@ mod tests {
         let message = "Failed to fetch https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
         let source_url =
             "https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
-        let redacted = CalendarSyncScheduler::redact_error_message(message, source_url);
+        let redacted = super::sanitizer::sanitize_error_message(message, source_url);
 
         assert!(!redacted.contains(source_url));
         assert!(redacted.contains("***redacted-url***"));

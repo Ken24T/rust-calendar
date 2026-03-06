@@ -3,6 +3,7 @@
 pub mod engine;
 pub mod fetcher;
 pub mod mapping;
+mod sanitizer;
 pub mod scheduler;
 
 use anyhow::{anyhow, Context, Result};
