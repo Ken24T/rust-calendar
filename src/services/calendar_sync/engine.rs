@@ -206,7 +206,7 @@ impl<'a> CalendarSyncEngine<'a> {
         };
 
         let source_service = CalendarSourceService::new(self.conn);
-        source_service
+        let source = source_service
             .get_by_id(source_id)?
             .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
 
@@ -264,6 +264,8 @@ impl<'a> CalendarSyncEngine<'a> {
                                 external_last_modified: imported.raw_last_modified.clone(),
                                 external_etag_hash: None,
                                 last_seen_at: Some(chrono::Local::now().to_rfc3339()),
+                                first_missing_at: None,
+                                purge_after_at: None,
                             })
                             .context("Failed to create replacement mapping")?;
 
@@ -289,6 +291,8 @@ impl<'a> CalendarSyncEngine<'a> {
                             external_last_modified: imported.raw_last_modified.clone(),
                             external_etag_hash: None,
                             last_seen_at: Some(chrono::Local::now().to_rfc3339()),
+                            first_missing_at: None,
+                            purge_after_at: None,
                         })
                         .context("Failed to create event mapping")?;
 
@@ -298,18 +302,40 @@ impl<'a> CalendarSyncEngine<'a> {
         }
 
         let existing_maps = map_service.list_by_source_id(source_id)?;
+        let now = Local::now();
+        let grace_minutes = (source.poll_interval_minutes.max(1) * 3).max(30);
         for mapping in existing_maps {
             if !seen_uids.contains(&mapping.external_uid) {
-                map_service
-                    .delete_by_source_and_uid(source_id, &mapping.external_uid)
-                    .context("Failed to delete reconciled mapping")?;
+                let should_purge = mapping
+                    .purge_after_at
+                    .as_deref()
+                    .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+                    .map(|dt| now >= dt.with_timezone(&Local))
+                    .unwrap_or(false);
 
-                if event_service.get(mapping.local_event_id)?.is_some() {
-                    event_service
-                        .delete(mapping.local_event_id)
-                        .context("Failed to delete reconciled local event")?;
+                if should_purge {
+                    map_service
+                        .delete_by_source_and_uid(source_id, &mapping.external_uid)
+                        .context("Failed to delete reconciled mapping")?;
+
+                    if event_service.get(mapping.local_event_id)?.is_some() {
+                        event_service
+                            .delete(mapping.local_event_id)
+                            .context("Failed to delete reconciled local event")?;
+                    }
+                    result.deleted += 1;
+                } else {
+                    let first_missing_at = now.to_rfc3339();
+                    let purge_after_at = (now + Duration::minutes(grace_minutes)).to_rfc3339();
+                    map_service
+                        .mark_missing(
+                            source_id,
+                            &mapping.external_uid,
+                            &first_missing_at,
+                            &purge_after_at,
+                        )
+                        .context("Failed to stage reconciled deletion")?;
                 }
-                result.deleted += 1;
             }
         }
 
@@ -539,7 +565,28 @@ mod tests {
     END:VCALENDAR"#;
 
         let next = engine.sync_source_from_ics(source_id, ics_next).unwrap();
-        assert_eq!(next.deleted, 1);
+        assert_eq!(next.deleted, 0);
+
+        // First missing run should stage deletion, not purge immediately.
+        let staged_maps = EventSyncMapService::new(conn)
+            .list_by_source_id(source_id)
+            .unwrap();
+        let staged = staged_maps
+            .iter()
+            .find(|m| m.external_uid == "uid-b")
+            .expect("uid-b mapping should be staged for deletion");
+        assert!(staged.first_missing_at.is_some());
+        assert!(staged.purge_after_at.is_some());
+
+        // Force grace window expiry and run again to purge.
+        conn.execute(
+            "UPDATE event_sync_map SET purge_after_at = ?1 WHERE source_id = ?2 AND external_uid = ?3",
+            params!["2000-01-01T00:00:00+00:00", source_id, "uid-b"],
+        )
+        .unwrap();
+
+        let purge = engine.sync_source_from_ics(source_id, ics_next).unwrap();
+        assert_eq!(purge.deleted, 1);
 
         let event_service = EventService::new(conn);
         let all_events = event_service.list_all().unwrap();

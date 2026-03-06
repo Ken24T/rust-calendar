@@ -409,6 +409,8 @@ fn create_event_sync_map_table(conn: &Connection) -> Result<()> {
             external_last_modified TEXT,
             external_etag_hash TEXT,
             last_seen_at TEXT,
+            first_missing_at TEXT,
+            purge_after_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(source_id, external_uid),
@@ -418,6 +420,20 @@ fn create_event_sync_map_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create event_sync_map table")?;
+
+    migrations::ensure_column(
+        conn,
+        "event_sync_map",
+        "first_missing_at",
+        "ALTER TABLE event_sync_map ADD COLUMN first_missing_at TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "event_sync_map",
+        "purge_after_at",
+        "ALTER TABLE event_sync_map ADD COLUMN purge_after_at TEXT",
+    )?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_event_sync_map_source_id ON event_sync_map(source_id)",

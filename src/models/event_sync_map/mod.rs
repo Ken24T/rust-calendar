@@ -11,6 +11,8 @@ pub struct EventSyncMap {
     pub external_last_modified: Option<String>,
     pub external_etag_hash: Option<String>,
     pub last_seen_at: Option<String>,
+    pub first_missing_at: Option<String>,
+    pub purge_after_at: Option<String>,
 }
 
 impl EventSyncMap {
@@ -44,6 +46,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         }
     }
 

@@ -25,8 +25,9 @@ impl<'a> EventSyncMapService<'a> {
                 "INSERT INTO event_sync_map (
                     source_id, external_uid, local_event_id,
                     external_last_modified, external_etag_hash,
-                    last_seen_at, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    last_seen_at, first_missing_at, purge_after_at,
+                    created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     mapping.source_id,
                     mapping.external_uid,
@@ -34,6 +35,8 @@ impl<'a> EventSyncMapService<'a> {
                     mapping.external_last_modified,
                     mapping.external_etag_hash,
                     mapping.last_seen_at,
+                    mapping.first_missing_at,
+                    mapping.purge_after_at,
                     now,
                     now,
                 ],
@@ -47,7 +50,8 @@ impl<'a> EventSyncMapService<'a> {
     pub fn get_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<Option<EventSyncMap>> {
         let result = self.conn.query_row(
             "SELECT id, source_id, external_uid, local_event_id,
-                    external_last_modified, external_etag_hash, last_seen_at
+                    external_last_modified, external_etag_hash, last_seen_at,
+                    first_missing_at, purge_after_at
              FROM event_sync_map
              WHERE source_id = ?1 AND external_uid = ?2",
             params![source_id, external_uid],
@@ -67,6 +71,8 @@ impl<'a> EventSyncMapService<'a> {
             .execute(
                 "UPDATE event_sync_map
                  SET last_seen_at = ?1,
+                     first_missing_at = NULL,
+                     purge_after_at = NULL,
                      updated_at = ?2
                  WHERE source_id = ?3 AND external_uid = ?4",
                 params![
@@ -94,7 +100,8 @@ impl<'a> EventSyncMapService<'a> {
             .conn
             .prepare(
                 "SELECT id, source_id, external_uid, local_event_id,
-                        external_last_modified, external_etag_hash, last_seen_at
+                           external_last_modified, external_etag_hash, last_seen_at,
+                           first_missing_at, purge_after_at
                  FROM event_sync_map
                  WHERE source_id = ?1",
             )
@@ -221,6 +228,42 @@ impl<'a> EventSyncMapService<'a> {
         Ok(())
     }
 
+    pub fn mark_missing(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+        first_missing_at: &str,
+        purge_after_at: &str,
+    ) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE event_sync_map
+                 SET first_missing_at = COALESCE(first_missing_at, ?1),
+                     purge_after_at = COALESCE(purge_after_at, ?2),
+                     updated_at = ?3
+                 WHERE source_id = ?4 AND external_uid = ?5",
+                params![
+                    first_missing_at,
+                    purge_after_at,
+                    Local::now().to_rfc3339(),
+                    source_id,
+                    external_uid,
+                ],
+            )
+            .context("Failed to mark event sync map row as missing")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Event sync map row not found for source_id={} external_uid={} when marking missing",
+                source_id,
+                external_uid
+            ));
+        }
+
+        Ok(())
+    }
+
     fn row_to_mapping(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventSyncMap> {
         Ok(EventSyncMap {
             id: Some(row.get(0)?),
@@ -230,6 +273,8 @@ impl<'a> EventSyncMapService<'a> {
             external_last_modified: row.get(4)?,
             external_etag_hash: row.get(5)?,
             last_seen_at: row.get(6)?,
+            first_missing_at: row.get(7)?,
+            purge_after_at: row.get(8)?,
         })
     }
 }
@@ -291,6 +336,8 @@ mod tests {
             external_last_modified: Some("20260227T010000Z".to_string()),
             external_etag_hash: None,
             last_seen_at: Some("2026-02-27T01:00:00Z".to_string()),
+            first_missing_at: None,
+            purge_after_at: None,
         };
 
         let created = service.create(mapping).unwrap();
@@ -320,6 +367,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(first).unwrap();
 
@@ -332,6 +381,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
 
         assert!(service.create(duplicate).is_err());
@@ -354,6 +405,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
@@ -385,6 +438,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -414,6 +469,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
@@ -441,6 +498,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
@@ -467,6 +526,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
@@ -506,6 +567,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -518,6 +581,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -552,6 +617,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -564,6 +631,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
