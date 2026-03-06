@@ -6,7 +6,8 @@ use rusqlite::{params, Connection};
 
 use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
 use crate::models::outbound_sync_operation::{
-    OutboundSyncOperation, OUTBOUND_STATUS_FAILED, OUTBOUND_STATUS_PENDING,
+    OutboundSyncOperation, OUTBOUND_STATUS_COMPLETED, OUTBOUND_STATUS_FAILED,
+    OUTBOUND_STATUS_PENDING, OUTBOUND_STATUS_PROCESSING,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -168,6 +169,90 @@ impl<'a> OutboundSyncService<'a> {
             .context("Failed to load failed outbound operations")
     }
 
+    pub fn active_operation_for_identity(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+    ) -> Result<Option<OutboundSyncOperation>> {
+        let result = self.conn.query_row(
+            "SELECT id, source_id, local_event_id, external_uid, operation_type,
+                    payload_json, status, attempt_count, next_retry_at, last_error,
+                    created_at, updated_at
+             FROM outbound_sync_operations
+             WHERE source_id = ?1
+               AND external_uid = ?2
+               AND status IN (?3, ?4, ?5)
+             ORDER BY updated_at DESC
+             LIMIT 1",
+            params![
+                source_id,
+                external_uid,
+                OUTBOUND_STATUS_PENDING,
+                OUTBOUND_STATUS_PROCESSING,
+                OUTBOUND_STATUS_FAILED,
+            ],
+            |row| {
+                Ok(OutboundSyncOperation {
+                    id: Some(row.get(0)?),
+                    source_id: row.get(1)?,
+                    local_event_id: row.get(2)?,
+                    external_uid: row.get(3)?,
+                    operation_type: row.get(4)?,
+                    payload_json: row.get(5)?,
+                    status: row.get(6)?,
+                    attempt_count: row.get(7)?,
+                    next_retry_at: row.get(8)?,
+                    last_error: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            },
+        );
+
+        match result {
+            Ok(operation) => Ok(Some(operation)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err).context("Failed to load active outbound operation"),
+        }
+    }
+
+    pub fn mark_operation_failed(&self, operation_id: i64, error: &str) -> Result<()> {
+        self.update_operation_status(operation_id, OUTBOUND_STATUS_FAILED, Some(error))
+    }
+
+    pub fn mark_operation_completed(&self, operation_id: i64) -> Result<()> {
+        self.update_operation_status(operation_id, OUTBOUND_STATUS_COMPLETED, None)
+    }
+
+    pub fn reset_operation_to_pending(&self, operation_id: i64) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE outbound_sync_operations
+                 SET status = ?1,
+                     attempt_count = 0,
+                     next_retry_at = NULL,
+                     last_error = NULL,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![
+                    OUTBOUND_STATUS_PENDING,
+                    Local::now().to_rfc3339(),
+                    operation_id
+                ],
+            )
+            .context("Failed to reset outbound sync operation to pending")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Outbound sync operation with id {} not found",
+                operation_id
+            ));
+        }
+
+        Ok(())
+    }
+
     fn lookup_writable_mapping(&self, local_event_id: i64) -> Result<Option<(i64, String)>> {
         let result = self.conn.query_row(
             "SELECT esm.source_id, esm.external_uid
@@ -234,6 +319,34 @@ impl<'a> OutboundSyncService<'a> {
                 ],
             )
             .context("Failed to enqueue outbound sync operation")?;
+
+        Ok(())
+    }
+
+    fn update_operation_status(
+        &self,
+        operation_id: i64,
+        status: &str,
+        last_error: Option<&str>,
+    ) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE outbound_sync_operations
+                 SET status = ?1,
+                     last_error = ?2,
+                     updated_at = ?3
+                 WHERE id = ?4",
+                params![status, last_error, Local::now().to_rfc3339(), operation_id],
+            )
+            .context("Failed to update outbound sync operation status")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Outbound sync operation with id {} not found",
+                operation_id
+            ));
+        }
 
         Ok(())
     }
@@ -361,5 +474,51 @@ mod tests {
 
         assert_eq!(stats.pending, 1);
         assert_eq!(stats.failed, 1);
+    }
+
+    #[test]
+    fn test_mark_operation_failed_and_reset_pending() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (source_id, external_uid, operation_type, status)
+             VALUES (?1, 'uid-c', 'update', 'pending')",
+            [source_id],
+        )
+        .unwrap();
+        let operation_id = conn.last_insert_rowid();
+
+        let service = OutboundSyncService::new(conn);
+        service
+            .mark_operation_failed(operation_id, "conflict detected")
+            .unwrap();
+
+        let failed: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE id = ?1",
+                [operation_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            failed,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED
+        );
+
+        service.reset_operation_to_pending(operation_id).unwrap();
+        let reset: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE id = ?1",
+                [operation_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            reset,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_PENDING
+        );
     }
 }

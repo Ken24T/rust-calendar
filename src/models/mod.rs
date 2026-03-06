@@ -10,4 +10,5 @@ pub mod outbound_sync_operation;
 pub mod recurrence;
 pub mod reminder;
 pub mod settings;
+pub mod sync_conflict;
 pub mod template;

@@ -7,11 +7,17 @@ use crate::models::calendar_source::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE};
 use crate::models::calendar_source::{SYNC_CAPABILITY_READ_ONLY, SYNC_CAPABILITY_READ_WRITE};
 use crate::models::google_account::GoogleAccount;
 use crate::models::settings::Settings;
+use crate::models::sync_conflict::{
+    SYNC_CONFLICT_REASON_LOCAL_CREATE_PENDING, SYNC_CONFLICT_REASON_LOCAL_DELETE_PENDING,
+    SYNC_CONFLICT_REASON_LOCAL_UPDATE_PENDING, SYNC_CONFLICT_RESOLUTION_REMOTE_WINS,
+    SYNC_CONFLICT_RESOLUTION_RETRY_LOCAL,
+};
 use crate::services::calendar_sync::engine::{CalendarSyncEngine, SyncRunResult};
 use crate::services::calendar_sync::CalendarSourceService;
 use crate::services::database::Database;
 use crate::services::google_account::GoogleAccountService;
 use crate::services::outbound_sync::OutboundSyncService;
+use crate::services::sync_conflict::SyncConflictService;
 use egui::{Color32, RichText};
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -96,13 +102,14 @@ pub fn poll_sync_result(ctx: &egui::Context, state: &mut CalendarSyncState) {
                 };
 
                 state.source_status_message = Some(format!(
-                    "{} complete for '{}': +{} ~{} -{} ={} skipped:{} errors:{} ({} ms)",
+                    "{} complete for '{}': +{} ~{} -{} ={} conflicts:{} skipped:{} errors:{} ({} ms)",
                     action,
                     source_name,
                     summary.created,
                     summary.updated,
                     summary.deleted,
                     summary.unchanged,
+                    summary.conflicts,
                     summary.skipped_missing_uid
                         + summary.skipped_duplicate_uid
                         + summary.skipped_filtered,
@@ -392,6 +399,7 @@ pub fn render_calendar_sync_section(
 
     let source_service = CalendarSourceService::new(database.connection());
     let outbound_service = OutboundSyncService::new(database.connection());
+    let conflict_service = SyncConflictService::new(database.connection());
     let mut sources = match source_service.list_all() {
         Ok(list) => list,
         Err(err) => {
@@ -773,6 +781,129 @@ pub fn render_calendar_sync_section(
                         );
                     }
                 }
+
+                match conflict_service.count_open_for_source(source_id) {
+                    Ok(open_conflicts) => {
+                        ui.label(format!("Open conflicts: {}", open_conflicts));
+
+                        if open_conflicts > 0 {
+                            match conflict_service.list_open_for_source(source_id, 3) {
+                                Ok(conflicts) => {
+                                    for conflict in conflicts {
+                                        ui.group(|ui| {
+                                            ui.label(format!(
+                                                "Conflict for {}: {}",
+                                                conflict.external_uid,
+                                                describe_sync_conflict(
+                                                    &conflict.reason,
+                                                    &conflict.remote_change_type,
+                                                )
+                                            ));
+
+                                            if let Some(resolution) = &conflict.resolution {
+                                                ui.label(format!(
+                                                    "Automatic outcome: {}",
+                                                    describe_conflict_resolution(resolution)
+                                                ));
+                                            }
+
+                                            ui.horizontal(|ui| {
+                                                if ui.button("Keep Remote").clicked() {
+                                                    match conflict.id {
+                                                        Some(conflict_id) => {
+                                                            match conflict_service.mark_resolved(
+                                                                conflict_id,
+                                                                SYNC_CONFLICT_RESOLUTION_REMOTE_WINS,
+                                                            ) {
+                                                                Ok(()) => {
+                                                                    state.source_status_message = Some(
+                                                                        format!(
+                                                                            "Resolved conflict for '{}' by keeping the remote version",
+                                                                            conflict.external_uid
+                                                                        ),
+                                                                    );
+                                                                    state.source_error_message = None;
+                                                                }
+                                                                Err(err) => {
+                                                                    state.source_error_message = Some(format!(
+                                                                        "Failed to resolve conflict: {}",
+                                                                        err
+                                                                    ));
+                                                                }
+                                                            }
+                                                        }
+                                                        None => {
+                                                            state.source_error_message = Some(
+                                                                "Conflict is missing an ID".to_string(),
+                                                            );
+                                                        }
+                                                    }
+                                                }
+
+                                                if ui.button("Retry Local").clicked() {
+                                                    match (conflict.id, conflict.outbound_operation_id) {
+                                                        (Some(conflict_id), Some(operation_id)) => {
+                                                            match outbound_service.reset_operation_to_pending(operation_id) {
+                                                                Ok(()) => match conflict_service.mark_resolved(
+                                                                    conflict_id,
+                                                                    SYNC_CONFLICT_RESOLUTION_RETRY_LOCAL,
+                                                                ) {
+                                                                    Ok(()) => {
+                                                                        state.source_status_message = Some(
+                                                                            format!(
+                                                                                "Conflict for '{}' marked for local retry",
+                                                                                conflict.external_uid
+                                                                            ),
+                                                                        );
+                                                                        state.source_error_message = None;
+                                                                    }
+                                                                    Err(err) => {
+                                                                        state.source_error_message = Some(format!(
+                                                                            "Failed to resolve conflict after resetting queue entry: {}",
+                                                                            err
+                                                                        ));
+                                                                    }
+                                                                },
+                                                                Err(err) => {
+                                                                    state.source_error_message = Some(format!(
+                                                                        "Failed to requeue local change: {}",
+                                                                        err
+                                                                    ));
+                                                                }
+                                                            }
+                                                        }
+                                                        (_, None) => {
+                                                            state.source_error_message = Some(
+                                                                "Conflict has no outbound operation to retry".to_string(),
+                                                            );
+                                                        }
+                                                        (None, _) => {
+                                                            state.source_error_message = Some(
+                                                                "Conflict is missing an ID".to_string(),
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    }
+                                }
+                                Err(err) => {
+                                    ui.colored_label(
+                                        Color32::LIGHT_RED,
+                                        format!("Failed to load open conflicts: {}", err),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ui.colored_label(
+                            Color32::LIGHT_RED,
+                            format!("Failed to load conflict count: {}", err),
+                        );
+                    }
+                }
             }
             if let Some(last_sync_at) = &source.last_sync_at {
                 ui.label(format!("Last sync: {}", last_sync_at));
@@ -804,5 +935,29 @@ pub fn render_calendar_sync_section(
     // Clean up drafts for deleted sources
     for source_id in deleted_source_ids {
         state.source_drafts.remove(&source_id);
+    }
+}
+
+fn describe_sync_conflict(reason: &str, remote_change_type: &str) -> String {
+    let local_change = match reason {
+        SYNC_CONFLICT_REASON_LOCAL_CREATE_PENDING => "a pending local create",
+        SYNC_CONFLICT_REASON_LOCAL_DELETE_PENDING => "a pending local delete",
+        SYNC_CONFLICT_REASON_LOCAL_UPDATE_PENDING => "a pending local update",
+        _ => "a pending local change",
+    };
+
+    let remote_change = match remote_change_type {
+        "delete" => "a remote deletion",
+        _ => "a remote update",
+    };
+
+    format!("{} conflicted with {}", local_change, remote_change)
+}
+
+fn describe_conflict_resolution(resolution: &str) -> &'static str {
+    match resolution {
+        SYNC_CONFLICT_RESOLUTION_REMOTE_WINS => "remote version applied",
+        SYNC_CONFLICT_RESOLUTION_RETRY_LOCAL => "local retry requested",
+        _ => "unknown",
     }
 }

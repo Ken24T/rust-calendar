@@ -9,9 +9,17 @@ use rusqlite::Connection;
 
 use crate::models::event::Event;
 use crate::models::event_sync_map::EventSyncMap;
+use crate::models::outbound_sync_operation::{OutboundSyncOperation, OUTBOUND_OPERATION_DELETE};
+use crate::models::sync_conflict::{
+    SyncConflict, SYNC_CONFLICT_REASON_LOCAL_CREATE_PENDING,
+    SYNC_CONFLICT_REASON_LOCAL_DELETE_PENDING, SYNC_CONFLICT_REASON_LOCAL_UPDATE_PENDING,
+    SYNC_CONFLICT_RESOLUTION_REMOTE_WINS,
+};
 use crate::services::event::EventService;
 use crate::services::google_account::GoogleAccountService;
 use crate::services::icalendar::import::{self, ImportedIcsEvent};
+use crate::services::outbound_sync::OutboundSyncService;
+use crate::services::sync_conflict::SyncConflictService;
 
 use super::fetcher::IcsFetcher;
 use super::google_api::{
@@ -28,6 +36,7 @@ pub struct SyncRunResult {
     pub updated: usize,
     pub deleted: usize,
     pub unchanged: usize,
+    pub conflicts: usize,
     pub skipped_missing_uid: usize,
     pub skipped_duplicate_uid: usize,
     pub skipped_filtered: usize,
@@ -434,6 +443,8 @@ impl<'a> CalendarSyncEngine<'a> {
     ) -> Result<SyncRunResult> {
         let map_service = EventSyncMapService::new(self.conn);
         let event_service = EventService::new(self.conn);
+        let outbound_service = OutboundSyncService::new(self.conn);
+        let conflict_service = SyncConflictService::new(self.conn);
         let mut result = SyncRunResult {
             source_id,
             ..SyncRunResult::default()
@@ -441,10 +452,39 @@ impl<'a> CalendarSyncEngine<'a> {
 
         for remote in &payload.items {
             let external_uid = remote.external_uid.clone();
+            let active_outbound =
+                outbound_service.active_operation_for_identity(source_id, &external_uid)?;
             let existing_map = map_service.get_by_source_and_uid(source_id, &external_uid)?;
 
             if remote.is_cancelled() {
                 if let Some(mapping) = existing_map {
+                    if let Some(operation) = active_outbound.as_ref() {
+                        if Self::remote_matches_local_intent(operation, None, remote) {
+                            if apply {
+                                if let Some(operation_id) = operation.id {
+                                    outbound_service.mark_operation_completed(operation_id)?;
+                                }
+                                conflict_service.resolve_open_for_identity(
+                                    source_id,
+                                    &external_uid,
+                                    SYNC_CONFLICT_RESOLUTION_REMOTE_WINS,
+                                )?;
+                            }
+                        } else {
+                            result.conflicts += 1;
+                            if apply {
+                                self.record_remote_wins_conflict(
+                                    &conflict_service,
+                                    &outbound_service,
+                                    &external_uid,
+                                    Some(mapping.local_event_id),
+                                    operation,
+                                    "delete",
+                                )?;
+                            }
+                        }
+                    }
+
                     if apply {
                         map_service.delete_by_source_and_uid(source_id, &external_uid)?;
                         map_service.delete_remote_metadata(source_id, &external_uid)?;
@@ -464,6 +504,37 @@ impl<'a> CalendarSyncEngine<'a> {
             match existing_map {
                 Some(mapping) => {
                     if let Some(existing_event) = event_service.get(mapping.local_event_id)? {
+                        if let Some(operation) = active_outbound.as_ref() {
+                            if Self::remote_matches_local_intent(
+                                operation,
+                                Some(&existing_event),
+                                remote,
+                            ) {
+                                if apply {
+                                    if let Some(operation_id) = operation.id {
+                                        outbound_service.mark_operation_completed(operation_id)?;
+                                    }
+                                    conflict_service.resolve_open_for_identity(
+                                        source_id,
+                                        &external_uid,
+                                        SYNC_CONFLICT_RESOLUTION_REMOTE_WINS,
+                                    )?;
+                                }
+                            } else {
+                                result.conflicts += 1;
+                                if apply {
+                                    self.record_remote_wins_conflict(
+                                        &conflict_service,
+                                        &outbound_service,
+                                        &external_uid,
+                                        existing_event.id.or(Some(mapping.local_event_id)),
+                                        operation,
+                                        "update",
+                                    )?;
+                                }
+                            }
+                        }
+
                         if Self::is_effectively_unchanged(&existing_event, &incoming_event) {
                             if apply {
                                 self.update_remote_tracking(
@@ -492,6 +563,20 @@ impl<'a> CalendarSyncEngine<'a> {
                             result.updated += 1;
                         }
                     } else {
+                        if let Some(operation) = active_outbound.as_ref() {
+                            result.conflicts += 1;
+                            if apply {
+                                self.record_remote_wins_conflict(
+                                    &conflict_service,
+                                    &outbound_service,
+                                    &external_uid,
+                                    Some(mapping.local_event_id),
+                                    operation,
+                                    "update",
+                                )?;
+                            }
+                        }
+
                         if apply {
                             let created_event = event_service.create(incoming_event.clone())?;
                             self.update_remote_tracking(
@@ -682,12 +767,88 @@ impl<'a> CalendarSyncEngine<'a> {
 
         Ok(())
     }
+
+    fn remote_matches_local_intent(
+        operation: &OutboundSyncOperation,
+        existing_event: Option<&Event>,
+        remote: &GoogleRemoteEvent,
+    ) -> bool {
+        match operation.operation_type.as_str() {
+            OUTBOUND_OPERATION_DELETE => remote.is_cancelled(),
+            _ => {
+                let Some(local_event) = existing_event else {
+                    return false;
+                };
+
+                if remote.is_cancelled() {
+                    return false;
+                }
+
+                let Some(incoming_event) = remote.event.as_ref() else {
+                    return false;
+                };
+
+                Self::is_effectively_unchanged(local_event, incoming_event)
+            }
+        }
+    }
+
+    fn record_remote_wins_conflict(
+        &self,
+        conflict_service: &SyncConflictService<'_>,
+        outbound_service: &OutboundSyncService<'_>,
+        external_uid: &str,
+        local_event_id: Option<i64>,
+        operation: &OutboundSyncOperation,
+        remote_change_type: &str,
+    ) -> Result<()> {
+        if let Some(operation_id) = operation.id {
+            outbound_service.mark_operation_failed(
+                operation_id,
+                "Conflict detected during Google sync: remote change was applied and local change was kept for manual review",
+            )?;
+        }
+
+        conflict_service.upsert_open(&SyncConflict {
+            id: None,
+            source_id: operation.source_id,
+            local_event_id,
+            external_uid: external_uid.to_string(),
+            outbound_operation_id: operation.id,
+            local_operation_type: Some(operation.operation_type.clone()),
+            remote_change_type: remote_change_type.to_string(),
+            reason: Self::conflict_reason_for_operation(&operation.operation_type).to_string(),
+            resolution: Some(SYNC_CONFLICT_RESOLUTION_REMOTE_WINS.to_string()),
+            status: crate::models::sync_conflict::SYNC_CONFLICT_STATUS_OPEN.to_string(),
+            created_at: None,
+            resolved_at: None,
+            updated_at: None,
+        })?;
+
+        Ok(())
+    }
+
+    fn conflict_reason_for_operation(operation_type: &str) -> &'static str {
+        match operation_type {
+            crate::models::outbound_sync_operation::OUTBOUND_OPERATION_CREATE => {
+                SYNC_CONFLICT_REASON_LOCAL_CREATE_PENDING
+            }
+            OUTBOUND_OPERATION_DELETE => SYNC_CONFLICT_REASON_LOCAL_DELETE_PENDING,
+            _ => SYNC_CONFLICT_REASON_LOCAL_UPDATE_PENDING,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CalendarSyncEngine;
     use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
+    use crate::models::outbound_sync_operation::{
+        OUTBOUND_OPERATION_UPDATE, OUTBOUND_STATUS_FAILED,
+    };
+    use crate::models::sync_conflict::{
+        SYNC_CONFLICT_RESOLUTION_REMOTE_WINS, SYNC_CONFLICT_STATUS_OPEN,
+    };
     use crate::services::calendar_sync::mapping::EventSyncMapService;
     use crate::services::database::Database;
     use crate::services::event::EventService;
@@ -1188,5 +1349,103 @@ END:VCALENDAR"#;
             .list_by_source_id(source_id)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn test_sync_source_from_google_payload_records_remote_wins_conflict() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-3",
+                        "etag": "\"etag-3\"",
+                        "status": "confirmed",
+                        "summary": "Remote Baseline",
+                        "iCalUID": "uid-api-3",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-4"
+            }"#,
+            )
+            .unwrap();
+        engine
+            .sync_source_from_google_payload(source_id, initial_payload)
+            .unwrap();
+
+        let existing = EventService::new(conn).list_all().unwrap().remove(0);
+        let mut local_edit = existing.clone();
+        local_edit.title = "Local Edit".to_string();
+        EventService::new(conn).update_local(&local_edit).unwrap();
+
+        let operation = crate::services::outbound_sync::OutboundSyncService::new(conn)
+            .active_operation_for_identity(source_id, "uid-api-3")
+            .unwrap()
+            .unwrap();
+        assert_eq!(operation.operation_type, OUTBOUND_OPERATION_UPDATE);
+
+        let remote_update_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-3",
+                        "etag": "\"etag-4\"",
+                        "status": "confirmed",
+                        "summary": "Remote Edit",
+                        "iCalUID": "uid-api-3",
+                        "updated": "2026-03-07T00:00:00Z",
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-5"
+            }"#,
+            )
+            .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, remote_update_payload)
+            .unwrap();
+
+        assert_eq!(result.updated, 1);
+        assert_eq!(result.conflicts, 1);
+
+        let updated = EventService::new(conn).list_all().unwrap().remove(0);
+        assert_eq!(updated.title, "Remote Edit");
+
+        let queue_status: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-api-3"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(queue_status, OUTBOUND_STATUS_FAILED);
+
+        let conflict: (String, String, String) = conn
+            .query_row(
+                "SELECT status, resolution, reason
+                 FROM sync_conflicts
+                 WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-api-3"],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(conflict.0, SYNC_CONFLICT_STATUS_OPEN);
+        assert_eq!(conflict.1, SYNC_CONFLICT_RESOLUTION_REMOTE_WINS);
+        assert_eq!(
+            conflict.2,
+            crate::models::sync_conflict::SYNC_CONFLICT_REASON_LOCAL_UPDATE_PENDING
+        );
     }
 }

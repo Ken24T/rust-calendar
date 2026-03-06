@@ -14,5 +14,6 @@ pub mod outbound_sync;
 pub mod pdf;
 pub mod reminder;
 pub mod settings;
+pub mod sync_conflict;
 pub mod template;
 pub mod theme; // Theme service - adapted for egui

@@ -19,6 +19,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_event_sync_map_table(conn)?;
     create_event_remote_metadata_table(conn)?;
     create_outbound_sync_operations_table(conn)?;
+    create_sync_conflicts_table(conn)?;
     create_calendar_sync_runs_table(conn)?;
     initialize_default_categories(conn)?;
     normalize_all_day_event_times(conn)?;
@@ -663,6 +664,47 @@ fn create_outbound_sync_operations_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create outbound sync next_retry index")?;
+
+    Ok(())
+}
+
+fn create_sync_conflicts_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sync_conflicts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            local_event_id INTEGER,
+            external_uid TEXT NOT NULL,
+            outbound_operation_id INTEGER,
+            local_operation_type TEXT,
+            remote_change_type TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            resolution TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (source_id) REFERENCES calendar_sources(id) ON DELETE CASCADE,
+            FOREIGN KEY (local_event_id) REFERENCES events(id) ON DELETE SET NULL,
+            FOREIGN KEY (outbound_operation_id) REFERENCES outbound_sync_operations(id) ON DELETE SET NULL
+        )",
+        [],
+    )
+    .context("Failed to create sync_conflicts table")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sync_conflicts_source_status
+         ON sync_conflicts(source_id, status)",
+        [],
+    )
+    .context("Failed to create sync conflicts source/status index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sync_conflicts_identity_open
+         ON sync_conflicts(source_id, external_uid, status)",
+        [],
+    )
+    .context("Failed to create sync conflicts identity index")?;
 
     Ok(())
 }

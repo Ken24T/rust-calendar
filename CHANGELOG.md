@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.15] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.5 conflict policy and review groundwork:
+  - persistent `sync_conflicts` audit table with model/service coverage tests
+  - remote-wins conflict detection for inbound Google API reconciliation
+  - sync settings review controls for keeping the remote version or retrying the queued local change
+
+### Changed
+
+- Inbound Google sync now detects queued local write conflicts, applies a deterministic
+  remote-wins policy, and marks the queued outbound operation for manual follow-up.
+- Matching inbound state now auto-completes stale outbound queue entries when the
+  remote event already reflects the intended local change.
+- Sync completion messages now include conflict counts for read/write sources.
+
 ## [2.4.14] - 2026-03-06
 
 ### Added
