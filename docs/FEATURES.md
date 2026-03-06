@@ -88,7 +88,19 @@ A summary of the features available in Rust Calendar.
 - Sidebar position and visibility
 - ISO week numbers
 - Countdown card default dimensions
-- Google Calendar sync configuration
+- Google Calendar sync configuration and operational status
+
+## Google Calendar Sync
+
+- Read-only ICS sync for configured Google Calendar feeds
+- Writable Google Calendar API sync for linked Google accounts
+- Local-to-Google CRUD for writable synced events
+- Google-to-local incremental sync for remote changes
+- Recurrence, detached instance, and exception round-trip handling
+- Conflict tracking and manual retry/keep-remote resolution flow
+- Adaptive quota backoff with explicit `backoff` status
+- Recent sync-run audit history and outbound queue visibility in settings
+- Broken-mapping recovery tools, including manual disconnect for stale links
 
 ## System Tray
 

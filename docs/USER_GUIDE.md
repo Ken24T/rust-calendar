@@ -270,6 +270,7 @@ assigned per-category in **Edit → Manage Countdown Categories…**.
 
 - Google Calendar sync configuration (ICS feed URL, sync interval, startup
   delay)
+- Linked writable Google sources can push local changes and pull remote changes
 - Writable Google sync shows source health, recent sync runs, outbound queue
   counts, and the latest outbound error in settings
 - `Retry Failed Pushes` is for transient failures only
