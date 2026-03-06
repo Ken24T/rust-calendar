@@ -307,7 +307,7 @@ Stage 1 acceptance criteria checkpoint:
 
 - Status: in progress
 - Branch: `feature/google-sync-stage2-full-crud`
-- Latest Stage 2 release tag: `v2.4.26`
+- Latest Stage 2 release tag: `v2.4.27`
 
 Slices shipped:
 
@@ -335,6 +335,7 @@ Current S2.6 slices shipped:
 Current S2.7 slices shipped:
 
 - [x] Google API rate-limit handling and adaptive backoff (`v2.4.26`)
+- [x] Sync health backoff status and audit history visibility (`v2.4.27`)
 
 ## Decision Log (Initial)
 

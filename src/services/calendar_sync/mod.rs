@@ -581,4 +581,53 @@ mod tests {
         assert_eq!(fetched.unchanged_count, 4);
         assert_eq!(fetched.error_count, 0);
     }
+
+    #[test]
+    fn test_update_sync_status_with_diagnostics_persists_backoff_status() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let service = CalendarSourceService::new(db.connection());
+
+        let created = service.create(build_source("Work")).unwrap();
+        let source_id = created.id.unwrap();
+
+        let diagnostics = SyncRunDiagnostics {
+            source_id,
+            started_at: "2026-03-06T09:00:00+10:00".to_string(),
+            finished_at: "2026-03-06T09:00:01+10:00".to_string(),
+            status: "backoff".to_string(),
+            duration_ms: 500,
+            created_count: 0,
+            updated_count: 0,
+            deleted_count: 0,
+            unchanged_count: 0,
+            skipped_count: 0,
+            error_count: 1,
+            error_message: Some("retry after 15 minute(s)".to_string()),
+        };
+
+        service
+            .update_sync_status_with_diagnostics(
+                source_id,
+                Some("backoff"),
+                Some("retry after 15 minute(s)"),
+                Some(&diagnostics),
+            )
+            .unwrap();
+
+        let fetched_source = service.get_by_id(source_id).unwrap().unwrap();
+        assert_eq!(fetched_source.last_sync_status.as_deref(), Some("backoff"));
+        assert_eq!(
+            fetched_source.last_error.as_deref(),
+            Some("retry after 15 minute(s)")
+        );
+
+        let fetched_run = service.latest_sync_run(source_id).unwrap().unwrap();
+        assert_eq!(fetched_run.status, "backoff");
+        assert_eq!(fetched_run.error_count, 1);
+        assert_eq!(
+            fetched_run.error_message.as_deref(),
+            Some("retry after 15 minute(s)")
+        );
+    }
 }

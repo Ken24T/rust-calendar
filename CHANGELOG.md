@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.27] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 operational status observability:
+  - sync source status and sync-run audit history now distinguish temporary backoff from generic failure
+  - regression coverage verifies backoff status persistence in both source metadata and diagnostics history
+
+### Changed
+
+- Google retry-after errors are now recorded as `backoff` instead of plain `failed` in sync health surfaces.
+
 ## [2.4.26] - 2026-03-06
 
 ### Added

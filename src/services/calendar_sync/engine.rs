@@ -126,12 +126,13 @@ impl<'a> CalendarSyncEngine<'a> {
                 let finished_at = chrono::Local::now();
                 let redacted_error =
                     sanitizer::sanitize_error_message(&err.to_string(), &source.ics_url);
+                let sync_status = Self::sync_status_for_error(&err);
 
                 let diagnostics = SyncRunDiagnostics {
                     source_id,
                     started_at: started_at.to_rfc3339(),
                     finished_at: finished_at.to_rfc3339(),
-                    status: "failed".to_string(),
+                    status: sync_status.to_string(),
                     duration_ms: i64::try_from(timer.elapsed().as_millis()).unwrap_or(i64::MAX),
                     created_count: 0,
                     updated_count: 0,
@@ -144,7 +145,7 @@ impl<'a> CalendarSyncEngine<'a> {
 
                 let _ = source_service.update_sync_status_with_diagnostics(
                     source_id,
-                    Some("failed"),
+                    Some(sync_status),
                     Some(&redacted_error),
                     Some(&diagnostics),
                 );
@@ -997,6 +998,18 @@ impl<'a> CalendarSyncEngine<'a> {
         err.downcast_ref::<GoogleCalendarApiError>()
             .is_some_and(GoogleCalendarApiError::is_sync_token_expired)
     }
+
+    fn sync_status_for_error(err: &anyhow::Error) -> &'static str {
+        if err
+            .downcast_ref::<GoogleCalendarApiError>()
+            .and_then(GoogleCalendarApiError::retry_after_minutes)
+            .is_some()
+        {
+            return "backoff";
+        }
+
+        "failed"
+    }
 }
 
 #[cfg(test)]
@@ -1060,6 +1073,18 @@ mod tests {
 
         assert!(CalendarSyncEngine::should_reset_api_sync_token(&expired));
         assert!(!CalendarSyncEngine::should_reset_api_sync_token(&rate_limited));
+    }
+
+    #[test]
+    fn test_sync_status_for_error_marks_retry_after_errors_as_backoff() {
+        let rate_limited = anyhow!(GoogleCalendarApiError::RetryAfter {
+            status_code: 503,
+            retry_after_minutes: 15,
+        });
+        let generic = anyhow!("plain failure");
+
+        assert_eq!(CalendarSyncEngine::sync_status_for_error(&rate_limited), "backoff");
+        assert_eq!(CalendarSyncEngine::sync_status_for_error(&generic), "failed");
     }
 
     fn set_source_windows(conn: &Connection, source_id: i64, past_days: i64, future_days: i64) {
