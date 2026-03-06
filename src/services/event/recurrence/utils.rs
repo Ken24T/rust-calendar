@@ -1,5 +1,10 @@
 use crate::models::event::Event;
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Weekday};
+use chrono::{
+    DateTime, Datelike, Duration, Local, LocalResult, NaiveDate, NaiveDateTime, NaiveTime,
+    TimeZone, Weekday,
+};
+
+const MAX_DST_FORWARD_ADJUSTMENT_MINUTES: i64 = 180;
 
 pub(super) fn is_valid_occurrence(event: &Event, occurrence_start: DateTime<Local>) -> bool {
     if occurrence_start < event.start {
@@ -31,6 +36,45 @@ pub(super) fn push_if_in_range(
         occurrence.start = start;
         occurrence.end = start + duration;
         occurrences.push(occurrence);
+    }
+}
+
+pub(super) fn resolve_local_datetime(
+    date: NaiveDate,
+    time: NaiveTime,
+) -> Option<DateTime<Local>> {
+    resolve_datetime_in_timezone(&Local, date.and_time(time))
+}
+
+pub(super) fn advance_days_preserving_local_time(
+    current_start: DateTime<Local>,
+    interval_days: i64,
+) -> DateTime<Local> {
+    let next_date = current_start.date_naive() + Duration::days(interval_days);
+    resolve_local_datetime(next_date, current_start.time())
+        .unwrap_or(current_start + Duration::days(interval_days))
+}
+
+fn resolve_datetime_in_timezone<Tz>(timezone: &Tz, naive: NaiveDateTime) -> Option<DateTime<Tz>>
+where
+    Tz: TimeZone,
+    Tz::Offset: Copy,
+{
+    match timezone.from_local_datetime(&naive) {
+        LocalResult::Single(datetime) => Some(datetime),
+        LocalResult::Ambiguous(earliest, _) => Some(earliest),
+        LocalResult::None => {
+            for minutes in 1..=MAX_DST_FORWARD_ADJUSTMENT_MINUTES {
+                let adjusted = naive + Duration::minutes(minutes);
+                match timezone.from_local_datetime(&adjusted) {
+                    LocalResult::Single(datetime) => return Some(datetime),
+                    LocalResult::Ambiguous(earliest, _) => return Some(earliest),
+                    LocalResult::None => continue,
+                }
+            }
+
+            None
+        }
     }
 }
 
@@ -101,4 +145,36 @@ pub(super) fn all_weekdays_in_month(current_date: NaiveDate, weekday: Weekday) -
     }
 
     dates
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_datetime_in_timezone;
+    use chrono::{NaiveDate, TimeZone, Utc};
+    use chrono_tz::America::New_York;
+
+    #[test]
+    fn resolves_nonexistent_local_time_to_first_valid_minute() {
+        let naive = NaiveDate::from_ymd_opt(2026, 3, 8)
+            .unwrap()
+            .and_hms_opt(2, 30, 0)
+            .unwrap();
+
+        let resolved = resolve_datetime_in_timezone(&New_York, naive).unwrap();
+
+        assert_eq!(resolved.naive_local(), naive.date().and_hms_opt(3, 0, 0).unwrap());
+    }
+
+    #[test]
+    fn resolves_ambiguous_local_time_to_earlier_offset() {
+        let naive = NaiveDate::from_ymd_opt(2026, 11, 1)
+            .unwrap()
+            .and_hms_opt(1, 30, 0)
+            .unwrap();
+
+        let resolved = resolve_datetime_in_timezone(&New_York, naive).unwrap();
+
+        assert_eq!(resolved.naive_local(), naive);
+        assert_eq!(resolved.with_timezone(&Utc), Utc.with_ymd_and_hms(2026, 11, 1, 5, 30, 0).unwrap());
+    }
 }

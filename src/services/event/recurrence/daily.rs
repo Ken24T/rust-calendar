@@ -2,7 +2,7 @@ use crate::models::event::Event;
 use chrono::{DateTime, Duration, Local, NaiveDate};
 
 use super::parser::parse_interval;
-use super::utils::{is_valid_occurrence, push_if_in_range};
+use super::utils::{advance_days_preserving_local_time, is_valid_occurrence, push_if_in_range};
 
 pub(super) fn generate(
     event: &Event,
@@ -44,7 +44,7 @@ pub(super) fn generate(
             );
         }
 
-        current_start += Duration::days(interval);
+        current_start = advance_days_preserving_local_time(current_start, interval);
 
         if current_start > range_end + Duration::days(365) {
             break;
