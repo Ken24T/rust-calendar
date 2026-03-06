@@ -273,6 +273,36 @@ Branch enforcement:
 - Risk: API quota and token churn
   - Mitigation: incremental sync, backoff, and robust token lifecycle handling
 
+## Stage Status
+
+### Stage 1 Completion Audit (2026-03-06)
+
+- Status: complete
+- Branch: `feature/google-sync-stage1-enhanced-ro`
+- Latest Stage 1 release tag: `v2.4.10`
+
+Slices shipped:
+
+- [x] S1.1 Sync Health and Diagnostics (`v2.4.4`)
+- [x] S1.2 Preview / Dry-Run Sync (`v2.4.5`)
+- [x] S1.3 Selective Sync Controls (`v2.4.6`)
+- [x] S1.4 Reconciliation Safety Window (`v2.4.7`)
+- [x] S1.5 Recurrence and Instance Hardening (RO) (`v2.4.8`)
+- [x] S1.6 Read-Only UX Improvements (`v2.4.9`)
+- [x] S1.7 Security and Logging Hardening (`v2.4.10`)
+
+Stage 1 acceptance criteria checkpoint:
+
+- [x] Multi-source RO sync reliability and safe reconciliation
+- [x] Manual and scheduled sync support
+- [x] UI read-only enforcement and provenance clarity
+- [x] Diagnostics/summary visibility for operators
+- [x] Quality gates (`clippy`, `test`, `build`) for each shipped slice
+
+### Stage 2 Activation
+
+- Approved to start Stage 2 branch after Stage 1 completion review.
+
 ## Decision Log (Initial)
 
 - Stage 1 remains strictly RO with safety and UX hardening.
