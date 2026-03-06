@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::time::Instant;
 
 use anyhow::{anyhow, Context, Result};
+use chrono::{Duration, Local};
 use rusqlite::Connection;
 
 use crate::models::event_sync_map::EventSyncMap;
@@ -24,6 +25,7 @@ pub struct SyncRunResult {
     pub unchanged: usize,
     pub skipped_missing_uid: usize,
     pub skipped_duplicate_uid: usize,
+    pub skipped_filtered: usize,
     pub error_count: usize,
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
@@ -81,8 +83,9 @@ impl<'a> CalendarSyncEngine<'a> {
                     updated_count: success.updated as i64,
                     deleted_count: success.deleted as i64,
                     unchanged_count: success.unchanged as i64,
-                    skipped_count: (success.skipped_missing_uid + success.skipped_duplicate_uid)
-                        as i64,
+                    skipped_count: (success.skipped_missing_uid
+                        + success.skipped_duplicate_uid
+                        + success.skipped_filtered) as i64,
                     error_count: 0,
                     error_message: None,
                 };
@@ -127,6 +130,11 @@ impl<'a> CalendarSyncEngine<'a> {
     }
 
     pub fn sync_source_from_ics(&self, source_id: i64, ics_content: &str) -> Result<SyncRunResult> {
+        let source_service = CalendarSourceService::new(self.conn);
+        let source = source_service
+            .get_by_id(source_id)?
+            .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
+
         let imported = import::from_str_with_metadata(ics_content)?;
 
         if imported.is_empty() && ics_content.contains("BEGIN:VEVENT") {
@@ -135,7 +143,10 @@ impl<'a> CalendarSyncEngine<'a> {
             ));
         }
 
-        self.apply_imported(source_id, imported)
+        let (filtered, skipped_filtered) = Self::filter_imported_by_window(&source, imported);
+        let mut result = self.apply_imported(source_id, filtered)?;
+        result.skipped_filtered = skipped_filtered;
+        Ok(result)
     }
 
     pub fn preview_source(&self, source_id: i64) -> Result<SyncRunResult> {
@@ -150,6 +161,11 @@ impl<'a> CalendarSyncEngine<'a> {
     }
 
     pub fn preview_source_from_ics(&self, source_id: i64, ics_content: &str) -> Result<SyncRunResult> {
+        let source_service = CalendarSourceService::new(self.conn);
+        let source = source_service
+            .get_by_id(source_id)?
+            .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
+
         let imported = import::from_str_with_metadata(ics_content)?;
 
         if imported.is_empty() && ics_content.contains("BEGIN:VEVENT") {
@@ -158,7 +174,10 @@ impl<'a> CalendarSyncEngine<'a> {
             ));
         }
 
-        self.preview_imported(source_id, imported)
+        let (filtered, skipped_filtered) = Self::filter_imported_by_window(&source, imported);
+        let mut result = self.preview_imported(source_id, filtered)?;
+        result.skipped_filtered = skipped_filtered;
+        Ok(result)
     }
 
     pub fn sync_all_enabled_sources(&self) -> Result<SyncBatchResult> {
@@ -379,11 +398,35 @@ impl<'a> CalendarSyncEngine<'a> {
 
         message.replace(source_url, "***redacted-url***")
     }
+
+    fn filter_imported_by_window(
+        source: &crate::models::calendar_source::CalendarSource,
+        imported_events: Vec<ImportedIcsEvent>,
+    ) -> (Vec<ImportedIcsEvent>, usize) {
+        let now = Local::now();
+        let past_cutoff = now - Duration::days(source.sync_past_days.max(0));
+        let future_cutoff = now + Duration::days(source.sync_future_days.max(1));
+
+        let mut kept = Vec::with_capacity(imported_events.len());
+        let mut skipped = 0usize;
+
+        for imported in imported_events {
+            let in_window = imported.event.end >= past_cutoff && imported.event.start <= future_cutoff;
+            if in_window {
+                kept.push(imported);
+            } else {
+                skipped += 1;
+            }
+        }
+
+        (kept, skipped)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CalendarSyncEngine;
+    use chrono::{Duration, Local};
     use crate::services::calendar_sync::mapping::EventSyncMapService;
     use crate::services::database::Database;
     use crate::services::event::EventService;
@@ -402,6 +445,14 @@ mod tests {
         )
         .unwrap();
         conn.last_insert_rowid()
+    }
+
+    fn set_source_windows(conn: &Connection, source_id: i64, past_days: i64, future_days: i64) {
+        conn.execute(
+            "UPDATE calendar_sources SET sync_past_days = ?1, sync_future_days = ?2 WHERE id = ?3",
+            params![past_days, future_days, source_id],
+        )
+        .unwrap();
     }
 
     #[test]
@@ -669,5 +720,39 @@ mod tests {
         // Preview must not apply deletions.
         let event_service = EventService::new(conn);
         assert_eq!(event_service.list_all().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_sync_source_from_ics_respects_source_date_window() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn, "Work", true);
+        set_source_windows(conn, source_id, 0, 1);
+
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let now = Local::now();
+        let in_window_start = now + Duration::hours(6);
+        let in_window_end = in_window_start + Duration::hours(1);
+        let out_window_start = now + Duration::days(5);
+        let out_window_end = out_window_start + Duration::hours(1);
+
+        let ics = format!(
+            "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:keep-uid\nDTSTART:{}\nDTEND:{}\nSUMMARY:Keep Event\nEND:VEVENT\nBEGIN:VEVENT\nUID:skip-uid\nDTSTART:{}\nDTEND:{}\nSUMMARY:Skip Event\nEND:VEVENT\nEND:VCALENDAR",
+            in_window_start.format("%Y%m%dT%H%M%S"),
+            in_window_end.format("%Y%m%dT%H%M%S"),
+            out_window_start.format("%Y%m%dT%H%M%S"),
+            out_window_end.format("%Y%m%dT%H%M%S"),
+        );
+
+        let result = engine.sync_source_from_ics(source_id, &ics).unwrap();
+        assert_eq!(result.created, 1);
+        assert_eq!(result.skipped_filtered, 1);
+
+        let event_service = EventService::new(conn);
+        let events = event_service.list_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].title, "Keep Event");
     }
 }

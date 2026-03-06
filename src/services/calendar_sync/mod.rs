@@ -44,14 +44,17 @@ impl<'a> CalendarSourceService<'a> {
             .execute(
                 "INSERT INTO calendar_sources (
                     name, source_type, ics_url, enabled, poll_interval_minutes,
+                    sync_past_days, sync_future_days,
                     last_sync_at, last_sync_status, last_error, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     source.name,
                     source.source_type,
                     source.ics_url,
                     source.enabled as i32,
                     source.poll_interval_minutes,
+                    source.sync_past_days,
+                    source.sync_future_days,
                     source.last_sync_at,
                     source.last_sync_status,
                     source.last_error,
@@ -70,7 +73,8 @@ impl<'a> CalendarSourceService<'a> {
             .conn
             .prepare(
                 "SELECT id, name, source_type, ics_url, enabled, poll_interval_minutes,
-                        last_sync_at, last_sync_status, last_error
+                    sync_past_days, sync_future_days,
+                    last_sync_at, last_sync_status, last_error
                  FROM calendar_sources
                  ORDER BY name COLLATE NOCASE ASC",
             )
@@ -84,6 +88,7 @@ impl<'a> CalendarSourceService<'a> {
     pub fn get_by_id(&self, id: i64) -> Result<Option<CalendarSource>> {
         let result = self.conn.query_row(
             "SELECT id, name, source_type, ics_url, enabled, poll_interval_minutes,
+                    sync_past_days, sync_future_days,
                     last_sync_at, last_sync_status, last_error
              FROM calendar_sources
              WHERE id = ?1",
@@ -112,14 +117,18 @@ impl<'a> CalendarSourceService<'a> {
                  ics_url = ?3,
                  enabled = ?4,
                  poll_interval_minutes = ?5,
-                 updated_at = ?6
-             WHERE id = ?7",
+                 sync_past_days = ?6,
+                 sync_future_days = ?7,
+                 updated_at = ?8
+             WHERE id = ?9",
             params![
                 source.name,
                 source.source_type,
                 source.ics_url,
                 source.enabled as i32,
                 source.poll_interval_minutes,
+                source.sync_past_days,
+                source.sync_future_days,
                 Local::now().to_rfc3339(),
                 id,
             ],
@@ -264,9 +273,11 @@ impl<'a> CalendarSourceService<'a> {
             ics_url: row.get(3)?,
             enabled: row.get::<_, i32>(4)? != 0,
             poll_interval_minutes: row.get(5)?,
-            last_sync_at: row.get(6)?,
-            last_sync_status: row.get(7)?,
-            last_error: row.get(8)?,
+            sync_past_days: row.get(6)?,
+            sync_future_days: row.get(7)?,
+            last_sync_at: row.get(8)?,
+            last_sync_status: row.get(9)?,
+            last_error: row.get(10)?,
         })
     }
 
@@ -305,6 +316,8 @@ mod tests {
             ),
             enabled: true,
             poll_interval_minutes: 15,
+            sync_past_days: 90,
+            sync_future_days: 365,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
@@ -353,6 +366,8 @@ mod tests {
             ics_url: "https://calendar.google.com/calendar/ical/work%40gmail.com/private-updated/basic.ics".to_string(),
             enabled: false,
             poll_interval_minutes: 30,
+            sync_past_days: 30,
+            sync_future_days: 180,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
@@ -363,6 +378,8 @@ mod tests {
         assert_eq!(fetched.name, "Work Updated");
         assert!(!fetched.enabled);
         assert_eq!(fetched.poll_interval_minutes, 30);
+        assert_eq!(fetched.sync_past_days, 30);
+        assert_eq!(fetched.sync_future_days, 180);
     }
 
     #[test]

@@ -20,6 +20,8 @@ struct CalendarSourceDraft {
     name: String,
     ics_url: String,
     poll_interval_minutes: i64,
+    sync_past_days: i64,
+    sync_future_days: i64,
     enabled: bool,
 }
 
@@ -38,6 +40,8 @@ pub struct CalendarSyncState {
     new_source_name: String,
     new_source_url: String,
     new_source_poll_interval: i64,
+    new_source_sync_past_days: i64,
+    new_source_sync_future_days: i64,
     source_status_message: Option<String>,
     source_error_message: Option<String>,
     source_sync_in_progress_id: Option<i64>,
@@ -48,6 +52,8 @@ impl CalendarSyncState {
     pub fn new() -> Self {
         Self {
             new_source_poll_interval: 15,
+            new_source_sync_past_days: 90,
+            new_source_sync_future_days: 365,
             ..Self::default()
         }
     }
@@ -77,7 +83,9 @@ pub fn poll_sync_result(ctx: &egui::Context, state: &mut CalendarSyncState) {
                     summary.updated,
                     summary.deleted,
                     summary.unchanged,
-                    summary.skipped_missing_uid + summary.skipped_duplicate_uid,
+                    summary.skipped_missing_uid
+                        + summary.skipped_duplicate_uid
+                        + summary.skipped_filtered,
                     summary.error_count,
                     summary.duration_ms,
                 ));
@@ -195,6 +203,30 @@ pub fn render_calendar_sync_section(
                 .speed(1)
                 .suffix(" min"),
         );
+    });
+
+    ui.horizontal(|ui| {
+        ui.allocate_ui_with_layout(
+            egui::Vec2::new(label_width, 20.0),
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                ui.label("Sync window:");
+            },
+        );
+        ui.label("Past");
+        ui.add(
+            egui::DragValue::new(&mut state.new_source_sync_past_days)
+                .range(0..=3650)
+                .speed(1)
+                .suffix(" d"),
+        );
+        ui.label("Future");
+        ui.add(
+            egui::DragValue::new(&mut state.new_source_sync_future_days)
+                .range(1..=3650)
+                .speed(1)
+                .suffix(" d"),
+        );
 
         if ui.button("Add Source").clicked() {
             state.source_status_message = None;
@@ -207,6 +239,8 @@ pub fn render_calendar_sync_section(
                 ics_url: state.new_source_url.trim().to_string(),
                 enabled: true,
                 poll_interval_minutes: state.new_source_poll_interval,
+                sync_past_days: state.new_source_sync_past_days,
+                sync_future_days: state.new_source_sync_future_days,
                 last_sync_at: None,
                 last_sync_status: None,
                 last_error: None,
@@ -217,6 +251,8 @@ pub fn render_calendar_sync_section(
                     state.new_source_name.clear();
                     state.new_source_url.clear();
                     state.new_source_poll_interval = 15;
+                    state.new_source_sync_past_days = 90;
+                    state.new_source_sync_future_days = 365;
                     state.source_status_message =
                         Some(format!("Added source '{}'", created.name));
                 }
@@ -246,6 +282,8 @@ pub fn render_calendar_sync_section(
                 name: source.name.clone(),
                 ics_url: source.ics_url.clone(),
                 poll_interval_minutes: source.poll_interval_minutes,
+                sync_past_days: source.sync_past_days,
+                sync_future_days: source.sync_future_days,
                 enabled: source.enabled,
             });
 
@@ -276,6 +314,22 @@ pub fn render_calendar_sync_section(
                         .suffix(" min"),
                 );
 
+                ui.label("Past:");
+                ui.add(
+                    egui::DragValue::new(&mut draft.sync_past_days)
+                        .range(0..=3650)
+                        .speed(1)
+                        .suffix(" d"),
+                );
+
+                ui.label("Future:");
+                ui.add(
+                    egui::DragValue::new(&mut draft.sync_future_days)
+                        .range(1..=3650)
+                        .speed(1)
+                        .suffix(" d"),
+                );
+
                 if ui.button("Update").clicked() {
                     state.source_status_message = None;
                     state.source_error_message = None;
@@ -287,6 +341,8 @@ pub fn render_calendar_sync_section(
                         ics_url: draft.ics_url.trim().to_string(),
                         enabled: draft.enabled,
                         poll_interval_minutes: draft.poll_interval_minutes,
+                        sync_past_days: draft.sync_past_days,
+                        sync_future_days: draft.sync_future_days,
                         last_sync_at: source.last_sync_at.clone(),
                         last_sync_status: source.last_sync_status.clone(),
                         last_error: source.last_error.clone(),

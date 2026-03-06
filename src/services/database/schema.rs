@@ -369,6 +369,8 @@ fn create_calendar_sources_table(conn: &Connection) -> Result<()> {
             ics_url TEXT NOT NULL,
             enabled INTEGER NOT NULL DEFAULT 1,
             poll_interval_minutes INTEGER NOT NULL DEFAULT 15 CHECK (poll_interval_minutes > 0),
+            sync_past_days INTEGER NOT NULL DEFAULT 90 CHECK (sync_past_days >= 0),
+            sync_future_days INTEGER NOT NULL DEFAULT 365 CHECK (sync_future_days > 0),
             last_sync_at TEXT,
             last_sync_status TEXT,
             last_error TEXT,
@@ -379,6 +381,20 @@ fn create_calendar_sources_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create calendar_sources table")?;
+
+    migrations::ensure_column(
+        conn,
+        "calendar_sources",
+        "sync_past_days",
+        "ALTER TABLE calendar_sources ADD COLUMN sync_past_days INTEGER NOT NULL DEFAULT 90",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "calendar_sources",
+        "sync_future_days",
+        "ALTER TABLE calendar_sources ADD COLUMN sync_future_days INTEGER NOT NULL DEFAULT 365",
+    )?;
 
     Ok(())
 }

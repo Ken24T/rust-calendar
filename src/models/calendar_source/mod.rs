@@ -12,6 +12,8 @@ pub struct CalendarSource {
     pub ics_url: String,
     pub enabled: bool,
     pub poll_interval_minutes: i64,
+    pub sync_past_days: i64,
+    pub sync_future_days: i64,
     pub last_sync_at: Option<String>,
     pub last_sync_status: Option<String>,
     pub last_error: Option<String>,
@@ -34,6 +36,14 @@ impl CalendarSource {
 
         if self.poll_interval_minutes <= 0 {
             return Err("Poll interval must be greater than 0 minutes".to_string());
+        }
+
+        if self.sync_past_days < 0 {
+            return Err("Past sync window must be 0 days or greater".to_string());
+        }
+
+        if self.sync_future_days <= 0 {
+            return Err("Future sync window must be greater than 0 days".to_string());
         }
 
         Ok(())
@@ -59,6 +69,8 @@ impl Default for CalendarSource {
             ics_url: String::new(),
             enabled: true,
             poll_interval_minutes: 15,
+            sync_past_days: 90,
+            sync_future_days: 365,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
@@ -78,6 +90,8 @@ mod tests {
             ics_url: "https://calendar.google.com/calendar/ical/test%40gmail.com/private-abc123/basic.ics".to_string(),
             enabled: true,
             poll_interval_minutes: 15,
+            sync_past_days: 90,
+            sync_future_days: 365,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
@@ -121,6 +135,24 @@ mod tests {
     fn test_validate_invalid_poll_interval() {
         let source = CalendarSource {
             poll_interval_minutes: 0,
+            ..valid_source()
+        };
+        assert!(source.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_past_window() {
+        let source = CalendarSource {
+            sync_past_days: -1,
+            ..valid_source()
+        };
+        assert!(source.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_future_window() {
+        let source = CalendarSource {
+            sync_future_days: 0,
             ..valid_source()
         };
         assert!(source.validate().is_err());
