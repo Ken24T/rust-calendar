@@ -4564,7 +4564,7 @@ dependencies = [
 
 [[package]]
 name = "rust-calendar"
-version = "2.4.28"
+version = "2.4.29"
 dependencies = [
  "anyhow",
  "chrono",

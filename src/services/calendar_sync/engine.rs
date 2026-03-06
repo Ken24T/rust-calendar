@@ -539,15 +539,13 @@ impl<'a> CalendarSyncEngine<'a> {
             OUTBOUND_OPERATION_DELETE => {
                 let remote_event_id = map_service
                     .get_remote_metadata(source_id, external_uid)?
-                    .and_then(|metadata| metadata.remote_event_id)
-                    .ok_or_else(|| {
-                        OutboundOperationError::MissingRemoteEventId {
-                            external_uid: external_uid.to_string(),
-                        }
-                    })?;
-                writer.delete_event(source, &remote_event_id)?;
-                map_service.delete_remote_metadata(source_id, external_uid)?;
-                map_service.delete_by_source_and_uid(source_id, external_uid)?;
+                    .and_then(|metadata| metadata.remote_event_id);
+
+                if let Some(remote_event_id) = remote_event_id {
+                    writer.delete_event(source, &remote_event_id)?;
+                }
+
+                self.clear_remote_identity_tracking(&map_service, source_id, external_uid)?;
                 Ok(())
             }
             _ => {
@@ -584,6 +582,24 @@ impl<'a> CalendarSyncEngine<'a> {
             )
         })?;
         self.update_remote_tracking(&map_service, source_id, external_uid, local_event_id, remote)
+    }
+
+    fn clear_remote_identity_tracking(
+        &self,
+        map_service: &EventSyncMapService<'_>,
+        source_id: i64,
+        external_uid: &str,
+    ) -> Result<()> {
+        map_service.delete_remote_metadata(source_id, external_uid)?;
+
+        if map_service
+            .get_by_source_and_uid(source_id, external_uid)?
+            .is_some()
+        {
+            map_service.delete_by_source_and_uid(source_id, external_uid)?;
+        }
+
+        Ok(())
     }
 
     fn reconcile_google_payload(
@@ -2458,6 +2474,86 @@ END:VCALENDAR"#;
 
         let updated_ids = writer.updated_ids.lock().unwrap().clone();
         assert!(updated_ids.is_empty());
+    }
+
+    #[test]
+    fn test_process_pending_outbound_operations_completes_delete_when_remote_metadata_is_missing() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series-delete-1",
+                        "etag": "\"etag-delete-1\"",
+                        "status": "confirmed",
+                        "summary": "Series",
+                        "iCalUID": "uid-api-delete-broken",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-delete-broken"
+            }"#,
+            )
+            .unwrap();
+        engine
+            .sync_source_from_google_payload(source_id, initial_payload)
+            .unwrap();
+
+        conn.execute(
+            "UPDATE event_remote_metadata SET remote_event_id = NULL WHERE source_id = ?1 AND external_uid = ?2",
+            params![source_id, "uid-api-delete-broken"],
+        )
+        .unwrap();
+
+        let existing = EventService::new(conn).list_all().unwrap().remove(0);
+        EventService::new(conn).delete_local(existing.id.unwrap()).unwrap();
+
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let status: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-api-delete-broken"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+
+        let metadata_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_remote_metadata WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-api-delete-broken"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(metadata_exists, 0);
+
+        let mapping_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_sync_map WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-api-delete-broken"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(mapping_exists, 0);
+
+        let deleted_ids = writer.deleted_ids.lock().unwrap().clone();
+        assert!(deleted_ids.is_empty());
     }
 
     #[test]
