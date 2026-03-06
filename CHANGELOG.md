@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.21] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 outbound retry scheduling:
+  - failed outbound Google operations now record `next_retry_at` using exponential backoff based on the source poll interval
+  - due failed operations automatically re-enter execution during later RW sync runs
+
+### Changed
+
+- Transient outbound recurrence push failures no longer stall permanently after the first error; the queue now tracks retry timing and reprocesses eligible failures automatically.
+
 ## [2.4.20] - 2026-03-06
 
 ### Added

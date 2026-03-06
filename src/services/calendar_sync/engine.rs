@@ -450,7 +450,7 @@ impl<'a> CalendarSyncEngine<'a> {
             .id
             .ok_or_else(|| anyhow!("Calendar source ID is required to process outbound operations"))?;
         let outbound_service = OutboundSyncService::new(self.conn);
-        let operations = outbound_service.list_pending_for_source(source_id, 100)?;
+        let operations = outbound_service.list_runnable_for_source(source_id, 100)?;
 
         for operation in operations {
             let Some(operation_id) = operation.id else {
@@ -466,7 +466,12 @@ impl<'a> CalendarSyncEngine<'a> {
                     CalendarSourceService::new(self.conn).mark_last_push_now(source_id)?;
                 }
                 Err(err) => {
-                    outbound_service.mark_operation_failed(operation_id, &err.to_string())?;
+                    outbound_service.mark_operation_failed_with_retry(
+                        operation_id,
+                        operation.attempt_count + 1,
+                        source.poll_interval_minutes,
+                        &err.to_string(),
+                    )?;
                 }
             }
         }
@@ -1872,5 +1877,71 @@ END:VCALENDAR"#;
             )
             .unwrap();
         assert_eq!(remote_event_id.as_deref(), Some("remote-instance-1"));
+    }
+
+    #[test]
+    fn test_process_pending_outbound_operations_retries_due_failed_operation() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series-2",
+                        "etag": "\"etag-1\"",
+                        "status": "confirmed",
+                        "summary": "Series",
+                        "iCalUID": "uid-api-retry",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-retry"
+            }"#,
+            )
+            .unwrap();
+        engine
+            .sync_source_from_google_payload(source_id, initial_payload)
+            .unwrap();
+
+        let existing = EventService::new(conn).list_all().unwrap().remove(0);
+        let mut local_edit = existing.clone();
+        local_edit.title = "Retry Me".to_string();
+        EventService::new(conn).update_local(&local_edit).unwrap();
+
+        conn.execute(
+            "UPDATE outbound_sync_operations
+             SET status = 'failed', next_retry_at = '2000-01-01T00:00:00+00:00', attempt_count = 1
+             WHERE source_id = ?1 AND external_uid = ?2",
+            params![source_id, "uid-api-retry"],
+        )
+        .unwrap();
+
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let updated_ids = writer.updated_ids.lock().unwrap().clone();
+        assert_eq!(updated_ids, vec!["remote-series-2".to_string()]);
+
+        let queue_status: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, "uid-api-retry"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
     }
 }

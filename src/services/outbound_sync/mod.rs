@@ -10,6 +10,9 @@ use crate::models::outbound_sync_operation::{
     OUTBOUND_STATUS_PENDING, OUTBOUND_STATUS_PROCESSING,
 };
 
+const DEFAULT_BACKOFF_BASE_MINUTES: i64 = 1;
+const DEFAULT_MAX_BACKOFF_MINUTES: i64 = 60;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct OutboundQueueStats {
     pub pending: i64,
@@ -229,6 +232,60 @@ impl<'a> OutboundSyncService<'a> {
             .context("Failed to load pending outbound operations")
     }
 
+    pub fn list_runnable_for_source(
+        &self,
+        source_id: i64,
+        limit: i64,
+    ) -> Result<Vec<OutboundSyncOperation>> {
+        let safe_limit = limit.clamp(1, 1000);
+        let now = Local::now().to_rfc3339();
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, source_id, local_event_id, external_uid, operation_type,
+                        payload_json, status, attempt_count, next_retry_at, last_error,
+                        created_at, updated_at
+                 FROM outbound_sync_operations
+                 WHERE source_id = ?1
+                   AND (
+                        status = ?2
+                        OR (status = ?3 AND (next_retry_at IS NULL OR next_retry_at <= ?4))
+                   )
+                 ORDER BY CASE WHEN status = ?2 THEN 0 ELSE 1 END, updated_at ASC
+                 LIMIT ?5",
+            )
+            .context("Failed to prepare runnable outbound operations query")?;
+
+        let rows = stmt.query_map(
+            params![
+                source_id,
+                OUTBOUND_STATUS_PENDING,
+                OUTBOUND_STATUS_FAILED,
+                now,
+                safe_limit,
+            ],
+            |row| {
+                Ok(OutboundSyncOperation {
+                    id: Some(row.get(0)?),
+                    source_id: row.get(1)?,
+                    local_event_id: row.get(2)?,
+                    external_uid: row.get(3)?,
+                    operation_type: row.get(4)?,
+                    payload_json: row.get(5)?,
+                    status: row.get(6)?,
+                    attempt_count: row.get(7)?,
+                    next_retry_at: row.get(8)?,
+                    last_error: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            },
+        )?;
+
+        rows.collect::<Result<Vec<_>, _>>()
+            .context("Failed to load runnable outbound operations")
+    }
+
     pub fn active_operation_for_identity(
         &self,
         source_id: i64,
@@ -278,6 +335,48 @@ impl<'a> OutboundSyncService<'a> {
 
     pub fn mark_operation_failed(&self, operation_id: i64, error: &str) -> Result<()> {
         self.update_operation_status(operation_id, OUTBOUND_STATUS_FAILED, Some(error))
+    }
+
+    pub fn mark_operation_failed_with_retry(
+        &self,
+        operation_id: i64,
+        attempt_count: i64,
+        base_backoff_minutes: i64,
+        error: &str,
+    ) -> Result<()> {
+        let retry_at = Local::now()
+            + chrono::Duration::minutes(Self::calculate_backoff_minutes(
+                base_backoff_minutes,
+                attempt_count,
+            ));
+
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE outbound_sync_operations
+                 SET status = ?1,
+                     next_retry_at = ?2,
+                     last_error = ?3,
+                     updated_at = ?4
+                 WHERE id = ?5",
+                params![
+                    OUTBOUND_STATUS_FAILED,
+                    retry_at.to_rfc3339(),
+                    error,
+                    Local::now().to_rfc3339(),
+                    operation_id,
+                ],
+            )
+            .context("Failed to mark outbound sync operation as failed with retry")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Outbound sync operation with id {} not found",
+                operation_id
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn mark_operation_completed(&self, operation_id: i64) -> Result<()> {
@@ -437,6 +536,13 @@ impl<'a> OutboundSyncService<'a> {
         }
 
         Ok(())
+    }
+
+    fn calculate_backoff_minutes(base_backoff_minutes: i64, attempt_count: i64) -> i64 {
+        let base = base_backoff_minutes.max(DEFAULT_BACKOFF_BASE_MINUTES);
+        let exponent = attempt_count.clamp(1, 10) as u32;
+        let backoff = base.saturating_mul(2_i64.saturating_pow(exponent));
+        backoff.min(DEFAULT_MAX_BACKOFF_MINUTES.max(base))
     }
 }
 
@@ -608,5 +714,74 @@ mod tests {
             reset,
             crate::models::outbound_sync_operation::OUTBOUND_STATUS_PENDING
         );
+    }
+
+    #[test]
+    fn test_list_runnable_for_source_includes_due_failed_operations_only() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (source_id, external_uid, operation_type, status, next_retry_at)
+             VALUES (?1, 'uid-pending', 'update', 'pending', NULL)",
+            [source_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (source_id, external_uid, operation_type, status, next_retry_at)
+             VALUES (?1, 'uid-due', 'update', 'failed', '2000-01-01T00:00:00+00:00')",
+            [source_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (source_id, external_uid, operation_type, status, next_retry_at)
+             VALUES (?1, 'uid-later', 'update', 'failed', '2999-01-01T00:00:00+00:00')",
+            [source_id],
+        )
+        .unwrap();
+
+        let service = OutboundSyncService::new(conn);
+        let runnable = service.list_runnable_for_source(source_id, 10).unwrap();
+        let external_uids = runnable
+            .into_iter()
+            .filter_map(|operation| operation.external_uid)
+            .collect::<Vec<_>>();
+
+        assert_eq!(external_uids, vec!["uid-pending".to_string(), "uid-due".to_string()]);
+    }
+
+    #[test]
+    fn test_mark_operation_failed_with_retry_sets_next_retry_at() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+
+        conn.execute(
+            "INSERT INTO outbound_sync_operations (source_id, external_uid, operation_type, status)
+             VALUES (?1, 'uid-retry', 'update', 'processing')",
+            [source_id],
+        )
+        .unwrap();
+        let operation_id = conn.last_insert_rowid();
+
+        let service = OutboundSyncService::new(conn);
+        service
+            .mark_operation_failed_with_retry(operation_id, 2, 5, "temporary outage")
+            .unwrap();
+
+        let (status, next_retry_at, error): (String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT status, next_retry_at, last_error FROM outbound_sync_operations WHERE id = ?1",
+                [operation_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+
+        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED);
+        assert!(next_retry_at.is_some());
+        assert_eq!(error.as_deref(), Some("temporary outage"));
     }
 }
