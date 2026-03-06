@@ -1,9 +1,11 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 use std::time::Duration as StdDuration;
 
 use anyhow::{anyhow, Context, Result};
-use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime};
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono_tz::Tz;
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use thiserror::Error;
@@ -290,8 +292,109 @@ impl GoogleEventItem {
             builder = builder.recurrence_rule(recurrence_rule);
         }
 
-        builder.build().map_err(|err| anyhow!(err))
+        let mut event = builder.build().map_err(|err| anyhow!(err))?;
+        event.recurrence_exceptions = parse_google_recurrence_exceptions(
+            self.recurrence.as_deref().unwrap_or(&[]),
+        )?;
+
+        Ok(event)
     }
+}
+
+fn parse_google_recurrence_exceptions(recurrence: &[String]) -> Result<Option<Vec<DateTime<Local>>>> {
+    let mut exceptions = Vec::new();
+
+    for entry in recurrence {
+        if !entry.starts_with("EXDATE") {
+            continue;
+        }
+
+        let (key_part, value_part) = entry
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Invalid Google EXDATE recurrence entry '{}': missing ':'", entry))?;
+        let tzid = extract_tzid(key_part);
+        let is_value_date = key_part.contains("VALUE=DATE");
+
+        for raw_value in value_part.split(',') {
+            let exdate = raw_value.trim();
+            if exdate.is_empty() {
+                continue;
+            }
+
+            let parsed = if is_value_date {
+                parse_google_date(exdate)?
+            } else {
+                parse_google_datetime_with_tzid(exdate, tzid)?
+            };
+            exceptions.push(parsed);
+        }
+    }
+
+    if exceptions.is_empty() {
+        return Ok(None);
+    }
+
+    exceptions.sort();
+    exceptions.dedup();
+    Ok(Some(exceptions))
+}
+
+fn extract_tzid(key_part: &str) -> Option<&str> {
+    key_part
+        .split(';')
+        .find_map(|part| part.strip_prefix("TZID="))
+}
+
+fn parse_google_datetime_with_tzid(s: &str, tzid: Option<&str>) -> Result<DateTime<Local>> {
+    let has_utc_suffix = s.ends_with('Z');
+    let normalized = s.trim_end_matches('Z');
+
+    if normalized.len() < 15 {
+        return Err(anyhow!("Invalid Google recurrence datetime '{}'", s));
+    }
+
+    let naive = NaiveDateTime::new(
+        NaiveDate::from_ymd_opt(
+            normalized[0..4].parse()?,
+            normalized[4..6].parse()?,
+            normalized[6..8].parse()?,
+        )
+        .ok_or_else(|| anyhow!("Invalid Google recurrence date '{}'", s))?,
+        NaiveTime::from_hms_opt(
+            normalized[9..11].parse()?,
+            normalized[11..13].parse()?,
+            normalized[13..15].parse()?,
+        )
+        .ok_or_else(|| anyhow!("Invalid Google recurrence time '{}'", s))?,
+    );
+
+    if has_utc_suffix {
+        return Ok(Utc.from_utc_datetime(&naive).with_timezone(&Local));
+    }
+
+    if let Some(tz_name) = tzid {
+        if let Ok(timezone) = Tz::from_str(tz_name) {
+            if let Some(dt) = timezone.from_local_datetime(&naive).earliest() {
+                return Ok(dt.with_timezone(&Local));
+            }
+        }
+    }
+
+    Local
+        .from_local_datetime(&naive)
+        .earliest()
+        .ok_or_else(|| anyhow!("Invalid Google recurrence datetime '{}'", s))
+}
+
+fn parse_google_date(s: &str) -> Result<DateTime<Local>> {
+    let parsed = NaiveDate::parse_from_str(s, "%Y%m%d")
+        .with_context(|| format!("Invalid Google recurrence date '{}'", s))?;
+
+    parsed
+        .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+        .and_local_timezone(Local)
+        .earliest()
+        .ok_or_else(|| anyhow!("Google recurrence date '{}' is invalid in local timezone", s))
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -347,6 +450,7 @@ impl GoogleEventDateTime {
 #[cfg(test)]
 mod tests {
     use super::GoogleCalendarApiClient;
+    use chrono::Utc;
 
     #[test]
     fn parse_google_events_response_maps_master_and_cancelled_items() {
@@ -401,5 +505,61 @@ mod tests {
             parsed.items[0].external_uid,
             "series-uid::RID::20260311T140000Z"
         );
+    }
+
+    #[test]
+    fn parse_google_events_response_preserves_timed_exdates() {
+        let body = r#"{
+            "items": [
+                {
+                    "id": "remote-master",
+                    "status": "confirmed",
+                    "iCalUID": "series-uid",
+                    "summary": "Series With Exceptions",
+                    "recurrence": [
+                        "RRULE:FREQ=WEEKLY;BYDAY=TU",
+                        "EXDATE:20260317T090000Z,20260324T090000Z"
+                    ],
+                    "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                    "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                }
+            ]
+        }"#;
+
+        let parsed = GoogleCalendarApiClient::parse_events_response_body(body).unwrap();
+        let event = parsed.items[0].event.as_ref().unwrap();
+        let exceptions = event.recurrence_exceptions.as_ref().unwrap();
+
+        assert_eq!(exceptions.len(), 2);
+        assert_eq!(exceptions[0].with_timezone(&Utc).to_rfc3339(), "2026-03-17T09:00:00+00:00");
+        assert_eq!(exceptions[1].with_timezone(&Utc).to_rfc3339(), "2026-03-24T09:00:00+00:00");
+    }
+
+    #[test]
+    fn parse_google_events_response_preserves_all_day_exdates() {
+        let body = r#"{
+            "items": [
+                {
+                    "id": "remote-all-day",
+                    "status": "confirmed",
+                    "iCalUID": "all-day-uid",
+                    "summary": "All Day Series",
+                    "recurrence": [
+                        "RRULE:FREQ=DAILY;COUNT=3",
+                        "EXDATE;VALUE=DATE:20260311"
+                    ],
+                    "start": { "date": "2026-03-10" },
+                    "end": { "date": "2026-03-11" }
+                }
+            ]
+        }"#;
+
+        let parsed = GoogleCalendarApiClient::parse_events_response_body(body).unwrap();
+        let event = parsed.items[0].event.as_ref().unwrap();
+        let exceptions = event.recurrence_exceptions.as_ref().unwrap();
+
+        assert!(event.all_day);
+        assert_eq!(exceptions.len(), 1);
+        assert_eq!(exceptions[0].format("%Y%m%d").to_string(), "20260311");
     }
 }

@@ -1448,4 +1448,51 @@ END:VCALENDAR"#;
             crate::models::sync_conflict::SYNC_CONFLICT_REASON_LOCAL_UPDATE_PENDING
         );
     }
+
+    #[test]
+    fn test_sync_source_from_google_payload_preserves_recurrence_exceptions() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                r#"{
+                "items": [
+                    {
+                        "id": "remote-series",
+                        "etag": "\"etag-series\"",
+                        "status": "confirmed",
+                        "summary": "Series With EXDATE",
+                        "iCalUID": "uid-api-exdate",
+                        "updated": "2026-03-06T00:00:00Z",
+                        "recurrence": [
+                            "RRULE:FREQ=WEEKLY;BYDAY=TU",
+                            "EXDATE:20260317T090000Z"
+                        ],
+                        "start": { "dateTime": "2026-03-10T09:00:00Z" },
+                        "end": { "dateTime": "2026-03-10T10:00:00Z" }
+                    }
+                ],
+                "nextSyncToken": "sync-token-exdate"
+            }"#,
+            )
+            .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, payload)
+            .unwrap();
+        assert_eq!(result.created, 1);
+
+        let events = EventService::new(conn).list_all().unwrap();
+        assert_eq!(events.len(), 1);
+        let exceptions = events[0].recurrence_exceptions.as_ref().unwrap();
+        assert_eq!(exceptions.len(), 1);
+        assert_eq!(
+            exceptions[0].with_timezone(&chrono::Utc).to_rfc3339(),
+            "2026-03-17T09:00:00+00:00"
+        );
+    }
 }
