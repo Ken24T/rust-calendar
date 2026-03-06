@@ -138,6 +138,29 @@ impl<'a> CalendarSyncEngine<'a> {
         self.apply_imported(source_id, imported)
     }
 
+    pub fn preview_source(&self, source_id: i64) -> Result<SyncRunResult> {
+        let source_service = CalendarSourceService::new(self.conn);
+        let source = source_service
+            .get_by_id(source_id)?
+            .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
+
+        self.fetcher
+            .fetch_ics(&source.ics_url)
+            .and_then(|ics| self.preview_source_from_ics(source_id, &ics))
+    }
+
+    pub fn preview_source_from_ics(&self, source_id: i64, ics_content: &str) -> Result<SyncRunResult> {
+        let imported = import::from_str_with_metadata(ics_content)?;
+
+        if imported.is_empty() && ics_content.contains("BEGIN:VEVENT") {
+            return Err(anyhow!(
+                "ICS payload contained VEVENT markers but no events were parsed; aborting preview"
+            ));
+        }
+
+        self.preview_imported(source_id, imported)
+    }
+
     pub fn sync_all_enabled_sources(&self) -> Result<SyncBatchResult> {
         let source_service = CalendarSourceService::new(self.conn);
         let sources = source_service.list_all()?;
@@ -267,6 +290,68 @@ impl<'a> CalendarSyncEngine<'a> {
                         .delete(mapping.local_event_id)
                         .context("Failed to delete reconciled local event")?;
                 }
+                result.deleted += 1;
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn preview_imported(&self, source_id: i64, imported_events: Vec<ImportedIcsEvent>) -> Result<SyncRunResult> {
+        let mut result = SyncRunResult {
+            source_id,
+            ..SyncRunResult::default()
+        };
+
+        let source_service = CalendarSourceService::new(self.conn);
+        source_service
+            .get_by_id(source_id)?
+            .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
+
+        let map_service = EventSyncMapService::new(self.conn);
+        let event_service = EventService::new(self.conn);
+
+        let mut seen_uids: HashSet<String> = HashSet::new();
+
+        for imported in imported_events {
+            let uid = imported
+                .uid
+                .as_deref()
+                .map(str::trim)
+                .filter(|uid| !uid.is_empty());
+
+            let Some(uid) = uid else {
+                result.skipped_missing_uid += 1;
+                continue;
+            };
+
+            if !seen_uids.insert(uid.to_string()) {
+                result.skipped_duplicate_uid += 1;
+                continue;
+            }
+
+            match map_service.get_by_source_and_uid(source_id, uid)? {
+                Some(existing_map) => {
+                    if let Some(existing_event) = event_service.get(existing_map.local_event_id)? {
+                        if Self::is_effectively_unchanged(&existing_event, &imported.event) {
+                            result.unchanged += 1;
+                        } else {
+                            result.updated += 1;
+                        }
+                    } else {
+                        // Mapping exists but points to missing event; apply path would recreate it.
+                        result.created += 1;
+                    }
+                }
+                None => {
+                    result.created += 1;
+                }
+            }
+        }
+
+        let existing_maps = map_service.list_by_source_id(source_id)?;
+        for mapping in existing_maps {
+            if !seen_uids.contains(&mapping.external_uid) {
                 result.deleted += 1;
             }
         }
@@ -507,5 +592,82 @@ mod tests {
         let second = engine.sync_source_from_ics(source_id, ics).unwrap();
         assert_eq!(second.unchanged, 1);
         assert_eq!(second.updated, 0);
+    }
+
+    #[test]
+    fn test_preview_source_from_ics_reports_changes_without_writing() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn, "Work", true);
+
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let ics = r#"BEGIN:VCALENDAR
+    VERSION:2.0
+    BEGIN:VEVENT
+    UID:preview-1
+    DTSTART:20260227T090000
+    DTEND:20260227T100000
+    SUMMARY:Preview Event
+    END:VEVENT
+    END:VCALENDAR"#;
+
+        let preview = engine.preview_source_from_ics(source_id, ics).unwrap();
+        assert_eq!(preview.created, 1);
+        assert_eq!(preview.updated, 0);
+        assert_eq!(preview.deleted, 0);
+
+        // Preview must not persist events or mappings.
+        let event_service = EventService::new(conn);
+        assert_eq!(event_service.list_all().unwrap().len(), 0);
+
+        let map_service = EventSyncMapService::new(conn);
+        assert_eq!(map_service.list_by_source_id(source_id).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_preview_source_from_ics_reports_delete_candidates() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn, "Work", true);
+
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let initial = r#"BEGIN:VCALENDAR
+    VERSION:2.0
+    BEGIN:VEVENT
+    UID:uid-a
+    DTSTART:20260227T090000
+    DTEND:20260227T100000
+    SUMMARY:Event A
+    END:VEVENT
+    BEGIN:VEVENT
+    UID:uid-b
+    DTSTART:20260227T110000
+    DTEND:20260227T120000
+    SUMMARY:Event B
+    END:VEVENT
+    END:VCALENDAR"#;
+
+        let _ = engine.sync_source_from_ics(source_id, initial).unwrap();
+
+        let next = r#"BEGIN:VCALENDAR
+    VERSION:2.0
+    BEGIN:VEVENT
+    UID:uid-a
+    DTSTART:20260227T090000
+    DTEND:20260227T100000
+    SUMMARY:Event A
+    END:VEVENT
+    END:VCALENDAR"#;
+
+        let preview = engine.preview_source_from_ics(source_id, next).unwrap();
+        assert_eq!(preview.deleted, 1);
+
+        // Preview must not apply deletions.
+        let event_service = EventService::new(conn);
+        assert_eq!(event_service.list_all().unwrap().len(), 2);
     }
 }

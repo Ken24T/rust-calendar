@@ -23,6 +23,14 @@ struct CalendarSourceDraft {
     enabled: bool,
 }
 
+#[derive(Clone, Copy)]
+enum SyncJobKind {
+    Preview,
+    Apply,
+}
+
+type SyncWorkerMessage = Result<(String, SyncJobKind, SyncRunResult), String>;
+
 /// Mutable state for the calendar sync section of the settings dialog.
 #[derive(Default)]
 pub struct CalendarSyncState {
@@ -33,7 +41,7 @@ pub struct CalendarSyncState {
     source_status_message: Option<String>,
     source_error_message: Option<String>,
     source_sync_in_progress_id: Option<i64>,
-    source_sync_result_rx: Option<Receiver<Result<(String, SyncRunResult), String>>>,
+    source_sync_result_rx: Option<Receiver<SyncWorkerMessage>>,
 }
 
 impl CalendarSyncState {
@@ -51,12 +59,19 @@ impl CalendarSyncState {
 pub fn poll_sync_result(ctx: &egui::Context, state: &mut CalendarSyncState) {
     if let Some(rx) = &state.source_sync_result_rx {
         match rx.try_recv() {
-            Ok(Ok((source_name, summary))) => {
+            Ok(Ok((source_name, kind, summary))) => {
                 state.source_sync_result_rx = None;
                 state.source_sync_in_progress_id = None;
                 state.source_error_message = None;
+
+                let action = match kind {
+                    SyncJobKind::Preview => "Preview",
+                    SyncJobKind::Apply => "Sync",
+                };
+
                 state.source_status_message = Some(format!(
-                    "Sync complete for '{}': +{} ~{} -{} ={} skipped:{} errors:{} ({} ms)",
+                    "{} complete for '{}': +{} ~{} -{} ={} skipped:{} errors:{} ({} ms)",
+                    action,
                     source_name,
                     summary.created,
                     summary.updated,
@@ -289,14 +304,43 @@ pub fn render_calendar_sync_section(
                     }
                 }
 
-                let sync_in_progress =
-                    state.source_sync_in_progress_id == Some(source_id);
+                let sync_in_progress = state.source_sync_in_progress_id == Some(source_id);
                 let any_sync_in_progress = state.source_sync_in_progress_id.is_some();
                 let sync_button_text = if sync_in_progress {
-                    "Syncing..."
+                    "Running..."
                 } else {
                     "Sync Now"
                 };
+
+                if ui
+                    .add_enabled(!any_sync_in_progress, egui::Button::new("Preview Sync"))
+                    .clicked()
+                {
+                    state.source_error_message = None;
+                    state.source_sync_in_progress_id = Some(source_id);
+
+                    let source_name = draft.name.clone();
+                    state.source_status_message =
+                        Some(format!("Previewing '{}'...", source_name));
+
+                    let db_path = database.path().to_string();
+                    let (tx, rx) = mpsc::channel();
+                    state.source_sync_result_rx = Some(rx);
+
+                    thread::spawn(move || {
+                        let result = (|| -> SyncWorkerMessage {
+                            let db = Database::new(&db_path).map_err(|err| err.to_string())?;
+                            let engine = CalendarSyncEngine::new(db.connection())
+                                .map_err(|err| err.to_string())?;
+                            let summary = engine
+                                .preview_source(source_id)
+                                .map_err(|err| err.to_string())?;
+                            Ok((source_name, SyncJobKind::Preview, summary))
+                        })();
+
+                        let _ = tx.send(result);
+                    });
+                }
 
                 if ui
                     .add_enabled(!any_sync_in_progress, egui::Button::new(sync_button_text))
@@ -314,7 +358,7 @@ pub fn render_calendar_sync_section(
                     state.source_sync_result_rx = Some(rx);
 
                     thread::spawn(move || {
-                        let result = (|| -> Result<(String, SyncRunResult), String> {
+                        let result = (|| -> SyncWorkerMessage {
                             let db =
                                 Database::new(&db_path).map_err(|err| err.to_string())?;
                             let engine = CalendarSyncEngine::new(db.connection())
@@ -322,7 +366,7 @@ pub fn render_calendar_sync_section(
                             let summary = engine
                                 .sync_source(source_id)
                                 .map_err(|err| err.to_string())?;
-                            Ok((source_name, summary))
+                            Ok((source_name, SyncJobKind::Apply, summary))
                         })();
 
                         let _ = tx.send(result);
