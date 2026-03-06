@@ -633,6 +633,21 @@ impl<'a> CalendarSyncEngine<'a> {
                         }
                     }
                     result.deleted += 1;
+                } else if let Some(operation) = active_outbound.as_ref() {
+                    if Self::remote_matches_local_intent(operation, None, remote) {
+                        if apply {
+                            if let Some(operation_id) = operation.id {
+                                outbound_service.mark_operation_completed(operation_id)?;
+                            }
+                            conflict_service.resolve_open_for_identity(
+                                source_id,
+                                &external_uid,
+                                SYNC_CONFLICT_RESOLUTION_REMOTE_WINS,
+                            )?;
+                            map_service.delete_remote_metadata(source_id, &external_uid)?;
+                        }
+                        result.deleted += 1;
+                    }
                 }
                 continue;
             }
@@ -2408,5 +2423,173 @@ END:VCALENDAR"#;
             )
             .unwrap();
         assert_eq!(mapping_count, 1);
+    }
+
+    #[test]
+    fn test_sync_source_from_google_payload_deletes_cancelled_detached_instance() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+        let event_service = EventService::new(conn);
+
+        let detached_start = Local.with_ymd_and_hms(2026, 5, 12, 9, 0, 0).unwrap();
+        let detached_end = detached_start + Duration::hours(2);
+        let detached = event_service
+            .create(
+                crate::models::event::Event::builder()
+                    .title("Detached Cancel")
+                    .start(detached_start)
+                    .end(detached_end)
+                    .build()
+                    .unwrap(),
+            )
+            .unwrap();
+        let detached_id = detached.id.unwrap();
+        let detached_uid = format!(
+            "uid-parent::RID::{}",
+            detached_start.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ")
+        );
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id) VALUES (?1, ?2, ?3)",
+            params![source_id, detached_uid, detached_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_remote_metadata (source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![source_id, detached_uid, "remote-instance-cancel-1", "\"etag-cancel\"", "hash-cancel", "2026-03-06T00:00:00Z"],
+        )
+        .unwrap();
+
+        let payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+            &format!(
+                r#"{{
+                "items": [
+                    {{
+                        "id": "remote-instance-cancel-1",
+                        "status": "cancelled",
+                        "iCalUID": "uid-parent",
+                        "originalStartTime": {{ "dateTime": "{}" }}
+                    }}
+                ],
+                "nextSyncToken": "sync-token-detached-cancel"
+            }}"#,
+                detached_start.with_timezone(&Utc).to_rfc3339(),
+            ),
+        )
+        .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, payload)
+            .unwrap();
+
+        assert_eq!(result.deleted, 1);
+        assert!(event_service.get(detached_id).unwrap().is_none());
+
+        let mapping_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_sync_map WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(mapping_count, 0);
+
+        let metadata_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_remote_metadata WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(metadata_count, 0);
+    }
+
+    #[test]
+    fn test_sync_source_from_google_payload_completes_matching_detached_delete_without_conflict() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+        let event_service = EventService::new(conn);
+
+        let detached_start = Local.with_ymd_and_hms(2026, 5, 19, 9, 0, 0).unwrap();
+        let detached_end = detached_start + Duration::hours(2);
+        let detached = event_service
+            .create(
+                crate::models::event::Event::builder()
+                    .title("Detached Delete Converges")
+                    .start(detached_start)
+                    .end(detached_end)
+                    .build()
+                    .unwrap(),
+            )
+            .unwrap();
+        let detached_id = detached.id.unwrap();
+        let detached_uid = format!(
+            "uid-parent::RID::{}",
+            detached_start.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ")
+        );
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id) VALUES (?1, ?2, ?3)",
+            params![source_id, detached_uid, detached_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_remote_metadata (source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![source_id, detached_uid, "remote-instance-delete-race-1", "\"etag-delete-race\"", "hash-delete-race", "2026-03-06T00:00:00Z"],
+        )
+        .unwrap();
+
+        event_service.delete_local(detached_id).unwrap();
+
+        let payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+            &format!(
+                r#"{{
+                "items": [
+                    {{
+                        "id": "remote-instance-delete-race-1",
+                        "status": "cancelled",
+                        "iCalUID": "uid-parent",
+                        "originalStartTime": {{ "dateTime": "{}" }}
+                    }}
+                ],
+                "nextSyncToken": "sync-token-detached-delete-race"
+            }}"#,
+                detached_start.with_timezone(&Utc).to_rfc3339(),
+            ),
+        )
+        .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, payload)
+            .unwrap();
+
+        assert_eq!(result.deleted, 1);
+        assert_eq!(result.conflicts, 0);
+
+        let queue_status: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+
+        let mapping_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_sync_map WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(mapping_count, 0);
     }
 }

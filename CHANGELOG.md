@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.24] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 detached delete convergence coverage:
+  - regression coverage for inbound cancellation of detached instances
+  - convergence coverage when a local detached delete is already queued and Google returns the matching cancelled instance
+
+### Changed
+
+- Detached recurring-instance deletion is now proven stable across inbound cancellation and outbound delete convergence paths.
+
 ## [2.4.23] - 2026-03-06
 
 ### Added
