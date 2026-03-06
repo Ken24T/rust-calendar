@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.9] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.6 read-only UX hardening with synced source labels in
+  Search and view context menus.
+
+### Changed
+
+- Sync guard toasts now clearly explain that synced events must be edited or
+  deleted in Google Calendar and then re-synced, with source-aware messaging
+  when available.
+- Event dialog save validation now returns source-aware read-only messages for
+  synced events.
+
 ## [2.4.8] - 2026-03-06
 
 ### Added

@@ -8,11 +8,23 @@ use egui::{Color32, Pos2, Rect, Vec2};
 use std::collections::HashSet;
 
 use super::week_shared::{DeleteConfirmRequest, EventInteractionResult};
-use super::{countdown_menu_state, is_synced_event, CountdownMenuState, CountdownRequest, render_countdown_menu_items};
+use super::{
+    countdown_menu_state, is_synced_event, render_countdown_menu_items, CountdownMenuState,
+    CountdownRequest,
+};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
+use crate::services::calendar_sync::mapping::EventSyncMapService;
 use crate::services::database::Database;
 use crate::services::template::TemplateService;
+
+fn synced_source_name(database: &'static Database, event_id: Option<i64>) -> Option<String> {
+    let id = event_id?;
+    EventSyncMapService::new(database.connection())
+        .get_source_name_for_local_event(id)
+        .ok()
+        .flatten()
+}
 
 /// Render the context menu popup for a day-view time slot.
 ///
@@ -72,10 +84,18 @@ pub fn render_slot_context_menu(
 
             if let Some(event) = popup_event {
                 let event_is_synced = is_synced_event(event.id, synced_event_ids);
+                let source_name = synced_source_name(database, event.id);
                 ui.label(format!("Event: {}", event.title));
                 ui.separator();
 
                 if event_is_synced {
+                    if let Some(source_name) = source_name {
+                        ui.label(
+                            egui::RichText::new(format!("Source: {}", source_name))
+                                .italics()
+                                .size(11.0),
+                        );
+                    }
                     ui.label(
                         egui::RichText::new("🔒 Synced read-only event")
                             .italics()
@@ -108,14 +128,8 @@ pub fn render_slot_context_menu(
                 // Delete options - different for recurring events
                 if event_is_synced {
                     if event.recurrence_rule.is_some() {
-                        ui.add_enabled(
-                            false,
-                            egui::Button::new("🗑 Delete This Occurrence"),
-                        );
-                        ui.add_enabled(
-                            false,
-                            egui::Button::new("🗑 Delete All Occurrences"),
-                        );
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete This Occurrence"));
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete All Occurrences"));
                     } else {
                         ui.add_enabled(false, egui::Button::new("🗑 Delete"));
                     }
@@ -198,10 +212,9 @@ pub fn render_slot_context_menu(
                 }
 
                 // Template submenu
-                let templates: Vec<EventTemplate> =
-                    TemplateService::new(database.connection())
-                        .list_all()
-                        .unwrap_or_default();
+                let templates: Vec<EventTemplate> = TemplateService::new(database.connection())
+                    .list_all()
+                    .unwrap_or_default();
 
                 if !templates.is_empty() {
                     ui.separator();
@@ -230,8 +243,7 @@ pub fn render_slot_context_menu(
                                 .clicked()
                             {
                                 if let Some(id) = template.id {
-                                    result.template_selection =
-                                        Some((id, date, Some(time)));
+                                    result.template_selection = Some((id, date, Some(time)));
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
                             }
