@@ -15,6 +15,22 @@ pub struct CalendarSourceService<'a> {
     conn: &'a Connection,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncRunDiagnostics {
+    pub source_id: i64,
+    pub started_at: String,
+    pub finished_at: String,
+    pub status: String,
+    pub duration_ms: i64,
+    pub created_count: i64,
+    pub updated_count: i64,
+    pub deleted_count: i64,
+    pub unchanged_count: i64,
+    pub skipped_count: i64,
+    pub error_count: i64,
+    pub error_message: Option<String>,
+}
+
 impl<'a> CalendarSourceService<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
@@ -139,6 +155,16 @@ impl<'a> CalendarSourceService<'a> {
         status: Option<&str>,
         error: Option<&str>,
     ) -> Result<()> {
+        self.update_sync_status_with_diagnostics(id, status, error, None)
+    }
+
+    pub fn update_sync_status_with_diagnostics(
+        &self,
+        id: i64,
+        status: Option<&str>,
+        error: Option<&str>,
+        diagnostics: Option<&SyncRunDiagnostics>,
+    ) -> Result<()> {
         let rows_affected = self
             .conn
             .execute(
@@ -162,7 +188,59 @@ impl<'a> CalendarSourceService<'a> {
             return Err(anyhow!("Calendar source with id {} not found", id));
         }
 
+        if let Some(diag) = diagnostics {
+            self.record_sync_run(diag)?;
+        }
+
         Ok(())
+    }
+
+    pub fn record_sync_run(&self, diagnostics: &SyncRunDiagnostics) -> Result<()> {
+        self.conn
+            .execute(
+                "INSERT INTO calendar_sync_runs (
+                    source_id, started_at, finished_at, status, duration_ms,
+                    created_count, updated_count, deleted_count, unchanged_count,
+                    skipped_count, error_count, error_message
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    diagnostics.source_id,
+                    diagnostics.started_at,
+                    diagnostics.finished_at,
+                    diagnostics.status,
+                    diagnostics.duration_ms,
+                    diagnostics.created_count,
+                    diagnostics.updated_count,
+                    diagnostics.deleted_count,
+                    diagnostics.unchanged_count,
+                    diagnostics.skipped_count,
+                    diagnostics.error_count,
+                    diagnostics.error_message,
+                ],
+            )
+            .context("Failed to insert calendar sync diagnostics run")?;
+
+        Ok(())
+    }
+
+    pub fn latest_sync_run(&self, source_id: i64) -> Result<Option<SyncRunDiagnostics>> {
+        let result = self.conn.query_row(
+            "SELECT source_id, started_at, finished_at, status, duration_ms,
+                    created_count, updated_count, deleted_count, unchanged_count,
+                    skipped_count, error_count, error_message
+             FROM calendar_sync_runs
+             WHERE source_id = ?1
+             ORDER BY id DESC
+             LIMIT 1",
+            [source_id],
+            Self::row_to_sync_run,
+        );
+
+        match result {
+            Ok(run) => Ok(Some(run)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err).context("Failed to fetch latest sync run"),
+        }
     }
 
     pub fn delete(&self, id: i64) -> Result<()> {
@@ -189,6 +267,23 @@ impl<'a> CalendarSourceService<'a> {
             last_sync_at: row.get(6)?,
             last_sync_status: row.get(7)?,
             last_error: row.get(8)?,
+        })
+    }
+
+    fn row_to_sync_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<SyncRunDiagnostics> {
+        Ok(SyncRunDiagnostics {
+            source_id: row.get(0)?,
+            started_at: row.get(1)?,
+            finished_at: row.get(2)?,
+            status: row.get(3)?,
+            duration_ms: row.get(4)?,
+            created_count: row.get(5)?,
+            updated_count: row.get(6)?,
+            deleted_count: row.get(7)?,
+            unchanged_count: row.get(8)?,
+            skipped_count: row.get(9)?,
+            error_count: row.get(10)?,
+            error_message: row.get(11)?,
         })
     }
 }
@@ -313,5 +408,39 @@ mod tests {
 
         service.delete(source_id).unwrap();
         assert!(service.get_by_id(source_id).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_record_and_read_latest_sync_run() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let service = CalendarSourceService::new(db.connection());
+
+        let created = service.create(build_source("Work")).unwrap();
+        let source_id = created.id.unwrap();
+
+        let diagnostics = SyncRunDiagnostics {
+            source_id,
+            started_at: "2026-03-06T08:00:00+10:00".to_string(),
+            finished_at: "2026-03-06T08:00:02+10:00".to_string(),
+            status: "success".to_string(),
+            duration_ms: 1234,
+            created_count: 2,
+            updated_count: 1,
+            deleted_count: 0,
+            unchanged_count: 4,
+            skipped_count: 1,
+            error_count: 0,
+            error_message: None,
+        };
+
+        service.record_sync_run(&diagnostics).unwrap();
+
+        let fetched = service.latest_sync_run(source_id).unwrap().unwrap();
+        assert_eq!(fetched.source_id, source_id);
+        assert_eq!(fetched.duration_ms, 1234);
+        assert_eq!(fetched.created_count, 2);
+        assert_eq!(fetched.unchanged_count, 4);
+        assert_eq!(fetched.error_count, 0);
     }
 }

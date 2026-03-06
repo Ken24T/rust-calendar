@@ -182,4 +182,19 @@ mod tests {
         assert!(result.is_ok(), "Should be able to query sqlite_master");
         assert_eq!(result.unwrap(), 1, "event_sync_map table should exist");
     }
+
+    #[test]
+    fn test_calendar_sync_runs_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='calendar_sync_runs'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(result.unwrap(), 1, "calendar_sync_runs table should exist");
+    }
 }

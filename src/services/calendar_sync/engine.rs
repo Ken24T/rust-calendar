@@ -1,17 +1,19 @@
 #![allow(dead_code)]
 
 use std::collections::HashSet;
+use std::time::Instant;
 
 use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
 
 use crate::models::event_sync_map::EventSyncMap;
+use crate::models::event::Event;
 use crate::services::event::EventService;
 use crate::services::icalendar::import::{self, ImportedIcsEvent};
 
 use super::fetcher::IcsFetcher;
 use super::mapping::EventSyncMapService;
-use super::CalendarSourceService;
+use super::{CalendarSourceService, SyncRunDiagnostics};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncRunResult {
@@ -19,8 +21,13 @@ pub struct SyncRunResult {
     pub created: usize,
     pub updated: usize,
     pub deleted: usize,
+    pub unchanged: usize,
     pub skipped_missing_uid: usize,
     pub skipped_duplicate_uid: usize,
+    pub error_count: usize,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    pub duration_ms: u128,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -48,16 +55,72 @@ impl<'a> CalendarSyncEngine<'a> {
             .get_by_id(source_id)?
             .ok_or_else(|| anyhow!("Calendar source with id {} not found", source_id))?;
 
+        let started_at = chrono::Local::now();
+        let timer = Instant::now();
+
         let result = self
             .fetcher
             .fetch_ics(&source.ics_url)
             .and_then(|ics| self.sync_source_from_ics(source_id, &ics));
 
         match result {
-            Ok(success) => Ok(success),
+            Ok(mut success) => {
+                let finished_at = chrono::Local::now();
+                success.started_at = Some(started_at.to_rfc3339());
+                success.finished_at = Some(finished_at.to_rfc3339());
+                success.duration_ms = timer.elapsed().as_millis();
+                success.error_count = 0;
+
+                let diagnostics = SyncRunDiagnostics {
+                    source_id,
+                    started_at: success.started_at.clone().unwrap_or_default(),
+                    finished_at: success.finished_at.clone().unwrap_or_default(),
+                    status: "success".to_string(),
+                    duration_ms: i64::try_from(success.duration_ms).unwrap_or(i64::MAX),
+                    created_count: success.created as i64,
+                    updated_count: success.updated as i64,
+                    deleted_count: success.deleted as i64,
+                    unchanged_count: success.unchanged as i64,
+                    skipped_count: (success.skipped_missing_uid + success.skipped_duplicate_uid)
+                        as i64,
+                    error_count: 0,
+                    error_message: None,
+                };
+
+                source_service.update_sync_status_with_diagnostics(
+                    source_id,
+                    Some("success"),
+                    None,
+                    Some(&diagnostics),
+                )?;
+
+                Ok(success)
+            }
             Err(err) => {
+                let finished_at = chrono::Local::now();
                 let redacted_error = Self::sanitize_error_message(&err.to_string(), &source.ics_url);
-                let _ = source_service.update_sync_status(source_id, Some("failed"), Some(&redacted_error));
+
+                let diagnostics = SyncRunDiagnostics {
+                    source_id,
+                    started_at: started_at.to_rfc3339(),
+                    finished_at: finished_at.to_rfc3339(),
+                    status: "failed".to_string(),
+                    duration_ms: i64::try_from(timer.elapsed().as_millis()).unwrap_or(i64::MAX),
+                    created_count: 0,
+                    updated_count: 0,
+                    deleted_count: 0,
+                    unchanged_count: 0,
+                    skipped_count: 0,
+                    error_count: 1,
+                    error_message: Some(redacted_error.clone()),
+                };
+
+                let _ = source_service.update_sync_status_with_diagnostics(
+                    source_id,
+                    Some("failed"),
+                    Some(&redacted_error),
+                    Some(&diagnostics),
+                );
                 Err(anyhow!(redacted_error))
             }
         }
@@ -130,10 +193,15 @@ impl<'a> CalendarSyncEngine<'a> {
             match map_service.get_by_source_and_uid(source_id, uid)? {
                 Some(existing_map) => {
                     if let Some(existing_event) = event_service.get(existing_map.local_event_id)? {
-                        let mut updated_event = imported.event.clone();
-                        updated_event.id = existing_event.id;
-                        updated_event.created_at = existing_event.created_at;
-                        event_service.update(&updated_event)?;
+                        if Self::is_effectively_unchanged(&existing_event, &imported.event) {
+                            result.unchanged += 1;
+                        } else {
+                            let mut updated_event = imported.event.clone();
+                            updated_event.id = existing_event.id;
+                            updated_event.created_at = existing_event.created_at;
+                            event_service.update(&updated_event)?;
+                            result.updated += 1;
+                        }
                     } else {
                         let created_event = event_service
                             .create(imported.event.clone())
@@ -162,7 +230,6 @@ impl<'a> CalendarSyncEngine<'a> {
                     }
 
                     map_service.touch_last_seen(source_id, uid)?;
-                    result.updated += 1;
                 }
                 None => {
                     let created_event = event_service
@@ -204,9 +271,20 @@ impl<'a> CalendarSyncEngine<'a> {
             }
         }
 
-        source_service.update_sync_status(source_id, Some("success"), None)?;
-
         Ok(result)
+    }
+
+    fn is_effectively_unchanged(existing: &Event, incoming: &Event) -> bool {
+        existing.title == incoming.title
+            && existing.description == incoming.description
+            && existing.location == incoming.location
+            && existing.start == incoming.start
+            && existing.end == incoming.end
+            && existing.all_day == incoming.all_day
+            && existing.category == incoming.category
+            && existing.color == incoming.color
+            && existing.recurrence_rule == incoming.recurrence_rule
+            && existing.recurrence_exceptions == incoming.recurrence_exceptions
     }
 
     fn sanitize_error_message(message: &str, source_url: &str) -> String {
@@ -402,5 +480,32 @@ mod tests {
         let all_events = event_service.list_all().unwrap();
         assert_eq!(all_events.len(), 1);
         assert_eq!(all_events[0].title, "Existing Event");
+    }
+
+    #[test]
+    fn test_sync_source_from_ics_counts_unchanged() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn, "Work", true);
+
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let ics = r#"BEGIN:VCALENDAR
+    VERSION:2.0
+    BEGIN:VEVENT
+    UID:uid-200
+    DTSTART:20260227T090000
+    DTEND:20260227T100000
+    SUMMARY:Stable Event
+    END:VEVENT
+    END:VCALENDAR"#;
+
+        let first = engine.sync_source_from_ics(source_id, ics).unwrap();
+        assert_eq!(first.created, 1);
+
+        let second = engine.sync_source_from_ics(source_id, ics).unwrap();
+        assert_eq!(second.unchanged, 1);
+        assert_eq!(second.updated, 0);
     }
 }

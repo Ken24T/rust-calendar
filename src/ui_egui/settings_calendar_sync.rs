@@ -56,8 +56,15 @@ pub fn poll_sync_result(ctx: &egui::Context, state: &mut CalendarSyncState) {
                 state.source_sync_in_progress_id = None;
                 state.source_error_message = None;
                 state.source_status_message = Some(format!(
-                    "Sync complete for '{}': +{} ~{} -{}",
-                    source_name, summary.created, summary.updated, summary.deleted
+                    "Sync complete for '{}': +{} ~{} -{} ={} skipped:{} errors:{} ({} ms)",
+                    source_name,
+                    summary.created,
+                    summary.updated,
+                    summary.deleted,
+                    summary.unchanged,
+                    summary.skipped_missing_uid + summary.skipped_duplicate_uid,
+                    summary.error_count,
+                    summary.duration_ms,
                 ));
             }
             Ok(Err(err)) => {
@@ -351,6 +358,19 @@ pub fn render_calendar_sync_section(
                     Color32::LIGHT_RED,
                     format!("Last error: {}", last_error),
                 );
+            }
+
+            if let Ok(Some(run)) = source_service.latest_sync_run(source_id) {
+                ui.label(format!("Last duration: {} ms", run.duration_ms));
+                ui.label(format!(
+                    "Last run summary: +{} ~{} -{} ={} skipped:{} errors:{}",
+                    run.created_count,
+                    run.updated_count,
+                    run.deleted_count,
+                    run.unchanged_count,
+                    run.skipped_count,
+                    run.error_count,
+                ));
             }
         });
 

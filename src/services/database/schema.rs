@@ -16,6 +16,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_categories_table(conn)?;
     create_calendar_sources_table(conn)?;
     create_event_sync_map_table(conn)?;
+    create_calendar_sync_runs_table(conn)?;
     initialize_default_categories(conn)?;
     normalize_all_day_event_times(conn)?;
     Ok(())
@@ -407,6 +408,44 @@ fn create_event_sync_map_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create event_sync_map source index")?;
+
+    Ok(())
+}
+
+fn create_calendar_sync_runs_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS calendar_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            status TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            created_count INTEGER NOT NULL DEFAULT 0,
+            updated_count INTEGER NOT NULL DEFAULT 0,
+            deleted_count INTEGER NOT NULL DEFAULT 0,
+            unchanged_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            error_count INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (source_id) REFERENCES calendar_sources(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .context("Failed to create calendar_sync_runs table")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_calendar_sync_runs_source_id ON calendar_sync_runs(source_id)",
+        [],
+    )
+    .context("Failed to create calendar_sync_runs source index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_calendar_sync_runs_started_at ON calendar_sync_runs(started_at)",
+        [],
+    )
+    .context("Failed to create calendar_sync_runs started_at index")?;
 
     Ok(())
 }
