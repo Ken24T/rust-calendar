@@ -89,7 +89,8 @@ impl CountdownService {
         if self.container_geometry != Some(geometry) {
             log::debug!(
                 "Container geometry updated: {:?} -> {:?}",
-                self.container_geometry, geometry
+                self.container_geometry,
+                geometry
             );
             self.container_geometry = Some(geometry);
             self.dirty = true;
@@ -126,7 +127,12 @@ impl CountdownService {
                 width: CARD_WIDTH,
                 height: CARD_HEIGHT,
             };
-            log::debug!("Reset card {:?} position to ({}, {})", card.id, card.geometry.x, card.geometry.y);
+            log::debug!(
+                "Reset card {:?} position to ({}, {})",
+                card.id,
+                card.geometry.x,
+                card.geometry.y
+            );
         }
 
         // Clear pending geometry updates since we're resetting
@@ -148,11 +154,8 @@ impl CountdownService {
     /// Sort cards by their target date (start_at) and update card_order
     pub fn sort_cards_by_date(&mut self) {
         // Get cards sorted by start_at
-        let mut sorted_ids: Vec<(CountdownCardId, chrono::DateTime<chrono::Local>)> = self
-            .cards
-            .iter()
-            .map(|c| (c.id, c.start_at))
-            .collect();
+        let mut sorted_ids: Vec<(CountdownCardId, chrono::DateTime<chrono::Local>)> =
+            self.cards.iter().map(|c| (c.id, c.start_at)).collect();
         sorted_ids.sort_by_key(|(_, start_at)| *start_at);
 
         let new_order: Vec<CountdownCardId> = sorted_ids.into_iter().map(|(id, _)| id).collect();
@@ -230,7 +233,10 @@ mod tests {
     #[test]
     fn test_display_mode_defaults_to_individual_windows() {
         let service = CountdownService::new();
-        assert_eq!(service.display_mode(), CountdownDisplayMode::IndividualWindows);
+        assert_eq!(
+            service.display_mode(),
+            CountdownDisplayMode::IndividualWindows
+        );
     }
 
     #[test]
@@ -286,11 +292,7 @@ mod tests {
     #[test]
     fn test_reorder_cards() {
         let mut service = CountdownService::new();
-        let new_order = vec![
-            CountdownCardId(3),
-            CountdownCardId(1),
-            CountdownCardId(2),
-        ];
+        let new_order = vec![CountdownCardId(3), CountdownCardId(1), CountdownCardId(2)];
 
         service.mark_clean();
         service.reorder_cards(new_order.clone());

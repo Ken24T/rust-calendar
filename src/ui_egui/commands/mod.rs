@@ -31,7 +31,9 @@ pub struct CreateEventCommand {
 
 impl CreateEventCommand {
     pub fn new(event: Event) -> Self {
-        Self { event: Mutex::new(event) }
+        Self {
+            event: Mutex::new(event),
+        }
     }
 }
 
@@ -107,7 +109,9 @@ pub struct DeleteEventCommand {
 
 impl DeleteEventCommand {
     pub fn new(event: Event) -> Self {
-        Self { event: Mutex::new(event) }
+        Self {
+            event: Mutex::new(event),
+        }
     }
 }
 

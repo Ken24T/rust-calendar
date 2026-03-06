@@ -1,7 +1,7 @@
 use super::CalendarApp;
-use crate::ui_egui::event_dialog::EventDialogState;
-use crate::services::template::TemplateService;
 use crate::services::countdown::CountdownDisplayMode;
+use crate::services::template::TemplateService;
+use crate::ui_egui::event_dialog::EventDialogState;
 use egui::Context;
 
 impl CalendarApp {
@@ -99,42 +99,42 @@ impl CalendarApp {
             // Undo/Redo section
             let can_undo = self.undo_manager.can_undo();
             let can_redo = self.undo_manager.can_redo();
-            
+
             let undo_label = if let Some(desc) = self.undo_manager.undo_description() {
                 format!("↶ Undo {}    Ctrl+Z", desc)
             } else {
                 "↶ Undo    Ctrl+Z".to_string()
             };
-            
+
             let redo_label = if let Some(desc) = self.undo_manager.redo_description() {
                 format!("↷ Redo {}    Ctrl+Y", desc)
             } else {
                 "↷ Redo    Ctrl+Y".to_string()
             };
-            
+
             ui.add_enabled_ui(can_undo, |ui| {
                 if ui.button(&undo_label).clicked() {
                     self.perform_undo();
                     ui.close_menu();
                 }
             });
-            
+
             ui.add_enabled_ui(can_redo, |ui| {
                 if ui.button(&redo_label).clicked() {
                     self.perform_redo();
                     ui.close_menu();
                 }
             });
-            
+
             ui.separator();
-            
+
             if ui.button("⚙ Settings    Ctrl+S").clicked() {
                 self.show_settings_dialog = true;
                 ui.close_menu();
             }
-            
+
             ui.separator();
-            
+
             if ui.button("🎨 Manage Themes...").clicked() {
                 self.state.theme_dialog_state.open(&self.settings.theme);
                 ui.close_menu();
@@ -152,12 +152,14 @@ impl CalendarApp {
                 ui.close_menu();
             }
             if ui.button("📋 Manage Event Templates...").clicked() {
-                self.state.template_manager_state.open(self.context.database());
+                self.state
+                    .template_manager_state
+                    .open(self.context.database());
                 ui.close_menu();
             }
         });
     }
-    
+
     /// Perform undo operation
     pub(super) fn perform_undo(&mut self) {
         let event_service = self.context.event_service();
@@ -174,7 +176,7 @@ impl CalendarApp {
             }
         }
     }
-    
+
     /// Perform redo operation
     pub(super) fn perform_redo(&mut self) {
         let event_service = self.context.event_service();
@@ -368,25 +370,32 @@ impl CalendarApp {
     fn render_category_filter_submenu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("📂 Filter by Category", |ui| {
             // Get all categories
-            let categories = self.context.category_service().list_all().unwrap_or_default();
-            
+            let categories = self
+                .context
+                .category_service()
+                .list_all()
+                .unwrap_or_default();
+
             // "All Categories" option
             let is_all_selected = self.active_category_filter.is_none();
-            if ui.selectable_label(is_all_selected, "All Categories").clicked() {
+            if ui
+                .selectable_label(is_all_selected, "All Categories")
+                .clicked()
+            {
                 self.active_category_filter = None;
                 ui.close_menu();
             }
-            
+
             if !categories.is_empty() {
                 ui.separator();
-                
+
                 for category in &categories {
                     let label = if let Some(icon) = &category.icon {
                         format!("{} {}", icon, category.name)
                     } else {
                         category.name.clone()
                     };
-                    
+
                     let is_selected = self.active_category_filter.as_ref() == Some(&category.name);
                     if ui.selectable_label(is_selected, label).clicked() {
                         self.active_category_filter = Some(category.name.clone());
@@ -396,7 +405,6 @@ impl CalendarApp {
             }
         });
     }
-
 
     fn render_events_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Events", |ui| {
@@ -408,10 +416,10 @@ impl CalendarApp {
                 ));
                 ui.close_menu();
             }
-            
+
             // Templates submenu
             self.render_templates_submenu(ui);
-            
+
             ui.separator();
             if ui.button("🔍 Search Events...    Ctrl+F").clicked() {
                 self.state.show_search_dialog = true;
@@ -428,28 +436,36 @@ impl CalendarApp {
 
             if templates.is_empty() {
                 ui.label(egui::RichText::new("No templates yet").weak().italics());
-                ui.label(egui::RichText::new("Use Edit > Manage Event Templates").weak().small());
+                ui.label(
+                    egui::RichText::new("Use Edit > Manage Event Templates")
+                        .weak()
+                        .small(),
+                );
             } else {
                 // Show each template as a button
                 for template in &templates {
                     let label = format!("{} > {}", template.name, template.title);
-                    if ui.button(&label).on_hover_text(format!(
-                        "Create event from template: {}\nDuration: {}",
-                        template.title,
-                        if template.all_day {
-                            "All day".to_string()
-                        } else {
-                            let h = template.duration_minutes / 60;
-                            let m = template.duration_minutes % 60;
-                            if h > 0 && m > 0 {
-                                format!("{}h {}m", h, m)
-                            } else if h > 0 {
-                                format!("{}h", h)
+                    if ui
+                        .button(&label)
+                        .on_hover_text(format!(
+                            "Create event from template: {}\nDuration: {}",
+                            template.title,
+                            if template.all_day {
+                                "All day".to_string()
                             } else {
-                                format!("{}m", m)
+                                let h = template.duration_minutes / 60;
+                                let m = template.duration_minutes % 60;
+                                if h > 0 && m > 0 {
+                                    format!("{}h {}m", h, m)
+                                } else if h > 0 {
+                                    format!("{}h", h)
+                                } else {
+                                    format!("{}m", m)
+                                }
                             }
-                        }
-                    )).clicked() {
+                        ))
+                        .clicked()
+                    {
                         self.create_event_from_template(template);
                         ui.close_menu();
                     }
@@ -461,17 +477,20 @@ impl CalendarApp {
     /// Create a new event from a template
     fn create_event_from_template(&mut self, template: &crate::models::template::EventTemplate) {
         use chrono::{Duration, NaiveDateTime};
-        
+
         let mut state = EventDialogState::new_event(self.current_date, &self.settings);
-        
+
         // Apply template values
         state.title = template.title.clone();
         state.description = template.description.clone().unwrap_or_default();
         state.location = template.location.clone().unwrap_or_default();
         state.category = template.category.clone().unwrap_or_default();
-        state.color = template.color.clone().unwrap_or_else(|| "#3B82F6".to_string());
+        state.color = template
+            .color
+            .clone()
+            .unwrap_or_else(|| "#3B82F6".to_string());
         state.all_day = template.all_day;
-        
+
         // Calculate end time based on duration
         if !template.all_day {
             let start_dt = NaiveDateTime::new(state.date, state.start_time);
@@ -482,11 +501,11 @@ impl CalendarApp {
                 state.end_date = end_dt.date();
             }
         }
-        
+
         self.event_dialog_state = Some(state);
         self.show_event_dialog = true;
     }
-    
+
     /// Create a new event from a template by ID with a specific date and optional time
     /// Used by context menus in calendar views
     pub(super) fn create_event_from_template_with_date(
@@ -498,24 +517,27 @@ impl CalendarApp {
         let service = TemplateService::new(self.context.database().connection());
         if let Ok(template) = service.get_by_id(template_id) {
             use chrono::{Duration, NaiveDateTime};
-            
+
             let mut state = EventDialogState::new_event(date, &self.settings);
-            
+
             // Apply template values
             state.title = template.title.clone();
             state.description = template.description.clone().unwrap_or_default();
             state.location = template.location.clone().unwrap_or_default();
             state.category = template.category.clone().unwrap_or_default();
-            state.color = template.color.clone().unwrap_or_else(|| "#3B82F6".to_string());
+            state.color = template
+                .color
+                .clone()
+                .unwrap_or_else(|| "#3B82F6".to_string());
             state.all_day = template.all_day;
-            
+
             // Use the clicked time if provided, otherwise use the default start time
             if let Some(start_time) = time {
                 if !template.all_day {
                     state.start_time = start_time;
                 }
             }
-            
+
             // Calculate end time based on duration
             if !template.all_day {
                 let start_dt = NaiveDateTime::new(state.date, state.start_time);
@@ -526,7 +548,7 @@ impl CalendarApp {
                     state.end_date = end_dt.date();
                 }
             }
-            
+
             // Apply recurrence rule from template if present
             // The recurrence rule parsing is done in EventDialogState::from_event
             // For templates, we'll need to parse the RRULE string
@@ -534,7 +556,7 @@ impl CalendarApp {
                 state.is_recurring = true;
                 // Template recurrence will be applied when saving - let user customize
             }
-            
+
             self.event_dialog_state = Some(state);
             self.show_event_dialog = true;
         }

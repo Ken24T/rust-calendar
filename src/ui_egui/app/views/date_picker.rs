@@ -86,18 +86,10 @@ impl CalendarApp {
                 },
             );
 
-            if ui
-                .small_button("▶")
-                .on_hover_text("Next month")
-                .clicked()
-            {
+            if ui.small_button("▶").on_hover_text("Next month").clicked() {
                 self.state.date_picker_state.viewing_date = Some(shift_month(viewing_date, 1));
             }
-            if ui
-                .small_button("▶▶")
-                .on_hover_text("Next year")
-                .clicked()
-            {
+            if ui.small_button("▶▶").on_hover_text("Next year").clicked() {
                 if let Some(new_date) = viewing_date.with_year(viewing_date.year() + 1) {
                     self.state.date_picker_state.viewing_date = Some(new_date);
                 }

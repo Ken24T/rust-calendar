@@ -1,9 +1,7 @@
-use super::container::{
-    render_container_window, ContainerAction, ContainerLayout, DragState,
-};
+use super::container::{render_container_window, ContainerAction, ContainerLayout, DragState};
 use super::render::{
-    render_countdown_card_ui, viewport_builder_for_card,
-    viewport_title_matches, CountdownCardUiAction,
+    render_countdown_card_ui, viewport_builder_for_card, viewport_title_matches,
+    CountdownCardUiAction,
 };
 use crate::services::countdown::{
     CardSettingsSnapshot, ContainerSortMode, CountdownCardGeometry, CountdownCardId,
@@ -95,11 +93,7 @@ impl CountdownUiState {
 
     /// Open the settings dialog for a card, taking a snapshot of its current
     /// state so that Cancel can revert the preview changes.
-    fn open_settings_dialog(
-        &mut self,
-        card: &CountdownCardState,
-        service: &CountdownService,
-    ) {
+    fn open_settings_dialog(&mut self, card: &CountdownCardState, service: &CountdownService) {
         let card_id = card.id;
         // Only snapshot once per dialog session (idempotent on re-insert)
         if self.open_settings.insert(card_id) {
@@ -113,43 +107,43 @@ impl CountdownUiState {
             .or_insert(default_geometry);
         self.settings_needs_layout.insert(card_id);
     }
-    
+
     /// Full reset of all UI state when card positions are reset.
     /// This clears pending geometry, resets container layout completely,
     /// and clears any geometry sampling state to prevent flashing/feedback loops.
-    /// 
+    ///
     /// IMPORTANT: We clear pending_geometry entirely (not re-populate it) so that
     /// cards render immediately at their new positions without the hide/show cycle
     /// that causes flickering.
     pub(in super::super) fn reset_all_ui_state(&mut self) {
         log::info!("Resetting all countdown UI state for position reset");
-        
+
         // Completely reset container layout to default state
         self.container_layout = ContainerLayout::default();
         // Skip geometry change detection for 30 frames to let the window settle
         self.container_layout.skip_geometry_frames = 30;
-        
+
         // Clear ALL pending geometry - do NOT re-populate!
         // This ensures cards render immediately at new positions without visibility toggling
         self.pending_geometry.clear();
-        
-        // Clear geometry sampling state  
+
+        // Clear geometry sampling state
         self.geometry_samples.clear();
-        
+
         // Clear render log state so next render logs fresh info
         self.render_log_state.clear();
-        
+
         // Reset container drag state
         self.container_drag_state = DragState::default();
-        
+
         // Reset category container state
         self.category_layouts.clear();
         self.category_drag_states.clear();
-        
+
         // Skip geometry updates for individual cards too
         self.skip_geometry_frames = 30;
     }
-    
+
     /// Drain pending delete requests from settings dialogs
     pub(in super::super) fn drain_delete_requests(&mut self) -> Vec<DeleteCardRequest> {
         std::mem::take(&mut self.pending_delete_requests)
@@ -202,20 +196,16 @@ impl CountdownUiState {
     ) -> CountdownRenderResult {
         // Branch based on display mode
         match service.display_mode() {
-            CountdownDisplayMode::IndividualWindows => {
-                self.render_individual_windows(ctx, service)
-            }
+            CountdownDisplayMode::IndividualWindows => self.render_individual_windows(ctx, service),
             CountdownDisplayMode::Container => {
                 self.render_container_mode(ctx, service, default_card_width, default_card_height)
             }
-            CountdownDisplayMode::CategoryContainers => {
-                self.render_category_containers_mode(
-                    ctx,
-                    service,
-                    default_card_width,
-                    default_card_height,
-                )
-            }
+            CountdownDisplayMode::CategoryContainers => self.render_category_containers_mode(
+                ctx,
+                service,
+                default_card_width,
+                default_card_height,
+            ),
         }
     }
 
@@ -228,12 +218,12 @@ impl CountdownUiState {
         default_card_height: f32,
     ) -> CountdownRenderResult {
         let cards = service.cards().to_vec();
-        
+
         // Don't show empty container - wait until there are cards to display
         if cards.is_empty() {
             return CountdownRenderResult::default();
         }
-        
+
         let now = Local::now();
         let notification_config = service.notification_config().clone();
         let visual_defaults = service.visual_defaults().clone();
@@ -266,7 +256,7 @@ impl CountdownUiState {
             &categories,
             "Countdown Cards",
             "countdown_container",
-            None, // No cross-category drop zones in single-container mode
+            None,  // No cross-category drop zones in single-container mode
             false, // not collapsed
             ContainerSortMode::default(), // date sort
             LayoutOrientation::Auto, // auto-detect for single container
@@ -274,7 +264,7 @@ impl CountdownUiState {
 
         // Collect delete requests
         let mut delete_card_requests = Vec::new();
-        
+
         // Process container actions
         for action in actions {
             match action {
@@ -452,14 +442,8 @@ impl CountdownUiState {
             };
 
             // Get or create per-category layout and drag state
-            let layout = self
-                .category_layouts
-                .entry(cat_snap.id)
-                .or_default();
-            let drag_state = self
-                .category_drag_states
-                .entry(cat_snap.id)
-                .or_default();
+            let layout = self.category_layouts.entry(cat_snap.id).or_default();
+            let drag_state = self.category_drag_states.entry(cat_snap.id).or_default();
 
             let window_title = format!("⏱ {}", cat_snap.name);
             let viewport_id_suffix = format!("countdown_category_{}", cat_snap.id.0);
@@ -494,7 +478,11 @@ impl CountdownUiState {
                         reorder_updates.push(new_order);
                     }
                     ContainerAction::DeleteCard(card_id) => {
-                        log::info!("Delete requested for card {:?} in category {:?}", card_id, cat_snap.id);
+                        log::info!(
+                            "Delete requested for card {:?} in category {:?}",
+                            card_id,
+                            cat_snap.id
+                        );
                         if let Some(card) = cat_cards.iter().find(|c| c.id == card_id) {
                             delete_card_requests.push(DeleteCardRequest {
                                 card_id,
@@ -586,9 +574,7 @@ impl CountdownUiState {
         }
         // If any category container was closed, switch back to individual windows
         if !closed_categories.is_empty() {
-            log::info!(
-                "Category container(s) closed, switching to individual windows mode"
-            );
+            log::info!("Category container(s) closed, switching to individual windows mode");
             service.set_display_mode(CountdownDisplayMode::IndividualWindows);
             // Reset category layouts so next open will re-apply stored geometry
             self.category_layouts.clear();
@@ -609,7 +595,7 @@ impl CountdownUiState {
         service: &mut CountdownService,
     ) -> CountdownRenderResult {
         let cards = service.cards().to_vec();
-        
+
         if cards.is_empty() {
             return CountdownRenderResult::default();
         }
@@ -800,13 +786,9 @@ impl CountdownUiState {
         }
     }
 
-
-
     pub(in super::super) fn drain_pending_event_bodies(&mut self) -> Vec<(i64, Option<String>)> {
         std::mem::take(&mut self.pending_event_body_updates)
     }
-
-
 
     pub(super) fn clear_geometry_wait_state(&mut self, card_id: &CountdownCardId) {
         self.pending_geometry.remove(card_id);
@@ -915,5 +897,3 @@ impl PendingGeometryState {
         }
     }
 }
-
-

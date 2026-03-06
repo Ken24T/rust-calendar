@@ -46,27 +46,30 @@ impl<'a> TemplateService<'a> {
 
     /// Get a template by ID
     pub fn get_by_id(&self, id: i64) -> Result<EventTemplate> {
-        let template = self.conn.query_row(
-            "SELECT id, name, title, description, location, duration_minutes, all_day,
+        let template = self
+            .conn
+            .query_row(
+                "SELECT id, name, title, description, location, duration_minutes, all_day,
              category, color, recurrence_rule, created_at
              FROM event_templates WHERE id = ?1",
-            params![id],
-            |row| {
-                Ok(EventTemplate {
-                    id: Some(row.get(0)?),
-                    name: row.get(1)?,
-                    title: row.get(2)?,
-                    description: row.get(3)?,
-                    location: row.get(4)?,
-                    duration_minutes: row.get(5)?,
-                    all_day: row.get::<_, i32>(6)? != 0,
-                    category: row.get(7)?,
-                    color: row.get(8)?,
-                    recurrence_rule: row.get(9)?,
-                    created_at: parse_datetime(row.get::<_, Option<String>>(10)?),
-                })
-            },
-        ).context("Template not found")?;
+                params![id],
+                |row| {
+                    Ok(EventTemplate {
+                        id: Some(row.get(0)?),
+                        name: row.get(1)?,
+                        title: row.get(2)?,
+                        description: row.get(3)?,
+                        location: row.get(4)?,
+                        duration_minutes: row.get(5)?,
+                        all_day: row.get::<_, i32>(6)? != 0,
+                        category: row.get(7)?,
+                        color: row.get(8)?,
+                        recurrence_rule: row.get(9)?,
+                        created_at: parse_datetime(row.get::<_, Option<String>>(10)?),
+                    })
+                },
+            )
+            .context("Template not found")?;
 
         Ok(template)
     }
@@ -95,43 +98,48 @@ impl<'a> TemplateService<'a> {
             })
         })?;
 
-        templates.collect::<Result<Vec<_>, _>>().context("Failed to fetch templates")
+        templates
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to fetch templates")
     }
 
     /// Update an existing template
     pub fn update(&self, template: &EventTemplate) -> Result<()> {
         template.validate().map_err(|e| anyhow::anyhow!(e))?;
 
-        let id = template.id.ok_or_else(|| anyhow::anyhow!("Template ID is required for update"))?;
+        let id = template
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Template ID is required for update"))?;
 
-        self.conn.execute(
-            "UPDATE event_templates SET 
+        self.conn
+            .execute(
+                "UPDATE event_templates SET 
              name = ?1, title = ?2, description = ?3, location = ?4, 
              duration_minutes = ?5, all_day = ?6, category = ?7, color = ?8, recurrence_rule = ?9
              WHERE id = ?10",
-            params![
-                template.name,
-                template.title,
-                template.description,
-                template.location,
-                template.duration_minutes,
-                template.all_day as i32,
-                template.category,
-                template.color,
-                template.recurrence_rule,
-                id,
-            ],
-        ).context("Failed to update template")?;
+                params![
+                    template.name,
+                    template.title,
+                    template.description,
+                    template.location,
+                    template.duration_minutes,
+                    template.all_day as i32,
+                    template.category,
+                    template.color,
+                    template.recurrence_rule,
+                    id,
+                ],
+            )
+            .context("Failed to update template")?;
 
         Ok(())
     }
 
     /// Delete a template by ID
     pub fn delete(&self, id: i64) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM event_templates WHERE id = ?1",
-            params![id],
-        ).context("Failed to delete template")?;
+        self.conn
+            .execute("DELETE FROM event_templates WHERE id = ?1", params![id])
+            .context("Failed to delete template")?;
 
         Ok(())
     }
@@ -186,7 +194,8 @@ mod tests {
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         conn
     }
 
@@ -212,8 +221,12 @@ mod tests {
         let conn = setup_test_db();
         let service = TemplateService::new(&conn);
 
-        service.create(EventTemplate::new("Zebra", "Z Event", 60)).unwrap();
-        service.create(EventTemplate::new("Apple", "A Event", 30)).unwrap();
+        service
+            .create(EventTemplate::new("Zebra", "Z Event", 60))
+            .unwrap();
+        service
+            .create(EventTemplate::new("Apple", "A Event", 30))
+            .unwrap();
 
         let templates = service.list_all().unwrap();
         assert_eq!(templates.len(), 2);
@@ -226,7 +239,9 @@ mod tests {
         let conn = setup_test_db();
         let service = TemplateService::new(&conn);
 
-        let template = service.create(EventTemplate::new("Original", "Title", 60)).unwrap();
+        let template = service
+            .create(EventTemplate::new("Original", "Title", 60))
+            .unwrap();
         let mut updated = template;
         updated.name = "Updated".to_string();
         updated.duration_minutes = 90;
@@ -243,7 +258,9 @@ mod tests {
         let conn = setup_test_db();
         let service = TemplateService::new(&conn);
 
-        let template = service.create(EventTemplate::new("ToDelete", "Title", 60)).unwrap();
+        let template = service
+            .create(EventTemplate::new("ToDelete", "Title", 60))
+            .unwrap();
         let id = template.id.unwrap();
 
         service.delete(id).unwrap();
@@ -256,7 +273,9 @@ mod tests {
         let conn = setup_test_db();
         let service = TemplateService::new(&conn);
 
-        let template = service.create(EventTemplate::new("Unique", "Title", 60)).unwrap();
+        let template = service
+            .create(EventTemplate::new("Unique", "Title", 60))
+            .unwrap();
 
         assert!(service.name_exists("Unique", None).unwrap());
         assert!(!service.name_exists("Other", None).unwrap());

@@ -9,8 +9,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 use super::models::{
-    CountdownCardId, CountdownPersistedState, MIN_DAYS_FONT_SIZE,
-    MAX_DAYS_FONT_SIZE,
+    CountdownCardId, CountdownPersistedState, MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
 };
 use super::persistence::{load_snapshot, save_snapshot};
 use super::repository::{CountdownGlobalSettings, CountdownRepository};
@@ -157,7 +156,10 @@ impl CountdownService {
         }
 
         // Insert or update current categories, collecting ID remaps
-        let mut id_remaps: Vec<(super::models::CountdownCategoryId, super::models::CountdownCategoryId)> = Vec::new();
+        let mut id_remaps: Vec<(
+            super::models::CountdownCategoryId,
+            super::models::CountdownCategoryId,
+        )> = Vec::new();
         for category in &self.categories {
             if existing_cat_ids.contains(&category.id.0) {
                 repo.update_category(category)?;
@@ -342,7 +344,15 @@ mod tests {
         let mut service = CountdownService::new();
         let target_start = Local::now() + Duration::days(10);
         service.create_card(
-            None, "Persist", target_start, None, None, None, None, 120.0, 110.0,
+            None,
+            "Persist",
+            target_start,
+            None,
+            None,
+            None,
+            None,
+            120.0,
+            110.0,
         );
         service.save_to_disk(&file_path).unwrap();
 

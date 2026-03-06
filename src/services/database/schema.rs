@@ -484,10 +484,10 @@ fn create_calendar_sync_runs_table(conn: &Connection) -> Result<()> {
 
 fn initialize_default_categories(conn: &Connection) -> Result<()> {
     use crate::services::category::CategoryService;
-    
+
     let service = CategoryService::new(conn);
     service.initialize_defaults()?;
-    
+
     Ok(())
 }
 
@@ -555,9 +555,7 @@ fn normalize_all_day_event_times(conn: &Connection) -> Result<()> {
         // For the end, treat the stored end_date as the user-intended inclusive
         // last day, then add one day (iCal exclusive-end convention).
         let inclusive_end_date = end_local.date_naive();
-        let exclusive_end_date = inclusive_end_date
-            .succ_opt()
-            .unwrap_or(inclusive_end_date);
+        let exclusive_end_date = inclusive_end_date.succ_opt().unwrap_or(inclusive_end_date);
         let new_end = exclusive_end_date
             .and_time(midnight)
             .and_local_timezone(Local)
@@ -570,9 +568,7 @@ fn normalize_all_day_event_times(conn: &Connection) -> Result<()> {
                 new_end.to_rfc3339(),
                 id,
             ])
-            .with_context(|| {
-                format!("Failed to normalise all-day event id={}", id)
-            })?;
+            .with_context(|| format!("Failed to normalise all-day event id={}", id))?;
 
         log::info!(
             "Normalised all-day event id={}: start {} → {}, end {} → {}",

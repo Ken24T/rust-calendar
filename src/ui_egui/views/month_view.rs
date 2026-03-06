@@ -4,9 +4,7 @@ use std::collections::HashSet;
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
 use super::week_shared::DeleteConfirmRequest;
-use super::{
-    filter_events_by_category, filter_events_by_sync_scope, CountdownRequest,
-};
+use super::{filter_events_by_category, filter_events_by_sync_scope, CountdownRequest};
 use crate::models::event::Event;
 use crate::models::settings::Settings;
 use crate::services::database::Database;
@@ -89,7 +87,11 @@ impl MonthView {
         let day_names = Self::get_day_names(settings.first_day_of_week);
         let spacing = 2.0;
         let show_week_numbers = settings.show_week_numbers;
-        let week_col_extra = if show_week_numbers { WEEK_NUMBER_WIDTH + spacing } else { 0.0 };
+        let week_col_extra = if show_week_numbers {
+            WEEK_NUMBER_WIDTH + spacing
+        } else {
+            0.0
+        };
         let total_spacing = spacing * 6.0; // 6 gaps between 7 columns
         let col_width = (ui.available_width() - total_spacing - week_col_extra) / 7.0;
 
@@ -119,7 +121,7 @@ impl MonthView {
                         },
                     );
                 }
-                
+
                 for (idx, day) in day_names.iter().enumerate() {
                     let weekday = (settings.first_day_of_week as usize + idx) % 7;
                     let is_weekend = weekday == 0 || weekday == 6;
@@ -193,11 +195,7 @@ impl MonthView {
                             )
                         } else if row_day < 1 {
                             // Previous month - use day 1
-                            NaiveDate::from_ymd_opt(
-                                current_date.year(),
-                                current_date.month(),
-                                1,
-                            )
+                            NaiveDate::from_ymd_opt(current_date.year(), current_date.month(), 1)
                         } else {
                             // Next month - use last day
                             NaiveDate::from_ymd_opt(
@@ -206,7 +204,7 @@ impl MonthView {
                                 days_in_month as u32,
                             )
                         };
-                        
+
                         if let Some(date) = week_date {
                             let week_num = date.iso_week().week();
                             ui.allocate_ui_with_layout(
@@ -232,10 +230,8 @@ impl MonthView {
                     for _day_of_week in 0..7 {
                         if day_counter < 1 || day_counter > days_in_month {
                             // Empty cell for days outside current month
-                            let (rect, _response) = ui.allocate_exact_size(
-                                Vec2::new(col_width, 80.0),
-                                Sense::hover(),
-                            );
+                            let (rect, _response) =
+                                ui.allocate_exact_size(Vec2::new(col_width, 80.0), Sense::hover());
                             ui.painter().rect_filled(rect, 2.0, palette.empty_bg);
                         } else {
                             // Day cell
@@ -269,30 +265,31 @@ impl MonthView {
                                 })
                                 .collect();
 
-                            let (cell_action, _clicked_event, delete_request) = Self::render_day_cell(
-                                ui,
-                                day_counter,
-                                date,
-                                is_today,
-                                is_weekend,
-                                &day_events,
-                                &synced_event_ids,
-                                database,
-                                show_event_dialog,
-                                event_dialog_date,
-                                event_dialog_recurrence,
-                                event_to_edit,
-                                countdown_requests,
-                                active_countdown_events,
-                                palette,
-                                col_width,
-                            );
-                            
+                            let (cell_action, _clicked_event, delete_request) =
+                                Self::render_day_cell(
+                                    ui,
+                                    day_counter,
+                                    date,
+                                    is_today,
+                                    is_weekend,
+                                    &day_events,
+                                    &synced_event_ids,
+                                    database,
+                                    show_event_dialog,
+                                    event_dialog_date,
+                                    event_dialog_recurrence,
+                                    event_to_edit,
+                                    countdown_requests,
+                                    active_countdown_events,
+                                    palette,
+                                    col_width,
+                                );
+
                             // Check if we need to switch views
                             if !matches!(cell_action, MonthViewAction::None) {
                                 result.action = cell_action;
                             }
-                            
+
                             // Check if there's a delete confirmation request
                             if delete_request.is_some() {
                                 result.delete_confirm_request = delete_request;
@@ -303,7 +300,7 @@ impl MonthView {
                     ui.end_row();
                 }
             });
-        
+
         result
     }
 
@@ -349,5 +346,4 @@ impl MonthView {
         }
         result
     }
-
 }

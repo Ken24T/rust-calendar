@@ -138,10 +138,7 @@ impl ContainerLayout {
 
             self.card_rects.insert(
                 *card_id,
-                egui::Rect::from_min_size(
-                    egui::pos2(x, y),
-                    egui::vec2(card_width, card_height),
-                ),
+                egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(card_width, card_height)),
             );
         }
     }
@@ -164,10 +161,7 @@ impl ContainerLayout {
 
             self.card_rects.insert(
                 *card_id,
-                egui::Rect::from_min_size(
-                    egui::pos2(x, y),
-                    egui::vec2(card_width, card_height),
-                ),
+                egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(card_width, card_height)),
             );
         }
     }
@@ -178,11 +172,7 @@ impl ContainerLayout {
     }
 
     /// Calculate which card index a position would insert before (for drag-drop)
-    pub fn calculate_insert_index(
-        &self,
-        pos: egui::Pos2,
-        card_order: &[CountdownCardId],
-    ) -> usize {
+    pub fn calculate_insert_index(&self, pos: egui::Pos2, card_order: &[CountdownCardId]) -> usize {
         if card_order.is_empty() {
             return 0;
         }
@@ -303,8 +293,14 @@ pub fn calculate_insertion_indicator_rect(
             };
 
             Some(egui::Rect::from_min_size(
-                egui::pos2(available_rect.left() + layout.padding, y - indicator_thickness / 2.0),
-                egui::vec2(available_rect.width() - layout.padding * 2.0, indicator_thickness),
+                egui::pos2(
+                    available_rect.left() + layout.padding,
+                    y - indicator_thickness / 2.0,
+                ),
+                egui::vec2(
+                    available_rect.width() - layout.padding * 2.0,
+                    indicator_thickness,
+                ),
             ))
         }
         ResolvedOrientation::Horizontal => {
@@ -336,8 +332,14 @@ pub fn calculate_insertion_indicator_rect(
             };
 
             Some(egui::Rect::from_min_size(
-                egui::pos2(x - indicator_thickness / 2.0, available_rect.top() + layout.padding),
-                egui::vec2(indicator_thickness, available_rect.height() - layout.padding * 2.0),
+                egui::pos2(
+                    x - indicator_thickness / 2.0,
+                    available_rect.top() + layout.padding,
+                ),
+                egui::vec2(
+                    indicator_thickness,
+                    available_rect.height() - layout.padding * 2.0,
+                ),
             ))
         }
     }
@@ -430,8 +432,14 @@ mod tests {
         let rect1 = layout.get_card_rect(CountdownCardId(1)).unwrap();
         let rect2 = layout.get_card_rect(CountdownCardId(2)).unwrap();
 
-        assert!(rect1.top() < rect2.top(), "First card should be above second");
-        assert!((rect1.width() - rect2.width()).abs() < 0.01, "Cards should have same width");
+        assert!(
+            rect1.top() < rect2.top(),
+            "First card should be above second"
+        );
+        assert!(
+            (rect1.width() - rect2.width()).abs() < 0.01,
+            "Cards should have same width"
+        );
     }
 
     #[test]
@@ -450,8 +458,14 @@ mod tests {
         let rect1 = layout.get_card_rect(CountdownCardId(1)).unwrap();
         let rect2 = layout.get_card_rect(CountdownCardId(2)).unwrap();
 
-        assert!(rect1.left() < rect2.left(), "First card should be left of second");
-        assert!((rect1.height() - rect2.height()).abs() < 0.01, "Cards should have same height");
+        assert!(
+            rect1.left() < rect2.left(),
+            "First card should be left of second"
+        );
+        assert!(
+            (rect1.height() - rect2.height()).abs() < 0.01,
+            "Cards should have same height"
+        );
     }
 
     #[test]
@@ -480,7 +494,10 @@ mod tests {
 
         // Test insertion at various X positions
         let left_insert = layout.calculate_insert_index(egui::pos2(10.0, 150.0), &cards);
-        assert_eq!(left_insert, 0, "Should insert at beginning for left position");
+        assert_eq!(
+            left_insert, 0,
+            "Should insert at beginning for left position"
+        );
 
         let right_insert = layout.calculate_insert_index(egui::pos2(890.0, 150.0), &cards);
         assert_eq!(right_insert, 3, "Should insert at end for right position");

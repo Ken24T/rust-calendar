@@ -11,10 +11,7 @@ use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::theme::CalendarTheme;
 
-use super::{
-    filter_events_by_category, filter_events_by_sync_scope,
-    load_synced_event_ids,
-};
+use super::{filter_events_by_category, filter_events_by_sync_scope, load_synced_event_ids};
 
 pub struct DayView;
 
@@ -245,7 +242,7 @@ impl DayView {
             // Each hour has 4 slots (15 minutes each), each slot is 40 pixels high
             const SLOT_HEIGHT: f32 = 40.0;
             const SLOTS_PER_HOUR: f32 = 4.0;
-            
+
             let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
             let relative_y = hours_since_midnight * SLOTS_PER_HOUR * SLOT_HEIGHT;
 

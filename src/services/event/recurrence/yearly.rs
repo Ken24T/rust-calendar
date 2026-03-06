@@ -53,7 +53,10 @@ pub(super) fn generate(
     occurrences
 }
 
-fn advance_year_with_day_clamp(current_start: DateTime<Local>, year_interval: i32) -> DateTime<Local> {
+fn advance_year_with_day_clamp(
+    current_start: DateTime<Local>,
+    year_interval: i32,
+) -> DateTime<Local> {
     let target_year = current_start.year() + year_interval;
     let month = current_start.month();
     let day = current_start.day();
@@ -63,11 +66,7 @@ fn advance_year_with_day_clamp(current_start: DateTime<Local>, year_interval: i3
     let mut clamped_day = day;
     while clamped_day > 28 {
         if let Some(candidate) = NaiveDate::from_ymd_opt(target_year, month, clamped_day)
-            .and_then(|date| {
-                date.and_time(time)
-                    .and_local_timezone(Local)
-                    .single()
-            })
+            .and_then(|date| date.and_time(time).and_local_timezone(Local).single())
         {
             return candidate;
         }

@@ -217,7 +217,10 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(template.description, Some("Annual training session".to_string()));
+        assert_eq!(
+            template.description,
+            Some("Annual training session".to_string())
+        );
         assert_eq!(template.location, Some("Conference Room A".to_string()));
         assert!(template.all_day);
     }

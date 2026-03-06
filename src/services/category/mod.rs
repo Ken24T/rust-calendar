@@ -21,11 +21,10 @@ impl<'a> CategoryService<'a> {
 
     /// Initialize the categories table and populate with defaults if empty.
     pub fn initialize_defaults(&self) -> Result<()> {
-        let count: i32 = self.conn.query_row(
-            "SELECT COUNT(*) FROM categories",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let count: i32 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM categories", [], |row| row.get(0))
+            .unwrap_or(0);
 
         if count == 0 {
             log::info!("Initializing default categories");
@@ -43,16 +42,18 @@ impl<'a> CategoryService<'a> {
     pub fn create(&self, category: Category) -> Result<Category> {
         category.validate().map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        self.conn.execute(
-            "INSERT INTO categories (name, color, icon, is_system)
+        self.conn
+            .execute(
+                "INSERT INTO categories (name, color, icon, is_system)
              VALUES (?1, ?2, ?3, ?4)",
-            params![
-                category.name.trim(),
-                category.color,
-                category.icon,
-                category.is_system as i32,
-            ],
-        ).context("Failed to insert category")?;
+                params![
+                    category.name.trim(),
+                    category.color,
+                    category.icon,
+                    category.is_system as i32,
+                ],
+            )
+            .context("Failed to insert category")?;
 
         let id = self.conn.last_insert_rowid();
         self.get_by_id(id)
@@ -60,19 +61,22 @@ impl<'a> CategoryService<'a> {
 
     /// Get a category by ID.
     pub fn get_by_id(&self, id: i64) -> Result<Category> {
-        let category = self.conn.query_row(
-            "SELECT id, name, color, icon, is_system FROM categories WHERE id = ?1",
-            params![id],
-            |row| {
-                Ok(Category {
-                    id: Some(row.get(0)?),
-                    name: row.get(1)?,
-                    color: row.get(2)?,
-                    icon: row.get(3)?,
-                    is_system: row.get::<_, i32>(4)? != 0,
-                })
-            },
-        ).context("Category not found")?;
+        let category = self
+            .conn
+            .query_row(
+                "SELECT id, name, color, icon, is_system FROM categories WHERE id = ?1",
+                params![id],
+                |row| {
+                    Ok(Category {
+                        id: Some(row.get(0)?),
+                        name: row.get(1)?,
+                        color: row.get(2)?,
+                        icon: row.get(3)?,
+                        is_system: row.get::<_, i32>(4)? != 0,
+                    })
+                },
+            )
+            .context("Category not found")?;
 
         Ok(category)
     }
@@ -119,7 +123,9 @@ impl<'a> CategoryService<'a> {
             })
         })?;
 
-        categories.collect::<Result<Vec<_>, _>>().context("Failed to fetch categories")
+        categories
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to fetch categories")
     }
 
     /// Update an existing category.
@@ -127,23 +133,29 @@ impl<'a> CategoryService<'a> {
     pub fn update(&self, category: &Category) -> Result<()> {
         category.validate().map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        let id = category.id.ok_or_else(|| anyhow::anyhow!("Category ID is required for update"))?;
+        let id = category
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Category ID is required for update"))?;
 
         // Check if this is a system category
         let existing = self.get_by_id(id)?;
-        
+
         if existing.is_system {
             // System categories can only update color and icon
-            self.conn.execute(
-                "UPDATE categories SET color = ?1, icon = ?2 WHERE id = ?3",
-                params![category.color, category.icon, id],
-            ).context("Failed to update system category")?;
+            self.conn
+                .execute(
+                    "UPDATE categories SET color = ?1, icon = ?2 WHERE id = ?3",
+                    params![category.color, category.icon, id],
+                )
+                .context("Failed to update system category")?;
         } else {
             // User categories can update everything
-            self.conn.execute(
-                "UPDATE categories SET name = ?1, color = ?2, icon = ?3 WHERE id = ?4",
-                params![category.name.trim(), category.color, category.icon, id],
-            ).context("Failed to update category")?;
+            self.conn
+                .execute(
+                    "UPDATE categories SET name = ?1, color = ?2, icon = ?3 WHERE id = ?4",
+                    params![category.name.trim(), category.color, category.icon, id],
+                )
+                .context("Failed to update category")?;
         }
 
         Ok(())
@@ -155,20 +167,24 @@ impl<'a> CategoryService<'a> {
         // Check if it's a system category
         let category = self.get_by_id(id)?;
         if category.is_system {
-            return Err(anyhow::anyhow!("Cannot delete system category '{}'", category.name));
+            return Err(anyhow::anyhow!(
+                "Cannot delete system category '{}'",
+                category.name
+            ));
         }
 
         // Update events that use this category to have no category
-        self.conn.execute(
-            "UPDATE events SET category = NULL WHERE category = ?1",
-            params![category.name],
-        ).context("Failed to clear category from events")?;
+        self.conn
+            .execute(
+                "UPDATE events SET category = NULL WHERE category = ?1",
+                params![category.name],
+            )
+            .context("Failed to clear category from events")?;
 
         // Delete the category
-        self.conn.execute(
-            "DELETE FROM categories WHERE id = ?1",
-            params![id],
-        ).context("Failed to delete category")?;
+        self.conn
+            .execute("DELETE FROM categories WHERE id = ?1", params![id])
+            .context("Failed to delete category")?;
 
         Ok(())
     }
@@ -210,7 +226,7 @@ mod tests {
 
     fn setup_test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        
+
         // Create categories table
         conn.execute(
             "CREATE TABLE categories (
@@ -221,7 +237,8 @@ mod tests {
                 is_system INTEGER NOT NULL DEFAULT 0
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create events table for usage count tests
         conn.execute(
@@ -231,7 +248,8 @@ mod tests {
                 category TEXT
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         conn
     }
@@ -286,7 +304,9 @@ mod tests {
 
         service.create(Category::new("Zebra", "#FF0000")).unwrap();
         service.create(Category::new("Apple", "#00FF00")).unwrap();
-        service.create(Category::system("System", "#0000FF", "⭐")).unwrap();
+        service
+            .create(Category::system("System", "#0000FF", "⭐"))
+            .unwrap();
 
         let categories = service.list_all().unwrap();
         assert_eq!(categories.len(), 3);
@@ -301,7 +321,9 @@ mod tests {
         let conn = setup_test_db();
         let service = CategoryService::new(&conn);
 
-        let mut category = service.create(Category::new("Original", "#FF0000")).unwrap();
+        let mut category = service
+            .create(Category::new("Original", "#FF0000"))
+            .unwrap();
         category.name = "Updated".to_string();
         category.color = "#00FF00".to_string();
 
@@ -317,7 +339,9 @@ mod tests {
         let conn = setup_test_db();
         let service = CategoryService::new(&conn);
 
-        let mut category = service.create(Category::system("System", "#FF0000", "⭐")).unwrap();
+        let mut category = service
+            .create(Category::system("System", "#FF0000", "⭐"))
+            .unwrap();
         category.name = "Hacked".to_string(); // Try to change name
         category.color = "#00FF00".to_string();
 
@@ -333,7 +357,9 @@ mod tests {
         let conn = setup_test_db();
         let service = CategoryService::new(&conn);
 
-        let category = service.create(Category::new("ToDelete", "#FF0000")).unwrap();
+        let category = service
+            .create(Category::new("ToDelete", "#FF0000"))
+            .unwrap();
         let id = category.id.unwrap();
 
         service.delete(id).unwrap();
@@ -346,12 +372,17 @@ mod tests {
         let conn = setup_test_db();
         let service = CategoryService::new(&conn);
 
-        let category = service.create(Category::system("Protected", "#FF0000", "🔒")).unwrap();
+        let category = service
+            .create(Category::system("Protected", "#FF0000", "🔒"))
+            .unwrap();
         let id = category.id.unwrap();
 
         let result = service.delete(id);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Cannot delete system category"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot delete system category"));
     }
 
     #[test]
@@ -389,25 +420,31 @@ mod tests {
         let service = CategoryService::new(&conn);
 
         // Create a category and some events using it
-        let category = service.create(Category::new("ToDelete", "#FF0000")).unwrap();
+        let category = service
+            .create(Category::new("ToDelete", "#FF0000"))
+            .unwrap();
         conn.execute(
             "INSERT INTO events (title, category) VALUES ('Event1', 'ToDelete')",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO events (title, category) VALUES ('Event2', 'ToDelete')",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Delete the category
         service.delete(category.id.unwrap()).unwrap();
 
         // Check events have null category
-        let count: i32 = conn.query_row(
-            "SELECT COUNT(*) FROM events WHERE category IS NOT NULL",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let count: i32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM events WHERE category IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(count, 0);
     }
 
@@ -417,10 +454,22 @@ mod tests {
         let service = CategoryService::new(&conn);
 
         service.create(Category::new("Used", "#FF0000")).unwrap();
-        
-        conn.execute("INSERT INTO events (title, category) VALUES ('E1', 'Used')", []).unwrap();
-        conn.execute("INSERT INTO events (title, category) VALUES ('E2', 'Used')", []).unwrap();
-        conn.execute("INSERT INTO events (title, category) VALUES ('E3', 'Other')", []).unwrap();
+
+        conn.execute(
+            "INSERT INTO events (title, category) VALUES ('E1', 'Used')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO events (title, category) VALUES ('E2', 'Used')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO events (title, category) VALUES ('E3', 'Other')",
+            [],
+        )
+        .unwrap();
 
         assert_eq!(service.get_usage_count("Used").unwrap(), 2);
         assert_eq!(service.get_usage_count("Other").unwrap(), 1);

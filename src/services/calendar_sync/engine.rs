@@ -7,8 +7,8 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{Duration, Local};
 use rusqlite::Connection;
 
-use crate::models::event_sync_map::EventSyncMap;
 use crate::models::event::Event;
+use crate::models::event_sync_map::EventSyncMap;
 use crate::services::event::EventService;
 use crate::services::icalendar::import::{self, ImportedIcsEvent};
 
@@ -101,7 +101,8 @@ impl<'a> CalendarSyncEngine<'a> {
             }
             Err(err) => {
                 let finished_at = chrono::Local::now();
-                let redacted_error = Self::sanitize_error_message(&err.to_string(), &source.ics_url);
+                let redacted_error =
+                    Self::sanitize_error_message(&err.to_string(), &source.ics_url);
 
                 let diagnostics = SyncRunDiagnostics {
                     source_id,
@@ -160,7 +161,11 @@ impl<'a> CalendarSyncEngine<'a> {
             .and_then(|ics| self.preview_source_from_ics(source_id, &ics))
     }
 
-    pub fn preview_source_from_ics(&self, source_id: i64, ics_content: &str) -> Result<SyncRunResult> {
+    pub fn preview_source_from_ics(
+        &self,
+        source_id: i64,
+        ics_content: &str,
+    ) -> Result<SyncRunResult> {
         let source_service = CalendarSourceService::new(self.conn);
         let source = source_service
             .get_by_id(source_id)?
@@ -199,7 +204,11 @@ impl<'a> CalendarSyncEngine<'a> {
         Ok(batch)
     }
 
-    fn apply_imported(&self, source_id: i64, imported_events: Vec<ImportedIcsEvent>) -> Result<SyncRunResult> {
+    fn apply_imported(
+        &self,
+        source_id: i64,
+        imported_events: Vec<ImportedIcsEvent>,
+    ) -> Result<SyncRunResult> {
         let mut result = SyncRunResult {
             source_id,
             ..SyncRunResult::default()
@@ -279,9 +288,9 @@ impl<'a> CalendarSyncEngine<'a> {
                             id: None,
                             source_id,
                             external_uid: uid.clone(),
-                            local_event_id: created_event.id.ok_or_else(|| {
-                                anyhow!("Created event missing ID for mapping")
-                            })?,
+                            local_event_id: created_event
+                                .id
+                                .ok_or_else(|| anyhow!("Created event missing ID for mapping"))?,
                             external_last_modified: imported.raw_last_modified.clone(),
                             external_etag_hash: None,
                             last_seen_at: Some(chrono::Local::now().to_rfc3339()),
@@ -336,7 +345,11 @@ impl<'a> CalendarSyncEngine<'a> {
         Ok(result)
     }
 
-    fn preview_imported(&self, source_id: i64, imported_events: Vec<ImportedIcsEvent>) -> Result<SyncRunResult> {
+    fn preview_imported(
+        &self,
+        source_id: i64,
+        imported_events: Vec<ImportedIcsEvent>,
+    ) -> Result<SyncRunResult> {
         let mut result = SyncRunResult {
             source_id,
             ..SyncRunResult::default()
@@ -425,7 +438,8 @@ impl<'a> CalendarSyncEngine<'a> {
         let mut skipped = 0usize;
 
         for imported in imported_events {
-            let in_window = imported.event.end >= past_cutoff && imported.event.start <= future_cutoff;
+            let in_window =
+                imported.event.end >= past_cutoff && imported.event.start <= future_cutoff;
             if in_window {
                 kept.push(imported);
             } else {
@@ -459,10 +473,10 @@ impl<'a> CalendarSyncEngine<'a> {
 #[cfg(test)]
 mod tests {
     use super::CalendarSyncEngine;
-    use chrono::{Duration, Local};
     use crate::services::calendar_sync::mapping::EventSyncMapService;
     use crate::services::database::Database;
     use crate::services::event::EventService;
+    use chrono::{Duration, Local};
     use rusqlite::{params, Connection};
 
     fn create_source(conn: &Connection, name: &str, enabled: bool) -> i64 {

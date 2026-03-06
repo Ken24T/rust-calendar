@@ -37,21 +37,13 @@ pub fn render_recurrence_section(
             .selected_text(state.frequency.as_str())
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut state.frequency, RecurrenceFrequency::Daily, "Daily");
-                ui.selectable_value(
-                    &mut state.frequency,
-                    RecurrenceFrequency::Weekly,
-                    "Weekly",
-                );
+                ui.selectable_value(&mut state.frequency, RecurrenceFrequency::Weekly, "Weekly");
                 ui.selectable_value(
                     &mut state.frequency,
                     RecurrenceFrequency::Monthly,
                     "Monthly",
                 );
-                ui.selectable_value(
-                    &mut state.frequency,
-                    RecurrenceFrequency::Yearly,
-                    "Yearly",
-                );
+                ui.selectable_value(&mut state.frequency, RecurrenceFrequency::Yearly, "Yearly");
             });
     });
 
@@ -126,11 +118,7 @@ fn render_recurrence_pattern(ui: &mut egui::Ui, state: &mut EventDialogState) {
     }
 }
 
-fn render_byday_section(
-    ui: &mut egui::Ui,
-    state: &mut EventDialogState,
-    settings: &Settings,
-) {
+fn render_byday_section(ui: &mut egui::Ui, state: &mut EventDialogState, settings: &Settings) {
     if !(state.frequency == RecurrenceFrequency::Weekly
         || (state.frequency == RecurrenceFrequency::Monthly
             && state.pattern == RecurrencePattern::None))
@@ -164,11 +152,7 @@ fn render_byday_section(
     }
 }
 
-fn render_weekday_shortcuts(
-    ui: &mut egui::Ui,
-    state: &mut EventDialogState,
-    settings: &Settings,
-) {
+fn render_weekday_shortcuts(ui: &mut egui::Ui, state: &mut EventDialogState, settings: &Settings) {
     let shortcuts = vec![
         ("First Week Day", settings.first_day_of_week),
         ("Last Week Day", (settings.first_day_of_week + 6) % 7),

@@ -19,7 +19,7 @@ impl CalendarApp {
                 );
                 return;
             }
-            
+
             // Get real monitor layout and validate the saved position
             let monitors = get_real_monitors(ctx);
             let visible = monitors::is_visible_on_any_monitor(
@@ -30,18 +30,24 @@ impl CalendarApp {
                 geometry.height,
                 (MIN_VISIBLE_X, MIN_VISIBLE_Y),
             );
-            
+
             let final_geom = if visible {
-                log::debug!("Persisted root geometry is visible on a monitor: {:?}", geometry);
+                log::debug!(
+                    "Persisted root geometry is visible on a monitor: {:?}",
+                    geometry
+                );
                 geometry
             } else {
                 // Window would be off-screen — centre it on the nearest monitor
-                if let Some(nearest) = monitors::nearest_monitor(&monitors, geometry.x, geometry.y) {
+                if let Some(nearest) = monitors::nearest_monitor(&monitors, geometry.x, geometry.y)
+                {
                     let centred = centre_on_monitor(nearest, geometry.width, geometry.height);
                     log::info!(
                         "Persisted root geometry {:?} is not visible on any monitor; \
                          centering on nearest monitor {:?} → {:?}",
-                        geometry, nearest, centred
+                        geometry,
+                        nearest,
+                        centred
                     );
                     centred
                 } else {
@@ -52,10 +58,11 @@ impl CalendarApp {
                     geometry
                 }
             };
-            
+
             if final_geom.width > 40.0 && final_geom.height > 40.0 {
                 ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
-                    final_geom.x, final_geom.y,
+                    final_geom.x,
+                    final_geom.y,
                 )));
                 ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
                     final_geom.width,
@@ -92,7 +99,7 @@ impl CalendarApp {
     pub(super) fn is_plausible_root_geometry(geometry: &CountdownCardGeometry) -> bool {
         geometry.width >= MIN_ROOT_WIDTH && geometry.height >= MIN_ROOT_HEIGHT
     }
-    
+
     /// Sanitize all countdown card and container geometries to ensure they're visible
     /// on available monitors. Called on first frame when monitor info is available.
     pub(super) fn sanitize_countdown_geometries(&mut self, ctx: &egui::Context) {

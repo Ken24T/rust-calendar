@@ -1,6 +1,6 @@
+mod confirm;
 #[path = "app/context.rs"]
 mod context;
-mod confirm;
 mod countdown;
 mod dialogs;
 mod geometry;
@@ -13,19 +13,19 @@ mod navigation;
 mod notifications;
 mod shortcuts;
 mod sidebar;
-mod sync_guard;
-mod sync_scheduler;
 mod state;
 mod status_bar;
+mod sync_guard;
+mod sync_scheduler;
 mod toast;
 mod tray;
 mod views;
 
+use self::confirm::ConfirmDialogState;
 use self::context::AppContext;
 use self::countdown::CountdownUiState;
 use self::state::{AppState, ViewType};
 use self::toast::ToastManager;
-use self::confirm::ConfirmDialogState;
 use crate::models::settings::Settings;
 use crate::services::calendar_sync::scheduler::CalendarSyncScheduler;
 use crate::ui_egui::commands::UndoManager;

@@ -1,6 +1,8 @@
 use crate::models::event::Event;
 use crate::models::settings::Settings;
-use crate::services::countdown::{CountdownCardId, CountdownCardVisuals, CountdownCategoryId, DEFAULT_CATEGORY_ID};
+use crate::services::countdown::{
+    CountdownCardId, CountdownCardVisuals, CountdownCategoryId, DEFAULT_CATEGORY_ID,
+};
 use chrono::{self, Local, NaiveDate, NaiveDateTime, NaiveTime};
 
 use super::recurrence::{ParsedRRule, RecurrenceFrequency, RecurrencePattern};
@@ -146,10 +148,7 @@ impl EventDialogState {
         // (end = midnight of day AFTER the last visible day), convert back
         // to inclusive end date for display in the dialog.
         let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-        let end_date = if event.all_day
-            && end_time == midnight
-            && event.end.date_naive() > date
-        {
+        let end_date = if event.all_day && end_time == midnight && event.end.date_naive() > date {
             event
                 .end
                 .date_naive()

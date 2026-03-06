@@ -1,14 +1,14 @@
 use super::CalendarApp;
-use chrono::Datelike;
 use crate::services::event::EventService;
-use crate::services::pdf::{PdfExportService, service::PdfExportOptions};
+use crate::services::pdf::{service::PdfExportOptions, PdfExportService};
+use chrono::Datelike;
 
 /// Export and import menu functions (PDF, ICS, countdown layout).
 impl CalendarApp {
     pub(super) fn export_month_to_pdf(&self) {
         let date = self.current_date;
         let month_name = date.format("%B_%Y").to_string();
-        
+
         if let Some(path) = rfd::FileDialog::new()
             .set_title("Export Month View to PDF")
             .set_file_name(format!("calendar_{}.pdf", month_name))
@@ -20,7 +20,7 @@ impl CalendarApp {
                 title: format!("Calendar - {}", date.format("%B %Y")),
                 ..Default::default()
             };
-            
+
             if let Err(e) = PdfExportService::export_month(
                 &event_service,
                 date,
@@ -38,7 +38,7 @@ impl CalendarApp {
     pub(super) fn export_week_to_pdf(&self) {
         let date = self.current_date;
         let week_num = date.iso_week().week();
-        
+
         if let Some(path) = rfd::FileDialog::new()
             .set_title("Export Week View to PDF")
             .set_file_name(format!("calendar_week_{}.pdf", week_num))
@@ -50,7 +50,7 @@ impl CalendarApp {
                 title: format!("Calendar - Week {}", week_num),
                 ..Default::default()
             };
-            
+
             if let Err(e) = PdfExportService::export_week(
                 &event_service,
                 date,
@@ -78,11 +78,15 @@ impl CalendarApp {
                 title: "Calendar Events".to_string(),
                 ..Default::default()
             };
-            
+
             if let Err(e) = PdfExportService::export_event_list(&events, &path, &options) {
                 log::error!("Failed to export PDF: {}", e);
             } else {
-                log::info!("Successfully exported {} events to {:?}", events.len(), path);
+                log::info!(
+                    "Successfully exported {} events to {:?}",
+                    events.len(),
+                    path
+                );
             }
         }
     }
@@ -112,11 +116,12 @@ impl CalendarApp {
         {
             use crate::services::icalendar::ICalendarService;
             let ics_service = ICalendarService::new();
-            
+
             match ics_service.export_events_to_file(&events, &path) {
                 Ok(()) => {
                     log::info!("Exported {} events to {:?}", events.len(), path);
-                    self.toast_manager.success(format!("Exported {} events", events.len()));
+                    self.toast_manager
+                        .success(format!("Exported {} events", events.len()));
                 }
                 Err(e) => {
                     log::error!("Failed to export events: {}", e);
@@ -154,7 +159,8 @@ impl CalendarApp {
             .collect();
 
         if events.is_empty() {
-            self.toast_manager.warning(format!("No '{}' events to export", category));
+            self.toast_manager
+                .warning(format!("No '{}' events to export", category));
             return;
         }
 
@@ -167,11 +173,20 @@ impl CalendarApp {
         {
             use crate::services::icalendar::ICalendarService;
             let ics_service = ICalendarService::new();
-            
+
             match ics_service.export_events_to_file(&events, &path) {
                 Ok(()) => {
-                    log::info!("Exported {} '{}' events to {:?}", events.len(), category, path);
-                    self.toast_manager.success(format!("Exported {} '{}' events", events.len(), category));
+                    log::info!(
+                        "Exported {} '{}' events to {:?}",
+                        events.len(),
+                        category,
+                        path
+                    );
+                    self.toast_manager.success(format!(
+                        "Exported {} '{}' events",
+                        events.len(),
+                        category
+                    ));
                 }
                 Err(e) => {
                     log::error!("Failed to export events: {}", e);
@@ -182,17 +197,21 @@ impl CalendarApp {
     }
 
     /// Export events in a date range to an .ics file
-    pub(super) fn export_events_in_range(&mut self, start: chrono::NaiveDate, end: chrono::NaiveDate) {
+    pub(super) fn export_events_in_range(
+        &mut self,
+        start: chrono::NaiveDate,
+        end: chrono::NaiveDate,
+    ) {
         use chrono::{Local, NaiveTime, TimeZone};
-        
+
         // Convert NaiveDate to DateTime for the query
-        let start_dt = Local.from_local_datetime(
-            &start.and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
-        ).unwrap();
-        let end_dt = Local.from_local_datetime(
-            &end.and_time(NaiveTime::from_hms_opt(23, 59, 59).unwrap())
-        ).unwrap();
-        
+        let start_dt = Local
+            .from_local_datetime(&start.and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap()))
+            .unwrap();
+        let end_dt = Local
+            .from_local_datetime(&end.and_time(NaiveTime::from_hms_opt(23, 59, 59).unwrap()))
+            .unwrap();
+
         let event_service = EventService::new(self.context.database().connection());
         let events = match event_service.find_by_date_range(start_dt, end_dt) {
             Ok(events) => events,
@@ -208,8 +227,9 @@ impl CalendarApp {
             return;
         }
 
-        let filename = format!("calendar_{}_{}.ics", 
-            start.format("%Y%m%d"), 
+        let filename = format!(
+            "calendar_{}_{}.ics",
+            start.format("%Y%m%d"),
             end.format("%Y%m%d")
         );
 
@@ -221,11 +241,12 @@ impl CalendarApp {
         {
             use crate::services::icalendar::ICalendarService;
             let ics_service = ICalendarService::new();
-            
+
             match ics_service.export_events_to_file(&events, &path) {
                 Ok(()) => {
                     log::info!("Exported {} events to {:?}", events.len(), path);
-                    self.toast_manager.success(format!("Exported {} events", events.len()));
+                    self.toast_manager
+                        .success(format!("Exported {} events", events.len()));
                 }
                 Err(e) => {
                     log::error!("Failed to export events: {}", e);
@@ -299,7 +320,8 @@ impl CalendarApp {
                 }
                 Err(e) => {
                     log::error!("Failed to export countdown layout: {}", e);
-                    self.toast_manager.error("Failed to export countdown layout");
+                    self.toast_manager
+                        .error("Failed to export countdown layout");
                 }
             }
         }

@@ -47,7 +47,9 @@ pub(super) fn generate(
             let mut dates = Vec::new();
             for entry in &monthly_byday {
                 if let Some(position) = entry.position {
-                    if let Some(date) = select_positional_weekday(current_date, position, entry.weekday) {
+                    if let Some(date) =
+                        select_positional_weekday(current_date, position, entry.weekday)
+                    {
                         dates.push(date);
                     }
                 } else {
@@ -84,7 +86,9 @@ pub(super) fn generate(
                 .and_local_timezone(Local)
                 .single()
             {
-                if occurrence_datetime >= event.start && is_valid_occurrence(event, occurrence_datetime) {
+                if occurrence_datetime >= event.start
+                    && is_valid_occurrence(event, occurrence_datetime)
+                {
                     occurrence_count += 1;
                     push_if_in_range(
                         &mut occurrences,
@@ -152,9 +156,21 @@ mod tests {
         );
 
         assert_eq!(occurrences.len(), 4);
-        assert_eq!(occurrences[0].start.date_naive(), chrono::NaiveDate::from_ymd_opt(2026, 1, 5).unwrap());
-        assert_eq!(occurrences[1].start.date_naive(), chrono::NaiveDate::from_ymd_opt(2026, 1, 30).unwrap());
-        assert_eq!(occurrences[2].start.date_naive(), chrono::NaiveDate::from_ymd_opt(2026, 2, 2).unwrap());
-        assert_eq!(occurrences[3].start.date_naive(), chrono::NaiveDate::from_ymd_opt(2026, 2, 27).unwrap());
+        assert_eq!(
+            occurrences[0].start.date_naive(),
+            chrono::NaiveDate::from_ymd_opt(2026, 1, 5).unwrap()
+        );
+        assert_eq!(
+            occurrences[1].start.date_naive(),
+            chrono::NaiveDate::from_ymd_opt(2026, 1, 30).unwrap()
+        );
+        assert_eq!(
+            occurrences[2].start.date_naive(),
+            chrono::NaiveDate::from_ymd_opt(2026, 2, 2).unwrap()
+        );
+        assert_eq!(
+            occurrences[3].start.date_naive(),
+            chrono::NaiveDate::from_ymd_opt(2026, 2, 27).unwrap()
+        );
     }
 }

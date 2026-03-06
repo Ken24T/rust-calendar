@@ -112,7 +112,9 @@ impl CalendarSyncScheduler {
             };
 
             let state = self.source_state.entry(source_id).or_default();
-            let is_due = state.next_run_at.is_none_or(|next_run_at| now >= next_run_at);
+            let is_due = state
+                .next_run_at
+                .is_none_or(|next_run_at| now >= next_run_at);
             if !is_due {
                 continue;
             }
@@ -122,7 +124,8 @@ impl CalendarSyncScheduler {
             match runner(source_id) {
                 Ok(sync_result) => {
                     state.consecutive_failures = 0;
-                    state.next_run_at = Some(now + Duration::minutes(source.poll_interval_minutes.max(1)));
+                    state.next_run_at =
+                        Some(now + Duration::minutes(source.poll_interval_minutes.max(1)));
                     result.successful.push(sync_result);
                 }
                 Err(err) => {
@@ -134,7 +137,8 @@ impl CalendarSyncScheduler {
                     );
                     state.next_run_at = Some(now + Duration::minutes(backoff_minutes));
 
-                    let redacted_error = Self::redact_error_message(&err.to_string(), &source.ics_url);
+                    let redacted_error =
+                        Self::redact_error_message(&err.to_string(), &source.ics_url);
                     result.failed_sources.push((source_id, redacted_error));
                 }
             }
@@ -158,7 +162,11 @@ impl CalendarSyncScheduler {
         Ok(result)
     }
 
-    fn calculate_backoff_minutes(base_poll_minutes: i64, failures: u32, max_backoff_minutes: i64) -> i64 {
+    fn calculate_backoff_minutes(
+        base_poll_minutes: i64,
+        failures: u32,
+        max_backoff_minutes: i64,
+    ) -> i64 {
         let base = base_poll_minutes.max(1);
         if failures == 0 {
             return base;
@@ -186,7 +194,12 @@ mod tests {
     use chrono::{Local, TimeZone};
     use rusqlite::params;
 
-    fn create_source(conn: &rusqlite::Connection, name: &str, poll_minutes: i64, enabled: bool) -> i64 {
+    fn create_source(
+        conn: &rusqlite::Connection,
+        name: &str,
+        poll_minutes: i64,
+        enabled: bool,
+    ) -> i64 {
         conn.execute(
             "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -302,7 +315,8 @@ mod tests {
     #[test]
     fn redact_error_hides_source_url() {
         let message = "Failed to fetch https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
-        let source_url = "https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
+        let source_url =
+            "https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
         let redacted = CalendarSyncScheduler::redact_error_message(message, source_url);
 
         assert!(!redacted.contains(source_url));
@@ -317,7 +331,8 @@ mod tests {
 
         let source_id = create_source(conn, "source1", 15, true);
 
-        let mut scheduler = CalendarSyncScheduler::with_startup_delay(chrono::Duration::seconds(20));
+        let mut scheduler =
+            CalendarSyncScheduler::with_startup_delay(chrono::Duration::seconds(20));
         let now = Local.with_ymd_and_hms(2026, 2, 27, 12, 0, 0).unwrap();
 
         scheduler.startup_sync_ready_at = Some(now + chrono::Duration::seconds(20));

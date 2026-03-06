@@ -141,8 +141,7 @@ impl CalendarApp {
                 {
                     if let Err(e) = theme_service.export_theme(&name, &path) {
                         log::error!("Failed to export theme: {}", e);
-                        self.toast_manager
-                            .error(format!("Export failed: {}", e));
+                        self.toast_manager.error(format!("Export failed: {}", e));
                     } else {
                         log::info!("Successfully exported theme to {:?}", path);
                         self.toast_manager.success("Theme exported");
@@ -159,8 +158,7 @@ impl CalendarApp {
                     match theme_service.import_theme(&path) {
                         Ok(name) => {
                             log::info!("Successfully imported theme: {}", name);
-                            self.toast_manager
-                                .success(format!("Imported \"{}\"", name));
+                            self.toast_manager.success(format!("Imported \"{}\"", name));
                             // Cache colors for the imported theme
                             if let Ok(theme) = theme_service.get_theme(&name) {
                                 self.state
@@ -170,8 +168,7 @@ impl CalendarApp {
                         }
                         Err(e) => {
                             log::error!("Failed to import theme: {}", e);
-                            self.toast_manager
-                                .error(format!("Import failed: {}", e));
+                            self.toast_manager.error(format!("Import failed: {}", e));
                         }
                     }
                 }

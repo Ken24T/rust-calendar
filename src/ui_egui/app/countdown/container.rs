@@ -1,18 +1,16 @@
 //! Container mode for countdown cards - displays all cards in a single resizable window.
 
+pub use super::card_rendering::format_card_tooltip;
 use super::card_rendering::{render_card_content, CardUiAction};
 use super::container_layout::{
-    calculate_insertion_indicator_rect,
-    CARD_PADDING, CONTAINER_MIN_HEIGHT, CONTAINER_MIN_WIDTH, MIN_CARD_HEIGHT, MIN_CARD_WIDTH,
-    VISIBILITY_CHECK_FRAMES,
+    calculate_insertion_indicator_rect, CARD_PADDING, CONTAINER_MIN_HEIGHT, CONTAINER_MIN_WIDTH,
+    MIN_CARD_HEIGHT, MIN_CARD_WIDTH, VISIBILITY_CHECK_FRAMES,
 };
-pub use super::card_rendering::format_card_tooltip;
 pub use super::container_layout::{ContainerLayout, DragState};
 
 use crate::services::countdown::{
     ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownCategoryId, CountdownNotificationConfig,
-    LayoutOrientation,
+    CountdownCardVisuals, CountdownCategoryId, CountdownNotificationConfig, LayoutOrientation,
 };
 use chrono::{DateTime, Local};
 use std::collections::HashMap;
@@ -52,7 +50,9 @@ pub enum ContainerAction {
 /// Get the primary monitor width from context, with fallback to 1920
 fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
     ctx.input(|input| {
-        input.raw.viewports
+        input
+            .raw
+            .viewports
             .values()
             .filter_map(|info| info.monitor_size)
             .next()
@@ -178,7 +178,7 @@ pub fn render_container_window(
             // Determine current orientation from stored geometry
             let aspect_ratio = stored.width / stored.height;
             let is_horizontal = aspect_ratio > 1.5;
-            
+
             if is_horizontal {
                 // Landscape: grow/shrink width when cards change
                 let width_change = (default_card_width + CARD_PADDING) * card_count_diff;
@@ -225,7 +225,7 @@ pub fn render_container_window(
 
     // Set position/size on first render OR when card count changes
     let needs_resize = !layout.initialized || card_count_changed;
-    
+
     // Log the geometry being used
     if !layout.initialized {
         log::info!(
@@ -234,7 +234,7 @@ pub fn render_container_window(
             initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
         );
     }
-    
+
     // Only set position/size in the builder on first render or when resizing
     // Otherwise, let the OS/user control the window position to prevent shaking during drag
     let builder = if needs_resize {
@@ -257,9 +257,12 @@ pub fn render_container_window(
     if needs_resize {
         log::info!(
             "Container setting position to ({}, {}) size ({}, {})",
-            initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
+            initial_geometry.x,
+            initial_geometry.y,
+            initial_geometry.width,
+            initial_geometry.height
         );
-        
+
         // Push geometry change when resizing due to card count change
         if card_count_changed {
             actions.push(ContainerAction::GeometryChanged(initial_geometry));
@@ -726,7 +729,11 @@ fn render_container_header(
         }
 
         // Card count badge
-        let count_text = format!("{} card{}", card_count, if card_count == 1 { "" } else { "s" });
+        let count_text = format!(
+            "{} card{}",
+            card_count,
+            if card_count == 1 { "" } else { "s" }
+        );
         ui.label(
             egui::RichText::new(count_text)
                 .size(11.0)
