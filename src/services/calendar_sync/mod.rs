@@ -335,6 +335,30 @@ impl<'a> CalendarSourceService<'a> {
         }
     }
 
+    pub fn list_recent_sync_runs(
+        &self,
+        source_id: i64,
+        limit: i64,
+    ) -> Result<Vec<SyncRunDiagnostics>> {
+        let safe_limit = limit.clamp(1, 20);
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT source_id, started_at, finished_at, status, duration_ms,
+                        created_count, updated_count, deleted_count, unchanged_count,
+                        skipped_count, error_count, error_message
+                 FROM calendar_sync_runs
+                 WHERE source_id = ?1
+                 ORDER BY id DESC
+                 LIMIT ?2",
+            )
+            .context("Failed to prepare recent sync runs query")?;
+
+        let rows = stmt.query_map(params![source_id, safe_limit], Self::row_to_sync_run)?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .context("Failed to list recent sync runs")
+    }
+
     pub fn delete(&self, id: i64) -> Result<()> {
         let rows_affected = self
             .conn
@@ -629,5 +653,48 @@ mod tests {
             fetched_run.error_message.as_deref(),
             Some("retry after 15 minute(s)")
         );
+    }
+
+    #[test]
+    fn test_list_recent_sync_runs_returns_newest_first() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let service = CalendarSourceService::new(db.connection());
+
+        let created = service.create(build_source("Work")).unwrap();
+        let source_id = created.id.unwrap();
+
+        for index in 0..3 {
+            service
+                .record_sync_run(&SyncRunDiagnostics {
+                    source_id,
+                    started_at: format!("2026-03-06T10:00:0{}+10:00", index),
+                    finished_at: format!("2026-03-06T10:00:1{}+10:00", index),
+                    status: if index == 2 {
+                        "backoff".to_string()
+                    } else {
+                        "success".to_string()
+                    },
+                    duration_ms: 100 + index,
+                    created_count: index,
+                    updated_count: 0,
+                    deleted_count: 0,
+                    unchanged_count: 1,
+                    skipped_count: 0,
+                    error_count: if index == 2 { 1 } else { 0 },
+                    error_message: if index == 2 {
+                        Some("retry after 15 minute(s)".to_string())
+                    } else {
+                        None
+                    },
+                })
+                .unwrap();
+        }
+
+        let runs = service.list_recent_sync_runs(source_id, 2).unwrap();
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0].duration_ms, 102);
+        assert_eq!(runs[0].status, "backoff");
+        assert_eq!(runs[1].duration_ms, 101);
     }
 }

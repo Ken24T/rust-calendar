@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.32] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 recent sync-run audit history:
+  - calendar sync settings now show the latest recorded sync runs with status, duration, counters, and any recorded error
+  - diagnostics service now exposes recent sync run history in newest-first order
+
+### Changed
+
+- Sync health visibility now includes short recent-run history instead of only the latest status summary.
+
 ## [2.4.31] - 2026-03-06
 
 ### Added

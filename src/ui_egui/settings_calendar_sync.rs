@@ -732,6 +732,37 @@ pub fn render_calendar_sync_section(
             if let Some(status) = &source.last_sync_status {
                 ui.label(format!("Last status: {}", status));
             }
+            match source_service.list_recent_sync_runs(source_id, 3) {
+                Ok(sync_runs) if !sync_runs.is_empty() => {
+                    ui.label("Recent sync runs:");
+                    for run in sync_runs {
+                        let mut summary = format!(
+                            "{} | {} ms | +{} ~{} -{} ={} skip {} err {}",
+                            run.status,
+                            run.duration_ms,
+                            run.created_count,
+                            run.updated_count,
+                            run.deleted_count,
+                            run.unchanged_count,
+                            run.skipped_count,
+                            run.error_count,
+                        );
+
+                        if let Some(error_message) = run.error_message.as_deref() {
+                            summary.push_str(&format!(" | {}", error_message));
+                        }
+
+                        ui.small(summary);
+                    }
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    ui.colored_label(
+                        Color32::LIGHT_RED,
+                        format!("Failed to load sync history: {}", err),
+                    );
+                }
+            }
             ui.label(format!("Capability: {}", source.sync_capability));
             if source.sync_capability == SYNC_CAPABILITY_READ_WRITE {
                 match outbound_service.queue_stats_for_source(source_id) {
