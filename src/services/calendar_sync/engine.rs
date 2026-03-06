@@ -984,7 +984,8 @@ mod tests {
     use super::CalendarSyncEngine;
     use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
     use crate::models::outbound_sync_operation::{
-        OUTBOUND_OPERATION_CREATE, OUTBOUND_OPERATION_UPDATE, OUTBOUND_STATUS_FAILED,
+        OUTBOUND_OPERATION_CREATE, OUTBOUND_OPERATION_DELETE, OUTBOUND_OPERATION_UPDATE,
+        OUTBOUND_STATUS_FAILED,
     };
     use crate::models::sync_conflict::{
         SYNC_CONFLICT_RESOLUTION_REMOTE_WINS, SYNC_CONFLICT_STATUS_OPEN,
@@ -1943,5 +1944,239 @@ END:VCALENDAR"#;
             )
             .unwrap();
         assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+    }
+
+    #[test]
+    fn test_process_pending_outbound_operations_updates_detached_instance_using_remote_metadata() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+        let event_service = EventService::new(conn);
+
+        let detached_start = Local.with_ymd_and_hms(2026, 4, 7, 9, 0, 0).unwrap();
+        let detached_end = detached_start + Duration::hours(2);
+        let detached = event_service
+            .create(
+                crate::models::event::Event::builder()
+                    .title("Detached")
+                    .start(detached_start)
+                    .end(detached_end)
+                    .build()
+                    .unwrap(),
+            )
+            .unwrap();
+        let detached_id = detached.id.unwrap();
+        let detached_uid = format!(
+            "uid-parent::RID::{}",
+            detached_start.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ")
+        );
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id) VALUES (?1, ?2, ?3)",
+            params![source_id, detached_uid, detached_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_remote_metadata (source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![source_id, detached_uid, "remote-instance-update-1", "\"etag-before\"", "hash-before", "2026-03-06T00:00:00Z"],
+        )
+        .unwrap();
+
+        let mut updated_detached = detached.clone();
+        updated_detached.title = "Detached Updated".to_string();
+        event_service.update_local(&updated_detached).unwrap();
+
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let updated_ids = writer.updated_ids.lock().unwrap().clone();
+        assert_eq!(updated_ids, vec!["remote-instance-update-1".to_string()]);
+
+        let queue_status: String = conn
+            .query_row(
+                "SELECT status FROM outbound_sync_operations WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+    }
+
+    #[test]
+    fn test_process_pending_outbound_operations_deletes_detached_instance_and_clears_metadata() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+        let event_service = EventService::new(conn);
+
+        let detached_start = Local.with_ymd_and_hms(2026, 4, 14, 9, 0, 0).unwrap();
+        let detached_end = detached_start + Duration::hours(2);
+        let detached = event_service
+            .create(
+                crate::models::event::Event::builder()
+                    .title("Detached Delete")
+                    .start(detached_start)
+                    .end(detached_end)
+                    .build()
+                    .unwrap(),
+            )
+            .unwrap();
+        let detached_id = detached.id.unwrap();
+        let detached_uid = format!(
+            "uid-parent::RID::{}",
+            detached_start.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ")
+        );
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id) VALUES (?1, ?2, ?3)",
+            params![source_id, detached_uid, detached_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_remote_metadata (source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![source_id, detached_uid, "remote-instance-delete-1", "\"etag-delete\"", "hash-delete", "2026-03-06T00:00:00Z"],
+        )
+        .unwrap();
+
+        event_service.delete_local(detached_id).unwrap();
+
+        let operation_type: String = conn
+            .query_row(
+                "SELECT operation_type FROM outbound_sync_operations WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(operation_type, OUTBOUND_OPERATION_DELETE);
+
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let deleted_ids = writer.deleted_ids.lock().unwrap().clone();
+        assert_eq!(deleted_ids, vec!["remote-instance-delete-1".to_string()]);
+
+        let remaining_mapping: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_sync_map WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_mapping, 0);
+
+        let remaining_metadata: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM event_remote_metadata WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, detached_uid],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_metadata, 0);
+    }
+
+    #[test]
+    fn test_sync_source_from_google_payload_round_trips_detached_instance_after_outbound_update() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_rw_source(conn, "API Source");
+        let source = crate::services::calendar_sync::CalendarSourceService::new(conn)
+            .get_by_id(source_id)
+            .unwrap()
+            .unwrap();
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+        let event_service = EventService::new(conn);
+
+        let detached_start = Local.with_ymd_and_hms(2026, 4, 21, 11, 0, 0).unwrap();
+        let detached_end = detached_start + Duration::hours(2);
+        let detached = event_service
+            .create(
+                crate::models::event::Event::builder()
+                    .title("Detached Original")
+                    .start(detached_start)
+                    .end(detached_end)
+                    .build()
+                    .unwrap(),
+            )
+            .unwrap();
+        let detached_id = detached.id.unwrap();
+        let detached_uid = format!(
+            "uid-parent::RID::{}",
+            detached_start.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ")
+        );
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id) VALUES (?1, ?2, ?3)",
+            params![source_id, detached_uid, detached_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_remote_metadata (source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![source_id, detached_uid, "remote-instance-roundtrip-1", "\"etag-roundtrip\"", "hash-roundtrip", "2026-03-06T00:00:00Z"],
+        )
+        .unwrap();
+
+        let mut updated_detached = detached.clone();
+        updated_detached.title = "Detached Roundtrip".to_string();
+        event_service.update_local(&updated_detached).unwrap();
+
+        let writer = FakeGoogleOutboundWriter::default();
+        engine
+            .process_pending_outbound_operations(&source, &writer)
+            .unwrap();
+
+        let inbound_payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+            &format!(
+                r#"{{
+                "items": [
+                    {{
+                        "id": "remote-instance-roundtrip-1",
+                        "etag": "\"etag-roundtrip-2\"",
+                        "status": "confirmed",
+                        "summary": "Detached Roundtrip",
+                        "iCalUID": "uid-parent",
+                        "updated": "2026-03-06T03:00:00Z",
+                        "originalStartTime": {{ "dateTime": "{}" }},
+                        "start": {{ "dateTime": "{}" }},
+                        "end": {{ "dateTime": "{}" }}
+                    }}
+                ],
+                "nextSyncToken": "sync-token-roundtrip"
+            }}"#,
+                detached_start.with_timezone(&Utc).to_rfc3339(),
+                detached_start.with_timezone(&Utc).to_rfc3339(),
+                detached_end.with_timezone(&Utc).to_rfc3339(),
+            ),
+        )
+        .unwrap();
+
+        let result = engine
+            .sync_source_from_google_payload(source_id, inbound_payload)
+            .unwrap();
+
+        assert_eq!(result.unchanged, 1);
+        assert_eq!(result.conflicts, 0);
+
+        let refreshed = event_service.get(detached_id).unwrap().unwrap();
+        assert_eq!(refreshed.title, "Detached Roundtrip");
     }
 }

@@ -307,7 +307,7 @@ Stage 1 acceptance criteria checkpoint:
 
 - Status: in progress
 - Branch: `feature/google-sync-stage2-full-crud`
-- Latest Stage 2 release tag: `v2.4.21`
+- Latest Stage 2 release tag: `v2.4.22`
 
 Slices shipped:
 
@@ -327,6 +327,7 @@ Current S2.6 slices shipped:
 - [x] Google API inbound EXDATE preservation for recurring series (`v2.4.19`)
 - [x] Google outbound execution for recurring series updates and detached instance pushes (`v2.4.20`)
 - [x] Automatic retry/backoff scheduling for failed outbound recurrence pushes (`v2.4.21`)
+- [x] Detached instance outbound lifecycle and round-trip sync hardening (`v2.4.22`)
 
 ## Decision Log (Initial)
 

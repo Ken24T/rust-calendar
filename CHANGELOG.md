@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.22] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 detached instance lifecycle hardening:
+  - regression coverage for detached instance outbound update and delete after remote metadata exists
+  - round-trip sync coverage for detached instance identities after outbound update completion
+
+### Changed
+
+- Detached recurring-instance lifecycle behaviour is now covered across outbound update/delete and subsequent inbound Google reconciliation on the same `RID` identity.
+
 ## [2.4.21] - 2026-03-06
 
 ### Added
