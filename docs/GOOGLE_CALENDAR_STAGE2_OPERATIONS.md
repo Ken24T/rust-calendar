@@ -4,6 +4,9 @@ This guide covers the operational behaviour of writable Google Calendar sync in
 Stage 2, with emphasis on backoff states, sync history, broken mappings, and
 safe recovery steps.
 
+For first-time writable OAuth setup, see
+[GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md).
+
 ## What Stage 2 Adds
 
 Stage 2 enables writable Google Calendar sync through the Google Calendar API.
