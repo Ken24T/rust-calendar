@@ -10,6 +10,7 @@ pub mod event;
 pub mod google_account;
 pub mod icalendar;
 pub mod notification;
+pub mod outbound_sync;
 pub mod pdf;
 pub mod reminder;
 pub mod settings;

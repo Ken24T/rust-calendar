@@ -231,4 +231,23 @@ mod tests {
             "event_remote_metadata table should exist"
         );
     }
+
+    #[test]
+    fn test_outbound_sync_operations_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='outbound_sync_operations'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(
+            result.unwrap(),
+            1,
+            "outbound_sync_operations table should exist"
+        );
+    }
 }

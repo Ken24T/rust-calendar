@@ -1,11 +1,85 @@
 use super::shared::{deserialize_exceptions, serialize_exceptions, to_local_datetime};
 use super::EventService;
 use crate::models::event::Event;
+use crate::models::outbound_sync_operation::{
+    OUTBOUND_OPERATION_CREATE, OUTBOUND_OPERATION_UPDATE,
+};
+use crate::services::outbound_sync::OutboundSyncService;
 use anyhow::{anyhow, Context, Result};
 use chrono::{Local, TimeZone};
 use rusqlite::{self, params};
+use serde_json::json;
 
 impl<'a> EventService<'a> {
+    /// Create a user-initiated local event and enqueue outbound sync when mapped to a writable source.
+    pub fn create_local(&self, event: Event) -> Result<Event> {
+        let created = self.create(event)?;
+        if let Some(event_id) = created.id {
+            let payload = json!({
+                "event_id": event_id,
+                "title": created.title,
+                "start": created.start.to_rfc3339(),
+                "end": created.end.to_rfc3339(),
+                "all_day": created.all_day,
+                "updated_at": Local::now().to_rfc3339(),
+            })
+            .to_string();
+            let outbound = OutboundSyncService::new(self.conn);
+            let _ = outbound.enqueue_upsert_for_local_event(
+                event_id,
+                OUTBOUND_OPERATION_CREATE,
+                Some(&payload),
+            )?;
+        }
+
+        Ok(created)
+    }
+
+    /// Update a user-initiated local event and enqueue outbound sync when mapped to a writable source.
+    pub fn update_local(&self, event: &Event) -> Result<()> {
+        self.update(event)?;
+
+        if let Some(event_id) = event.id {
+            let payload = json!({
+                "event_id": event_id,
+                "title": event.title,
+                "start": event.start.to_rfc3339(),
+                "end": event.end.to_rfc3339(),
+                "all_day": event.all_day,
+                "updated_at": Local::now().to_rfc3339(),
+            })
+            .to_string();
+            let outbound = OutboundSyncService::new(self.conn);
+            let _ = outbound.enqueue_upsert_for_local_event(
+                event_id,
+                OUTBOUND_OPERATION_UPDATE,
+                Some(&payload),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Delete a user-initiated local event and enqueue outbound deletion for writable mapped sources.
+    pub fn delete_local(&self, id: i64) -> Result<()> {
+        let outbound = OutboundSyncService::new(self.conn);
+        let mapping = outbound.writable_identity_for_local_event(id)?;
+
+        self.delete(id)?;
+
+        if let Some((source_id, external_uid)) = mapping {
+            let payload = json!({
+                "event_id": id,
+                "external_uid": external_uid,
+                "deleted_at": Local::now().to_rfc3339(),
+            })
+            .to_string();
+            outbound.enqueue_delete_for_identity(source_id, &external_uid, Some(&payload))?;
+        }
+
+        Ok(())
+    }
+
     /// Create a new event in the database.
     pub fn create(&self, mut event: Event) -> Result<Event> {
         event.validate().map_err(|e| anyhow!(e))?;

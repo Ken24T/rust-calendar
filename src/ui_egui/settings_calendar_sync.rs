@@ -3,14 +3,15 @@
 //! Handles Google Calendar ICS source management: adding, editing,
 //! deleting sources and triggering manual sync operations.
 
-use crate::models::calendar_source::SYNC_CAPABILITY_READ_ONLY;
 use crate::models::calendar_source::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE};
+use crate::models::calendar_source::{SYNC_CAPABILITY_READ_ONLY, SYNC_CAPABILITY_READ_WRITE};
 use crate::models::google_account::GoogleAccount;
 use crate::models::settings::Settings;
 use crate::services::calendar_sync::engine::{CalendarSyncEngine, SyncRunResult};
 use crate::services::calendar_sync::CalendarSourceService;
 use crate::services::database::Database;
 use crate::services::google_account::GoogleAccountService;
+use crate::services::outbound_sync::OutboundSyncService;
 use egui::{Color32, RichText};
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -25,6 +26,7 @@ struct CalendarSourceDraft {
     poll_interval_minutes: i64,
     sync_past_days: i64,
     sync_future_days: i64,
+    sync_capability: String,
     enabled: bool,
 }
 
@@ -52,6 +54,7 @@ pub struct CalendarSyncState {
     new_source_poll_interval: i64,
     new_source_sync_past_days: i64,
     new_source_sync_future_days: i64,
+    new_source_sync_capability: String,
     source_status_message: Option<String>,
     source_error_message: Option<String>,
     source_sync_in_progress_id: Option<i64>,
@@ -70,6 +73,7 @@ impl CalendarSyncState {
             new_source_poll_interval: 15,
             new_source_sync_past_days: 90,
             new_source_sync_future_days: 365,
+            new_source_sync_capability: SYNC_CAPABILITY_READ_ONLY.to_string(),
             ..Self::default()
         }
     }
@@ -387,6 +391,7 @@ pub fn render_calendar_sync_section(
     }
 
     let source_service = CalendarSourceService::new(database.connection());
+    let outbound_service = OutboundSyncService::new(database.connection());
     let mut sources = match source_service.list_all() {
         Ok(list) => list,
         Err(err) => {
@@ -412,6 +417,28 @@ pub fn render_calendar_sync_section(
             [180.0, 20.0],
             egui::TextEdit::singleline(&mut state.new_source_name),
         );
+    });
+
+    ui.horizontal(|ui| {
+        ui.allocate_ui_with_layout(
+            egui::Vec2::new(label_width, 20.0),
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                ui.label("Write-back:");
+            },
+        );
+
+        let mut write_back_enabled = state.new_source_sync_capability == SYNC_CAPABILITY_READ_WRITE;
+        if ui
+            .checkbox(&mut write_back_enabled, "Enable read/write sync preview")
+            .changed()
+        {
+            state.new_source_sync_capability = if write_back_enabled {
+                SYNC_CAPABILITY_READ_WRITE.to_string()
+            } else {
+                SYNC_CAPABILITY_READ_ONLY.to_string()
+            };
+        }
     });
 
     ui.horizontal(|ui| {
@@ -480,7 +507,7 @@ pub fn render_calendar_sync_section(
                 poll_interval_minutes: state.new_source_poll_interval,
                 sync_past_days: state.new_source_sync_past_days,
                 sync_future_days: state.new_source_sync_future_days,
-                sync_capability: SYNC_CAPABILITY_READ_ONLY.to_string(),
+                sync_capability: state.new_source_sync_capability.clone(),
                 api_sync_token: None,
                 last_push_at: None,
                 last_sync_at: None,
@@ -495,6 +522,7 @@ pub fn render_calendar_sync_section(
                     state.new_source_poll_interval = 15;
                     state.new_source_sync_past_days = 90;
                     state.new_source_sync_future_days = 365;
+                    state.new_source_sync_capability = SYNC_CAPABILITY_READ_ONLY.to_string();
                     state.source_status_message = Some(format!("Added source '{}'", created.name));
                 }
                 Err(err) => {
@@ -524,6 +552,7 @@ pub fn render_calendar_sync_section(
                 poll_interval_minutes: source.poll_interval_minutes,
                 sync_past_days: source.sync_past_days,
                 sync_future_days: source.sync_future_days,
+                sync_capability: source.sync_capability.clone(),
                 enabled: source.enabled,
             });
 
@@ -567,6 +596,15 @@ pub fn render_calendar_sync_section(
                         .suffix(" d"),
                 );
 
+                let mut write_back_enabled = draft.sync_capability == SYNC_CAPABILITY_READ_WRITE;
+                if ui.checkbox(&mut write_back_enabled, "Read/write").changed() {
+                    draft.sync_capability = if write_back_enabled {
+                        SYNC_CAPABILITY_READ_WRITE.to_string()
+                    } else {
+                        SYNC_CAPABILITY_READ_ONLY.to_string()
+                    };
+                }
+
                 if ui.button("Update").clicked() {
                     state.source_status_message = None;
                     state.source_error_message = None;
@@ -580,7 +618,7 @@ pub fn render_calendar_sync_section(
                         poll_interval_minutes: draft.poll_interval_minutes,
                         sync_past_days: draft.sync_past_days,
                         sync_future_days: draft.sync_future_days,
-                        sync_capability: source.sync_capability.clone(),
+                        sync_capability: draft.sync_capability.clone(),
                         api_sync_token: source.api_sync_token.clone(),
                         last_push_at: source.last_push_at.clone(),
                         last_sync_at: source.last_sync_at.clone(),
@@ -687,6 +725,55 @@ pub fn render_calendar_sync_section(
                 ui.label(format!("Last status: {}", status));
             }
             ui.label(format!("Capability: {}", source.sync_capability));
+            if source.sync_capability == SYNC_CAPABILITY_READ_WRITE {
+                match outbound_service.queue_stats_for_source(source_id) {
+                    Ok(stats) => {
+                        ui.label(format!(
+                            "Outbound queue: pending {} processing {} failed {} completed {}",
+                            stats.pending, stats.processing, stats.failed, stats.completed
+                        ));
+
+                        if stats.failed > 0 {
+                            if ui.button("Retry Failed Pushes").clicked() {
+                                match outbound_service.reset_failed_for_source(source_id) {
+                                    Ok(reset_count) => {
+                                        state.source_status_message = Some(format!(
+                                            "Reset {} failed outbound operation(s) to pending",
+                                            reset_count
+                                        ));
+                                        state.source_error_message = None;
+                                    }
+                                    Err(err) => {
+                                        state.source_error_message = Some(format!(
+                                            "Failed to reset outbound queue: {}",
+                                            err
+                                        ));
+                                    }
+                                }
+                            }
+
+                            if let Ok(failed_ops) =
+                                outbound_service.list_failed_for_source(source_id, 1)
+                            {
+                                if let Some(last_failed) = failed_ops.first() {
+                                    if let Some(error) = &last_failed.last_error {
+                                        ui.colored_label(
+                                            Color32::LIGHT_RED,
+                                            format!("Last outbound error: {}", error),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ui.colored_label(
+                            Color32::LIGHT_RED,
+                            format!("Failed to load outbound queue stats: {}", err),
+                        );
+                    }
+                }
+            }
             if let Some(last_sync_at) = &source.last_sync_at {
                 ui.label(format!("Last sync: {}", last_sync_at));
             }

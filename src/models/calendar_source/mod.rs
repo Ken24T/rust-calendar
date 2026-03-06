@@ -94,9 +94,7 @@ impl Default for CalendarSource {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        CalendarSource, GOOGLE_ICS_SOURCE_TYPE, SYNC_CAPABILITY_READ_ONLY,
-    };
+    use super::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE, SYNC_CAPABILITY_READ_ONLY};
 
     fn valid_source() -> CalendarSource {
         CalendarSource {

@@ -322,7 +322,7 @@ impl WeekView {
                                     log::info!("New dates: start={}, end={}", new_start, new_end);
                                     event.start = new_start;
                                     event.end = new_end;
-                                    if let Err(err) = event_service.update(&event) {
+                                    if let Err(err) = event_service.update_local(&event) {
                                         log::error!(
                                             "Failed to resize ribbon event {}: {}",
                                             resize_ctx.event_id,

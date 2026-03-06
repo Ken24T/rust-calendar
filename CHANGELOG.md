@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.13] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.3 outbound write foundation:
+  - new `outbound_sync_operations` queue table with retry/error metadata
+  - `OutboundSyncService` for enqueue, queue stats, and failed-operation reset
+  - outbound operation model and coverage tests
+
+### Changed
+
+- Added local-only event CRUD entry points (`create_local`, `update_local`,
+  `delete_local`) to enqueue outbound writes only for mapped `read_write`
+  sources, avoiding inbound sync feedback loops.
+- Updated user-driven event edit/delete/create paths (dialog, drag/resize,
+  imports, countdown text sync, undo/redo) to use local-aware CRUD methods.
+- Sync settings now allow toggling source capability (`read_only`/`read_write`)
+  and display outbound queue state with a retry action for failed pushes.
+
 ## [2.4.12] - 2026-03-06
 
 ### Added

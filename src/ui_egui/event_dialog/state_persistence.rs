@@ -44,12 +44,12 @@ impl EventDialogState {
 
             event.id = Some(id);
             service
-                .update(&event)
+                .update_local(&event)
                 .map_err(|e| format!("Failed to update event: {}", e))?;
             Ok(event)
         } else {
             service
-                .create(event)
+                .create_local(event)
                 .map_err(|e| format!("Failed to create event: {}", e))
         }
     }

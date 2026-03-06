@@ -79,7 +79,11 @@ impl CalendarApp {
                     first_event.title
                 );
             } else {
-                match self.context.event_service().create(first_event.clone()) {
+                match self
+                    .context
+                    .event_service()
+                    .create_local(first_event.clone())
+                {
                     Ok(created_event) => {
                         self.focus_on_event(&created_event);
                         if let Some(event_id) = created_event.id {
@@ -148,7 +152,7 @@ impl CalendarApp {
                 continue;
             }
 
-            match self.context.event_service().create(event) {
+            match self.context.event_service().create_local(event) {
                 Ok(created_event) => {
                     self.focus_on_event(&created_event);
                     imported_count += 1;

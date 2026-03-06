@@ -6,6 +6,7 @@ pub mod category;
 pub mod event;
 pub mod event_sync_map;
 pub mod google_account;
+pub mod outbound_sync_operation;
 pub mod recurrence;
 pub mod reminder;
 pub mod settings;

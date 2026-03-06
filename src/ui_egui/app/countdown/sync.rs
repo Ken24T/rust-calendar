@@ -58,7 +58,7 @@ impl CalendarApp {
             match self.context.event_service().get(event_id) {
                 Ok(Some(mut event)) => {
                     event.description = body.clone();
-                    if let Err(err) = self.context.event_service().update(&event) {
+                    if let Err(err) = self.context.event_service().update_local(&event) {
                         log::error!(
                             "Failed to update event {} body from countdown settings: {err}",
                             event_id

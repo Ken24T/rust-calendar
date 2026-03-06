@@ -18,6 +18,7 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_google_account_table(conn)?;
     create_event_sync_map_table(conn)?;
     create_event_remote_metadata_table(conn)?;
+    create_outbound_sync_operations_table(conn)?;
     create_calendar_sync_runs_table(conn)?;
     initialize_default_categories(conn)?;
     normalize_all_day_event_times(conn)?;
@@ -622,6 +623,46 @@ fn create_event_remote_metadata_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create event_remote_metadata source index")?;
+
+    Ok(())
+}
+
+fn create_outbound_sync_operations_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS outbound_sync_operations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            local_event_id INTEGER,
+            external_uid TEXT NOT NULL,
+            operation_type TEXT NOT NULL,
+            payload_json TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            next_retry_at TEXT,
+            last_error TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(source_id, external_uid),
+            FOREIGN KEY (source_id) REFERENCES calendar_sources(id) ON DELETE CASCADE,
+            FOREIGN KEY (local_event_id) REFERENCES events(id) ON DELETE SET NULL
+        )",
+        [],
+    )
+    .context("Failed to create outbound_sync_operations table")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outbound_sync_operations_source_status
+         ON outbound_sync_operations(source_id, status)",
+        [],
+    )
+    .context("Failed to create outbound sync source/status index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outbound_sync_operations_next_retry_at
+         ON outbound_sync_operations(next_retry_at)",
+        [],
+    )
+    .context("Failed to create outbound sync next_retry index")?;
 
     Ok(())
 }

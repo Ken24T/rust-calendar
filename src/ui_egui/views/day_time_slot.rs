@@ -334,7 +334,7 @@ impl DayView {
 
                             if new_event.validate().is_err() {
                                 log::warn!("Resize would create invalid event, ignoring");
-                            } else if let Err(err) = event_service.update(&new_event) {
+                            } else if let Err(err) = event_service.update_local(&new_event) {
                                 log::error!(
                                     "Failed to resize event {}: {}",
                                     resize_ctx.event_id, err
@@ -483,7 +483,7 @@ impl DayView {
                             new_event.start = target_start;
                             new_event.end = new_end;
 
-                            if let Err(err) = event_service.update(&new_event) {
+                            if let Err(err) = event_service.update_local(&new_event) {
                                 log::error!(
                                     "Failed to move event {}: {}",
                                     drag_context.event_id, err

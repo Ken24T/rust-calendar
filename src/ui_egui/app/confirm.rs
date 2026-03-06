@@ -279,7 +279,7 @@ impl CalendarApp {
                 // Fetch the full event before deleting (for undo)
                 let event_for_undo = event_service.get(event_id).ok().flatten();
 
-                if let Err(e) = event_service.delete(event_id) {
+                if let Err(e) = event_service.delete_local(event_id) {
                     log::error!("Failed to delete event: {}", e);
                     self.toast_manager
                         .error(format!("Failed to delete event: {}", e));
