@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.8] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.5 recurrence-instance identity support by parsing
+  `RECURRENCE-ID` from ICS imports.
+
+### Changed
+
+- Sync mapping now derives a stable effective external identity for recurring
+  overrides using `UID + RECURRENCE-ID`, preventing legitimate modified
+  instances from being treated as duplicate UIDs and skipped.
+- Added regression coverage for recurring series overrides that share a UID.
+
 ## [2.4.7] - 2026-03-06
 
 ### Added

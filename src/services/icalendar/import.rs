@@ -8,6 +8,7 @@ use super::utils::{parse_date, parse_datetime_with_tzid, unescape_text};
 pub struct ImportedIcsEvent {
     pub event: Event,
     pub uid: Option<String>,
+    pub recurrence_id: Option<String>,
     pub raw_last_modified: Option<String>,
     pub has_start: bool,
     pub has_end: bool,
@@ -33,6 +34,7 @@ pub fn from_str_with_metadata(ics_content: &str) -> Result<Vec<ImportedIcsEvent>
             current_event = Some(ImportedIcsEvent {
                 event: blank_event(),
                 uid: None,
+                recurrence_id: None,
                 raw_last_modified: None,
                 has_start: false,
                 has_end: false,
@@ -90,6 +92,14 @@ fn parse_event_property(line: &str, imported: &mut ImportedIcsEvent) -> Result<(
         match key {
             "UID" => {
                 imported.uid = Some(unescape_text(value));
+            }
+            "RECURRENCE-ID" => {
+                let parsed = if key_part.contains("VALUE=DATE") {
+                    parse_date(value)?
+                } else {
+                    parse_datetime_with_tzid(value, tzid)?
+                };
+                imported.recurrence_id = Some(parsed.to_rfc3339());
             }
             "SUMMARY" => {
                 imported.event.title = unescape_text(value);
@@ -314,5 +324,24 @@ END:VCALENDAR"#;
         let imported = from_str_with_metadata(ics).unwrap();
         assert_eq!(imported.len(), 1);
         assert_eq!(imported[0].event.title, "Longcontinuation title");
+    }
+
+    #[test]
+    fn test_import_parses_recurrence_id_with_tzid() {
+        let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:series-123
+RECURRENCE-ID;TZID=Australia/Sydney:20260310T090000
+DTSTART;TZID=Australia/Sydney:20260310T100000
+DTEND;TZID=Australia/Sydney:20260310T110000
+SUMMARY:Moved Instance
+END:VEVENT
+END:VCALENDAR"#;
+
+        let imported = from_str_with_metadata(ics).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(imported[0].uid.as_deref(), Some("series-123"));
+        assert!(imported[0].recurrence_id.is_some());
     }
 }

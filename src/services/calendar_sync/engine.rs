@@ -216,23 +216,17 @@ impl<'a> CalendarSyncEngine<'a> {
         let mut seen_uids: HashSet<String> = HashSet::new();
 
         for imported in imported_events {
-            let uid = imported
-                .uid
-                .as_deref()
-                .map(str::trim)
-                .filter(|uid| !uid.is_empty());
-
-            let Some(uid) = uid else {
+            let Some(uid) = Self::effective_uid(&imported) else {
                 result.skipped_missing_uid += 1;
                 continue;
             };
 
-            if !seen_uids.insert(uid.to_string()) {
+            if !seen_uids.insert(uid.clone()) {
                 result.skipped_duplicate_uid += 1;
                 continue;
             }
 
-            match map_service.get_by_source_and_uid(source_id, uid)? {
+            match map_service.get_by_source_and_uid(source_id, &uid)? {
                 Some(existing_map) => {
                     if let Some(existing_event) = event_service.get(existing_map.local_event_id)? {
                         if Self::is_effectively_unchanged(&existing_event, &imported.event) {
@@ -250,14 +244,14 @@ impl<'a> CalendarSyncEngine<'a> {
                             .context("Failed to create event for stale mapping")?;
 
                         map_service
-                            .delete_by_source_and_uid(source_id, uid)
+                            .delete_by_source_and_uid(source_id, &uid)
                             .context("Failed to remove stale mapping")?;
 
                         map_service
                             .create(EventSyncMap {
                                 id: None,
                                 source_id,
-                                external_uid: uid.to_string(),
+                                external_uid: uid.clone(),
                                 local_event_id: created_event.id.ok_or_else(|| {
                                     anyhow!("Created event missing ID for mapping")
                                 })?,
@@ -273,7 +267,7 @@ impl<'a> CalendarSyncEngine<'a> {
                         continue;
                     }
 
-                    map_service.touch_last_seen(source_id, uid)?;
+                    map_service.touch_last_seen(source_id, &uid)?;
                 }
                 None => {
                     let created_event = event_service
@@ -284,7 +278,7 @@ impl<'a> CalendarSyncEngine<'a> {
                         .create(EventSyncMap {
                             id: None,
                             source_id,
-                            external_uid: uid.to_string(),
+                            external_uid: uid.clone(),
                             local_event_id: created_event.id.ok_or_else(|| {
                                 anyhow!("Created event missing ID for mapping")
                             })?,
@@ -359,23 +353,17 @@ impl<'a> CalendarSyncEngine<'a> {
         let mut seen_uids: HashSet<String> = HashSet::new();
 
         for imported in imported_events {
-            let uid = imported
-                .uid
-                .as_deref()
-                .map(str::trim)
-                .filter(|uid| !uid.is_empty());
-
-            let Some(uid) = uid else {
+            let Some(uid) = Self::effective_uid(&imported) else {
                 result.skipped_missing_uid += 1;
                 continue;
             };
 
-            if !seen_uids.insert(uid.to_string()) {
+            if !seen_uids.insert(uid.clone()) {
                 result.skipped_duplicate_uid += 1;
                 continue;
             }
 
-            match map_service.get_by_source_and_uid(source_id, uid)? {
+            match map_service.get_by_source_and_uid(source_id, &uid)? {
                 Some(existing_map) => {
                     if let Some(existing_event) = event_service.get(existing_map.local_event_id)? {
                         if Self::is_effectively_unchanged(&existing_event, &imported.event) {
@@ -446,6 +434,25 @@ impl<'a> CalendarSyncEngine<'a> {
         }
 
         (kept, skipped)
+    }
+
+    fn effective_uid(imported: &ImportedIcsEvent) -> Option<String> {
+        let base_uid = imported
+            .uid
+            .as_deref()
+            .map(str::trim)
+            .filter(|uid| !uid.is_empty())?
+            .to_string();
+
+        match imported
+            .recurrence_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|rid| !rid.is_empty())
+        {
+            Some(rid) => Some(format!("{}::RID::{}", base_uid, rid)),
+            None => Some(base_uid),
+        }
     }
 }
 
@@ -801,5 +808,40 @@ mod tests {
         let events = event_service.list_all().unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].title, "Keep Event");
+    }
+
+    #[test]
+    fn test_sync_source_from_ics_keeps_modified_instances_with_same_uid() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn, "Work", true);
+
+        let engine = CalendarSyncEngine::new(conn).unwrap();
+
+        let ics = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:series-uid
+DTSTART:20260310T090000
+DTEND:20260310T100000
+SUMMARY:Series Master
+END:VEVENT
+BEGIN:VEVENT
+UID:series-uid
+RECURRENCE-ID:20260311T090000
+DTSTART:20260311T120000
+DTEND:20260311T130000
+SUMMARY:Moved Instance
+END:VEVENT
+END:VCALENDAR"#;
+
+        let result = engine.sync_source_from_ics(source_id, ics).unwrap();
+        assert_eq!(result.created, 2);
+        assert_eq!(result.skipped_duplicate_uid, 0);
+
+        let event_service = EventService::new(conn);
+        let events = event_service.list_all().unwrap();
+        assert_eq!(events.len(), 2);
     }
 }
