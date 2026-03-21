@@ -172,6 +172,12 @@ Unified sync expectation:
 - `handover` consults and updates a dedicated metadata branch, `tctbp/handover-state`, so resume can be based on an explicit last-handed-over branch signal rather than recency alone.
 - `handover` does not attempt to sync every branch in the repository and does not merge the work branch into `main` as part of normal machine-to-machine sync.
 
+Branch transition expectation:
+
+- `branch <new-branch-name>` is the close-out workflow for moving from one work branch to the next. It must stop rather than guess whenever the source branch or local `main` is dirty, behind, or diverged in a way that could risk losing code.
+- When started from a non-`main` work branch, it merges that branch into updated local `main` using a non-destructive merge before creating the next branch.
+- When started from `main`, it skips the merge step and creates the next branch directly from updated local `main`.
+
 Deployment note:
 
 - Linux local deployment uses `cargo build --release` followed by `./packaging/install.sh` when the user explicitly triggers deploy.

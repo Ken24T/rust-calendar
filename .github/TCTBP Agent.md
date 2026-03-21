@@ -103,28 +103,61 @@ Purpose: close out the current branch cleanly and start the next one.
 
 Behaviour, local-first and remote-safe:
 
-1. **Assess whether a SHIP is needed** on the current branch.
-   - If there are uncommitted changes or commits since the last `vX.Y.Z` tag, recommend SHIP.
+Safety promise:
+
+- The workflow must preserve all existing work on the current branch, `main`, and the new branch transition.
+- If any branch transition would require guessing, discarding local changes, or reconciling diverged history automatically, stop instead of continuing.
+- Never use stash, hard reset, auto-rebase, force-push, or destructive checkout as part of this workflow.
+
+Behaviour, local-first and no-code-loss:
+
+1. **Preflight**
+   - Report the current branch, working tree state, and upstream tracking state if one exists.
+   - Determine whether the current branch is the default branch or a non-default work branch.
+
+2. **Assess whether SHIP is needed on the current branch**
+   - If the current branch is non-default and has uncommitted changes or commits since the last `vX.Y.Z` tag, recommend SHIP.
    - If agreed, run the full SHIP workflow before branching.
 
-2. **Verification gate if SHIP is declined**
-   - If the user declines SHIP, run tests at minimum to confirm the codebase is not broken.
+3. **Stop if SHIP is declined while the branch is dirty**
+   - If the user declines SHIP and the current branch has uncommitted changes, stop.
+   - Do not switch branches or attempt a merge with a dirty working tree.
+
+4. **Verification gate when continuing without SHIP**
+   - If SHIP is declined and the tree is clean, run tests at minimum to confirm the codebase is not broken.
    - Stop on failure.
 
-3. **Merge current branch into the default branch.**
-   - Ensure the working tree is clean.
-   - Checkout the default branch from `TCTBP.json`.
-   - Fast-forward it from origin if needed and safe.
-   - Merge the current branch using a non-destructive merge.
-   - Stop on conflicts.
+5. **Inspect source branch sync state when the current branch is not the default branch**
+   - If the source branch has an upstream and is diverged from it, stop and ask the user to resolve that state explicitly.
+   - If the source branch has an upstream and is behind it, stop and recommend running `handover` or another explicit sync step first.
+   - If the source branch is ahead of its upstream or has no upstream, continue locally; no code is lost because the source commits remain present on the source branch until an explicit cleanup step occurs.
 
-4. **Create and switch to the new branch** from the updated default branch.
+6. **Prepare the default branch safely**
+   - Ensure the working tree is clean before checking out the default branch from `TCTBP.json`.
+   - If the default branch is dirty, stop.
+   - If the default branch is diverged from its upstream, stop.
+   - If the default branch is behind its upstream and clean, fast-forward it from origin.
 
-5. **Cleanup, optional**
-   - Ask the user whether to delete the old feature branch locally and remotely.
+7. **Merge the source branch into the default branch when needed**
+   - If the current branch is already the default branch, skip the merge step and continue from the updated default branch.
+   - Otherwise merge the source branch into the default branch using a non-destructive merge.
+   - Stop on conflicts and leave the repository in a recoverable state for manual resolution.
 
-6. **Remote safety**
-   - Any push requires explicit approval.
+8. **Verify the branch transition before creating the next branch**
+   - Confirm the source branch tip commit is reachable from the default branch before proceeding.
+   - If that cannot be confirmed, stop.
+
+9. **Create and switch to the new branch** from the updated default branch.
+   - Stop if the new branch cannot be created or checked out safely.
+
+10. **Cleanup, optional and last**
+   Consider deleting the old branch only after the merge succeeded, the source branch tip is reachable from the default branch, and the new branch exists and is checked out. Ask the user whether to delete the old branch locally and remotely. Do not assume the old branch was a feature branch; apply the same rule to `fix/`, `docs/`, `infrastructure/`, or other work branches.
+
+11. **Remote safety**
+   Any push requires explicit approval. Any branch deletion requires explicit approval.
+
+12. **Summary**
+   Confirm the source branch, the resulting default-branch state, the new branch name, and whether any push or deletion occurred. Explicitly state whether the workflow stopped for safety, skipped the merge because the workflow started on the default branch, or completed the full transition without code loss.
 
 Versioning interaction:
 
