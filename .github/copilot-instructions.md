@@ -174,7 +174,7 @@ Unified sync expectation:
 
 Branch transition expectation:
 
-- `branch <new-branch-name>` is the close-out workflow for moving from one work branch to the next. It must stop rather than guess whenever the source branch or local `main` is dirty, behind, or diverged in a way that could risk losing code.
+- `branch <new-branch-name>` is the close-out workflow for moving from one work branch to the next. It must stop rather than guess whenever the source branch or local `main` is dirty, unsynced, behind, or diverged in a way that could risk losing code.
 - When started from a non-`main` work branch, it merges that branch into updated local `main` using a non-destructive merge before creating the next branch.
 - When started from `main`, it skips the merge step and creates the next branch directly from updated local `main`.
 

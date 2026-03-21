@@ -130,7 +130,8 @@ Behaviour, local-first and no-code-loss:
 5. **Inspect source branch sync state when the current branch is not the default branch**
    - If the source branch has an upstream and is diverged from it, stop and ask the user to resolve that state explicitly.
    - If the source branch has an upstream and is behind it, stop and recommend running `handover` or another explicit sync step first.
-   - If the source branch is ahead of its upstream or has no upstream, continue locally; no code is lost because the source commits remain present on the source branch until an explicit cleanup step occurs.
+   - If the source branch has an upstream and is ahead of it, stop and recommend publishing that branch first by running `handover`, `ship`, or an explicit push.
+   - If the source branch has no upstream, stop and recommend creating or publishing the upstream first before using `branch <new-branch-name>`.
 
 6. **Prepare the default branch safely**
    - Ensure the working tree is clean before checking out the default branch from `TCTBP.json`.
@@ -157,7 +158,7 @@ Behaviour, local-first and no-code-loss:
    Any push requires explicit approval. Any branch deletion requires explicit approval.
 
 12. **Summary**
-   Confirm the source branch, the resulting default-branch state, the new branch name, and whether any push or deletion occurred. Explicitly state whether the workflow stopped for safety, skipped the merge because the workflow started on the default branch, or completed the full transition without code loss.
+   Confirm the source branch, the resulting default-branch state, the new branch name, and whether any push or deletion occurred. Explicitly state whether the workflow stopped for safety, skipped the merge because the workflow started on the default branch, or completed the full transition without code loss. If the workflow stopped because the source branch was not yet published, say so explicitly and recommend the exact sync step needed before retrying.
 
 Versioning interaction:
 
