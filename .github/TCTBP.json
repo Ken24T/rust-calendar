@@ -19,7 +19,7 @@
   },
   "workflow": {
     "shipOrder": ["preflight", "test", "problems", "docs-impact", "bump", "commit", "changelog", "tag", "push"],
-    "handoverOrder": ["preflight", "fetch", "determine-target-branch", "switch-target-branch", "compare", "stage", "test-gate", "docs-impact", "commit-if-needed", "ship-if-needed", "reconcile", "push-if-needed", "verify-sync", "summary"],
+    "handoverOrder": ["preflight", "fetch", "read-handover-metadata", "determine-target-branch", "switch-target-branch", "compare", "stage", "test-gate", "docs-impact", "commit-if-needed", "ship-if-needed", "reconcile", "push-if-needed", "update-handover-metadata", "verify-sync", "summary"],
     "statusOrder": ["fetch", "report", "recommend"],
     "abortOrder": ["inspect", "propose", "execute"],
     "deployOrder": ["preflight", "sync-prerequisite", "verification-gate", "docs-impact", "runtime-build", "deploy-target", "post-deploy-validation", "summary"],
@@ -28,7 +28,12 @@
   "handover": {
     "preferredTriggers": ["handover", "handover please"],
     "purpose": "Reconcile the active work branch with origin so work can stop on one machine and resume on another from the latest validated shared state.",
-    "syncScope": "active-work-branch-and-relevant-tags-only",
+    "syncScope": "active-work-branch-plus-handover-metadata-and-relevant-tags",
+    "metadataBranch": "tctbp/handover-state",
+    "metadataFile": ".github/TCTBP_STATE.json",
+    "consultMetadataBranchBeforeBranchInference": true,
+    "updateMetadataBranchOnSuccessfulHandover": true,
+    "excludeBranchesFromCandidateDetection": ["origin/main", "origin/HEAD", "origin/tctbp/handover-state"],
     "resumesTargetBranchOnAnotherMachine": true,
     "requiresConfirmationWhenSwitchingBranches": true,
     "stopOnAmbiguousTargetBranch": true,
@@ -47,7 +52,7 @@
     "enabled": true,
     "suggestions": ["handover", "ship", "abort", "none"],
     "rules": {
-      "handover": "Suggest when the active work branch is dirty, ahead or behind origin, must be resumed on this machine, or local and remote sync of that branch should be verified before stopping or resuming work.",
+      "handover": "Suggest when the active work branch is dirty, ahead or behind origin, must be resumed on this machine, the handover metadata branch should be refreshed, or local and remote sync of that branch should be verified before stopping or resuming work.",
       "ship": "Suggest when there are unshipped commits since the last tag or version and tag drift exists.",
       "abort": "Suggest when a partial workflow state is detected.",
       "none": "Suggest when branch state is clean, synced, and no SHIP or handover is needed."

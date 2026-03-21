@@ -169,6 +169,7 @@ Docs impact expectations:
 Unified sync expectation:
 
 - `handover` is the single multi-machine sync workflow. When it completes successfully, the active work branch and relevant tags are reconciled with origin, and on another machine it should leave the user back on the detected and confirmed work branch when that can be done safely.
+- `handover` consults and updates a dedicated metadata branch, `tctbp/handover-state`, so resume can be based on an explicit last-handed-over branch signal rather than recency alone.
 - `handover` does not attempt to sync every branch in the repository and does not merge the work branch into `main` as part of normal machine-to-machine sync.
 
 Deployment note:

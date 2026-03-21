@@ -56,15 +56,24 @@ Safely reconcile the working branch with `origin` so you can stop on one machine
 
 Scope:
 
-- syncs the active work branch and relevant tags only
+- syncs the active work branch, a dedicated handover metadata branch, and relevant tags only
 - does not reconcile every branch in the repository
 - does not merge into `main` as part of normal machine-to-machine sync
+
+Handover metadata:
+
+- metadata branch: `tctbp/handover-state`
+- metadata file: `.github/TCTBP_STATE.json`
+- stores the last successfully handed-over work branch and commit
+- is consulted before branch-recency inference on another machine
+- is never treated as a work-branch candidate itself
 
 Attempts to:
 
 - preserve dirty work on the active branch when needed
 - fetch and inspect remote state
-- detect the likely active work branch when you are on the wrong branch or on `main`
+- consult the handover metadata branch first when you are on the wrong branch or on `main`
+- fall back to branch detection only when metadata is missing, stale, or invalid
 - ask for confirmation before switching if branch choice is ambiguous
 - check out the target branch when safe
 - fast-forward when remote is ahead and local is clean
@@ -158,6 +167,7 @@ Attempts to:
 When `handover` succeeds:
 
 - the active work branch has been safely reconciled with `origin`
+- the handover metadata branch points at that branch and handed-over commit
 - relevant tags have been pushed when needed
 - if you started on another machine from a clean state, you are back on the detected and confirmed work branch
 - if the workflow could not do that safely, it stops instead of guessing
