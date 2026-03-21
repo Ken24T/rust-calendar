@@ -139,10 +139,20 @@ This is a unified codebase targeting Linux and Windows from a single source tree
 
 ## Shipping Workflow
 
-For SHIP/TCTBP activation, order, versioning, tagging, and approval rules, follow:
+For SHIP/TCTBP activation, order, sync safety, docs-impact checks, deployment, versioning, tagging, and approval rules, follow:
 
 - `.github/TCTBP.json` (authoritative)
 - `.github/TCTBP Agent.md` (behavioural guidance)
+- `.github/TCTBP Cheatsheet.md` (quick operator reference)
+
+Supported milestone triggers:
+
+- `ship`, `ship please`, `shipping`, `tctbp`, `prepare release`
+- `deploy`, `deploy please`
+- `handover`, `handover please`
+- `status`, `status please`
+- `abort`
+- `branch <new-branch-name>`
 
 Tag convention: `vX.Y.Z`
 
@@ -150,6 +160,27 @@ SHIP cadence:
 
 - SHIP is required after each completed implementation slice by default
 - Docs-only/infrastructure-only slices are committed without version bump/tag
+
+Docs impact expectations:
+
+- Assess docs impact before SHIP or deploy when changes affect user-visible behaviour, UI, settings, packaging, or roadmap/status.
+- Prefer small, accurate updates to `README.md`, `docs/USER_GUIDE.md`, `docs/FEATURES.md`, packaging docs, and any directly affected design or roadmap doc.
+
+Unified sync expectation:
+
+- `handover` is the single multi-machine sync workflow. When it completes successfully, the active work branch and relevant tags are reconciled with origin, and on another machine it should leave the user back on the detected and confirmed work branch when that can be done safely.
+- `handover` consults and updates a dedicated metadata branch, `tctbp/handover-state`, so resume can be based on an explicit last-handed-over branch signal rather than recency alone.
+- `handover` does not attempt to sync every branch in the repository and does not merge the work branch into `main` as part of normal machine-to-machine sync.
+
+Branch transition expectation:
+
+- `branch <new-branch-name>` is the close-out workflow for moving from one work branch to the next. It must stop rather than guess whenever the source branch or local `main` is dirty, unsynced, behind, or diverged in a way that could risk losing code.
+- When started from a non-`main` work branch, it merges that branch into updated local `main` using a non-destructive merge before creating the next branch.
+- When started from `main`, it skips the merge step and creates the next branch directly from updated local `main`.
+
+Deployment note:
+
+- Linux local deployment uses `cargo build --release` followed by `./packaging/install.sh` when the user explicitly triggers deploy.
 
 ## Branch Naming
 
