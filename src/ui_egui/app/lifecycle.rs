@@ -97,7 +97,9 @@ impl CalendarApp {
             exit_requested: false,
             tray_action_flag: None,
             tray_hwnd: 0,
+            #[cfg(target_os = "windows")]
             tray_saved_pixel_pos: None,
+            #[cfg(target_os = "windows")]
             tray_original_exstyle: 0,
         };
 

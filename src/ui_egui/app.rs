@@ -103,8 +103,10 @@ pub struct CalendarApp {
     /// Cached native window handle for Win32 API calls
     tray_hwnd: isize,
     /// Saved pixel position before hiding (for pixel-perfect restore)
+    #[cfg(target_os = "windows")]
     tray_saved_pixel_pos: Option<(i32, i32)>,
     /// Original extended window style, restored when showing
+    #[cfg(target_os = "windows")]
     tray_original_exstyle: i32,
 }
 
