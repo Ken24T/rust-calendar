@@ -25,8 +25,8 @@ use crate::services::sync_conflict::SyncConflictService;
 
 use super::fetcher::IcsFetcher;
 use super::google_api::{
-    GoogleCalendarApiClient, GoogleCalendarApiError, GoogleEventsSyncPayload,
-    GoogleOutboundWriter, GoogleRemoteEvent,
+    GoogleCalendarApiClient, GoogleCalendarApiError, GoogleEventsSyncPayload, GoogleOutboundWriter,
+    GoogleRemoteEvent,
 };
 use super::mapping::EventSyncMapService;
 use super::sanitizer;
@@ -456,9 +456,9 @@ impl<'a> CalendarSyncEngine<'a> {
         source: &CalendarSource,
         writer: &W,
     ) -> Result<()> {
-        let source_id = source
-            .id
-            .ok_or_else(|| anyhow!("Calendar source ID is required to process outbound operations"))?;
+        let source_id = source.id.ok_or_else(|| {
+            anyhow!("Calendar source ID is required to process outbound operations")
+        })?;
         let outbound_service = OutboundSyncService::new(self.conn);
         let operations = outbound_service.list_runnable_for_source(source_id, 100)?;
 
@@ -523,10 +523,8 @@ impl<'a> CalendarSyncEngine<'a> {
                 let parent_remote = map_service
                     .get_remote_metadata(source_id, parent_external_uid)?
                     .and_then(|metadata| metadata.remote_event_id)
-                    .ok_or_else(|| {
-                        OutboundOperationError::MissingParentRemoteEventId {
-                            external_uid: parent_external_uid.to_string(),
-                        }
+                    .ok_or_else(|| OutboundOperationError::MissingParentRemoteEventId {
+                        external_uid: parent_external_uid.to_string(),
                     })?;
                 let remote = writer.patch_detached_instance(
                     source,
@@ -534,7 +532,12 @@ impl<'a> CalendarSyncEngine<'a> {
                     external_uid,
                     payload_json,
                 )?;
-                self.complete_outbound_upsert(source_id, external_uid, operation.local_event_id, &remote)
+                self.complete_outbound_upsert(
+                    source_id,
+                    external_uid,
+                    operation.local_event_id,
+                    &remote,
+                )
             }
             OUTBOUND_OPERATION_DELETE => {
                 let remote_event_id = map_service
@@ -556,13 +559,16 @@ impl<'a> CalendarSyncEngine<'a> {
                 let remote_event_id = map_service
                     .get_remote_metadata(source_id, external_uid)?
                     .and_then(|metadata| metadata.remote_event_id)
-                    .ok_or_else(|| {
-                        OutboundOperationError::MissingRemoteEventId {
-                            external_uid: external_uid.to_string(),
-                        }
+                    .ok_or_else(|| OutboundOperationError::MissingRemoteEventId {
+                        external_uid: external_uid.to_string(),
                     })?;
                 let remote = writer.update_event(source, &remote_event_id, payload_json)?;
-                self.complete_outbound_upsert(source_id, external_uid, operation.local_event_id, &remote)
+                self.complete_outbound_upsert(
+                    source_id,
+                    external_uid,
+                    operation.local_event_id,
+                    &remote,
+                )
             }
         }
     }
@@ -581,7 +587,13 @@ impl<'a> CalendarSyncEngine<'a> {
                 external_uid
             )
         })?;
-        self.update_remote_tracking(&map_service, source_id, external_uid, local_event_id, remote)
+        self.update_remote_tracking(
+            &map_service,
+            source_id,
+            external_uid,
+            local_event_id,
+            remote,
+        )
     }
 
     fn clear_remote_identity_tracking(
@@ -1045,7 +1057,7 @@ impl<'a> CalendarSyncEngine<'a> {
 #[cfg(test)]
 mod tests {
     use super::{CalendarSyncEngine, OutboundOperationError};
-    use anyhow::anyhow;
+    use crate::models::calendar_source::CalendarSource;
     use crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE;
     use crate::models::outbound_sync_operation::{
         OUTBOUND_OPERATION_CREATE, OUTBOUND_OPERATION_DELETE, OUTBOUND_OPERATION_UPDATE,
@@ -1054,14 +1066,14 @@ mod tests {
     use crate::models::sync_conflict::{
         SYNC_CONFLICT_RESOLUTION_REMOTE_WINS, SYNC_CONFLICT_STATUS_OPEN,
     };
+    use crate::services::calendar_sync::google_api::GoogleCalendarApiError;
+    use crate::services::calendar_sync::google_api::{GoogleOutboundWriter, GoogleRemoteEvent};
     use crate::services::calendar_sync::mapping::EventSyncMapService;
     use crate::services::database::Database;
     use crate::services::event::EventService;
-    use crate::services::calendar_sync::google_api::GoogleCalendarApiError;
+    use anyhow::anyhow;
     use chrono::{Duration, Local, TimeZone, Utc};
     use rusqlite::{params, Connection};
-    use crate::models::calendar_source::CalendarSource;
-    use crate::services::calendar_sync::google_api::{GoogleOutboundWriter, GoogleRemoteEvent};
 
     fn create_source(conn: &Connection, name: &str, enabled: bool) -> i64 {
         conn.execute(
@@ -1102,7 +1114,9 @@ mod tests {
         });
 
         assert!(CalendarSyncEngine::should_reset_api_sync_token(&expired));
-        assert!(!CalendarSyncEngine::should_reset_api_sync_token(&rate_limited));
+        assert!(!CalendarSyncEngine::should_reset_api_sync_token(
+            &rate_limited
+        ));
     }
 
     #[test]
@@ -1113,8 +1127,14 @@ mod tests {
         });
         let generic = anyhow!("plain failure");
 
-        assert_eq!(CalendarSyncEngine::sync_status_for_error(&rate_limited), "backoff");
-        assert_eq!(CalendarSyncEngine::sync_status_for_error(&generic), "failed");
+        assert_eq!(
+            CalendarSyncEngine::sync_status_for_error(&rate_limited),
+            "backoff"
+        );
+        assert_eq!(
+            CalendarSyncEngine::sync_status_for_error(&generic),
+            "failed"
+        );
     }
 
     #[test]
@@ -1818,7 +1838,8 @@ END:VCALENDAR"#;
     }
 
     #[test]
-    fn test_sync_source_from_google_payload_round_trips_timed_series_recurrence_exceptions_after_outbound_update() {
+    fn test_sync_source_from_google_payload_round_trips_timed_series_recurrence_exceptions_after_outbound_update(
+    ) {
         let db = Database::new(":memory:").unwrap();
         db.initialize_schema().unwrap();
         let conn = db.connection();
@@ -1906,7 +1927,10 @@ END:VCALENDAR"#;
         assert_eq!(result.unchanged, 1);
         assert_eq!(result.conflicts, 0);
 
-        let refreshed = EventService::new(conn).get(existing.id.unwrap()).unwrap().unwrap();
+        let refreshed = EventService::new(conn)
+            .get(existing.id.unwrap())
+            .unwrap()
+            .unwrap();
         let exceptions = refreshed.recurrence_exceptions.unwrap();
         assert_eq!(exceptions.len(), 2);
         assert_eq!(
@@ -1920,7 +1944,8 @@ END:VCALENDAR"#;
     }
 
     #[test]
-    fn test_sync_source_from_google_payload_round_trips_all_day_series_recurrence_exceptions_after_outbound_update() {
+    fn test_sync_source_from_google_payload_round_trips_all_day_series_recurrence_exceptions_after_outbound_update(
+    ) {
         let db = Database::new(":memory:").unwrap();
         db.initialize_schema().unwrap();
         let conn = db.connection();
@@ -2002,7 +2027,10 @@ END:VCALENDAR"#;
         assert_eq!(result.unchanged, 1);
         assert_eq!(result.conflicts, 0);
 
-        let refreshed = EventService::new(conn).get(existing.id.unwrap()).unwrap().unwrap();
+        let refreshed = EventService::new(conn)
+            .get(existing.id.unwrap())
+            .unwrap()
+            .unwrap();
         let exceptions = refreshed.recurrence_exceptions.unwrap();
         assert_eq!(exceptions.len(), 2);
         assert_eq!(exceptions[0].date_naive().to_string(), "2026-03-11");
@@ -2064,7 +2092,10 @@ END:VCALENDAR"#;
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+        assert_eq!(
+            queue_status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED
+        );
 
         let last_push_at: Option<String> = conn
             .query_row(
@@ -2225,9 +2256,10 @@ END:VCALENDAR"#;
         )
         .unwrap();
 
-        let payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
-            &format!(
-                r#"{{
+        let payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                &format!(
+                    r#"{{
                 "items": [
                     {{
                         "id": "remote-instance-race-1",
@@ -2243,12 +2275,12 @@ END:VCALENDAR"#;
                 ],
                 "nextSyncToken": "sync-token-race"
             }}"#,
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-                detached_end.with_timezone(&Utc).to_rfc3339(),
-            ),
-        )
-        .unwrap();
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                    detached_end.with_timezone(&Utc).to_rfc3339(),
+                ),
+            )
+            .unwrap();
 
         let result = engine
             .sync_source_from_google_payload(source_id, payload)
@@ -2264,7 +2296,10 @@ END:VCALENDAR"#;
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+        assert_eq!(
+            queue_status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED
+        );
 
         let remote_event_id: Option<String> = conn
             .query_row(
@@ -2339,7 +2374,10 @@ END:VCALENDAR"#;
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+        assert_eq!(
+            queue_status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED
+        );
     }
 
     #[test]
@@ -2404,7 +2442,10 @@ END:VCALENDAR"#;
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+        assert_eq!(
+            queue_status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED
+        );
     }
 
     #[test]
@@ -2466,7 +2507,10 @@ END:VCALENDAR"#;
             )
             .unwrap();
 
-        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED);
+        assert_eq!(
+            status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED
+        );
         assert!(next_retry_at.is_none());
         assert!(last_error
             .as_deref()
@@ -2518,7 +2562,9 @@ END:VCALENDAR"#;
         .unwrap();
 
         let existing = EventService::new(conn).list_all().unwrap().remove(0);
-        EventService::new(conn).delete_local(existing.id.unwrap()).unwrap();
+        EventService::new(conn)
+            .delete_local(existing.id.unwrap())
+            .unwrap();
 
         let writer = FakeGoogleOutboundWriter::default();
         engine
@@ -2532,7 +2578,10 @@ END:VCALENDAR"#;
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+        assert_eq!(
+            status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED
+        );
 
         let metadata_exists: i64 = conn
             .query_row(
@@ -2689,9 +2738,10 @@ END:VCALENDAR"#;
             .process_pending_outbound_operations(&source, &writer)
             .unwrap();
 
-        let inbound_payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
-            &format!(
-                r#"{{
+        let inbound_payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                &format!(
+                    r#"{{
                 "items": [
                     {{
                         "id": "remote-instance-roundtrip-1",
@@ -2707,12 +2757,12 @@ END:VCALENDAR"#;
                 ],
                 "nextSyncToken": "sync-token-roundtrip"
             }}"#,
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-                detached_end.with_timezone(&Utc).to_rfc3339(),
-            ),
-        )
-        .unwrap();
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                    detached_end.with_timezone(&Utc).to_rfc3339(),
+                ),
+            )
+            .unwrap();
 
         let result = engine
             .sync_source_from_google_payload(source_id, inbound_payload)
@@ -2740,7 +2790,8 @@ END:VCALENDAR"#;
 
         let series_start = Local.with_ymd_and_hms(2026, 3, 10, 9, 0, 0).unwrap();
         let series_end = series_start + Duration::hours(1);
-        let mut series = crate::models::event::Event::new("Series", series_start, series_end).unwrap();
+        let mut series =
+            crate::models::event::Event::new("Series", series_start, series_end).unwrap();
         series.recurrence_rule = Some("FREQ=WEEKLY;BYDAY=TU".to_string());
         let series = event_service.create(series).unwrap();
         let series_id = series.id.unwrap();
@@ -2806,9 +2857,10 @@ END:VCALENDAR"#;
             .process_pending_outbound_operations(&source, &writer)
             .unwrap();
 
-        let payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
-            &format!(
-                r#"{{
+        let payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                &format!(
+                    r#"{{
                 "items": [
                     {{
                         "id": "remote-instance-1",
@@ -2824,12 +2876,12 @@ END:VCALENDAR"#;
                 ],
                 "nextSyncToken": "sync-token-create-roundtrip"
             }}"#,
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-                detached_end.with_timezone(&Utc).to_rfc3339(),
-            ),
-        )
-        .unwrap();
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                    detached_end.with_timezone(&Utc).to_rfc3339(),
+                ),
+            )
+            .unwrap();
 
         let result = engine
             .sync_source_from_google_payload(source_id, payload)
@@ -2890,9 +2942,10 @@ END:VCALENDAR"#;
         )
         .unwrap();
 
-        let payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
-            &format!(
-                r#"{{
+        let payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                &format!(
+                    r#"{{
                 "items": [
                     {{
                         "id": "remote-instance-cancel-1",
@@ -2903,10 +2956,10 @@ END:VCALENDAR"#;
                 ],
                 "nextSyncToken": "sync-token-detached-cancel"
             }}"#,
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-            ),
-        )
-        .unwrap();
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                ),
+            )
+            .unwrap();
 
         let result = engine
             .sync_source_from_google_payload(source_id, payload)
@@ -2975,9 +3028,10 @@ END:VCALENDAR"#;
 
         event_service.delete_local(detached_id).unwrap();
 
-        let payload = super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
-            &format!(
-                r#"{{
+        let payload =
+            super::super::google_api::GoogleCalendarApiClient::parse_events_response_body(
+                &format!(
+                    r#"{{
                 "items": [
                     {{
                         "id": "remote-instance-delete-race-1",
@@ -2988,10 +3042,10 @@ END:VCALENDAR"#;
                 ],
                 "nextSyncToken": "sync-token-detached-delete-race"
             }}"#,
-                detached_start.with_timezone(&Utc).to_rfc3339(),
-            ),
-        )
-        .unwrap();
+                    detached_start.with_timezone(&Utc).to_rfc3339(),
+                ),
+            )
+            .unwrap();
 
         let result = engine
             .sync_source_from_google_payload(source_id, payload)
@@ -3007,7 +3061,10 @@ END:VCALENDAR"#;
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(queue_status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED);
+        assert_eq!(
+            queue_status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_COMPLETED
+        );
 
         let mapping_count: i64 = conn
             .query_row(

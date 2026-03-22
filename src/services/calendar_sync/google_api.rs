@@ -6,8 +6,8 @@ use std::time::Duration as StdDuration;
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
-use reqwest::header::RETRY_AFTER;
 use reqwest::blocking::Client;
+use reqwest::header::RETRY_AFTER;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use thiserror::Error;
@@ -214,9 +214,9 @@ impl GoogleCalendarApiClient {
     }
 
     fn calendar_id(source: &CalendarSource) -> Result<String> {
-        source.google_calendar_id().ok_or_else(|| {
-            anyhow!("Calendar source does not contain a valid Google calendar ID")
-        })
+        source
+            .google_calendar_id()
+            .ok_or_else(|| anyhow!("Calendar source does not contain a valid Google calendar ID"))
     }
 
     fn event_request_url(source: &CalendarSource, remote_event_id: &str) -> Result<String> {
@@ -249,7 +249,12 @@ impl GoogleCalendarApiClient {
         let recurrence_token = detached_external_uid
             .split("::RID::")
             .nth(1)
-            .ok_or_else(|| anyhow!("Detached instance identity '{}' is missing recurrence token", detached_external_uid))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Detached instance identity '{}' is missing recurrence token",
+                    detached_external_uid
+                )
+            })?;
         let (time_min, time_max) = detached_instance_window(recurrence_token)?;
 
         let response = self
@@ -352,8 +357,11 @@ impl GoogleOutboundWriter for GoogleCalendarApiClient {
         detached_external_uid: &str,
         payload_json: &str,
     ) -> Result<GoogleRemoteEvent> {
-        let instance =
-            self.find_detached_instance_remote(source, parent_remote_event_id, detached_external_uid)?;
+        let instance = self.find_detached_instance_remote(
+            source,
+            parent_remote_event_id,
+            detached_external_uid,
+        )?;
         let remote_event_id = instance.remote_event_id.clone();
         self.update_event(source, &remote_event_id, payload_json)
     }
@@ -385,7 +393,10 @@ fn build_google_event_request_body(payload_json: &str) -> Result<Value> {
 
     if let Some(description) = payload.get("description").and_then(Value::as_str) {
         if !description.trim().is_empty() {
-            body.insert("description".to_string(), Value::String(description.to_string()));
+            body.insert(
+                "description".to_string(),
+                Value::String(description.to_string()),
+            );
         }
     }
 
@@ -486,12 +497,22 @@ fn detached_instance_window(recurrence_token: &str) -> Result<(String, String)> 
             .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
             .and_local_timezone(Local)
             .earliest()
-            .ok_or_else(|| anyhow!("Detached recurrence token '{}' is invalid in local timezone", recurrence_token))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Detached recurrence token '{}' is invalid in local timezone",
+                    recurrence_token
+                )
+            })?;
         let time_max = (date + Duration::days(1))
             .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
             .and_local_timezone(Local)
             .earliest()
-            .ok_or_else(|| anyhow!("Detached recurrence token '{}' is invalid in local timezone", recurrence_token))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Detached recurrence token '{}' is invalid in local timezone",
+                    recurrence_token
+                )
+            })?;
         return Ok((time_min.to_rfc3339(), time_max.to_rfc3339()));
     }
 
@@ -651,15 +672,16 @@ impl GoogleEventItem {
         }
 
         let mut event = builder.build().map_err(|err| anyhow!(err))?;
-        event.recurrence_exceptions = parse_google_recurrence_exceptions(
-            self.recurrence.as_deref().unwrap_or(&[]),
-        )?;
+        event.recurrence_exceptions =
+            parse_google_recurrence_exceptions(self.recurrence.as_deref().unwrap_or(&[]))?;
 
         Ok(event)
     }
 }
 
-fn parse_google_recurrence_exceptions(recurrence: &[String]) -> Result<Option<Vec<DateTime<Local>>>> {
+fn parse_google_recurrence_exceptions(
+    recurrence: &[String],
+) -> Result<Option<Vec<DateTime<Local>>>> {
     let mut exceptions = Vec::new();
 
     for entry in recurrence {
@@ -667,9 +689,12 @@ fn parse_google_recurrence_exceptions(recurrence: &[String]) -> Result<Option<Ve
             continue;
         }
 
-        let (key_part, value_part) = entry
-            .split_once(':')
-            .ok_or_else(|| anyhow!("Invalid Google EXDATE recurrence entry '{}': missing ':'", entry))?;
+        let (key_part, value_part) = entry.split_once(':').ok_or_else(|| {
+            anyhow!(
+                "Invalid Google EXDATE recurrence entry '{}': missing ':'",
+                entry
+            )
+        })?;
         let tzid = extract_tzid(key_part);
         let is_value_date = key_part.contains("VALUE=DATE");
 
@@ -752,7 +777,12 @@ fn parse_google_date(s: &str) -> Result<DateTime<Local>> {
         .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
         .and_local_timezone(Local)
         .earliest()
-        .ok_or_else(|| anyhow!("Google recurrence date '{}' is invalid in local timezone", s))
+        .ok_or_else(|| {
+            anyhow!(
+                "Google recurrence date '{}' is invalid in local timezone",
+                s
+            )
+        })
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -892,8 +922,14 @@ mod tests {
         let exceptions = event.recurrence_exceptions.as_ref().unwrap();
 
         assert_eq!(exceptions.len(), 2);
-        assert_eq!(exceptions[0].with_timezone(&Utc).to_rfc3339(), "2026-03-17T09:00:00+00:00");
-        assert_eq!(exceptions[1].with_timezone(&Utc).to_rfc3339(), "2026-03-24T09:00:00+00:00");
+        assert_eq!(
+            exceptions[0].with_timezone(&Utc).to_rfc3339(),
+            "2026-03-17T09:00:00+00:00"
+        );
+        assert_eq!(
+            exceptions[1].with_timezone(&Utc).to_rfc3339(),
+            "2026-03-24T09:00:00+00:00"
+        );
     }
 
     #[test]

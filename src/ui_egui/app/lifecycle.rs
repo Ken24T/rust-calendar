@@ -234,11 +234,12 @@ impl CalendarApp {
                 for request in self.countdown_ui.drain_delete_requests() {
                     self.restore_from_tray(ctx);
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                    self.confirm_dialog
-                        .request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                    self.confirm_dialog.request(
+                        super::confirm::ConfirmAction::DeleteCountdownCard {
                             card_id: request.card_id,
                             card_title: request.card_title,
-                        });
+                        },
+                    );
                 }
             }
 

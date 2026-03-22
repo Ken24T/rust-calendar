@@ -7,8 +7,8 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
 use rusqlite::Connection;
 
-use super::google_api::GoogleCalendarApiError;
 use super::engine::{CalendarSyncEngine, SyncRunResult};
+use super::google_api::GoogleCalendarApiError;
 use super::sanitizer;
 use super::CalendarSourceService;
 

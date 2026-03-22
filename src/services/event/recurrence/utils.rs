@@ -39,10 +39,7 @@ pub(super) fn push_if_in_range(
     }
 }
 
-pub(super) fn resolve_local_datetime(
-    date: NaiveDate,
-    time: NaiveTime,
-) -> Option<DateTime<Local>> {
+pub(super) fn resolve_local_datetime(date: NaiveDate, time: NaiveTime) -> Option<DateTime<Local>> {
     resolve_datetime_in_timezone(&Local, date.and_time(time))
 }
 
@@ -162,7 +159,10 @@ mod tests {
 
         let resolved = resolve_datetime_in_timezone(&New_York, naive).unwrap();
 
-        assert_eq!(resolved.naive_local(), naive.date().and_hms_opt(3, 0, 0).unwrap());
+        assert_eq!(
+            resolved.naive_local(),
+            naive.date().and_hms_opt(3, 0, 0).unwrap()
+        );
     }
 
     #[test]
@@ -175,6 +175,9 @@ mod tests {
         let resolved = resolve_datetime_in_timezone(&New_York, naive).unwrap();
 
         assert_eq!(resolved.naive_local(), naive);
-        assert_eq!(resolved.with_timezone(&Utc), Utc.with_ymd_and_hms(2026, 11, 1, 5, 30, 0).unwrap());
+        assert_eq!(
+            resolved.with_timezone(&Utc),
+            Utc.with_ymd_and_hms(2026, 11, 1, 5, 30, 0).unwrap()
+        );
     }
 }

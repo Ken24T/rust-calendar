@@ -49,7 +49,8 @@ pub(super) fn generate(
                 }
             }
 
-            if let Some(occurrence_datetime) = resolve_local_datetime(occurrence_date, week_start_time)
+            if let Some(occurrence_datetime) =
+                resolve_local_datetime(occurrence_date, week_start_time)
             {
                 if occurrence_datetime >= event.start
                     && is_valid_occurrence(event, occurrence_datetime)
