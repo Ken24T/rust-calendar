@@ -29,6 +29,7 @@ Formal source release workflow.
 Attempts to:
 
 - preflight the repo state
+- show a concise origin-vs-local snapshot table before mutating anything
 - run verification gates
 - confirm zero problems
 - assess docs impact
@@ -45,14 +46,18 @@ Use when:
 
 Notes:
 
+- Starts with a four-column table: `Origin`, `Local`, `Status`, `Action(s)`
+- Table should explicitly include rows such as tag state and commits ahead/behind
 - Uses the normal build gate by default, not the release build
 - Patch bump happens on every ship unless the changes are docs-only or infrastructure-only
 - Release build is reserved for installation or deployment scenarios
+- Stops if the branch is dirty, missing an upstream, behind origin, or diverged from origin
+- Stops if `HEAD` is detached
 
 ### `handover` / `handover please`
 
 Purpose:
-Safely reconcile the working branch with `origin` so you can stop on one machine and resume on another from the latest validated shared state.
+Safely reconcile the working branch with `origin` so you can stop on one machine and resume on another from the latest safely recoverable shared state.
 
 Scope:
 
@@ -71,8 +76,9 @@ Handover metadata:
 Attempts to:
 
 - preserve dirty work on the active branch when needed
+- create a durable checkpoint for dirty unpublished work before verification can strand it on one machine
 - fetch and inspect remote state
-- consult the handover metadata branch first when you are on the wrong branch or on `main`
+- prefer the handover metadata branch over an arbitrary clean non-default branch when metadata is newer and valid
 - fall back to branch detection only when metadata is missing, stale, or invalid
 - ask for confirmation before switching if branch choice is ambiguous
 - check out the target branch when safe
@@ -81,6 +87,14 @@ Attempts to:
 - stop on divergence or ambiguity
 - push relevant tags when appropriate
 - confirm that you are positioned back on the resumed work branch with local and remote in sync
+
+Notes:
+
+- Ends with a concise four-column table: `Origin`, `Local`, `Status`, `Action(s)`
+- Keep the handover table to five rows focused on branch sync, latest tag, metadata branch publication, metadata consistency, and final baseline state
+- Use a short completion line after the table to confirm the handed-over branch and commit
+- Update the metadata branch using a secondary worktree or another equally non-destructive method
+- Stops if `HEAD` is detached
 
 Use when:
 
@@ -132,14 +146,25 @@ Current deploy policy:
 - `requireShipFirst: false`
 - `migrationCommand: null`
 
+Deploy guard rails:
+
+- detached `HEAD` should stop deploy
+- destructive replacement without rollback expectations should stop deploy
+
 ### `status` / `status please`
 
 Purpose:
-Read-only report of branch state, sync status, last tag, and recommended next steps.
+Read-only operator snapshot of branch state, sync status, last tag, and recommended next steps.
 
 Use when:
 
 - you want to know whether `handover`, `ship`, or `abort` is needed before doing anything else
+
+Notes:
+
+- This is the trigger that should show the fuller four-column table: `Origin`, `Local`, `Status`, `Action(s)`
+- Table should explicitly include branch state, default-branch state, tag state, ahead/behind counts, working tree, and whether `ship` or `handover` is recommended
+- If metadata points another machine at the wrong published branch, call that out as a resume-target mismatch
 
 ### `abort`
 
@@ -150,6 +175,15 @@ Use when:
 
 - a prior workflow stopped part-way through
 - version, tag, merge, or push state looks inconsistent
+- branch publication and handover metadata disagree
+- a version bump, changelog update, or tag exists without the rest of the release state
+- `main` and a newly created branch are only partially published after a branch workflow
+
+Recovery expectations:
+
+- inspect concrete partial states before proposing action
+- preserve unpublished work before cleanup when needed
+- never rewrite history or force-push without explicit extra confirmation
 
 ### `branch <new-branch-name>`
 
@@ -159,6 +193,8 @@ Close out current work cleanly and start the next branch.
 Attempts to:
 
 - assess whether the current branch should be shipped first
+- stop if `HEAD` is detached
+- stop if the requested new branch name is invalid or already exists locally or remotely
 - stop instead of switching if the current branch is dirty and SHIP is declined
 - stop instead of guessing if the source branch or local `main` is diverged
 - stop if the source branch is ahead, behind, or otherwise not yet synced to its upstream

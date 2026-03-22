@@ -7,7 +7,9 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
 use rusqlite::Connection;
 
+use super::google_api::GoogleCalendarApiError;
 use super::engine::{CalendarSyncEngine, SyncRunResult};
+use super::sanitizer;
 use super::CalendarSourceService;
 
 #[derive(Debug, Clone, Default)]
@@ -112,7 +114,9 @@ impl CalendarSyncScheduler {
             };
 
             let state = self.source_state.entry(source_id).or_default();
-            let is_due = state.next_run_at.is_none_or(|next_run_at| now >= next_run_at);
+            let is_due = state
+                .next_run_at
+                .is_none_or(|next_run_at| now >= next_run_at);
             if !is_due {
                 continue;
             }
@@ -122,19 +126,22 @@ impl CalendarSyncScheduler {
             match runner(source_id) {
                 Ok(sync_result) => {
                     state.consecutive_failures = 0;
-                    state.next_run_at = Some(now + Duration::minutes(source.poll_interval_minutes.max(1)));
+                    state.next_run_at =
+                        Some(now + Duration::minutes(source.poll_interval_minutes.max(1)));
                     result.successful.push(sync_result);
                 }
                 Err(err) => {
                     state.consecutive_failures = state.consecutive_failures.saturating_add(1);
-                    let backoff_minutes = Self::calculate_backoff_minutes(
+                    let backoff_minutes = Self::calculate_backoff_minutes_for_error(
                         source.poll_interval_minutes,
                         state.consecutive_failures,
                         self.max_backoff_minutes,
+                        &err,
                     );
                     state.next_run_at = Some(now + Duration::minutes(backoff_minutes));
 
-                    let redacted_error = Self::redact_error_message(&err.to_string(), &source.ics_url);
+                    let redacted_error =
+                        sanitizer::sanitize_error_message(&err.to_string(), &source.ics_url);
                     result.failed_sources.push((source_id, redacted_error));
                 }
             }
@@ -158,7 +165,11 @@ impl CalendarSyncScheduler {
         Ok(result)
     }
 
-    fn calculate_backoff_minutes(base_poll_minutes: i64, failures: u32, max_backoff_minutes: i64) -> i64 {
+    fn calculate_backoff_minutes(
+        base_poll_minutes: i64,
+        failures: u32,
+        max_backoff_minutes: i64,
+    ) -> i64 {
         let base = base_poll_minutes.max(1);
         if failures == 0 {
             return base;
@@ -169,12 +180,20 @@ impl CalendarSyncScheduler {
         backoff.min(max_backoff_minutes.max(base))
     }
 
-    fn redact_error_message(message: &str, source_url: &str) -> String {
-        if source_url.is_empty() {
-            return message.to_string();
+    fn calculate_backoff_minutes_for_error(
+        base_poll_minutes: i64,
+        failures: u32,
+        max_backoff_minutes: i64,
+        err: &anyhow::Error,
+    ) -> i64 {
+        if let Some(retry_after_minutes) = err
+            .downcast_ref::<GoogleCalendarApiError>()
+            .and_then(GoogleCalendarApiError::retry_after_minutes)
+        {
+            return retry_after_minutes.max(1);
         }
 
-        message.replace(source_url, "***redacted-url***")
+        Self::calculate_backoff_minutes(base_poll_minutes, failures, max_backoff_minutes)
     }
 }
 
@@ -182,11 +201,17 @@ impl CalendarSyncScheduler {
 mod tests {
     use super::CalendarSyncScheduler;
     use crate::services::calendar_sync::engine::SyncRunResult;
+    use crate::services::calendar_sync::google_api::GoogleCalendarApiError;
     use crate::services::database::Database;
     use chrono::{Local, TimeZone};
     use rusqlite::params;
 
-    fn create_source(conn: &rusqlite::Connection, name: &str, poll_minutes: i64, enabled: bool) -> i64 {
+    fn create_source(
+        conn: &rusqlite::Connection,
+        name: &str,
+        poll_minutes: i64,
+        enabled: bool,
+    ) -> i64 {
         conn.execute(
             "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -300,10 +325,53 @@ mod tests {
     }
 
     #[test]
+    fn tick_uses_retry_after_minutes_for_rate_limited_errors() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        let source_id = create_source(conn, "rate-limited", 10, true);
+
+        let mut scheduler = CalendarSyncScheduler::with_startup_delay(chrono::Duration::zero());
+        let now = Local.with_ymd_and_hms(2026, 2, 27, 13, 0, 0).unwrap();
+
+        let first = scheduler
+            .tick_with_runner_at(conn, now, |_source_id| {
+                Err(anyhow::anyhow!(GoogleCalendarApiError::RetryAfter {
+                    status_code: 429,
+                    retry_after_minutes: 25,
+                }))
+            })
+            .unwrap();
+
+        assert_eq!(first.attempted_source_ids, vec![source_id]);
+        assert_eq!(first.failed_sources.len(), 1);
+        assert!(first.failed_sources[0].1.contains("retry after 25 minute"));
+
+        let before_retry = scheduler
+            .tick_with_runner_at(conn, now + chrono::Duration::minutes(24), |_source_id| {
+                Ok(SyncRunResult::default())
+            })
+            .unwrap();
+        assert_eq!(before_retry.attempted_count(), 0);
+
+        let at_retry = scheduler
+            .tick_with_runner_at(conn, now + chrono::Duration::minutes(25), |sid| {
+                Ok(SyncRunResult {
+                    source_id: sid,
+                    ..SyncRunResult::default()
+                })
+            })
+            .unwrap();
+        assert_eq!(at_retry.attempted_source_ids, vec![source_id]);
+    }
+
+    #[test]
     fn redact_error_hides_source_url() {
         let message = "Failed to fetch https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
-        let source_url = "https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
-        let redacted = CalendarSyncScheduler::redact_error_message(message, source_url);
+        let source_url =
+            "https://calendar.google.com/calendar/ical/a%40gmail.com/private-token/basic.ics";
+        let redacted = super::sanitizer::sanitize_error_message(message, source_url);
 
         assert!(!redacted.contains(source_url));
         assert!(redacted.contains("***redacted-url***"));
@@ -317,7 +385,8 @@ mod tests {
 
         let source_id = create_source(conn, "source1", 15, true);
 
-        let mut scheduler = CalendarSyncScheduler::with_startup_delay(chrono::Duration::seconds(20));
+        let mut scheduler =
+            CalendarSyncScheduler::with_startup_delay(chrono::Duration::seconds(20));
         let now = Local.with_ymd_and_hms(2026, 2, 27, 12, 0, 0).unwrap();
 
         scheduler.startup_sync_ready_at = Some(now + chrono::Duration::seconds(20));

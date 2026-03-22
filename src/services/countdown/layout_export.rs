@@ -16,8 +16,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::models::{
-    CountdownCardTemplate, CountdownCardVisuals,
-    CountdownCategory, CountdownDisplayMode, LayoutOrientation,
+    CountdownCardTemplate, CountdownCardVisuals, CountdownCategory, CountdownDisplayMode,
+    LayoutOrientation,
 };
 use super::service::CountdownService;
 
@@ -117,8 +117,7 @@ impl CountdownService {
 
     /// Read a layout from a JSON file.
     pub fn read_layout_file(path: &Path) -> Result<CountdownLayoutExport> {
-        let json =
-            std::fs::read_to_string(path).context("Failed to read countdown layout file")?;
+        let json = std::fs::read_to_string(path).context("Failed to read countdown layout file")?;
         let layout: CountdownLayoutExport =
             serde_json::from_str(&json).context("Failed to parse countdown layout JSON")?;
 
@@ -151,11 +150,7 @@ impl CountdownService {
 
         // --- Templates ---
         for imported in &layout.templates {
-            if let Some(existing) = self
-                .templates
-                .iter_mut()
-                .find(|t| t.name == imported.name)
-            {
+            if let Some(existing) = self.templates.iter_mut().find(|t| t.name == imported.name) {
                 // Update existing template visuals/dimensions (keep existing ID)
                 existing.visuals = imported.visuals.clone();
                 existing.default_card_width = imported.default_card_width;
@@ -175,7 +170,10 @@ impl CountdownService {
         for imported_cat in &layout.categories {
             // Resolve template by name
             let template_id = imported_cat.template_name.as_ref().and_then(|name| {
-                self.templates.iter().find(|t| &t.name == name).map(|t| t.id)
+                self.templates
+                    .iter()
+                    .find(|t| &t.name == name)
+                    .map(|t| t.id)
             });
 
             if let Some(existing) = self
@@ -252,8 +250,8 @@ impl std::fmt::Display for ImportSummary {
 mod tests {
     use super::*;
     use crate::services::countdown::models::{
-        CountdownCardTemplateId, CountdownCategory, CountdownCategoryId,
-        DEFAULT_CATEGORY_ID, DEFAULT_TEMPLATE_ID, LayoutOrientation,
+        CountdownCardTemplateId, CountdownCategory, CountdownCategoryId, LayoutOrientation,
+        DEFAULT_CATEGORY_ID, DEFAULT_TEMPLATE_ID,
     };
 
     fn make_test_service() -> CountdownService {
@@ -322,10 +320,18 @@ mod tests {
         assert_eq!(summary.templates_added, 1);
         assert_eq!(summary.categories_added, 1);
         // The imported template should have a new ID (not 99)
-        let custom = service.templates.iter().find(|t| t.name == "Custom").unwrap();
+        let custom = service
+            .templates
+            .iter()
+            .find(|t| t.name == "Custom")
+            .unwrap();
         assert_ne!(custom.id.0, 99);
         // The new category should reference the custom template
-        let work = service.categories.iter().find(|c| c.name == "Work").unwrap();
+        let work = service
+            .categories
+            .iter()
+            .find(|c| c.name == "Work")
+            .unwrap();
         assert_eq!(work.template_id, Some(custom.id));
     }
 
@@ -364,12 +370,20 @@ mod tests {
         assert_eq!(summary.categories_added, 0);
 
         // Template ID should be preserved
-        let tmpl = service.templates.iter().find(|t| t.name == "Default").unwrap();
+        let tmpl = service
+            .templates
+            .iter()
+            .find(|t| t.name == "Default")
+            .unwrap();
         assert_eq!(tmpl.id, default_template_id);
         assert_eq!(tmpl.default_card_width, 200.0);
 
         // Category should be updated
-        let cat = service.categories.iter().find(|c| c.name == "General").unwrap();
+        let cat = service
+            .categories
+            .iter()
+            .find(|c| c.name == "General")
+            .unwrap();
         assert_eq!(cat.display_order, 5);
         assert_eq!(cat.orientation, LayoutOrientation::Portrait);
     }

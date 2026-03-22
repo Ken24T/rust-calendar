@@ -8,8 +8,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 
 use super::models::{
     CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownCategoryId, CountdownWarningState,
-    RgbaColor,
+    CountdownCardVisuals, CountdownCategoryId, CountdownWarningState, RgbaColor,
 };
 
 pub use super::repository_settings::CountdownGlobalSettings;
@@ -115,12 +114,15 @@ impl<'a> CountdownRepository<'a> {
         let start_at_str = card.start_at.to_rfc3339();
         let event_start_str = card.event_start.map(|t| t.to_rfc3339());
         let event_end_str = card.event_end.map(|t| t.to_rfc3339());
-        let event_color_str = card.event_color.map(|c| format!("{},{},{},{}", c.r, c.g, c.b, c.a));
+        let event_color_str = card
+            .event_color
+            .map(|c| format!("{},{},{},{}", c.r, c.g, c.b, c.a));
         let last_warning_str = card.last_warning_state.map(warning_state_to_string);
         let last_notif_str = card.last_notification_time.map(|t| t.to_rfc3339());
 
-        self.conn.execute(
-            "INSERT INTO countdown_cards (
+        self.conn
+            .execute(
+                "INSERT INTO countdown_cards (
                 id, event_id, event_title, start_at, event_start, event_end,
                 title_override, auto_title_override,
                 comment, event_color,
@@ -150,55 +152,56 @@ impl<'a> CountdownRepository<'a> {
                 ?43, ?44, ?45,
                 ?46
             )",
-            params![
-                card.id.0 as i64,
-                card.event_id,
-                card.event_title,
-                start_at_str,
-                event_start_str,
-                event_end_str,
-                card.title_override,
-                card.auto_title_override,
-                card.comment,
-                event_color_str,
-                card.geometry.x,
-                card.geometry.y,
-                card.geometry.width,
-                card.geometry.height,
-                card.visuals.accent_color,
-                card.visuals.always_on_top,
-                card.visuals.use_default_title_bg,
-                card.visuals.title_bg_color.r,
-                card.visuals.title_bg_color.g,
-                card.visuals.title_bg_color.b,
-                card.visuals.title_bg_color.a,
-                card.visuals.use_default_title_fg,
-                card.visuals.title_fg_color.r,
-                card.visuals.title_fg_color.g,
-                card.visuals.title_fg_color.b,
-                card.visuals.title_fg_color.a,
-                card.visuals.title_font_size,
-                card.visuals.use_default_body_bg,
-                card.visuals.body_bg_color.r,
-                card.visuals.body_bg_color.g,
-                card.visuals.body_bg_color.b,
-                card.visuals.body_bg_color.a,
-                card.visuals.use_default_days_fg,
-                card.visuals.days_fg_color.r,
-                card.visuals.days_fg_color.g,
-                card.visuals.days_fg_color.b,
-                card.visuals.days_fg_color.a,
-                card.visuals.days_font_size,
-                card.auto_dismiss.enabled,
-                card.auto_dismiss.on_event_start,
-                card.auto_dismiss.on_event_end,
-                card.auto_dismiss.delay_seconds,
-                card.last_computed_days,
-                last_warning_str,
-                last_notif_str,
-                card.category_id.0,
-            ],
-        ).context("Failed to insert countdown card")?;
+                params![
+                    card.id.0 as i64,
+                    card.event_id,
+                    card.event_title,
+                    start_at_str,
+                    event_start_str,
+                    event_end_str,
+                    card.title_override,
+                    card.auto_title_override,
+                    card.comment,
+                    event_color_str,
+                    card.geometry.x,
+                    card.geometry.y,
+                    card.geometry.width,
+                    card.geometry.height,
+                    card.visuals.accent_color,
+                    card.visuals.always_on_top,
+                    card.visuals.use_default_title_bg,
+                    card.visuals.title_bg_color.r,
+                    card.visuals.title_bg_color.g,
+                    card.visuals.title_bg_color.b,
+                    card.visuals.title_bg_color.a,
+                    card.visuals.use_default_title_fg,
+                    card.visuals.title_fg_color.r,
+                    card.visuals.title_fg_color.g,
+                    card.visuals.title_fg_color.b,
+                    card.visuals.title_fg_color.a,
+                    card.visuals.title_font_size,
+                    card.visuals.use_default_body_bg,
+                    card.visuals.body_bg_color.r,
+                    card.visuals.body_bg_color.g,
+                    card.visuals.body_bg_color.b,
+                    card.visuals.body_bg_color.a,
+                    card.visuals.use_default_days_fg,
+                    card.visuals.days_fg_color.r,
+                    card.visuals.days_fg_color.g,
+                    card.visuals.days_fg_color.b,
+                    card.visuals.days_fg_color.a,
+                    card.visuals.days_font_size,
+                    card.auto_dismiss.enabled,
+                    card.auto_dismiss.on_event_start,
+                    card.auto_dismiss.on_event_end,
+                    card.auto_dismiss.delay_seconds,
+                    card.last_computed_days,
+                    last_warning_str,
+                    last_notif_str,
+                    card.category_id.0,
+                ],
+            )
+            .context("Failed to insert countdown card")?;
 
         Ok(())
     }
@@ -208,7 +211,9 @@ impl<'a> CountdownRepository<'a> {
         let start_at_str = card.start_at.to_rfc3339();
         let event_start_str = card.event_start.map(|t| t.to_rfc3339());
         let event_end_str = card.event_end.map(|t| t.to_rfc3339());
-        let event_color_str = card.event_color.map(|c| format!("{},{},{},{}", c.r, c.g, c.b, c.a));
+        let event_color_str = card
+            .event_color
+            .map(|c| format!("{},{},{},{}", c.r, c.g, c.b, c.a));
         let last_warning_str = card.last_warning_state.map(warning_state_to_string);
         let last_notif_str = card.last_notification_time.map(|t| t.to_rfc3339());
 
@@ -298,10 +303,7 @@ impl<'a> CountdownRepository<'a> {
     pub fn delete_cards_for_event(&self, event_id: i64) -> Result<usize> {
         let rows = self
             .conn
-            .execute(
-                "DELETE FROM countdown_cards WHERE event_id = ?",
-                [event_id],
-            )
+            .execute("DELETE FROM countdown_cards WHERE event_id = ?", [event_id])
             .context("Failed to delete countdown cards for event")?;
         Ok(rows)
     }

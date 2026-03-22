@@ -31,7 +31,9 @@ pub struct CreateEventCommand {
 
 impl CreateEventCommand {
     pub fn new(event: Event) -> Self {
-        Self { event: Mutex::new(event) }
+        Self {
+            event: Mutex::new(event),
+        }
     }
 }
 
@@ -41,7 +43,7 @@ impl Command for CreateEventCommand {
         let mut event = self.event.lock().unwrap();
         let mut new_event = event.clone();
         new_event.id = None; // Clear ID so it creates a new record
-        let created = event_service.create(new_event)?;
+        let created = event_service.create_local(new_event)?;
         // Update our stored event with the new ID so undo works
         event.id = created.id;
         Ok(())
@@ -51,7 +53,7 @@ impl Command for CreateEventCommand {
         // Delete the event
         let event = self.event.lock().unwrap();
         if let Some(id) = event.id {
-            event_service.delete(id)?;
+            event_service.delete_local(id)?;
         }
         Ok(())
     }
@@ -82,12 +84,12 @@ impl UpdateEventCommand {
 
 impl Command for UpdateEventCommand {
     fn execute(&self, event_service: &EventService) -> Result<()> {
-        event_service.update(&self.new_event)?;
+        event_service.update_local(&self.new_event)?;
         Ok(())
     }
 
     fn undo(&self, event_service: &EventService) -> Result<()> {
-        event_service.update(&self.old_event)?;
+        event_service.update_local(&self.old_event)?;
         Ok(())
     }
 
@@ -107,7 +109,9 @@ pub struct DeleteEventCommand {
 
 impl DeleteEventCommand {
     pub fn new(event: Event) -> Self {
-        Self { event: Mutex::new(event) }
+        Self {
+            event: Mutex::new(event),
+        }
     }
 }
 
@@ -115,7 +119,7 @@ impl Command for DeleteEventCommand {
     fn execute(&self, event_service: &EventService) -> Result<()> {
         let event = self.event.lock().unwrap();
         if let Some(id) = event.id {
-            event_service.delete(id)?;
+            event_service.delete_local(id)?;
         }
         Ok(())
     }
@@ -125,7 +129,7 @@ impl Command for DeleteEventCommand {
         let mut event = self.event.lock().unwrap();
         let mut new_event = event.clone();
         new_event.id = None; // Clear ID so it creates a new record
-        let created = event_service.create(new_event)?;
+        let created = event_service.create_local(new_event)?;
         // Update our stored event with the new ID so redo works
         event.id = created.id;
         Ok(())

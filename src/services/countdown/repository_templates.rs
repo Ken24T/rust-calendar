@@ -182,10 +182,7 @@ impl<'a> CountdownRepository<'a> {
 
         let rows = self
             .conn
-            .execute(
-                "DELETE FROM countdown_card_templates WHERE id = ?",
-                [id.0],
-            )
+            .execute("DELETE FROM countdown_card_templates WHERE id = ?", [id.0])
             .context("Failed to delete countdown card template")?;
 
         Ok(rows > 0)

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 7,
   "governance": {
     "sourceOfTruth": "TCTBP.json",
     "fallbackDocument": "TCTBP Agent.md"
@@ -14,22 +14,67 @@
     "caseInsensitive": true,
     "branchCommand": {
       "enabled": true,
-      "pattern": "^branch\\s+(.+)$"
+      "pattern": "^branch\\s+(.+)$",
+      "stopIfTargetBranchExistsLocal": true,
+      "stopIfTargetBranchExistsRemote": true,
+      "stopIfTargetBranchEqualsDefault": true,
+      "stopIfTargetBranchInvalid": true
     }
   },
+  "ship": {
+    "preferredTriggers": ["ship", "ship please", "shipping", "prepare release"],
+    "requireFetchedOriginInPreflight": true,
+    "stopIfDetachedHead": true,
+    "stopIfBranchMissingUpstream": true,
+    "allowShipFromUnpublishedBranch": false,
+    "stopIfBranchBehindUpstream": true,
+    "stopIfBranchDiverged": true,
+    "stopIfWorkingTreeDirty": true,
+    "purpose": "Create a formal shipped version only from a clean, fetched, synced branch so version, tag, and remote state stay recoverable and unambiguous."
+  },
   "workflow": {
-    "shipOrder": ["preflight", "test", "problems", "docs-impact", "bump", "commit", "changelog", "tag", "push"],
+    "shipOrder": ["preflight", "verify", "problems", "docs-impact", "bump", "commit", "changelog", "tag", "push"],
     "branchOrder": ["preflight", "assess-ship", "verify-or-stop", "inspect-source-branch", "sync-default-branch", "merge-source-into-default-when-needed", "verify-transition", "create-new-branch", "optional-cleanup", "summary"],
-    "handoverOrder": ["preflight", "fetch", "read-handover-metadata", "determine-target-branch", "switch-target-branch", "compare", "stage", "test-gate", "docs-impact", "commit-if-needed", "ship-if-needed", "reconcile", "push-if-needed", "update-handover-metadata", "verify-sync", "summary"],
+    "handoverOrder": ["preflight", "fetch", "read-handover-metadata", "determine-target-branch", "switch-target-branch", "compare", "stage", "checkpoint-if-needed", "verify-gate", "docs-impact", "commit-if-needed", "ship-if-needed", "reconcile", "push-if-needed", "update-handover-metadata", "verify-sync", "summary"],
     "statusOrder": ["fetch", "report", "recommend"],
     "abortOrder": ["inspect", "propose", "execute"],
     "deployOrder": ["preflight", "sync-prerequisite", "verification-gate", "docs-impact", "runtime-build", "deploy-target", "post-deploy-validation", "summary"],
     "requireApproval": ["push"]
   },
+  "shipReport": {
+    "enabled": true,
+    "stage": "preflight",
+    "format": "table",
+    "columns": ["Origin", "Local", "Status", "Action(s)"],
+    "recommendedRows": ["branch-and-upstream", "head-commit", "last-shipped-tag", "commits-ahead-behind", "working-tree", "version-source", "docs-impact", "push-readiness"],
+    "comment": "At the start of SHIP, render a concise release-focused local-versus-origin snapshot table before making changes. Use 'n/a' where a row has no meaningful origin-side value."
+  },
+  "statusReport": {
+    "enabled": true,
+    "stage": "report",
+    "format": "table",
+    "columns": ["Origin", "Local", "Status", "Action(s)"],
+    "recommendedRows": ["branch-and-upstream", "head-commit", "default-branch-state", "last-shipped-tag", "commits-ahead-behind", "working-tree", "version-source", "handover-metadata", "ship-readiness", "handover-readiness"],
+    "comment": "For status, render the fuller local-versus-origin operator snapshot. Include the current branch, default branch, tags, ahead/behind state, and handover relevance. Use 'n/a' where no meaningful origin-side value exists."
+  },
+  "handoverReport": {
+    "enabled": true,
+    "stage": "summary",
+    "format": "table",
+    "columns": ["Origin", "Local", "Status", "Action(s)"],
+    "recommendedRows": ["target-branch-state", "last-shipped-tag", "metadata-branch-state", "metadata-consistency", "handover-baseline"],
+    "comment": "At the end of handover, render a concise five-row summary table that confirms the target branch, tag state, metadata branch publication, metadata consistency, and clean synced baseline. Keep it shorter than status and focused on the handover result."
+  },
   "branch": {
     "enabled": true,
     "purpose": "Safely close out the current branch, reconcile local main, and create the next work branch without losing code.",
     "defaultBranch": "main",
+    "stopIfDetachedHead": true,
+    "validateTargetBranchNameBeforeWorkflow": true,
+    "stopIfTargetBranchExistsLocal": true,
+    "stopIfTargetBranchExistsRemote": true,
+    "stopIfTargetBranchEqualsDefault": true,
+    "stopIfTargetBranchInvalid": true,
     "requiresCleanTreeBeforeSwitch": true,
     "stopIfDirtyAndShipDeclined": true,
     "stopIfSourceBranchAheadOfUpstream": true,
@@ -53,13 +98,17 @@
   },
   "handover": {
     "preferredTriggers": ["handover", "handover please"],
-    "purpose": "Reconcile the active work branch with origin so work can stop on one machine and resume on another from the latest validated shared state.",
+    "purpose": "Reconcile the active work branch with origin so work can stop on one machine and resume on another from the latest safely recoverable shared state.",
     "syncScope": "active-work-branch-plus-handover-metadata-and-relevant-tags",
     "metadataBranch": "tctbp/handover-state",
     "metadataFile": ".github/TCTBP_STATE.json",
     "consultMetadataBranchBeforeBranchInference": true,
     "updateMetadataBranchOnSuccessfulHandover": true,
     "excludeBranchesFromCandidateDetection": ["origin/main", "origin/HEAD", "origin/tctbp/handover-state"],
+    "stopIfDetachedHead": true,
+    "preferMetadataBranchUnlessCurrentBranchDescendsFromMetadataCommit": true,
+    "checkpointDirtyUnpublishedTargetBeforeVerification": true,
+    "updateMetadataUsingSecondaryWorktree": true,
     "resumesTargetBranchOnAnotherMachine": true,
     "requiresConfirmationWhenSwitchingBranches": true,
     "stopOnAmbiguousTargetBranch": true,

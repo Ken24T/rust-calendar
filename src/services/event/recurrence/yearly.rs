@@ -2,7 +2,7 @@ use crate::models::event::Event;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate};
 
 use super::parser::parse_interval;
-use super::utils::{is_valid_occurrence, push_if_in_range};
+use super::utils::{is_valid_occurrence, push_if_in_range, resolve_local_datetime};
 
 pub(super) fn generate(
     event: &Event,
@@ -53,7 +53,10 @@ pub(super) fn generate(
     occurrences
 }
 
-fn advance_year_with_day_clamp(current_start: DateTime<Local>, year_interval: i32) -> DateTime<Local> {
+fn advance_year_with_day_clamp(
+    current_start: DateTime<Local>,
+    year_interval: i32,
+) -> DateTime<Local> {
     let target_year = current_start.year() + year_interval;
     let month = current_start.month();
     let day = current_start.day();
@@ -63,11 +66,7 @@ fn advance_year_with_day_clamp(current_start: DateTime<Local>, year_interval: i3
     let mut clamped_day = day;
     while clamped_day > 28 {
         if let Some(candidate) = NaiveDate::from_ymd_opt(target_year, month, clamped_day)
-            .and_then(|date| {
-                date.and_time(time)
-                    .and_local_timezone(Local)
-                    .single()
-            })
+            .and_then(|date| resolve_local_datetime(date, time))
         {
             return candidate;
         }

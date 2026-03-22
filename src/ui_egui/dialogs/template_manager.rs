@@ -81,7 +81,10 @@ impl TemplateEditState {
             duration_minutes: minutes,
             all_day: template.all_day,
             category: template.category.clone().unwrap_or_default(),
-            color: template.color.clone().unwrap_or_else(|| "#3B82F6".to_string()),
+            color: template
+                .color
+                .clone()
+                .unwrap_or_else(|| "#3B82F6".to_string()),
         }
     }
 
@@ -92,12 +95,32 @@ impl TemplateEditState {
             id: self.id,
             name: self.name.clone(),
             title: self.title.clone(),
-            description: if self.description.is_empty() { None } else { Some(self.description.clone()) },
-            location: if self.location.is_empty() { None } else { Some(self.location.clone()) },
-            duration_minutes: if self.all_day { 24 * 60 } else { duration_minutes.max(1) },
+            description: if self.description.is_empty() {
+                None
+            } else {
+                Some(self.description.clone())
+            },
+            location: if self.location.is_empty() {
+                None
+            } else {
+                Some(self.location.clone())
+            },
+            duration_minutes: if self.all_day {
+                24 * 60
+            } else {
+                duration_minutes.max(1)
+            },
             all_day: self.all_day,
-            category: if self.category.is_empty() { None } else { Some(self.category.clone()) },
-            color: if self.color.is_empty() { None } else { Some(self.color.clone()) },
+            category: if self.category.is_empty() {
+                None
+            } else {
+                Some(self.category.clone())
+            },
+            color: if self.color.is_empty() {
+                None
+            } else {
+                Some(self.color.clone())
+            },
             recurrence_rule: None, // Not editing recurrence in templates for now
             created_at: None,
         }
@@ -153,7 +176,9 @@ impl TemplateManagerState {
     }
 
     pub fn start_new_template(&mut self, default_duration_minutes: u32) {
-        self.editing_template = Some(TemplateEditState::new_with_duration(default_duration_minutes));
+        self.editing_template = Some(TemplateEditState::new_with_duration(
+            default_duration_minutes,
+        ));
         self.error_message = None;
     }
 
@@ -246,7 +271,7 @@ fn render_template_list(
         .show(ui, |ui| {
             for template in state.templates.clone() {
                 let is_selected = state.selected_template_id == template.id;
-                
+
                 egui::Frame::none()
                     .fill(if is_selected {
                         ui.visuals().selection.bg_fill
@@ -277,7 +302,7 @@ fn render_template_list(
                                     ui.label(">");
                                     ui.label(&template.title);
                                 });
-                                
+
                                 ui.horizontal(|ui| {
                                     if template.all_day {
                                         ui.label(RichText::new("All-day").weak().small());
@@ -293,35 +318,43 @@ fn render_template_list(
                                         };
                                         ui.label(RichText::new(duration).weak().small());
                                     }
-                                    
+
                                     if let Some(ref cat) = template.category {
-                                        ui.label(RichText::new(format!("• {}", cat)).weak().small());
+                                        ui.label(
+                                            RichText::new(format!("• {}", cat)).weak().small(),
+                                        );
                                     }
-                                    
+
                                     if let Some(ref loc) = template.location {
                                         if !loc.is_empty() {
-                                            ui.label(RichText::new(format!("📍 {}", loc)).weak().small());
+                                            ui.label(
+                                                RichText::new(format!("📍 {}", loc)).weak().small(),
+                                            );
                                         }
                                     }
                                 });
                             });
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button("🗑").on_hover_text("Delete").clicked() {
-                                    let service = TemplateService::new(database.connection());
-                                    if let Some(id) = template.id {
-                                        if let Err(e) = service.delete(id) {
-                                            state.error_message = Some(format!("Delete failed: {}", e));
-                                        } else {
-                                            state.needs_refresh = true;
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.button("🗑").on_hover_text("Delete").clicked() {
+                                        let service = TemplateService::new(database.connection());
+                                        if let Some(id) = template.id {
+                                            if let Err(e) = service.delete(id) {
+                                                state.error_message =
+                                                    Some(format!("Delete failed: {}", e));
+                                            } else {
+                                                state.needs_refresh = true;
+                                            }
                                         }
                                     }
-                                }
-                                
-                                if ui.button("✏").on_hover_text("Edit").clicked() {
-                                    state.start_edit_template(&template);
-                                }
-                            });
+
+                                    if ui.button("✏").on_hover_text("Edit").clicked() {
+                                        state.start_edit_template(&template);
+                                    }
+                                },
+                            );
                         });
                     });
 
@@ -338,18 +371,18 @@ fn render_template_list(
         });
 }
 
-fn render_edit_form(
-    ui: &mut egui::Ui,
-    state: &mut TemplateManagerState,
-    database: &Database,
-) {
+fn render_edit_form(ui: &mut egui::Ui, state: &mut TemplateManagerState, database: &Database) {
     let Some(editing) = state.editing_template.as_mut() else {
         return;
     };
-    
+
     let is_new = editing.id.is_none();
 
-    ui.heading(if is_new { "New Template" } else { "Edit Template" });
+    ui.heading(if is_new {
+        "New Template"
+    } else {
+        "Edit Template"
+    });
     ui.add_space(8.0);
 
     // Error message
@@ -528,9 +561,12 @@ fn render_edit_form(
             state.error_message = Some(e);
         } else {
             let service = TemplateService::new(database.connection());
-            
+
             // Check for duplicate name
-            if service.name_exists(&template_to_save.name, template_to_save.id).unwrap_or(false) {
+            if service
+                .name_exists(&template_to_save.name, template_to_save.id)
+                .unwrap_or(false)
+            {
                 state.error_message = Some("A template with this name already exists".to_string());
             } else {
                 let result = if is_new {
@@ -579,7 +615,7 @@ fn parse_hex_color(hex: &str) -> Option<Color32> {
     if !hex.starts_with('#') {
         return None;
     }
-    
+
     let hex = &hex[1..];
     if hex.len() == 6 {
         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;

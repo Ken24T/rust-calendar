@@ -5,6 +5,401 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.32] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 recent sync-run audit history:
+  - calendar sync settings now show the latest recorded sync runs with status, duration, counters, and any recorded error
+  - diagnostics service now exposes recent sync run history in newest-first order
+
+### Changed
+
+- Sync health visibility now includes short recent-run history instead of only the latest status summary.
+
+## [2.4.31] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 manual broken-mapping recovery:
+  - calendar sync settings now offer a manual action to disconnect a broken sync mapping from a failed outbound operation
+  - regression coverage now protects clearing stale sync tracking while preserving the local event
+
+### Changed
+
+- Applying manual broken-mapping recovery now completes the failed queue entry and removes stale remote tracking so the event remains local-only.
+
+## [2.4.30] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 bulk-retry hygiene for broken mappings:
+  - source-level failed-push resets now leave broken remote-metadata failures in place instead of requeueing them
+  - regression coverage now protects bulk retry from reviving doomed broken-mapping operations
+
+### Changed
+
+- Calendar sync settings now report when failed pushes require manual broken-mapping recovery rather than a normal retry.
+
+## [2.4.29] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 broken-delete recovery hardening:
+  - outbound deletes now complete cleanly when remote metadata has already lost its remote event id
+  - regression coverage now protects stale delete cleanup when the local event has already been removed
+
+### Changed
+
+- Broken delete operations now clear stale sync tracking instead of remaining stuck in a failed terminal state.
+
+## [2.4.28] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 broken-mapping recovery hardening:
+  - outbound operations with missing remote identifiers now fail terminally instead of retrying forever
+  - regression coverage now distinguishes terminal broken-mapping failures from retriable transient failures
+
+### Changed
+
+- Failed outbound operations only re-enter the runnable queue when they have an explicit retry schedule.
+
+## [2.4.27] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 operational status observability:
+  - sync source status and sync-run audit history now distinguish temporary backoff from generic failure
+  - regression coverage verifies backoff status persistence in both source metadata and diagnostics history
+
+### Changed
+
+- Google retry-after errors are now recorded as `backoff` instead of plain `failed` in sync health surfaces.
+
+## [2.4.26] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.7 rate-limit backoff hardening:
+  - Google Calendar API errors now preserve explicit retry-after backoff windows for rate-limit and temporary-unavailable responses
+  - scheduler coverage now verifies server-directed retry windows override generic exponential backoff
+
+### Changed
+
+- Sync token recovery now applies only to expired Google sync tokens, not to rate-limited API responses.
+
+## [2.4.25] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 recurrence-exception round-trip coverage:
+  - timed recurring series now have end-to-end exception round-trip tests across local edit, outbound push, and inbound Google reconciliation
+  - all-day recurring series now have the same round-trip coverage plus explicit outbound `EXDATE;VALUE=DATE` request-body validation
+
+### Changed
+
+- Recurrence exception lifecycle is now proven across both timed and all-day Google series update flows.
+
+## [2.4.24] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 detached delete convergence coverage:
+  - regression coverage for inbound cancellation of detached instances
+  - convergence coverage when a local detached delete is already queued and Google returns the matching cancelled instance
+
+### Changed
+
+- Detached recurring-instance deletion is now proven stable across inbound cancellation and outbound delete convergence paths.
+
+## [2.4.23] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 detached create convergence coverage:
+  - matching inbound detached instances now have regression coverage while a local detached create is still pending outbound
+  - detached instance create now has round-trip sync coverage after outbound patch completion
+
+### Changed
+
+- Detached recurring-instance creation is now proven stable across outbound/inbound race and post-patch reconciliation paths.
+
+## [2.4.22] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 detached instance lifecycle hardening:
+  - regression coverage for detached instance outbound update and delete after remote metadata exists
+  - round-trip sync coverage for detached instance identities after outbound update completion
+
+### Changed
+
+- Detached recurring-instance lifecycle behaviour is now covered across outbound update/delete and subsequent inbound Google reconciliation on the same `RID` identity.
+
+## [2.4.21] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 outbound retry scheduling:
+  - failed outbound Google operations now record `next_retry_at` using exponential backoff based on the source poll interval
+  - due failed operations automatically re-enter execution during later RW sync runs
+
+### Changed
+
+- Transient outbound recurrence push failures no longer stall permanently after the first error; the queue now tracks retry timing and reprocesses eligible failures automatically.
+
+## [2.4.20] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 outbound recurrence execution:
+  - pending Google read/write queue items now execute during RW source syncs for series updates, mapped deletes, and detached occurrence instance patching
+  - regression coverage for parent-series update pushes and detached occurrence create pushes
+
+### Changed
+
+- Successful Google outbound recurrence pushes now refresh remote metadata and source `last_push_at` instead of leaving queue items pending indefinitely.
+
+## [2.4.19] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 recurrence exception integrity hardening:
+  - Google API recurrence parsing now preserves `EXDATE` entries for timed and all-day recurring events
+  - regression coverage for inbound Google payloads with recurrence exceptions
+
+### Changed
+
+- Inbound Google sync no longer drops master-series recurrence exceptions when the API returns `EXDATE` rules alongside `RRULE`.
+
+## [2.4.18] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 recurrence timezone hardening:
+  - deterministic regression tests for DST spring-forward gap resolution and fall-back ambiguity handling
+  - shared recurrence helper for resolving recurring local datetimes through DST transitions
+
+### Changed
+
+- Daily recurring series now advance by local calendar day instead of fixed 24-hour jumps, preserving wall-clock intent across DST boundaries.
+- Weekly, monthly, and yearly recurrence generation now keep occurrences on the first valid local time when a scheduled wall-clock time falls inside a DST gap.
+
+## [2.4.17] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 month-view recurrence parity:
+  - month-view context menus now distinguish single-occurrence edit/delete from whole-series actions
+  - month-view recurring instances can open the detached occurrence edit flow used by timed views
+
+### Changed
+
+- Recurring events in month view no longer collapse to a generic series-only context menu path.
+- Month-view delete requests now preserve occurrence dates so writable recurring instances can delete just one occurrence.
+
+## [2.4.16] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.6 single-occurrence edit groundwork:
+  - detachable occurrence edit flow for recurring events in timed view context menus
+  - standalone detached-instance creation that preserves the parent series as an exception
+  - outbound queue + mapping coverage for writable recurring-instance edits
+
+### Changed
+
+- Writable synced recurring events can now be edited as either the whole series or a single occurrence from timed view context menus.
+- Saving a single-occurrence edit now creates a detached local event, queues an instance create for the writable source, and updates the parent series exceptions in the same flow.
+
+## [2.4.15] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.5 conflict policy and review groundwork:
+  - persistent `sync_conflicts` audit table with model/service coverage tests
+  - remote-wins conflict detection for inbound Google API reconciliation
+  - sync settings review controls for keeping the remote version or retrying the queued local change
+
+### Changed
+
+- Inbound Google sync now detects queued local write conflicts, applies a deterministic
+  remote-wins policy, and marks the queued outbound operation for manual follow-up.
+- Matching inbound state now auto-completes stale outbound queue entries when the
+  remote event already reflects the intended local change.
+- Sync completion messages now include conflict counts for read/write sources.
+
+## [2.4.14] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.4 inbound incremental Google API sync:
+  - Google Calendar API incremental pull client with sync-token support
+  - calendar ID extraction from existing Google ICS source URLs
+  - account service helper for retrieving/refreshing a valid access token
+  - reconciliation tests for API-driven create/delete flows and token persistence
+
+### Changed
+
+- Read/write sources now use the Google Calendar API for inbound sync and preview
+  instead of the ICS fetch path.
+- Incremental sync updates local events, mappings, and remote metadata from API
+  responses and clears expired sync tokens automatically before retrying.
+- Sync settings heading now reflects mixed read-only/read-write operation.
+
+## [2.4.13] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.3 outbound write foundation:
+  - new `outbound_sync_operations` queue table with retry/error metadata
+  - `OutboundSyncService` for enqueue, queue stats, and failed-operation reset
+  - outbound operation model and coverage tests
+
+### Changed
+
+- Added local-only event CRUD entry points (`create_local`, `update_local`,
+  `delete_local`) to enqueue outbound writes only for mapped `read_write`
+  sources, avoiding inbound sync feedback loops.
+- Updated user-driven event edit/delete/create paths (dialog, drag/resize,
+  imports, countdown text sync, undo/redo) to use local-aware CRUD methods.
+- Sync settings now allow toggling source capability (`read_only`/`read_write`)
+  and display outbound queue state with a retry action for failed pushes.
+
+## [2.4.12] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.2 remote identity metadata groundwork:
+  - per-source sync capability + API sync token metadata
+  - remote event metadata store (`remote_event_id`, `remote_etag`, payload hash)
+  - service APIs for metadata upsert/read and source sync-state updates
+
+### Changed
+
+- Calendar source schema/model/service now track read-only vs read-write
+  capability and last outbound push timestamp.
+- Settings sync section now surfaces source capability and last push state.
+- Added schema/service tests for new S2.2 metadata tables and helpers.
+
+## [2.4.11] - 2026-03-06
+
+### Added
+
+- Stage 2 Google Sync S2.1 account-linking foundation:
+  - persisted Google account state model/service
+  - device-code OAuth connect/reconnect flow
+  - token refresh and disconnect actions in Settings
+
+### Changed
+
+- Added a dedicated `google_account` database table and schema coverage tests.
+- Extended calendar sync settings UI with a new "Google Account (Read/Write
+  Preview)" section showing link state, token expiry, and auth errors.
+
+## [2.4.10] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.7 sanitization module for centralized redaction of
+  sync error details (URLs and bearer-style secrets).
+
+### Changed
+
+- Calendar sync engine, scheduler, and fetcher now share one sanitization path
+  to prevent raw source URLs or token-like values leaking into logs and stored
+  sync failure messages.
+- Fetch retry logging now sanitizes propagated network errors before emission.
+
+## [2.4.9] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.6 read-only UX hardening with synced source labels in
+  Search and view context menus.
+
+### Changed
+
+- Sync guard toasts now clearly explain that synced events must be edited or
+  deleted in Google Calendar and then re-synced, with source-aware messaging
+  when available.
+- Event dialog save validation now returns source-aware read-only messages for
+  synced events.
+
+## [2.4.8] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.5 recurrence-instance identity support by parsing
+  `RECURRENCE-ID` from ICS imports.
+
+### Changed
+
+- Sync mapping now derives a stable effective external identity for recurring
+  overrides using `UID + RECURRENCE-ID`, preventing legitimate modified
+  instances from being treated as duplicate UIDs and skipped.
+- Added regression coverage for recurring series overrides that share a UID.
+
+## [2.4.7] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.4 staged deletion reconciliation with a grace window
+  before purging missing mapped events.
+- New `event_sync_map` staged deletion metadata fields (`first_missing_at`,
+  `purge_after_at`) with migration support.
+
+### Changed
+
+- Sync reconciliation now marks first-missing entries and delays destructive
+  delete until the grace threshold is reached, reducing risk from transient
+  feed inconsistencies.
+- Seeing a UID again clears staged-deletion markers automatically.
+
+## [2.4.6] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.3 per-source sync window controls:
+  - past days horizon
+  - future days horizon
+
+### Changed
+
+- Sync and preview runs now filter imported events by each source's configured
+  date window before change detection/apply.
+- Skipped counts in sync summaries now include date-window filtered events.
+- Calendar source model and persistence now store source-specific sync horizons.
+
+## [2.4.5] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.2 preview flow with a non-destructive "Preview Sync"
+  action per source in settings.
+- Dry-run sync engine path that calculates pending create/update/delete and
+  unchanged/skipped counts without mutating local events or mappings.
+
+### Changed
+
+- Calendar sync status messaging now distinguishes preview vs apply runs while
+  keeping detailed count output.
+
+## [2.4.4] - 2026-03-06
+
+### Added
+
+- Stage 1 Google Sync S1.1 diagnostics foundation with persisted per-source sync
+  run summaries (`calendar_sync_runs`) including duration and counters.
+
+### Changed
+
+- Enhanced Google Sync settings status output to show richer run details:
+  created/updated/deleted/unchanged/skipped/errors and run duration.
+- Sync engine now distinguishes unchanged mapped events from true updates in
+  run summaries.
+
 ## [2.4.3] - 2026-03-06
 
 ### Fixed

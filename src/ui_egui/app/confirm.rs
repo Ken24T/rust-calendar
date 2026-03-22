@@ -15,13 +15,16 @@ pub enum ConfirmAction {
     /// Delete an event by ID
     DeleteEvent { event_id: i64, event_title: String },
     /// Delete a single occurrence of a recurring event
-    DeleteEventOccurrence { 
-        event_id: i64, 
-        event_title: String, 
-        occurrence_date: chrono::DateTime<chrono::Local> 
+    DeleteEventOccurrence {
+        event_id: i64,
+        event_title: String,
+        occurrence_date: chrono::DateTime<chrono::Local>,
     },
     /// Delete a countdown card by ID
-    DeleteCountdownCard { card_id: crate::services::countdown::CountdownCardId, card_title: String },
+    DeleteCountdownCard {
+        card_id: crate::services::countdown::CountdownCardId,
+        card_title: String,
+    },
     /// Discard unsaved changes in a dialog
     DiscardChanges,
     /// Delete a custom theme
@@ -47,9 +50,16 @@ impl ConfirmAction {
     pub fn message(&self) -> String {
         match self {
             ConfirmAction::DeleteEvent { event_title, .. } => {
-                format!("Are you sure you want to delete \"{}\"?\n\nThis action cannot be undone.", event_title)
+                format!(
+                    "Are you sure you want to delete \"{}\"?\n\nThis action cannot be undone.",
+                    event_title
+                )
             }
-            ConfirmAction::DeleteEventOccurrence { event_title, occurrence_date, .. } => {
+            ConfirmAction::DeleteEventOccurrence {
+                event_title,
+                occurrence_date,
+                ..
+            } => {
                 format!(
                     "Are you sure you want to delete this occurrence of \"{}\" on {}?\n\nOther occurrences will not be affected.",
                     event_title,
@@ -163,7 +173,11 @@ impl ConfirmDialogState {
                 // Warning icon for destructive actions
                 if action.is_destructive() {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("⚠").size(24.0).color(egui::Color32::from_rgb(220, 150, 50)));
+                        ui.label(
+                            RichText::new("⚠")
+                                .size(24.0)
+                                .color(egui::Color32::from_rgb(220, 150, 50)),
+                        );
                         ui.vertical(|ui| {
                             ui.label(action.message());
                         });
@@ -182,12 +196,11 @@ impl ConfirmDialogState {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Add padding on the right side of Delete button
                         ui.add_space(5.0);
-                        
+
                         // Confirm button
                         let confirm_button = if action.is_destructive() {
                             egui::Button::new(
-                                RichText::new(action.confirm_text())
-                                    .color(egui::Color32::WHITE)
+                                RichText::new(action.confirm_text()).color(egui::Color32::WHITE),
                             )
                             .fill(egui::Color32::from_rgb(180, 60, 60))
                         } else {
@@ -238,9 +251,9 @@ impl CalendarApp {
     /// Handle the confirmation dialog rendering and process confirmed actions
     pub(super) fn handle_confirm_dialog(&mut self, ctx: &Context) {
         use super::confirm::ConfirmResult;
-        
+
         let result = self.confirm_dialog.render(ctx);
-        
+
         if result == ConfirmResult::Confirmed {
             // Get the action that was confirmed
             if let Some(action) = self.confirm_dialog.take_action() {
@@ -248,58 +261,79 @@ impl CalendarApp {
             }
         }
     }
-    
+
     /// Execute an action that has been confirmed by the user
     fn execute_confirmed_action(&mut self, action: ConfirmAction, ctx: &Context) {
         match action {
-            ConfirmAction::DeleteEvent { event_id, event_title } => {
-                if self.is_synced_event_id(event_id) {
-                    self.notify_synced_event_read_only();
+            ConfirmAction::DeleteEvent {
+                event_id,
+                event_title,
+            } => {
+                if self.is_read_only_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only_for(event_id);
                     return;
                 }
 
                 let event_service = self.context.event_service();
-                
+
                 // Fetch the full event before deleting (for undo)
                 let event_for_undo = event_service.get(event_id).ok().flatten();
-                
-                if let Err(e) = event_service.delete(event_id) {
+
+                if let Err(e) = event_service.delete_local(event_id) {
                     log::error!("Failed to delete event: {}", e);
-                    self.toast_manager.error(format!("Failed to delete event: {}", e));
+                    self.toast_manager
+                        .error(format!("Failed to delete event: {}", e));
                 } else {
                     log::info!("Deleted event: {} (ID: {})", event_title, event_id);
-                    self.toast_manager.success(format!("Deleted \"{}\"", event_title));
-                    
+                    self.toast_manager
+                        .success(format!("Deleted \"{}\"", event_title));
+
                     // Push delete command for undo capability
                     if let Some(event) = event_for_undo {
                         let cmd = DeleteEventCommand::new(event);
                         self.undo_manager.push(Box::new(cmd));
                     }
-                    
+
                     // Also remove any linked countdown card
-                    self.context.countdown_service_mut().remove_cards_for_event(event_id);
+                    self.context
+                        .countdown_service_mut()
+                        .remove_cards_for_event(event_id);
                 }
             }
-            ConfirmAction::DeleteEventOccurrence { event_id, event_title, occurrence_date } => {
-                if self.is_synced_event_id(event_id) {
-                    self.notify_synced_event_read_only();
+            ConfirmAction::DeleteEventOccurrence {
+                event_id,
+                event_title,
+                occurrence_date,
+            } => {
+                if self.is_read_only_synced_event_id(event_id) {
+                    self.notify_synced_event_read_only_for(event_id);
                     return;
                 }
 
                 let event_service = self.context.event_service();
-                if let Err(e) = event_service.delete_occurrence(event_id, occurrence_date) {
+                if let Err(e) = event_service.delete_occurrence_local(event_id, occurrence_date) {
                     log::error!("Failed to delete occurrence: {}", e);
-                    self.toast_manager.error(format!("Failed to delete occurrence: {}", e));
+                    self.toast_manager
+                        .error(format!("Failed to delete occurrence: {}", e));
                 } else {
-                    log::info!("Deleted occurrence of {} on {}", event_title, occurrence_date.format("%Y-%m-%d"));
-                    self.toast_manager.success(format!("Deleted occurrence of \"{}\"", event_title));
+                    log::info!(
+                        "Deleted occurrence of {} on {}",
+                        event_title,
+                        occurrence_date.format("%Y-%m-%d")
+                    );
+                    self.toast_manager
+                        .success(format!("Deleted occurrence of \"{}\"", event_title));
                     // Note: Don't remove countdown card for occurrence-only deletion
                 }
             }
-            ConfirmAction::DeleteCountdownCard { card_id, card_title } => {
+            ConfirmAction::DeleteCountdownCard {
+                card_id,
+                card_title,
+            } => {
                 self.context.countdown_service_mut().remove_card(card_id);
                 log::info!("Deleted countdown card: {} (ID: {:?})", card_title, card_id);
-                self.toast_manager.success(format!("Deleted countdown \"{}\"", card_title));
+                self.toast_manager
+                    .success(format!("Deleted countdown \"{}\"", card_title));
             }
             ConfirmAction::DiscardChanges => {
                 // The dialog that requested this should handle closing itself
@@ -309,10 +343,12 @@ impl CalendarApp {
                 let theme_service = self.context.theme_service();
                 if let Err(e) = theme_service.delete_theme(&theme_name) {
                     log::error!("Failed to delete theme: {}", e);
-                    self.toast_manager.error(format!("Failed to delete theme: {}", e));
+                    self.toast_manager
+                        .error(format!("Failed to delete theme: {}", e));
                 } else {
                     log::info!("Deleted theme: {}", theme_name);
-                    self.toast_manager.success(format!("Deleted theme \"{}\"", theme_name));
+                    self.toast_manager
+                        .success(format!("Deleted theme \"{}\"", theme_name));
                 }
             }
             ConfirmAction::RestartApplication => {

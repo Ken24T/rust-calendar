@@ -55,7 +55,9 @@ pub fn render_event_dialog(
     // Check for warnings (overlap detection, etc.) - this updates state.warning_messages
     state.check_warnings(database);
 
-    egui::Window::new(if state.event_id.is_some() {
+    egui::Window::new(if state.is_occurrence_edit() {
+        "Edit Occurrence"
+    } else if state.event_id.is_some() {
         "Edit Event"
     } else {
         "New Event"
@@ -101,9 +103,9 @@ fn render_warning_banner(ui: &mut egui::Ui, state: &EventDialogState) {
     if state.warning_messages.is_empty() {
         return;
     }
-    
+
     let warning_color = Color32::from_rgb(200, 140, 0); // Orange/amber
-    
+
     for warning in &state.warning_messages {
         ui.horizontal(|ui| {
             ui.label(RichText::new("⚠").color(warning_color));
@@ -143,17 +145,24 @@ fn render_basic_information_section(
 
     labeled_row(ui, "Location:", |ui| {
         ui.text_edit_singleline(&mut state.location);
-        
+
         // Show "Open in Maps" button if location is not empty
         let location_trimmed = state.location.trim();
         if !location_trimmed.is_empty()
-            && ui.button("🗺").on_hover_text("Open in Google Maps").clicked() {
-                let encoded = urlencoding::encode(location_trimmed);
-                let url = format!("https://www.google.com/maps/search/?api=1&query={}", encoded);
-                if let Err(e) = webbrowser::open(&url) {
-                    log::error!("Failed to open maps URL: {}", e);
-                }
+            && ui
+                .button("🗺")
+                .on_hover_text("Open in Google Maps")
+                .clicked()
+        {
+            let encoded = urlencoding::encode(location_trimmed);
+            let url = format!(
+                "https://www.google.com/maps/search/?api=1&query={}",
+                encoded
+            );
+            if let Err(e) = webbrowser::open(&url) {
+                log::error!("Failed to open maps URL: {}", e);
             }
+        }
     });
 
     // Category dropdown
@@ -169,11 +178,11 @@ fn render_basic_information_section(
         );
     });
 
-    if state.event_id.is_none() {
+    if state.event_id.is_none() && !state.is_occurrence_edit() {
         ui.add_space(8.0);
         let today = Local::now().date_naive();
         let is_future_event = state.date > today;
-        
+
         indented_row(ui, |ui| {
             ui.add_enabled_ui(is_future_event, |ui| {
                 ui.checkbox(
@@ -186,7 +195,7 @@ fn render_basic_information_section(
                     "Countdown cards can only be created for future events."
                 });
             });
-            
+
             if !is_future_event && state.create_countdown {
                 // Auto-uncheck if date changed to today or past
                 state.create_countdown = false;
@@ -355,7 +364,7 @@ fn render_action_buttons(
             *show_dialog = false;
         }
 
-        if state.event_id.is_some() {
+        if state.event_id.is_some() && !state.is_occurrence_edit() {
             ui.add_space(20.0);
             if ui
                 .button(RichText::new("Delete").color(Color32::RED))
@@ -407,22 +416,28 @@ fn render_action_buttons(
 }
 
 /// Render a category dropdown with color swatches
-fn render_category_dropdown(ui: &mut egui::Ui, selected_category: &mut String, database: &Database) {
+fn render_category_dropdown(
+    ui: &mut egui::Ui,
+    selected_category: &mut String,
+    database: &Database,
+) {
     let service = CategoryService::new(database.connection());
     let categories = service.list_all().unwrap_or_default();
-    
+
     // Find the selected category for display
     let selected_display = if selected_category.is_empty() {
         "None".to_string()
     } else {
-        categories.iter()
+        categories
+            .iter()
             .find(|c| c.name == *selected_category)
             .map(|c| c.display_name())
             .unwrap_or_else(|| selected_category.clone())
     };
-    
+
     // Get the color of the selected category for the preview
-    let selected_color = categories.iter()
+    let selected_color = categories
+        .iter()
         .find(|c| c.name == *selected_category)
         .map(|c| parse_hex_color(&c.color).unwrap_or(Color32::GRAY))
         .unwrap_or(Color32::TRANSPARENT);
@@ -433,7 +448,7 @@ fn render_category_dropdown(ui: &mut egui::Ui, selected_category: &mut String, d
             let (rect, _) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
             ui.painter().rect_filled(rect, 3.0, selected_color);
         }
-        
+
         egui::ComboBox::from_id_source("category_dropdown")
             .selected_text(&selected_display)
             .width(180.0)
@@ -443,20 +458,24 @@ fn render_category_dropdown(ui: &mut egui::Ui, selected_category: &mut String, d
                 if ui.selectable_label(is_none, "None").clicked() {
                     selected_category.clear();
                 }
-                
+
                 ui.separator();
-                
+
                 // Category options
                 for cat in &categories {
                     let is_selected = cat.name == *selected_category;
-                    
+
                     ui.horizontal(|ui| {
                         // Color swatch
                         let color = parse_hex_color(&cat.color).unwrap_or(Color32::GRAY);
-                        let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 2.0, color);
-                        
-                        if ui.selectable_label(is_selected, cat.display_name()).clicked() {
+
+                        if ui
+                            .selectable_label(is_selected, cat.display_name())
+                            .clicked()
+                        {
                             *selected_category = cat.name.clone();
                         }
                     });

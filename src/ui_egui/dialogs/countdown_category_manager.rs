@@ -2,9 +2,8 @@
 //! countdown card categories (separate from event categories).
 
 use crate::services::countdown::{
-    CountdownCardTemplate, CountdownCardTemplateId, CountdownCardVisuals,
-    CountdownCategory, CountdownCategoryId, CountdownService, LayoutOrientation,
-    RgbaColor, DEFAULT_CATEGORY_ID,
+    CountdownCardTemplate, CountdownCardTemplateId, CountdownCardVisuals, CountdownCategory,
+    CountdownCategoryId, CountdownService, LayoutOrientation, RgbaColor, DEFAULT_CATEGORY_ID,
 };
 use egui::{Color32, RichText};
 
@@ -543,11 +542,7 @@ fn handle_save(
         return;
     }
 
-    let display_order: i32 = state
-        .display_order_input
-        .trim()
-        .parse()
-        .unwrap_or(0);
+    let display_order: i32 = state.display_order_input.trim().parse().unwrap_or(0);
 
     // Duplicate name check (excluding the currently-editing category)
     let duplicate = service.categories().iter().any(|c| {

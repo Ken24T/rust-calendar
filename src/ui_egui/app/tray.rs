@@ -91,11 +91,6 @@ fn hide_window_offscreen(hwnd_value: isize) -> i32 {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
-fn hide_window_offscreen(_hwnd_value: isize) -> i32 {
-    0
-}
-
 /// Move the window back on-screen, restore its taskbar button, and kill
 /// the keep-alive timer.
 #[cfg(target_os = "windows")]
@@ -123,9 +118,6 @@ fn show_window_onscreen(hwnd_value: isize, orig_exstyle: i32, x: i32, y: i32) {
         let _ = SetForegroundWindow(hwnd);
     }
 }
-
-#[cfg(not(target_os = "windows"))]
-fn show_window_onscreen(_hwnd_value: isize, _orig_exstyle: i32, _x: i32, _y: i32) {}
 
 impl CalendarApp {
     /// Attempt to create a system tray icon with a context menu.

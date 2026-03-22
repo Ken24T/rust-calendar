@@ -14,20 +14,15 @@ use super::event_rendering::{
 };
 use super::palette::TimeGridPalette;
 use super::time_grid_context_menu::render_time_cell_context_menu;
-use super::week_shared::{
-    maybe_focus_slot, EventInteractionResult, SLOT_HEIGHT,
-};
-use super::{
-    event_time_segment_for_date, is_synced_event, AutoFocusRequest,
-    CountdownRequest,
-};
+use super::week_shared::{maybe_focus_slot, EventInteractionResult, SLOT_HEIGHT};
+use super::{event_time_segment_for_date, is_synced_event, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::ui_egui::drag::{DragContext, DragManager, DragView};
 use crate::ui_egui::resize::{
-    HandleRects, ResizeContext, ResizeHandle, ResizeManager, ResizeView, draw_handles,
-    draw_resize_preview,
+    draw_handles, draw_resize_preview, HandleRects, ResizeContext, ResizeHandle, ResizeManager,
+    ResizeView,
 };
 
 /// Configuration for rendering a time cell, allowing view-specific behavior.
@@ -85,7 +80,7 @@ pub fn render_time_cell(
     } else {
         palette.regular_bg
     };
-    
+
     let bg_color = if is_current_time_slot {
         // Blend with a soft highlight color (light blue/cyan tint)
         Color32::from_rgb(
@@ -140,7 +135,7 @@ pub fn render_time_cell(
             .unwrap_or_else(|| event.end.naive_local());
         let is_ending = segment_end > slot_start_dt && segment_end <= slot_end_dt;
         let continues_to_next_slot = segment_end > slot_end_dt;
-        
+
         let event_rect = render_event_continuation(ui, rect, event, continues_to_next_slot);
         // Continuing events never show top handle (they started earlier)
         event_hitboxes.push((event_rect, (*event).clone(), false, is_ending));
@@ -153,16 +148,22 @@ pub fn render_time_cell(
             .map(|id| active_countdown_events.contains(&id))
             .unwrap_or(false);
         let event_is_synced = is_synced_event(event.id, synced_event_ids);
-        
+
         // Check if event ends in this slot
         let segment_end = event_time_segment_for_date(event, date)
             .map(|(_, end)| end)
             .unwrap_or_else(|| event.end.naive_local());
         let is_ending = segment_end > slot_start_dt && segment_end <= slot_end_dt;
         let continues_to_next_slot = segment_end > slot_end_dt;
-        
-        let event_rect =
-            render_event_in_cell(ui, rect, event, has_countdown, event_is_synced, continues_to_next_slot);
+
+        let event_rect = render_event_in_cell(
+            ui,
+            rect,
+            event,
+            has_countdown,
+            event_is_synced,
+            continues_to_next_slot,
+        );
         // Starting events always show top handle
         event_hitboxes.push((event_rect, (*event).clone(), true, is_ending));
     }
@@ -171,7 +172,11 @@ pub fn render_time_cell(
     let event_handles: Vec<(Rect, Event, HandleRects)> = event_hitboxes
         .iter()
         .map(|(r, e, is_starting, is_ending)| {
-            (*r, e.clone(), HandleRects::for_timed_event_in_slot(*r, *is_starting, *is_ending))
+            (
+                *r,
+                e.clone(),
+                HandleRects::for_timed_event_in_slot(*r, *is_starting, *is_ending),
+            )
         })
         .collect();
 
@@ -214,14 +219,16 @@ pub fn render_time_cell(
                 if is_synced_event(event.id, synced_event_ids) {
                     return None;
                 }
-                handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
+                handles
+                    .hit_test(pos)
+                    .map(|h| (h, *event_rect, event.clone()))
             })
     });
 
     // Draw resize handles on hovered event (when not dragging/resizing)
     let is_dragging = DragManager::is_active_for_view(ui.ctx(), config.drag_view);
     let is_resizing = ResizeManager::is_active_for_view(ui.ctx(), config.resize_view);
-    
+
     // Draw resize preview silhouette when actively resizing
     if is_resizing {
         if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), config.resize_view) {
@@ -236,7 +243,7 @@ pub fn render_time_cell(
                         .unwrap_or(Color32::from_rgb(100, 150, 200))
                 })
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
-            
+
             // Draw the preview for this slot
             draw_resize_preview(
                 ui,
@@ -250,7 +257,7 @@ pub fn render_time_cell(
             );
         }
     }
-    
+
     if !is_dragging && !is_resizing {
         if let Some((hit_rect, hovered_event, is_starting, is_ending)) = &pointer_hit {
             // Only show handles for non-recurring events and non-past events
@@ -260,7 +267,8 @@ pub fn render_time_cell(
                 && !is_synced_event(hovered_event.id, synced_event_ids)
             {
                 // Use slot-aware handles: only show handles that are active in this slot
-                let handles = HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
+                let handles =
+                    HandleRects::for_timed_event_in_slot(*hit_rect, *is_starting, *is_ending);
                 let hovered_h = hovered_handle.as_ref().map(|(h, _, _)| *h);
                 let event_color = hovered_event
                     .color
@@ -284,12 +292,14 @@ pub fn render_time_cell(
 
     // Show tooltip when hovering over an event (but not on resize handles)
     if let Some((hit_rect, hovered_event, _, _)) = &pointer_hit {
-        if response.hovered() 
+        if response.hovered()
             && hit_rect.contains(pointer_pos.unwrap_or_default())
             && hovered_handle.is_none()
         {
-            let tooltip_text =
-                format_event_tooltip(hovered_event, is_synced_event(hovered_event.id, synced_event_ids));
+            let tooltip_text = format_event_tooltip(
+                hovered_event,
+                is_synced_event(hovered_event.id, synced_event_ids),
+            );
             response.clone().on_hover_ui_at_pointer(|ui| {
                 ui.label(tooltip_text);
             });
@@ -304,12 +314,12 @@ pub fn render_time_cell(
     if let Some(pointer) = pointer_for_hover {
         if rect.contains(pointer) {
             DragManager::update_hover(ui.ctx(), date, time, rect, pointer);
-            
+
             // Update resize hover when resizing is active
             if ResizeManager::is_active_for_view(ui.ctx(), config.resize_view) {
                 ResizeManager::update_hover(ui.ctx(), date, time, slot_end, pointer);
             }
-            
+
             if DragManager::is_active_for_view(ui.ctx(), config.drag_view) {
                 ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
                 ui.ctx().request_repaint();
@@ -361,7 +371,7 @@ pub fn render_time_cell(
     if response.drag_started() {
         // Use interact_pointer_pos for the drag start position
         let drag_start_pos = response.interact_pointer_pos();
-        
+
         // Recalculate which handle was clicked using the drag start position
         let drag_handle: Option<(ResizeHandle, Rect, Event)> = drag_start_pos.and_then(|pos| {
             event_handles
@@ -375,10 +385,12 @@ pub fn render_time_cell(
                     if event.end < now {
                         return None;
                     }
-                    handles.hit_test(pos).map(|h| (h, *event_rect, event.clone()))
+                    handles
+                        .hit_test(pos)
+                        .map(|h| (h, *event_rect, event.clone()))
                 })
         });
-        
+
         // First check if we're starting a resize operation
         if let Some((handle, _hit_rect, event)) = drag_handle {
             // Start resize instead of drag
@@ -426,7 +438,9 @@ pub fn render_time_cell(
     if response.dragged() {
         if DragManager::is_active_for_view(ui.ctx(), config.drag_view) {
             ui.output_mut(|out| out.cursor_icon = CursorIcon::Grabbing);
-        } else if let Some(resize_ctx) = ResizeManager::active_for_view(ui.ctx(), config.resize_view) {
+        } else if let Some(resize_ctx) =
+            ResizeManager::active_for_view(ui.ctx(), config.resize_view)
+        {
             ui.output_mut(|out| out.cursor_icon = resize_ctx.handle.cursor_icon());
         }
     }
@@ -446,15 +460,12 @@ pub fn render_time_cell(
                     let mut new_event = event;
                     new_event.start = new_start;
                     new_event.end = new_end;
-                    
+
                     // Validate the new event times
                     if new_event.validate().is_err() {
                         log::warn!("Resize would create invalid event, ignoring");
-                    } else if let Err(err) = event_service.update(&new_event) {
-                        log::error!(
-                            "Failed to resize event {}: {}",
-                            resize_ctx.event_id, err
-                        );
+                    } else if let Err(err) = event_service.update_local(&new_event) {
+                        log::error!("Failed to resize event {}: {}", resize_ctx.event_id, err);
                     } else {
                         // Track for undo and countdown card sync
                         result.undo_requests.push((old_event, new_event.clone()));
@@ -482,8 +493,8 @@ pub fn render_time_cell(
                     let mut new_event = event;
                     new_event.start = target_start;
                     new_event.end = new_end;
-                    
-                    if let Err(err) = event_service.update(&new_event) {
+
+                    if let Err(err) = event_service.update_local(&new_event) {
                         log::error!("Failed to move event {}: {}", drag_context.event_id, err);
                     } else {
                         // Track for undo and countdown card sync

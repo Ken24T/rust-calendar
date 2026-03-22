@@ -29,7 +29,7 @@ impl<'a> EventService<'a> {
         if query.trim().is_empty() {
             return Ok(vec![]);
         }
-        
+
         let search_pattern = format!("%{}%", query.to_lowercase());
         let mut stmt = self.conn.prepare(
             "SELECT id, title, description, location, start_datetime, end_datetime,

@@ -1,8 +1,8 @@
+use super::confirm::ConfirmDialogState;
 use super::context::AppContext;
 use super::countdown::CountdownUiState;
 use super::state::{AppState, ViewType};
 use super::toast::ToastManager;
-use super::confirm::ConfirmDialogState;
 use super::CalendarApp;
 use crate::models::settings::Settings;
 use crate::services::backup::BackupService;
@@ -97,7 +97,9 @@ impl CalendarApp {
             exit_requested: false,
             tray_action_flag: None,
             tray_hwnd: 0,
+            #[cfg(target_os = "windows")]
             tray_saved_pixel_pos: None,
+            #[cfg(target_os = "windows")]
             tray_original_exstyle: 0,
         };
 
@@ -214,10 +216,11 @@ impl CalendarApp {
             for request in render_result.delete_card_requests {
                 self.restore_from_tray(ctx);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
-                    card_id: request.card_id,
-                    card_title: request.card_title,
-                });
+                self.confirm_dialog
+                    .request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                        card_id: request.card_id,
+                        card_title: request.card_title,
+                    });
             }
 
             self.countdown_ui
@@ -226,10 +229,11 @@ impl CalendarApp {
             for request in self.countdown_ui.drain_delete_requests() {
                 self.restore_from_tray(ctx);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
-                    card_id: request.card_id,
-                    card_title: request.card_title,
-                });
+                self.confirm_dialog
+                    .request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                        card_id: request.card_id,
+                        card_title: request.card_title,
+                    });
             }
 
             self.refresh_countdowns(ctx);
@@ -300,7 +304,7 @@ impl CalendarApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.current_date = request.date;
         }
-        
+
         // Handle delete confirmation requests for countdown cards
         for request in render_result.delete_card_requests {
             // If the main window is hidden, restore it so the confirmation
@@ -310,27 +314,29 @@ impl CalendarApp {
             }
             // Ensure the main window is in front of countdown card viewports
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
-                card_id: request.card_id,
-                card_title: request.card_title,
-            });
+            self.confirm_dialog
+                .request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                    card_id: request.card_id,
+                    card_title: request.card_title,
+                });
         }
 
         self.countdown_ui
             .render_settings_dialogs(ctx, self.context.countdown_service_mut());
-        
+
         // Handle delete requests from settings dialogs
         for request in self.countdown_ui.drain_delete_requests() {
             if self.hidden_to_tray {
                 self.restore_from_tray(ctx);
             }
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            self.confirm_dialog.request(super::confirm::ConfirmAction::DeleteCountdownCard {
-                card_id: request.card_id,
-                card_title: request.card_title,
-            });
+            self.confirm_dialog
+                .request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                    card_id: request.card_id,
+                    card_title: request.card_title,
+                });
         }
-        
+
         self.flush_pending_event_bodies();
         self.handle_dialogs(ctx);
 

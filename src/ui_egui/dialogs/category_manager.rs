@@ -129,7 +129,10 @@ pub fn render_category_manager_dialog(
 
                     // Frame for the category list with fixed height
                     egui::Frame::none()
-                        .stroke(egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
+                        .stroke(egui::Stroke::new(
+                            1.0,
+                            ui.visuals().widgets.noninteractive.bg_stroke.color,
+                        ))
                         .rounding(4.0)
                         .inner_margin(4.0)
                         .show(ui, |ui| {
@@ -139,9 +142,11 @@ pub fn render_category_manager_dialog(
                                 .min_scrolled_height(220.0)
                                 .show(ui, |ui| {
                                     ui.set_min_width(180.0);
-                                    
+
                                     for cat in &categories {
-                                        let is_selected = state.editing_category.as_ref()
+                                        let is_selected = state
+                                            .editing_category
+                                            .as_ref()
                                             .map(|e| e.id == cat.id)
                                             .unwrap_or(false);
 
@@ -179,11 +184,17 @@ pub fn render_category_manager_dialog(
                 // RIGHT COLUMN: Editor
                 columns[1].vertical(|ui| {
                     let is_editing = state.editing_category.is_some();
-                    let is_system = state.editing_category.as_ref()
+                    let is_system = state
+                        .editing_category
+                        .as_ref()
                         .map(|c| c.is_system)
                         .unwrap_or(false);
 
-                    ui.heading(if is_editing { "Edit Category" } else { "New Category" });
+                    ui.heading(if is_editing {
+                        "Edit Category"
+                    } else {
+                        "New Category"
+                    });
                     ui.add_space(8.0);
 
                     // Name field
@@ -197,7 +208,11 @@ pub fn render_category_manager_dialog(
                         );
                     });
                     if is_system {
-                        ui.label(RichText::new("System names cannot be changed").small().weak());
+                        ui.label(
+                            RichText::new("System names cannot be changed")
+                                .small()
+                                .weak(),
+                        );
                     }
 
                     ui.add_space(4.0);
@@ -229,10 +244,8 @@ pub fn render_category_manager_dialog(
                             }
                         } else {
                             // Just show preview for system categories
-                            let (rect, _) = ui.allocate_exact_size(
-                                egui::vec2(20.0, 20.0),
-                                egui::Sense::hover(),
-                            );
+                            let (rect, _) = ui
+                                .allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
                             ui.painter().rect_filled(rect, 3.0, preview_color);
                         }
                     });
@@ -241,12 +254,18 @@ pub fn render_category_manager_dialog(
                     ui.horizontal(|ui| {
                         ui.label("Presets:");
                         let presets = [
-                            "#3B82F6", "#10B981", "#F59E0B",
-                            "#EF4444", "#8B5CF6", "#EC4899",
+                            "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899",
                         ];
                         for hex in presets {
                             let color = parse_hex_color(hex);
-                            if ui.add(egui::Button::new("").fill(color).min_size(egui::vec2(18.0, 18.0))).clicked() {
+                            if ui
+                                .add(
+                                    egui::Button::new("")
+                                        .fill(color)
+                                        .min_size(egui::vec2(18.0, 18.0)),
+                                )
+                                .clicked()
+                            {
                                 state.color_input = hex.to_string();
                             }
                         }
@@ -281,16 +300,26 @@ pub fn render_category_manager_dialog(
                     // Action buttons
                     let can_create = !state.name_input.trim().is_empty();
                     ui.horizontal(|ui| {
-                        let button_text = if is_editing { "💾 Save" } else { "➕ Create" };
+                        let button_text = if is_editing {
+                            "💾 Save"
+                        } else {
+                            "➕ Create"
+                        };
                         let button_enabled = is_editing || can_create;
-                        if ui.add_enabled(button_enabled, egui::Button::new(button_text)).clicked() {
+                        if ui
+                            .add_enabled(button_enabled, egui::Button::new(button_text))
+                            .clicked()
+                        {
                             handle_save(state, &service, &mut response);
                         }
 
                         if is_editing && !is_system {
                             if let Some(ref cat) = state.editing_category {
                                 if let Some(id) = cat.id {
-                                    if ui.button(RichText::new("🗑 Delete").color(Color32::LIGHT_RED)).clicked() {
+                                    if ui
+                                        .button(RichText::new("🗑 Delete").color(Color32::LIGHT_RED))
+                                        .clicked()
+                                    {
                                         let usage = service.get_usage_count(&cat.name).unwrap_or(0);
                                         state.delete_pending = Some((id, cat.name.clone(), usage));
                                     }
@@ -298,10 +327,9 @@ pub fn render_category_manager_dialog(
                             }
                         }
 
-                        if is_editing
-                            && ui.button("Cancel").clicked() {
-                                state.start_new();
-                            }
+                        if is_editing && ui.button("Cancel").clicked() {
+                            state.start_new();
+                        }
                     });
 
                     // Delete confirmation
@@ -310,11 +338,17 @@ pub fn render_category_manager_dialog(
                         ui.separator();
                         ui.colored_label(Color32::YELLOW, format!("⚠ Delete '{}'?", name));
                         if usage > 0 {
-                            ui.label(RichText::new(format!("{} event(s) will be uncategorized.", usage)).small());
+                            ui.label(
+                                RichText::new(format!("{} event(s) will be uncategorized.", usage))
+                                    .small(),
+                            );
                         }
 
                         ui.horizontal(|ui| {
-                            if ui.button(RichText::new("Yes, Delete").color(Color32::RED)).clicked() {
+                            if ui
+                                .button(RichText::new("Yes, Delete").color(Color32::RED))
+                                .clicked()
+                            {
                                 match service.delete(id) {
                                     Ok(_) => {
                                         state.success_message = Some(format!("Deleted '{}'", name));
@@ -323,7 +357,8 @@ pub fn render_category_manager_dialog(
                                         state.start_new();
                                     }
                                     Err(e) => {
-                                        state.error_message = Some(format!("Failed to delete: {}", e));
+                                        state.error_message =
+                                            Some(format!("Failed to delete: {}", e));
                                     }
                                 }
                                 state.delete_pending = None;
@@ -428,7 +463,7 @@ fn handle_save(
 /// Parse a hex color string to Color32.
 fn parse_hex_color(hex: &str) -> Color32 {
     let hex = hex.trim().trim_start_matches('#');
-    
+
     if hex.len() == 6 {
         if let (Ok(r), Ok(g), Ok(b)) = (
             u8::from_str_radix(&hex[0..2], 16),
@@ -446,7 +481,7 @@ fn parse_hex_color(hex: &str) -> Color32 {
             return Color32::from_rgb(r * 17, g * 17, b * 17);
         }
     }
-    
+
     Color32::GRAY
 }
 

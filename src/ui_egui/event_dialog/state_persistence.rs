@@ -18,23 +18,50 @@ impl EventDialogState {
         let mut event = self.to_event()?;
         let service = EventService::new(database.connection());
         let sync_map_service = EventSyncMapService::new(database.connection());
+        let guarded_event_id = self.detached_occurrence_parent_id.or(self.event_id);
 
-        if let Some(id) = self.event_id {
+        if let Some(id) = guarded_event_id {
             if sync_map_service
-                .is_synced_local_event(id)
+                .is_read_only_synced_local_event(id)
                 .map_err(|e| format!("Failed to check sync status: {}", e))?
             {
-                return Err("Synced events are read-only and cannot be edited".to_string());
-            }
+                let source_name = sync_map_service
+                    .get_source_name_for_local_event(id)
+                    .ok()
+                    .flatten();
 
+                let message = source_name
+                    .map(|name| {
+                        format!(
+                            "Synced event from '{}' is read-only and cannot be edited here",
+                            name
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        "Synced events are read-only and cannot be edited here".to_string()
+                    });
+                return Err(message);
+            }
+        }
+
+        if let (Some(parent_event_id), Some(occurrence_date)) = (
+            self.detached_occurrence_parent_id,
+            self.detached_occurrence_date,
+        ) {
+            return service
+                .detach_occurrence_local(parent_event_id, occurrence_date, event)
+                .map_err(|e| format!("Failed to update occurrence: {}", e));
+        }
+
+        if let Some(id) = self.event_id {
             event.id = Some(id);
             service
-                .update(&event)
+                .update_local(&event)
                 .map_err(|e| format!("Failed to update event: {}", e))?;
             Ok(event)
         } else {
             service
-                .create(event)
+                .create_local(event)
                 .map_err(|e| format!("Failed to create event: {}", e))
         }
     }
@@ -48,10 +75,7 @@ impl EventDialogState {
         // events consistent so event_display_end_date works uniformly.
         let (start_time, end_date, end_time) = if self.all_day {
             let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-            let exclusive_end = self
-                .end_date
-                .succ_opt()
-                .unwrap_or(self.end_date);
+            let exclusive_end = self.end_date.succ_opt().unwrap_or(self.end_date);
             (midnight, exclusive_end, midnight)
         } else {
             (self.start_time, self.end_date, self.end_time)
@@ -170,17 +194,16 @@ impl EventDialogState {
     /// Call this when the dialog is opened or when dates change
     pub fn check_warnings(&mut self, database: &Database) {
         self.warning_messages.clear();
-        
+
         let today = Local::now().date_naive();
-        
+
         // Warning: Event date is more than 5 years in the past
         let five_years_ago = today.with_year(today.year() - 5).unwrap_or(today);
         if self.date < five_years_ago {
-            self.warning_messages.push(
-                "This event is more than 5 years in the past".to_string()
-            );
+            self.warning_messages
+                .push("This event is more than 5 years in the past".to_string());
         }
-        
+
         // Warning: All-day event with non-midnight times
         if self.all_day {
             let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
@@ -189,7 +212,7 @@ impl EventDialogState {
                 // This is handled at save time by using date boundaries
             }
         }
-        
+
         // Warning: Overlap detection
         if let Ok((start_dt, end_dt)) = self.start_end_datetimes() {
             let service = EventService::new(database.connection());
@@ -213,13 +236,11 @@ impl EventDialogState {
                         start_dt < event_end && end_dt > event_start
                     })
                     .collect();
-                
+
                 if !other_overlapping.is_empty() {
                     if other_overlapping.len() == 1 {
-                        self.warning_messages.push(format!(
-                            "Overlaps with \"{}\"",
-                            other_overlapping[0].title
-                        ));
+                        self.warning_messages
+                            .push(format!("Overlaps with \"{}\"", other_overlapping[0].title));
                     } else {
                         self.warning_messages.push(format!(
                             "Overlaps with {} other events",

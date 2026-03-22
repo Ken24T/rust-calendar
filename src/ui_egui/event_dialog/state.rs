@@ -1,7 +1,9 @@
 use crate::models::event::Event;
 use crate::models::settings::Settings;
-use crate::services::countdown::{CountdownCardId, CountdownCardVisuals, CountdownCategoryId, DEFAULT_CATEGORY_ID};
-use chrono::{self, Local, NaiveDate, NaiveDateTime, NaiveTime};
+use crate::services::countdown::{
+    CountdownCardId, CountdownCardVisuals, CountdownCategoryId, DEFAULT_CATEGORY_ID,
+};
+use chrono::{self, DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
 
 use super::recurrence::{ParsedRRule, RecurrenceFrequency, RecurrencePattern};
 
@@ -23,6 +25,8 @@ pub struct LinkedCountdownCard {
 /// State for the event editing dialog
 pub struct EventDialogState {
     pub event_id: Option<i64>,
+    pub detached_occurrence_parent_id: Option<i64>,
+    pub detached_occurrence_date: Option<DateTime<Local>>,
     pub title: String,
     pub description: String,
     pub location: String,
@@ -99,6 +103,8 @@ impl EventDialogState {
 
         Self {
             event_id: None,
+            detached_occurrence_parent_id: None,
+            detached_occurrence_date: None,
             title: String::new(),
             description: String::new(),
             location: String::new(),
@@ -146,10 +152,7 @@ impl EventDialogState {
         // (end = midnight of day AFTER the last visible day), convert back
         // to inclusive end date for display in the dialog.
         let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-        let end_date = if event.all_day
-            && end_time == midnight
-            && event.end.date_naive() > date
-        {
+        let end_date = if event.all_day && end_time == midnight && event.end.date_naive() > date {
             event
                 .end
                 .date_naive()
@@ -167,6 +170,8 @@ impl EventDialogState {
 
         Self {
             event_id: event.id,
+            detached_occurrence_parent_id: None,
+            detached_occurrence_date: None,
             title: event.title.clone(),
             description: event.description.clone().unwrap_or_default(),
             location: event.location.clone().unwrap_or_default(),
@@ -202,6 +207,37 @@ impl EventDialogState {
             date_picker_viewing: date,
             is_past_event: is_past,
         }
+    }
+
+    pub fn from_occurrence(
+        event: &Event,
+        settings: &Settings,
+        parent_event_id: i64,
+        occurrence_date: DateTime<Local>,
+    ) -> Self {
+        let mut state = Self::from_event(event, settings);
+        state.event_id = None;
+        state.detached_occurrence_parent_id = Some(parent_event_id);
+        state.detached_occurrence_date = Some(occurrence_date);
+        state.is_recurring = false;
+        state.frequency = RecurrenceFrequency::Daily;
+        state.interval = 1;
+        state.count = None;
+        state.until_date = None;
+        state.pattern = RecurrencePattern::None;
+        state.byday_enabled = false;
+        state.byday_monday = false;
+        state.byday_tuesday = false;
+        state.byday_wednesday = false;
+        state.byday_thursday = false;
+        state.byday_friday = false;
+        state.byday_saturday = false;
+        state.byday_sunday = false;
+        state
+    }
+
+    pub fn is_occurrence_edit(&self) -> bool {
+        self.detached_occurrence_parent_id.is_some() && self.detached_occurrence_date.is_some()
     }
 
     /// Link a countdown card to this event dialog state
@@ -386,18 +422,19 @@ mod tests {
     }
 
     #[test]
-    fn save_blocks_updates_for_synced_events() {
+    fn save_blocks_updates_for_read_only_synced_events() {
         let db = Database::new(":memory:").unwrap();
         db.initialize_schema().unwrap();
         let conn = db.connection();
 
         conn.execute(
-            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
-             VALUES (?1, ?2, ?3, 1, 15)",
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, ?2, ?3, 1, 15, ?4)",
             rusqlite::params![
                 "Test Source",
                 "google_ics",
-                "https://example.com/calendar.ics"
+                "https://example.com/calendar.ics",
+                crate::models::calendar_source::SYNC_CAPABILITY_READ_ONLY,
             ],
         )
         .unwrap();
@@ -428,5 +465,116 @@ mod tests {
 
         let err = state.save(&db).unwrap_err();
         assert!(err.contains("read-only"));
+    }
+
+    #[test]
+    fn save_allows_updates_for_writable_synced_events() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, ?2, ?3, 1, 15, ?4)",
+            rusqlite::params![
+                "Writable Source",
+                "google_ics",
+                "https://calendar.google.com/calendar/ical/test%40gmail.com/private-token/basic.ics",
+                crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE,
+            ],
+        )
+        .unwrap();
+        let source_id = conn.last_insert_rowid();
+
+        let start = Local.with_ymd_and_hms(2026, 2, 27, 9, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2026, 2, 27, 10, 0, 0).unwrap();
+        let event = Event::new("Synced Event".to_string(), start, end).unwrap();
+        let event_service = EventService::new(conn);
+        let created = event_service.create(event.clone()).unwrap();
+        let event_id = created.id.unwrap();
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                source_id,
+                "uid-test-writable",
+                event_id,
+                "2026-02-27T00:00:00Z",
+                "2026-02-27T00:00:00Z"
+            ],
+        )
+        .unwrap();
+
+        let mut state = EventDialogState::from_event(&created, &Settings::default());
+        state.title = "Changed".to_string();
+
+        let saved = state.save(&db).unwrap();
+        assert_eq!(saved.title, "Changed");
+    }
+
+    #[test]
+    fn save_detaches_single_occurrence_into_standalone_event() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, ?2, ?3, 1, 15, ?4)",
+            rusqlite::params![
+                "Writable Source",
+                "google_ics",
+                "https://calendar.google.com/calendar/ical/test%40gmail.com/private-token/basic.ics",
+                crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE,
+            ],
+        )
+        .unwrap();
+        let source_id = conn.last_insert_rowid();
+
+        let start = Local.with_ymd_and_hms(2026, 4, 1, 9, 0, 0).unwrap();
+        let end = Local.with_ymd_and_hms(2026, 4, 1, 10, 0, 0).unwrap();
+        let mut event = Event::new("Series".to_string(), start, end).unwrap();
+        event.recurrence_rule = Some("FREQ=WEEKLY;BYDAY=WE".to_string());
+        let event_service = EventService::new(conn);
+        let created = event_service.create(event).unwrap();
+        let event_id = created.id.unwrap();
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                source_id,
+                "uid-occurrence-series",
+                event_id,
+                "2026-04-01T00:00:00Z",
+                "2026-04-01T00:00:00Z"
+            ],
+        )
+        .unwrap();
+
+        let occurrence_start = Local.with_ymd_and_hms(2026, 4, 8, 9, 0, 0).unwrap();
+        let occurrence_end = Local.with_ymd_and_hms(2026, 4, 8, 10, 0, 0).unwrap();
+        let occurrence =
+            Event::new("Series".to_string(), occurrence_start, occurrence_end).unwrap();
+
+        let mut state = EventDialogState::from_occurrence(
+            &occurrence,
+            &Settings::default(),
+            event_id,
+            occurrence_start,
+        );
+        state.title = "Edited occurrence".to_string();
+
+        let saved = state.save(&db).unwrap();
+        assert_ne!(saved.id, Some(event_id));
+        assert_eq!(saved.title, "Edited occurrence");
+        assert!(saved.recurrence_rule.is_none());
+
+        let refreshed_series = event_service.get(event_id).unwrap().unwrap();
+        assert!(refreshed_series
+            .recurrence_exceptions
+            .unwrap_or_default()
+            .contains(&occurrence_start));
     }
 }

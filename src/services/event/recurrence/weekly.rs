@@ -2,7 +2,7 @@ use crate::models::event::Event;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate};
 
 use super::parser::{parse_interval, parse_weekly_byday};
-use super::utils::{is_valid_occurrence, push_if_in_range};
+use super::utils::{is_valid_occurrence, push_if_in_range, resolve_local_datetime};
 
 pub(super) fn generate(
     event: &Event,
@@ -49,10 +49,7 @@ pub(super) fn generate(
                 }
             }
 
-            if let Some(occurrence_datetime) = occurrence_date
-                .and_time(week_start_time)
-                .and_local_timezone(Local)
-                .single()
+            if let Some(occurrence_datetime) = resolve_local_datetime(occurrence_date, week_start_time)
             {
                 if occurrence_datetime >= event.start
                     && is_valid_occurrence(event, occurrence_datetime)

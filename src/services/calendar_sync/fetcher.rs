@@ -6,6 +6,8 @@ use reqwest::StatusCode;
 use std::thread;
 use std::time::Duration;
 
+use super::sanitizer;
+
 pub struct IcsFetcher {
     client: Client,
     max_response_bytes: usize,
@@ -41,8 +43,9 @@ impl IcsFetcher {
                 Ok(content) => return Ok(content),
                 Err(err) => {
                     let is_last_attempt = attempt == self.max_retries;
+                    let sanitized_error = sanitizer::sanitize_error_message(&err.to_string(), url);
                     if is_last_attempt {
-                        last_error = Some(err.context(format!(
+                        last_error = Some(anyhow!(sanitized_error).context(format!(
                             "Failed to fetch ICS from {} after {} attempts",
                             redacted,
                             attempt + 1
@@ -52,7 +55,7 @@ impl IcsFetcher {
                             "ICS fetch attempt {} failed for {}: {}",
                             attempt + 1,
                             redacted,
-                            err
+                            sanitized_error
                         );
                         thread::sleep(Duration::from_millis(self.retry_delay_ms));
                     }
@@ -97,7 +100,8 @@ impl IcsFetcher {
             ));
         }
 
-        let content = String::from_utf8(bytes.to_vec()).context("ICS response is not valid UTF-8")?;
+        let content =
+            String::from_utf8(bytes.to_vec()).context("ICS response is not valid UTF-8")?;
 
         if !(content.contains("BEGIN:VCALENDAR") || content.contains("BEGIN:VEVENT")) {
             return Err(anyhow!("Response does not appear to be valid ICS content"));
@@ -107,13 +111,7 @@ impl IcsFetcher {
     }
 
     fn redact_url(url: &str) -> String {
-        if let Some(index) = url.find("/calendar/ical/") {
-            let prefix_end = index + "/calendar/ical/".len();
-            let prefix = &url[..prefix_end];
-            return format!("{}***redacted***", prefix);
-        }
-
-        "***redacted-url***".to_string()
+        sanitizer::redact_url(url)
     }
 }
 

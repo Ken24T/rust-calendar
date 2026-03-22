@@ -2,10 +2,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone};
-use printpdf::{
-    BuiltinFont, IndirectFontRef, Mm, PdfDocument,
-    PdfLayerReference, Point, Rgb,
-};
+use printpdf::{BuiltinFont, IndirectFontRef, Mm, PdfDocument, PdfLayerReference, Point, Rgb};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -162,8 +159,24 @@ impl PdfExportService {
 
             // Day header
             let _header_text = format!("{}\n{}", day_names[i as usize], day_date.format("%d"));
-            Self::draw_text(&layer, &font_bold, 10.0, x + col_width / 2.0, header_y, day_names[i as usize], true);
-            Self::draw_text(&layer, &font, 9.0, x + col_width / 2.0, header_y - 6.0, &day_date.format("%d").to_string(), true);
+            Self::draw_text(
+                &layer,
+                &font_bold,
+                10.0,
+                x + col_width / 2.0,
+                header_y,
+                day_names[i as usize],
+                true,
+            );
+            Self::draw_text(
+                &layer,
+                &font,
+                9.0,
+                x + col_width / 2.0,
+                header_y - 6.0,
+                &day_date.format("%d").to_string(),
+                true,
+            );
 
             // Draw border for day column
             Self::draw_rect(&layer, x, header_y - 165.0, col_width - 1.0, 155.0);
@@ -239,7 +252,15 @@ impl PdfExportService {
         let mut current_layer = doc.get_page(page1).get_layer(layer1);
 
         // Title
-        Self::draw_text(&current_layer, &font_bold, 18.0, 105.0, 280.0, &options.title, true);
+        Self::draw_text(
+            &current_layer,
+            &font_bold,
+            18.0,
+            105.0,
+            280.0,
+            &options.title,
+            true,
+        );
 
         let mut y = 260.0;
         let margin_left = 20.0;
@@ -256,19 +277,32 @@ impl PdfExportService {
             }
 
             // Event title
-            Self::draw_text(&current_layer, &font_bold, 11.0, margin_left, y, &event.title, false);
+            Self::draw_text(
+                &current_layer,
+                &font_bold,
+                11.0,
+                margin_left,
+                y,
+                &event.title,
+                false,
+            );
             y -= 5.0;
 
             // Date/time
             let datetime_str = if event.all_day {
                 event.start.format("%B %d, %Y (All day)").to_string()
             } else {
-                event
-                    .start
-                    .format("%B %d, %Y at %I:%M %p")
-                    .to_string()
+                event.start.format("%B %d, %Y at %I:%M %p").to_string()
             };
-            Self::draw_text(&current_layer, &font, 9.0, margin_left, y, &datetime_str, false);
+            Self::draw_text(
+                &current_layer,
+                &font,
+                9.0,
+                margin_left,
+                y,
+                &datetime_str,
+                false,
+            );
             y -= 4.0;
 
             // Location
@@ -298,7 +332,15 @@ impl PdfExportService {
                         } else {
                             desc.clone()
                         };
-                        Self::draw_text(&current_layer, &font, 8.0, margin_left, y, &truncated, false);
+                        Self::draw_text(
+                            &current_layer,
+                            &font,
+                            8.0,
+                            margin_left,
+                            y,
+                            &truncated,
+                            false,
+                        );
                         y -= 4.0;
                     }
                 }
@@ -371,10 +413,9 @@ impl PdfExportService {
         font_bold: &IndirectFontRef,
     ) -> Result<()> {
         let first_of_month = date.with_day(1).unwrap();
-        let first_weekday = (first_of_month.weekday().num_days_from_sunday() as i32
-            - first_day_of_week as i32
-            + 7)
-            % 7;
+        let first_weekday =
+            (first_of_month.weekday().num_days_from_sunday() as i32 - first_day_of_week as i32 + 7)
+                % 7;
         let days_in_month = Self::get_days_in_month(date.year(), date.month());
 
         // Get events for the month
@@ -404,12 +445,9 @@ impl PdfExportService {
                 Self::draw_rect(layer, x, y - row_height, col_width - 1.0, row_height - 1.0);
 
                 if day_counter >= 1 && day_counter <= days_in_month {
-                    let cell_date = NaiveDate::from_ymd_opt(
-                        date.year(),
-                        date.month(),
-                        day_counter as u32,
-                    )
-                    .unwrap();
+                    let cell_date =
+                        NaiveDate::from_ymd_opt(date.year(), date.month(), day_counter as u32)
+                            .unwrap();
 
                     // Draw day number
                     let day_str = format!("{}", day_counter);

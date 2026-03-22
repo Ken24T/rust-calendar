@@ -11,7 +11,9 @@ mod sync;
 pub(super) use state::{CountdownUiState, OpenEventDialogRequest};
 
 use super::CalendarApp;
-use crate::services::countdown::{CountdownCardGeometry, CountdownCategoryId, RgbaColor, DEFAULT_CATEGORY_ID};
+use crate::services::countdown::{
+    CountdownCardGeometry, CountdownCategoryId, RgbaColor, DEFAULT_CATEGORY_ID,
+};
 use crate::ui_egui::views::CountdownRequest;
 use chrono::Local;
 use directories::ProjectDirs;
@@ -162,18 +164,21 @@ impl CalendarApp {
                 self.settings.default_card_width,
                 self.settings.default_card_height
             );
-            let card_id = self.context.countdown_service_mut().create_card_in_category(
-                event_id,
-                title,
-                target_at,
-                Some(effective_start_at),
-                Some(effective_end_at),
-                event_color,
-                event_body,
-                self.settings.default_card_width,
-                self.settings.default_card_height,
-                category_id.unwrap_or(CountdownCategoryId(DEFAULT_CATEGORY_ID)),
-            );
+            let card_id = self
+                .context
+                .countdown_service_mut()
+                .create_card_in_category(
+                    event_id,
+                    title,
+                    target_at,
+                    Some(effective_start_at),
+                    Some(effective_end_at),
+                    event_color,
+                    event_body,
+                    self.settings.default_card_width,
+                    self.settings.default_card_height,
+                    category_id.unwrap_or(CountdownCategoryId(DEFAULT_CATEGORY_ID)),
+                );
 
             // Card title defaults to event title, user can override in settings
             let geometry = self
@@ -215,11 +220,8 @@ mod tests {
 
     #[test]
     fn compose_countdown_body_ignores_empty_segments() {
-        let result = compose_countdown_body(
-            Some("   ".to_string()),
-            Some("Office".to_string()),
-            None,
-        );
+        let result =
+            compose_countdown_body(Some("   ".to_string()), Some("Office".to_string()), None);
 
         assert_eq!(result.as_deref(), Some("Location: Office"));
     }

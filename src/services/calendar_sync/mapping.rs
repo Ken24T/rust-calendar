@@ -5,10 +5,20 @@ use chrono::Local;
 use rusqlite::{params, Connection};
 use std::collections::HashSet;
 
+use crate::models::calendar_source::{SYNC_CAPABILITY_READ_ONLY, SYNC_CAPABILITY_READ_WRITE};
 use crate::models::event_sync_map::EventSyncMap;
 
 pub struct EventSyncMapService<'a> {
     conn: &'a Connection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteEventMetadata {
+    pub source_id: i64,
+    pub external_uid: String,
+    pub remote_event_id: Option<String>,
+    pub remote_etag: Option<String>,
+    pub remote_payload_hash: Option<String>,
 }
 
 impl<'a> EventSyncMapService<'a> {
@@ -25,8 +35,9 @@ impl<'a> EventSyncMapService<'a> {
                 "INSERT INTO event_sync_map (
                     source_id, external_uid, local_event_id,
                     external_last_modified, external_etag_hash,
-                    last_seen_at, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    last_seen_at, first_missing_at, purge_after_at,
+                    created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     mapping.source_id,
                     mapping.external_uid,
@@ -34,6 +45,8 @@ impl<'a> EventSyncMapService<'a> {
                     mapping.external_last_modified,
                     mapping.external_etag_hash,
                     mapping.last_seen_at,
+                    mapping.first_missing_at,
+                    mapping.purge_after_at,
                     now,
                     now,
                 ],
@@ -44,10 +57,15 @@ impl<'a> EventSyncMapService<'a> {
         Ok(mapping)
     }
 
-    pub fn get_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<Option<EventSyncMap>> {
+    pub fn get_by_source_and_uid(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+    ) -> Result<Option<EventSyncMap>> {
         let result = self.conn.query_row(
             "SELECT id, source_id, external_uid, local_event_id,
-                    external_last_modified, external_etag_hash, last_seen_at
+                    external_last_modified, external_etag_hash, last_seen_at,
+                    first_missing_at, purge_after_at
              FROM event_sync_map
              WHERE source_id = ?1 AND external_uid = ?2",
             params![source_id, external_uid],
@@ -67,6 +85,8 @@ impl<'a> EventSyncMapService<'a> {
             .execute(
                 "UPDATE event_sync_map
                  SET last_seen_at = ?1,
+                     first_missing_at = NULL,
+                     purge_after_at = NULL,
                      updated_at = ?2
                  WHERE source_id = ?3 AND external_uid = ?4",
                 params![
@@ -89,12 +109,56 @@ impl<'a> EventSyncMapService<'a> {
         Ok(())
     }
 
+    pub fn update_mapping_state(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+        local_event_id: i64,
+        external_last_modified: Option<&str>,
+        external_etag_hash: Option<&str>,
+    ) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE event_sync_map
+                 SET local_event_id = ?1,
+                     external_last_modified = ?2,
+                     external_etag_hash = ?3,
+                     last_seen_at = ?4,
+                     first_missing_at = NULL,
+                     purge_after_at = NULL,
+                     updated_at = ?5
+                 WHERE source_id = ?6 AND external_uid = ?7",
+                params![
+                    local_event_id,
+                    external_last_modified,
+                    external_etag_hash,
+                    Local::now().to_rfc3339(),
+                    Local::now().to_rfc3339(),
+                    source_id,
+                    external_uid,
+                ],
+            )
+            .context("Failed to update event sync map state")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Event sync map row not found for source_id={} external_uid={}",
+                source_id,
+                external_uid
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn list_by_source_id(&self, source_id: i64) -> Result<Vec<EventSyncMap>> {
         let mut stmt = self
             .conn
             .prepare(
                 "SELECT id, source_id, external_uid, local_event_id,
-                        external_last_modified, external_etag_hash, last_seen_at
+                           external_last_modified, external_etag_hash, last_seen_at,
+                           first_missing_at, purge_after_at
                  FROM event_sync_map
                  WHERE source_id = ?1",
             )
@@ -116,6 +180,41 @@ impl<'a> EventSyncMapService<'a> {
             .context("Failed to check synced status for local event")?;
 
         Ok(count > 0)
+    }
+
+    pub fn sync_capability_for_local_event(&self, local_event_id: i64) -> Result<Option<String>> {
+        let result = self.conn.query_row(
+            "SELECT cs.sync_capability
+             FROM event_sync_map esm
+             JOIN calendar_sources cs ON cs.id = esm.source_id
+             WHERE esm.local_event_id = ?1
+             ORDER BY esm.id DESC
+             LIMIT 1",
+            [local_event_id],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(capability) => Ok(Some(capability)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err).context("Failed to fetch sync capability for local event"),
+        }
+    }
+
+    pub fn is_read_only_synced_local_event(&self, local_event_id: i64) -> Result<bool> {
+        Ok(matches!(
+            self.sync_capability_for_local_event(local_event_id)?
+                .as_deref(),
+            Some(SYNC_CAPABILITY_READ_ONLY)
+        ))
+    }
+
+    pub fn is_writable_synced_local_event(&self, local_event_id: i64) -> Result<bool> {
+        Ok(matches!(
+            self.sync_capability_for_local_event(local_event_id)?
+                .as_deref(),
+            Some(SYNC_CAPABILITY_READ_WRITE)
+        ))
     }
 
     pub fn get_source_name_for_local_event(&self, local_event_id: i64) -> Result<Option<String>> {
@@ -176,6 +275,30 @@ impl<'a> EventSyncMapService<'a> {
         Ok(ids.into_iter().collect())
     }
 
+    pub fn list_read_only_synced_local_event_ids_for_enabled_sources(
+        &self,
+    ) -> Result<HashSet<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT DISTINCT esm.local_event_id
+                 FROM event_sync_map esm
+                 JOIN calendar_sources cs ON cs.id = esm.source_id
+                 WHERE cs.enabled = 1 AND cs.sync_capability = ?1",
+            )
+            .context("Failed to prepare read-only synced local event ids query")?;
+
+        let rows = stmt
+            .query_map([SYNC_CAPABILITY_READ_ONLY], |row| row.get::<_, i64>(0))
+            .context("Failed to execute read-only synced local event ids query")?;
+
+        let ids = rows
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect read-only synced local event ids")?;
+
+        Ok(ids.into_iter().collect())
+    }
+
     pub fn list_synced_local_event_ids_for_enabled_source(
         &self,
         source_id: i64,
@@ -201,6 +324,39 @@ impl<'a> EventSyncMapService<'a> {
         Ok(ids.into_iter().collect())
     }
 
+    pub fn list_read_only_synced_local_event_ids_for_enabled_source(
+        &self,
+        source_id: i64,
+    ) -> Result<HashSet<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT DISTINCT esm.local_event_id
+                 FROM event_sync_map esm
+                 JOIN calendar_sources cs ON cs.id = esm.source_id
+                 WHERE cs.enabled = 1
+                   AND esm.source_id = ?1
+                   AND cs.sync_capability = ?2",
+            )
+            .context(
+                "Failed to prepare read-only synced local event ids query for enabled source",
+            )?;
+
+        let rows = stmt
+            .query_map(params![source_id, SYNC_CAPABILITY_READ_ONLY], |row| {
+                row.get::<_, i64>(0)
+            })
+            .context(
+                "Failed to execute read-only synced local event ids query for enabled source",
+            )?;
+
+        let ids = rows
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect read-only synced local event ids for enabled source")?;
+
+        Ok(ids.into_iter().collect())
+    }
+
     pub fn delete_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<()> {
         let rows_affected = self
             .conn
@@ -221,6 +377,106 @@ impl<'a> EventSyncMapService<'a> {
         Ok(())
     }
 
+    pub fn mark_missing(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+        first_missing_at: &str,
+        purge_after_at: &str,
+    ) -> Result<()> {
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE event_sync_map
+                 SET first_missing_at = COALESCE(first_missing_at, ?1),
+                     purge_after_at = COALESCE(purge_after_at, ?2),
+                     updated_at = ?3
+                 WHERE source_id = ?4 AND external_uid = ?5",
+                params![
+                    first_missing_at,
+                    purge_after_at,
+                    Local::now().to_rfc3339(),
+                    source_id,
+                    external_uid,
+                ],
+            )
+            .context("Failed to mark event sync map row as missing")?;
+
+        if rows_affected == 0 {
+            return Err(anyhow!(
+                "Event sync map row not found for source_id={} external_uid={} when marking missing",
+                source_id,
+                external_uid
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn upsert_remote_metadata(&self, metadata: &RemoteEventMetadata) -> Result<()> {
+        self.conn
+            .execute(
+                "INSERT INTO event_remote_metadata (
+                    source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(source_id, external_uid) DO UPDATE SET
+                   remote_event_id = excluded.remote_event_id,
+                   remote_etag = excluded.remote_etag,
+                   remote_payload_hash = excluded.remote_payload_hash,
+                   updated_at = excluded.updated_at",
+                params![
+                    metadata.source_id,
+                    metadata.external_uid,
+                    metadata.remote_event_id,
+                    metadata.remote_etag,
+                    metadata.remote_payload_hash,
+                    Local::now().to_rfc3339(),
+                ],
+            )
+            .context("Failed to upsert remote event metadata")?;
+
+        Ok(())
+    }
+
+    pub fn get_remote_metadata(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+    ) -> Result<Option<RemoteEventMetadata>> {
+        let result = self.conn.query_row(
+            "SELECT source_id, external_uid, remote_event_id, remote_etag, remote_payload_hash
+             FROM event_remote_metadata
+             WHERE source_id = ?1 AND external_uid = ?2",
+            params![source_id, external_uid],
+            |row| {
+                Ok(RemoteEventMetadata {
+                    source_id: row.get(0)?,
+                    external_uid: row.get(1)?,
+                    remote_event_id: row.get(2)?,
+                    remote_etag: row.get(3)?,
+                    remote_payload_hash: row.get(4)?,
+                })
+            },
+        );
+
+        match result {
+            Ok(metadata) => Ok(Some(metadata)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err).context("Failed to fetch remote event metadata"),
+        }
+    }
+
+    pub fn delete_remote_metadata(&self, source_id: i64, external_uid: &str) -> Result<()> {
+        self.conn
+            .execute(
+                "DELETE FROM event_remote_metadata WHERE source_id = ?1 AND external_uid = ?2",
+                params![source_id, external_uid],
+            )
+            .context("Failed to delete remote event metadata")?;
+
+        Ok(())
+    }
+
     fn row_to_mapping(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventSyncMap> {
         Ok(EventSyncMap {
             id: Some(row.get(0)?),
@@ -230,13 +486,16 @@ impl<'a> EventSyncMapService<'a> {
             external_last_modified: row.get(4)?,
             external_etag_hash: row.get(5)?,
             last_seen_at: row.get(6)?,
+            first_missing_at: row.get(7)?,
+            purge_after_at: row.get(8)?,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::EventSyncMapService;
+    use super::{EventSyncMapService, RemoteEventMetadata};
+    use crate::models::calendar_source::{SYNC_CAPABILITY_READ_ONLY, SYNC_CAPABILITY_READ_WRITE};
     use crate::models::event_sync_map::EventSyncMap;
     use crate::services::database::Database;
     use rusqlite::{params, Connection};
@@ -291,6 +550,8 @@ mod tests {
             external_last_modified: Some("20260227T010000Z".to_string()),
             external_etag_hash: None,
             last_seen_at: Some("2026-02-27T01:00:00Z".to_string()),
+            first_missing_at: None,
+            purge_after_at: None,
         };
 
         let created = service.create(mapping).unwrap();
@@ -320,6 +581,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(first).unwrap();
 
@@ -332,6 +595,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
 
         assert!(service.create(duplicate).is_err());
@@ -354,6 +619,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
@@ -385,6 +652,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -414,10 +683,14 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
-        service.delete_by_source_and_uid(source_id, "uid-del").unwrap();
+        service
+            .delete_by_source_and_uid(source_id, "uid-del")
+            .unwrap();
         assert!(service
             .get_by_source_and_uid(source_id, "uid-del")
             .unwrap()
@@ -441,6 +714,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
@@ -467,6 +742,8 @@ mod tests {
             external_last_modified: None,
             external_etag_hash: None,
             last_seen_at: None,
+            first_missing_at: None,
+            purge_after_at: None,
         };
         service.create(mapping).unwrap();
 
@@ -506,6 +783,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -518,6 +797,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -552,6 +833,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -564,6 +847,8 @@ mod tests {
                 external_last_modified: None,
                 external_etag_hash: None,
                 last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
             })
             .unwrap();
 
@@ -573,5 +858,161 @@ mod tests {
 
         assert!(source_a_ids.contains(&event_a));
         assert!(!source_a_ids.contains(&event_b));
+    }
+
+    #[test]
+    fn test_list_read_only_synced_ids_only_returns_read_only_mappings() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, 'google_ics', ?2, 1, 15, ?3)",
+            params![
+                "Read Only",
+                "https://calendar.google.com/calendar/ical/readonly/basic.ics",
+                SYNC_CAPABILITY_READ_ONLY,
+            ],
+        )
+        .unwrap();
+        let read_only_source_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, 'google_ics', ?2, 1, 15, ?3)",
+            params![
+                "Writable",
+                "https://calendar.google.com/calendar/ical/writable/basic.ics",
+                SYNC_CAPABILITY_READ_WRITE,
+            ],
+        )
+        .unwrap();
+        let writable_source_id = conn.last_insert_rowid();
+
+        let read_only_event_id = create_event(conn);
+        let writable_event_id = create_event(conn);
+        let service = EventSyncMapService::new(conn);
+
+        service
+            .create(EventSyncMap {
+                id: None,
+                source_id: read_only_source_id,
+                external_uid: "uid-ro".to_string(),
+                local_event_id: read_only_event_id,
+                external_last_modified: None,
+                external_etag_hash: None,
+                last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
+            })
+            .unwrap();
+
+        service
+            .create(EventSyncMap {
+                id: None,
+                source_id: writable_source_id,
+                external_uid: "uid-rw".to_string(),
+                local_event_id: writable_event_id,
+                external_last_modified: None,
+                external_etag_hash: None,
+                last_seen_at: None,
+                first_missing_at: None,
+                purge_after_at: None,
+            })
+            .unwrap();
+
+        let read_only_ids = service
+            .list_read_only_synced_local_event_ids_for_enabled_sources()
+            .unwrap();
+        assert!(read_only_ids.contains(&read_only_event_id));
+        assert!(!read_only_ids.contains(&writable_event_id));
+
+        let scoped_ids = service
+            .list_read_only_synced_local_event_ids_for_enabled_source(read_only_source_id)
+            .unwrap();
+        assert!(scoped_ids.contains(&read_only_event_id));
+    }
+
+    #[test]
+    fn test_remote_metadata_upsert_and_get() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+        let source_id = create_source(conn);
+        let service = EventSyncMapService::new(conn);
+
+        let metadata = RemoteEventMetadata {
+            source_id,
+            external_uid: "uid-remote-1".to_string(),
+            remote_event_id: Some("google-event-123".to_string()),
+            remote_etag: Some("etag-1".to_string()),
+            remote_payload_hash: Some("hash-1".to_string()),
+        };
+
+        service.upsert_remote_metadata(&metadata).unwrap();
+
+        let fetched = service
+            .get_remote_metadata(source_id, "uid-remote-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(fetched.remote_event_id.as_deref(), Some("google-event-123"));
+
+        let updated = RemoteEventMetadata {
+            remote_etag: Some("etag-2".to_string()),
+            ..metadata
+        };
+
+        service.upsert_remote_metadata(&updated).unwrap();
+
+        let fetched_updated = service
+            .get_remote_metadata(source_id, "uid-remote-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(fetched_updated.remote_etag.as_deref(), Some("etag-2"));
+    }
+    #[test]
+    fn test_sync_capability_helpers_for_local_event() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+        let conn = db.connection();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, 'google_ics', ?2, 1, 15, ?3)",
+            params![
+                "Writable",
+                "https://calendar.google.com/calendar/ical/test%40gmail.com/private-token/basic.ics",
+                crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE,
+            ],
+        )
+        .unwrap();
+        let source_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO events (title, start_datetime, end_datetime, is_all_day)
+             VALUES ('Mapped', '2026-03-10T09:00:00+00:00', '2026-03-10T10:00:00+00:00', 0)",
+            [],
+        )
+        .unwrap();
+        let event_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id)
+             VALUES (?1, ?2, ?3)",
+            params![source_id, "uid-capability", event_id],
+        )
+        .unwrap();
+
+        let service = EventSyncMapService::new(conn);
+        assert_eq!(
+            service
+                .sync_capability_for_local_event(event_id)
+                .unwrap()
+                .as_deref(),
+            Some(crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE)
+        );
+        assert!(!service.is_read_only_synced_local_event(event_id).unwrap());
+        assert!(service.is_writable_synced_local_event(event_id).unwrap());
     }
 }

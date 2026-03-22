@@ -22,11 +22,13 @@ pub fn render_countdown_menu_items(
     event: &Event,
     countdown_requests: &mut Vec<CountdownRequest>,
 ) {
-    let categories = ui.ctx().data(|data| {
-        data.get_temp::<CountdownCategoriesCache>(egui::Id::new(COUNTDOWN_CATEGORIES_CACHE_ID))
-    })
-    .map(|c| c.0)
-    .unwrap_or_default();
+    let categories = ui
+        .ctx()
+        .data(|data| {
+            data.get_temp::<CountdownCategoriesCache>(egui::Id::new(COUNTDOWN_CATEGORIES_CACHE_ID))
+        })
+        .map(|c| c.0)
+        .unwrap_or_default();
 
     if categories.len() <= 1 {
         // Single category — simple button
@@ -50,9 +52,9 @@ pub fn render_countdown_menu_items(
 }
 
 mod day_context_menu;
-pub mod day_view;
 mod day_event_rendering;
 mod day_time_slot;
+pub mod day_view;
 mod event_helpers;
 mod event_rendering;
 mod month_context_menu;

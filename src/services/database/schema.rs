@@ -15,7 +15,12 @@ pub fn initialize_schema(conn: &Connection) -> Result<()> {
     create_event_templates_table(conn)?;
     create_categories_table(conn)?;
     create_calendar_sources_table(conn)?;
+    create_google_account_table(conn)?;
     create_event_sync_map_table(conn)?;
+    create_event_remote_metadata_table(conn)?;
+    create_outbound_sync_operations_table(conn)?;
+    create_sync_conflicts_table(conn)?;
+    create_calendar_sync_runs_table(conn)?;
     initialize_default_categories(conn)?;
     normalize_all_day_event_times(conn)?;
     Ok(())
@@ -368,6 +373,11 @@ fn create_calendar_sources_table(conn: &Connection) -> Result<()> {
             ics_url TEXT NOT NULL,
             enabled INTEGER NOT NULL DEFAULT 1,
             poll_interval_minutes INTEGER NOT NULL DEFAULT 15 CHECK (poll_interval_minutes > 0),
+            sync_past_days INTEGER NOT NULL DEFAULT 90 CHECK (sync_past_days >= 0),
+            sync_future_days INTEGER NOT NULL DEFAULT 365 CHECK (sync_future_days > 0),
+            sync_capability TEXT NOT NULL DEFAULT 'read_only',
+            api_sync_token TEXT,
+            last_push_at TEXT,
             last_sync_at TEXT,
             last_sync_status TEXT,
             last_error TEXT,
@@ -378,6 +388,41 @@ fn create_calendar_sources_table(conn: &Connection) -> Result<()> {
         [],
     )
     .context("Failed to create calendar_sources table")?;
+
+    migrations::ensure_column(
+        conn,
+        "calendar_sources",
+        "sync_past_days",
+        "ALTER TABLE calendar_sources ADD COLUMN sync_past_days INTEGER NOT NULL DEFAULT 90",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "calendar_sources",
+        "sync_future_days",
+        "ALTER TABLE calendar_sources ADD COLUMN sync_future_days INTEGER NOT NULL DEFAULT 365",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "calendar_sources",
+        "sync_capability",
+        "ALTER TABLE calendar_sources ADD COLUMN sync_capability TEXT NOT NULL DEFAULT 'read_only'",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "calendar_sources",
+        "api_sync_token",
+        "ALTER TABLE calendar_sources ADD COLUMN api_sync_token TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "calendar_sources",
+        "last_push_at",
+        "ALTER TABLE calendar_sources ADD COLUMN last_push_at TEXT",
+    )?;
 
     Ok(())
 }
@@ -392,6 +437,8 @@ fn create_event_sync_map_table(conn: &Connection) -> Result<()> {
             external_last_modified TEXT,
             external_etag_hash TEXT,
             last_seen_at TEXT,
+            first_missing_at TEXT,
+            purge_after_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(source_id, external_uid),
@@ -402,6 +449,20 @@ fn create_event_sync_map_table(conn: &Connection) -> Result<()> {
     )
     .context("Failed to create event_sync_map table")?;
 
+    migrations::ensure_column(
+        conn,
+        "event_sync_map",
+        "first_missing_at",
+        "ALTER TABLE event_sync_map ADD COLUMN first_missing_at TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "event_sync_map",
+        "purge_after_at",
+        "ALTER TABLE event_sync_map ADD COLUMN purge_after_at TEXT",
+    )?;
+
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_event_sync_map_source_id ON event_sync_map(source_id)",
         [],
@@ -411,12 +472,249 @@ fn create_event_sync_map_table(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn create_google_account_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS google_account (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            oauth_client_id TEXT,
+            account_email TEXT,
+            access_token TEXT,
+            refresh_token TEXT,
+            token_type TEXT,
+            scope TEXT,
+            expires_at TEXT,
+            last_error TEXT,
+            connected_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )
+    .context("Failed to create google_account table")?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "oauth_client_id",
+        "ALTER TABLE google_account ADD COLUMN oauth_client_id TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "account_email",
+        "ALTER TABLE google_account ADD COLUMN account_email TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "access_token",
+        "ALTER TABLE google_account ADD COLUMN access_token TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "refresh_token",
+        "ALTER TABLE google_account ADD COLUMN refresh_token TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "token_type",
+        "ALTER TABLE google_account ADD COLUMN token_type TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "scope",
+        "ALTER TABLE google_account ADD COLUMN scope TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "expires_at",
+        "ALTER TABLE google_account ADD COLUMN expires_at TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "last_error",
+        "ALTER TABLE google_account ADD COLUMN last_error TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "connected_at",
+        "ALTER TABLE google_account ADD COLUMN connected_at TEXT",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "google_account",
+        "updated_at",
+        "ALTER TABLE google_account ADD COLUMN updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    )?;
+
+    Ok(())
+}
+
+fn create_calendar_sync_runs_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS calendar_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            status TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            created_count INTEGER NOT NULL DEFAULT 0,
+            updated_count INTEGER NOT NULL DEFAULT 0,
+            deleted_count INTEGER NOT NULL DEFAULT 0,
+            unchanged_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            error_count INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (source_id) REFERENCES calendar_sources(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .context("Failed to create calendar_sync_runs table")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_calendar_sync_runs_source_id ON calendar_sync_runs(source_id)",
+        [],
+    )
+    .context("Failed to create calendar_sync_runs source index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_calendar_sync_runs_started_at ON calendar_sync_runs(started_at)",
+        [],
+    )
+    .context("Failed to create calendar_sync_runs started_at index")?;
+
+    Ok(())
+}
+
+fn create_event_remote_metadata_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS event_remote_metadata (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            external_uid TEXT NOT NULL,
+            remote_event_id TEXT,
+            remote_etag TEXT,
+            remote_payload_hash TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(source_id, external_uid),
+            FOREIGN KEY (source_id) REFERENCES calendar_sources(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .context("Failed to create event_remote_metadata table")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_remote_metadata_source_id ON event_remote_metadata(source_id)",
+        [],
+    )
+    .context("Failed to create event_remote_metadata source index")?;
+
+    Ok(())
+}
+
+fn create_outbound_sync_operations_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS outbound_sync_operations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            local_event_id INTEGER,
+            external_uid TEXT NOT NULL,
+            operation_type TEXT NOT NULL,
+            payload_json TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            next_retry_at TEXT,
+            last_error TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(source_id, external_uid),
+            FOREIGN KEY (source_id) REFERENCES calendar_sources(id) ON DELETE CASCADE,
+            FOREIGN KEY (local_event_id) REFERENCES events(id) ON DELETE SET NULL
+        )",
+        [],
+    )
+    .context("Failed to create outbound_sync_operations table")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outbound_sync_operations_source_status
+         ON outbound_sync_operations(source_id, status)",
+        [],
+    )
+    .context("Failed to create outbound sync source/status index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_outbound_sync_operations_next_retry_at
+         ON outbound_sync_operations(next_retry_at)",
+        [],
+    )
+    .context("Failed to create outbound sync next_retry index")?;
+
+    Ok(())
+}
+
+fn create_sync_conflicts_table(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sync_conflicts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            local_event_id INTEGER,
+            external_uid TEXT NOT NULL,
+            outbound_operation_id INTEGER,
+            local_operation_type TEXT,
+            remote_change_type TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            resolution TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (source_id) REFERENCES calendar_sources(id) ON DELETE CASCADE,
+            FOREIGN KEY (local_event_id) REFERENCES events(id) ON DELETE SET NULL,
+            FOREIGN KEY (outbound_operation_id) REFERENCES outbound_sync_operations(id) ON DELETE SET NULL
+        )",
+        [],
+    )
+    .context("Failed to create sync_conflicts table")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sync_conflicts_source_status
+         ON sync_conflicts(source_id, status)",
+        [],
+    )
+    .context("Failed to create sync conflicts source/status index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sync_conflicts_identity_open
+         ON sync_conflicts(source_id, external_uid, status)",
+        [],
+    )
+    .context("Failed to create sync conflicts identity index")?;
+
+    Ok(())
+}
+
 fn initialize_default_categories(conn: &Connection) -> Result<()> {
     use crate::services::category::CategoryService;
-    
+
     let service = CategoryService::new(conn);
     service.initialize_defaults()?;
-    
+
     Ok(())
 }
 
@@ -484,9 +782,7 @@ fn normalize_all_day_event_times(conn: &Connection) -> Result<()> {
         // For the end, treat the stored end_date as the user-intended inclusive
         // last day, then add one day (iCal exclusive-end convention).
         let inclusive_end_date = end_local.date_naive();
-        let exclusive_end_date = inclusive_end_date
-            .succ_opt()
-            .unwrap_or(inclusive_end_date);
+        let exclusive_end_date = inclusive_end_date.succ_opt().unwrap_or(inclusive_end_date);
         let new_end = exclusive_end_date
             .and_time(midnight)
             .and_local_timezone(Local)
@@ -499,9 +795,7 @@ fn normalize_all_day_event_times(conn: &Connection) -> Result<()> {
                 new_end.to_rfc3339(),
                 id,
             ])
-            .with_context(|| {
-                format!("Failed to normalise all-day event id={}", id)
-            })?;
+            .with_context(|| format!("Failed to normalise all-day event id={}", id))?;
 
         log::info!(
             "Normalised all-day event id={}: start {} → {}, end {} → {}",

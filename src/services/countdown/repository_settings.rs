@@ -7,8 +7,7 @@ use rusqlite::{params, OptionalExtension};
 
 use super::models::{
     CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardVisuals,
-    CountdownDisplayMode, CountdownNotificationConfig, RgbaColor,
-    WarningThresholds,
+    CountdownDisplayMode, CountdownNotificationConfig, RgbaColor, WarningThresholds,
 };
 use super::repository::CountdownRepository;
 
@@ -69,17 +68,16 @@ impl<'a> CountdownRepository<'a> {
                 let app_window_width: Option<f32> = row.get(3)?;
                 let app_window_height: Option<f32> = row.get(4)?;
 
-                let app_window_geometry =
-                    if app_window_x.is_some() && app_window_y.is_some() {
-                        Some(CountdownCardGeometry {
-                            x: app_window_x.unwrap_or(0.0),
-                            y: app_window_y.unwrap_or(0.0),
-                            width: app_window_width.unwrap_or(800.0),
-                            height: app_window_height.unwrap_or(600.0),
-                        })
-                    } else {
-                        None
-                    };
+                let app_window_geometry = if app_window_x.is_some() && app_window_y.is_some() {
+                    Some(CountdownCardGeometry {
+                        x: app_window_x.unwrap_or(0.0),
+                        y: app_window_y.unwrap_or(0.0),
+                        width: app_window_width.unwrap_or(800.0),
+                        height: app_window_height.unwrap_or(600.0),
+                    })
+                } else {
+                    None
+                };
 
                 // Parse container geometry (indices 34-37)
                 let container_x: Option<f32> = row.get(34)?;
@@ -87,17 +85,16 @@ impl<'a> CountdownRepository<'a> {
                 let container_width: Option<f32> = row.get(36)?;
                 let container_height: Option<f32> = row.get(37)?;
 
-                let container_geometry =
-                    if container_x.is_some() && container_y.is_some() {
-                        Some(CountdownCardGeometry {
-                            x: container_x.unwrap_or(0.0),
-                            y: container_y.unwrap_or(0.0),
-                            width: container_width.unwrap_or(400.0),
-                            height: container_height.unwrap_or(300.0),
-                        })
-                    } else {
-                        None
-                    };
+                let container_geometry = if container_x.is_some() && container_y.is_some() {
+                    Some(CountdownCardGeometry {
+                        x: container_x.unwrap_or(0.0),
+                        y: container_y.unwrap_or(0.0),
+                        width: container_width.unwrap_or(400.0),
+                        height: container_height.unwrap_or(300.0),
+                    })
+                } else {
+                    None
+                };
 
                 // Parse display_mode (index 33)
                 let display_mode_str: Option<String> = row.get(33)?;

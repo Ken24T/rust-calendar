@@ -182,4 +182,87 @@ mod tests {
         assert!(result.is_ok(), "Should be able to query sqlite_master");
         assert_eq!(result.unwrap(), 1, "event_sync_map table should exist");
     }
+
+    #[test]
+    fn test_calendar_sync_runs_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='calendar_sync_runs'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(result.unwrap(), 1, "calendar_sync_runs table should exist");
+    }
+
+    #[test]
+    fn test_google_account_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='google_account'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(result.unwrap(), 1, "google_account table should exist");
+    }
+
+    #[test]
+    fn test_event_remote_metadata_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='event_remote_metadata'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(
+            result.unwrap(),
+            1,
+            "event_remote_metadata table should exist"
+        );
+    }
+
+    #[test]
+    fn test_outbound_sync_operations_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='outbound_sync_operations'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(
+            result.unwrap(),
+            1,
+            "outbound_sync_operations table should exist"
+        );
+    }
+
+    #[test]
+    fn test_sync_conflicts_table_exists() {
+        let db = Database::new(":memory:").unwrap();
+        db.initialize_schema().unwrap();
+
+        let result: Result<i64, rusqlite::Error> = db.connection().query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sync_conflicts'",
+            [],
+            |row| row.get(0),
+        );
+
+        assert!(result.is_ok(), "Should be able to query sqlite_master");
+        assert_eq!(result.unwrap(), 1, "sync_conflicts table should exist");
+    }
 }

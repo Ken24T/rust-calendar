@@ -46,14 +46,14 @@ impl CalendarApp {
     /// Render the status bar at the bottom of the window
     pub(super) fn render_status_bar(&mut self, ctx: &egui::Context) {
         let is_dark = self.active_theme.is_dark;
-        
+
         egui::TopBottomPanel::bottom("status_bar")
             .exact_height(24.0)
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     // Left side: View info, date, event counts
                     self.render_status_left(ui, is_dark);
-                    
+
                     // Spacer
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Right side: Hints, save status, next event (rendered right-to-left)
@@ -62,12 +62,12 @@ impl CalendarApp {
                 });
             });
     }
-    
+
     /// Render left side of status bar: view indicator, date, event counts
     fn render_status_left(&mut self, ui: &mut egui::Ui, is_dark: bool) {
         let secondary_color = secondary_text_color(is_dark);
         let sep_color = separator_color(is_dark);
-        
+
         // View indicator
         let view_name = match self.current_view {
             ViewType::Day => "📅 Day",
@@ -76,17 +76,15 @@ impl CalendarApp {
             ViewType::Month => "🗓️ Month",
         };
         ui.label(RichText::new(view_name).small());
-        
+
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
-        
+
         // Current date - clickable to open date picker
         let date_str = self.current_date.format("%A, %B %d, %Y").to_string();
-        let date_response = ui.add(
-            egui::Label::new(RichText::new(&date_str).small())
-                .sense(Sense::click())
-        );
+        let date_response =
+            ui.add(egui::Label::new(RichText::new(&date_str).small()).sense(Sense::click()));
         if date_response.clicked() {
             self.state.date_picker_state.open(self.current_date);
         }
@@ -94,32 +92,34 @@ impl CalendarApp {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
         date_response.on_hover_text("Click to go to a specific date");
-        
+
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
-        
+
         // Week number
         let week_num = self.current_date.iso_week().week();
-        ui.label(RichText::new(format!("W{}", week_num)).small().color(secondary_color));
-        
+        ui.label(
+            RichText::new(format!("W{}", week_num))
+                .small()
+                .color(secondary_color),
+        );
+
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
-        
+
         // Event counts - clickable to open search
         let (today_count, visible_count) = self.get_event_counts();
-        
+
         // Today's events (always shown)
         let today_text = if today_count == 1 {
             "1 today".to_string()
         } else {
             format!("{} today", today_count)
         };
-        let today_response = ui.add(
-            egui::Label::new(RichText::new(&today_text).small())
-                .sense(Sense::click())
-        );
+        let today_response =
+            ui.add(egui::Label::new(RichText::new(&today_text).small()).sense(Sense::click()));
         if today_response.clicked() {
             self.state.show_search_dialog = true;
         }
@@ -127,7 +127,7 @@ impl CalendarApp {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
         today_response.on_hover_text("Click to search events");
-        
+
         // Visible period events (if different from today)
         if self.current_view != ViewType::Day {
             ui.label(RichText::new(" · ").small().color(sep_color));
@@ -139,22 +139,22 @@ impl CalendarApp {
             ui.label(RichText::new(&visible_text).small());
         }
     }
-    
+
     /// Render right side of status bar: save status, next event, keyboard hints
     fn render_status_right(&mut self, ui: &mut egui::Ui, is_dark: bool) {
         let hint_color = hint_text_color(is_dark);
         let sep_color = separator_color(is_dark);
-        
+
         // Keyboard hints (contextual)
         self.render_contextual_hints(ui, hint_color, sep_color);
-        
+
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
-        
+
         // Save/sync status
         self.render_save_status(ui, is_dark);
-        
+
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
@@ -165,11 +165,11 @@ impl CalendarApp {
         ui.add_space(SEPARATOR_WIDTH);
         ui.separator();
         ui.add_space(SEPARATOR_WIDTH);
-        
+
         // Next upcoming event
         self.render_next_event(ui, is_dark);
     }
-    
+
     /// Render contextual keyboard hints based on current app state
     fn render_contextual_hints(&self, ui: &mut egui::Ui, hint_color: Color32, sep_color: Color32) {
         let any_dialog_open = self.show_event_dialog
@@ -179,7 +179,7 @@ impl CalendarApp {
             || self.state.date_picker_state.is_open
             || self.state.show_about_dialog
             || self.confirm_dialog.is_open();
-        
+
         if any_dialog_open {
             // Dialog is open - show Esc hint
             ui.label(RichText::new("Esc: Close").small().color(hint_color));
@@ -196,18 +196,24 @@ impl CalendarApp {
             ui.label(RichText::new("Arrows: Navigate").small().color(hint_color));
         }
     }
-    
+
     /// Render save/sync status indicator
     fn render_save_status(&self, ui: &mut egui::Ui, is_dark: bool) {
         let countdown_dirty = self.context.countdown_service().is_dirty();
-        
+
         // Colors that work in both light and dark themes
         let (unsaved_color, saved_color) = if is_dark {
-            (Color32::from_rgb(255, 180, 80), Color32::from_rgb(100, 200, 120))
+            (
+                Color32::from_rgb(255, 180, 80),
+                Color32::from_rgb(100, 200, 120),
+            )
         } else {
-            (Color32::from_rgb(200, 120, 0), Color32::from_rgb(60, 140, 60))
+            (
+                Color32::from_rgb(200, 120, 0),
+                Color32::from_rgb(60, 140, 60),
+            )
         };
-        
+
         if countdown_dirty {
             // Unsaved changes
             let response = ui.label(RichText::new("● Unsaved").small().color(unsaved_color));
@@ -260,7 +266,7 @@ impl CalendarApp {
         let response = ui.label(RichText::new(status_text).small().color(color));
         response.on_hover_text("Google Calendar sync status and next scheduled run");
     }
-    
+
     /// Render next upcoming event with countdown
     fn render_next_event(&self, ui: &mut egui::Ui, is_dark: bool) {
         // Theme-aware accent color for next event
@@ -270,27 +276,31 @@ impl CalendarApp {
             Color32::from_rgb(40, 100, 180)
         };
         let muted_color = secondary_text_color(is_dark);
-        
+
         if let Some((title, countdown)) = self.get_next_upcoming_event() {
             let truncated_title = if title.len() > 25 {
                 format!("{}…", &title[..24])
             } else {
                 title.clone()
             };
-            
+
             let next_text = format!("Next: {} in {}", truncated_title, countdown);
             let response = ui.label(RichText::new(&next_text).small().color(accent_color));
             response.on_hover_text(format!("Upcoming: {}", title));
         } else {
-            ui.label(RichText::new("No upcoming events").small().color(muted_color));
+            ui.label(
+                RichText::new("No upcoming events")
+                    .small()
+                    .color(muted_color),
+            );
         }
     }
-    
+
     /// Get event counts: (today's events, visible period events)
     fn get_event_counts(&self) -> (usize, usize) {
         let event_service = self.context.event_service();
         let today = Local::now().date_naive();
-        
+
         // Today's events
         let today_start = Local
             .from_local_datetime(&today.and_hms_opt(0, 0, 0).unwrap())
@@ -300,22 +310,22 @@ impl CalendarApp {
             .from_local_datetime(&today.and_hms_opt(23, 59, 59).unwrap())
             .single()
             .unwrap();
-        
+
         let today_count = event_service
             .expand_recurring_events(today_start, today_end)
             .map(|events| events.len())
             .unwrap_or(0);
-        
+
         // Visible period events
         let visible_count = self.get_visible_event_count();
-        
+
         (today_count, visible_count)
     }
-    
+
     /// Get the count of events visible in the current view period
     fn get_visible_event_count(&self) -> usize {
         let event_service = self.context.event_service();
-        
+
         let (start_date, end_date) = match self.current_view {
             ViewType::Day => (self.current_date, self.current_date),
             ViewType::Week => {
@@ -340,15 +350,19 @@ impl CalendarApp {
                         .pred_opt()
                         .unwrap()
                 } else {
-                    NaiveDate::from_ymd_opt(self.current_date.year(), self.current_date.month() + 1, 1)
-                        .unwrap()
-                        .pred_opt()
-                        .unwrap()
+                    NaiveDate::from_ymd_opt(
+                        self.current_date.year(),
+                        self.current_date.month() + 1,
+                        1,
+                    )
+                    .unwrap()
+                    .pred_opt()
+                    .unwrap()
                 };
                 (first_of_month, last_of_month)
             }
         };
-        
+
         let start_datetime = Local
             .from_local_datetime(&start_date.and_hms_opt(0, 0, 0).unwrap())
             .single()
@@ -357,34 +371,32 @@ impl CalendarApp {
             .from_local_datetime(&end_date.and_hms_opt(23, 59, 59).unwrap())
             .single()
             .unwrap();
-        
+
         event_service
             .expand_recurring_events(start_datetime, end_datetime)
             .map(|events| events.len())
             .unwrap_or(0)
     }
-    
+
     /// Get the next upcoming event title and countdown string
     fn get_next_upcoming_event(&self) -> Option<(String, String)> {
         let event_service = self.context.event_service();
         let now = Local::now();
-        
+
         // Look ahead up to 7 days for the next event
         let end = now + Duration::days(7);
-        
-        let events = event_service
-            .expand_recurring_events(now, end)
-            .ok()?;
-        
+
+        let events = event_service.expand_recurring_events(now, end).ok()?;
+
         // Find the next event that starts after now
         let next_event = events
             .into_iter()
             .filter(|e| e.start > now)
             .min_by_key(|e| e.start)?;
-        
+
         let duration = next_event.start.signed_duration_since(now);
         let countdown = format_duration_short(duration);
-        
+
         Some((next_event.title.clone(), countdown))
     }
 }
@@ -399,15 +411,15 @@ fn format_scheduler_countdown(duration: std::time::Duration) -> String {
 /// Format a duration into a short human-readable string
 fn format_duration_short(duration: Duration) -> String {
     let total_seconds = duration.num_seconds();
-    
+
     if total_seconds < 0 {
         return "now".to_string();
     }
-    
+
     let days = total_seconds / 86400;
     let hours = (total_seconds % 86400) / 3600;
     let minutes = (total_seconds % 3600) / 60;
-    
+
     if days > 0 {
         if hours > 0 {
             format!("{}d {}h", days, hours)

@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 pub const GOOGLE_ICS_SOURCE_TYPE: &str = "google_ics";
+pub const SYNC_CAPABILITY_READ_ONLY: &str = "read_only";
+pub const SYNC_CAPABILITY_READ_WRITE: &str = "read_write";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarSource {
@@ -12,9 +14,14 @@ pub struct CalendarSource {
     pub ics_url: String,
     pub enabled: bool,
     pub poll_interval_minutes: i64,
+    pub sync_past_days: i64,
+    pub sync_future_days: i64,
     pub last_sync_at: Option<String>,
     pub last_sync_status: Option<String>,
     pub last_error: Option<String>,
+    pub sync_capability: String,
+    pub api_sync_token: Option<String>,
+    pub last_push_at: Option<String>,
 }
 
 impl CalendarSource {
@@ -36,6 +43,20 @@ impl CalendarSource {
             return Err("Poll interval must be greater than 0 minutes".to_string());
         }
 
+        if self.sync_past_days < 0 {
+            return Err("Past sync window must be 0 days or greater".to_string());
+        }
+
+        if self.sync_future_days <= 0 {
+            return Err("Future sync window must be greater than 0 days".to_string());
+        }
+
+        if self.sync_capability != SYNC_CAPABILITY_READ_ONLY
+            && self.sync_capability != SYNC_CAPABILITY_READ_WRITE
+        {
+            return Err("Sync capability must be either 'read_only' or 'read_write'".to_string());
+        }
+
         Ok(())
     }
 
@@ -48,6 +69,26 @@ impl CalendarSource {
         trimmed.starts_with("https://calendar.google.com/calendar/ical/")
             && trimmed.ends_with(".ics")
     }
+
+    pub fn google_calendar_id(&self) -> Option<String> {
+        Self::extract_google_calendar_id(&self.ics_url)
+    }
+
+    pub fn extract_google_calendar_id(url: &str) -> Option<String> {
+        let trimmed = url.trim();
+        let marker = "/calendar/ical/";
+        let start = trimmed.find(marker)? + marker.len();
+        let remainder = &trimmed[start..];
+        let encoded_calendar_id = remainder.split('/').next()?.trim();
+        if encoded_calendar_id.is_empty() {
+            return None;
+        }
+
+        urlencoding::decode(encoded_calendar_id)
+            .ok()
+            .map(|value| value.into_owned())
+            .filter(|value| !value.trim().is_empty())
+    }
 }
 
 impl Default for CalendarSource {
@@ -59,16 +100,21 @@ impl Default for CalendarSource {
             ics_url: String::new(),
             enabled: true,
             poll_interval_minutes: 15,
+            sync_past_days: 90,
+            sync_future_days: 365,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
+            sync_capability: SYNC_CAPABILITY_READ_ONLY.to_string(),
+            api_sync_token: None,
+            last_push_at: None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE};
+    use super::{CalendarSource, GOOGLE_ICS_SOURCE_TYPE, SYNC_CAPABILITY_READ_ONLY};
 
     fn valid_source() -> CalendarSource {
         CalendarSource {
@@ -78,9 +124,14 @@ mod tests {
             ics_url: "https://calendar.google.com/calendar/ical/test%40gmail.com/private-abc123/basic.ics".to_string(),
             enabled: true,
             poll_interval_minutes: 15,
+            sync_past_days: 90,
+            sync_future_days: 365,
             last_sync_at: None,
             last_sync_status: None,
             last_error: None,
+            sync_capability: SYNC_CAPABILITY_READ_ONLY.to_string(),
+            api_sync_token: None,
+            last_push_at: None,
         }
     }
 
@@ -127,6 +178,33 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_invalid_past_window() {
+        let source = CalendarSource {
+            sync_past_days: -1,
+            ..valid_source()
+        };
+        assert!(source.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_future_window() {
+        let source = CalendarSource {
+            sync_future_days: 0,
+            ..valid_source()
+        };
+        assert!(source.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_sync_capability() {
+        let source = CalendarSource {
+            sync_capability: "invalid".to_string(),
+            ..valid_source()
+        };
+        assert!(source.validate().is_err());
+    }
+
+    #[test]
     fn test_google_ics_url_validation() {
         assert!(CalendarSource::is_valid_google_ics_url(
             "https://calendar.google.com/calendar/ical/debp200517%40gmail.com/public/basic.ics"
@@ -140,5 +218,14 @@ mod tests {
         assert!(!CalendarSource::is_valid_google_ics_url(
             "https://example.com/calendar.ics"
         ));
+    }
+
+    #[test]
+    fn test_extract_google_calendar_id() {
+        let calendar_id = CalendarSource::extract_google_calendar_id(
+            "https://calendar.google.com/calendar/ical/test%40gmail.com/private-abcdef/basic.ics",
+        );
+
+        assert_eq!(calendar_id.as_deref(), Some("test@gmail.com"));
     }
 }

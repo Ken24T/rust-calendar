@@ -10,8 +10,7 @@ use std::collections::HashSet;
 use super::palette::TimeGridPalette;
 use super::time_grid_cell::{render_time_cell, TimeCellConfig};
 use super::week_shared::{
-    EventInteractionResult, COLUMN_SPACING, SLOT_HEIGHT,
-    SLOT_INTERVAL, TIME_LABEL_WIDTH,
+    EventInteractionResult, COLUMN_SPACING, SLOT_HEIGHT, SLOT_INTERVAL, TIME_LABEL_WIDTH,
 };
 use super::{event_time_segment_for_date, AutoFocusRequest, CountdownRequest};
 use crate::models::event::Event;
@@ -33,7 +32,7 @@ pub fn draw_current_time_indicator(
         // Calculate Y position based on time
         // Each hour has 4 slots (15 minutes each), each slot is SLOT_HEIGHT pixels
         const SLOTS_PER_HOUR: f32 = 4.0;
-        
+
         let hours_since_midnight = now_time.hour() as f32 + (now_time.minute() as f32 / 60.0);
         let relative_y = hours_since_midnight * SLOTS_PER_HOUR * SLOT_HEIGHT;
 

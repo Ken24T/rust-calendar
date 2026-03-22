@@ -1,6 +1,6 @@
 use std::time::Duration as StdDuration;
-use std::{sync::mpsc, thread};
 use std::time::Instant;
+use std::{sync::mpsc, thread};
 
 use super::CalendarApp;
 use crate::services::calendar_sync::scheduler::SchedulerTickResult;
@@ -81,7 +81,9 @@ impl CalendarApp {
                 let mut scheduler = scheduler
                     .lock()
                     .map_err(|_| "Calendar sync scheduler lock poisoned".to_string())?;
-                scheduler.tick(db.connection()).map_err(|err| err.to_string())
+                scheduler
+                    .tick(db.connection())
+                    .map_err(|err| err.to_string())
             })();
 
             let _ = tx.send(result);
@@ -91,7 +93,9 @@ impl CalendarApp {
     }
 
     fn apply_scheduler_result(&mut self, result: SchedulerTickResult, ctx: &egui::Context) {
-        let wait = result.next_due_in.unwrap_or_else(|| StdDuration::from_secs(60));
+        let wait = result
+            .next_due_in
+            .unwrap_or_else(|| StdDuration::from_secs(60));
         self.calendar_sync_next_due_in = Some(wait);
         self.calendar_sync_poll_due_at = Some(Instant::now() + wait);
 

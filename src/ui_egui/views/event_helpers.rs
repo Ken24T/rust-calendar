@@ -138,7 +138,10 @@ pub fn event_covers_date(event: &Event, date: NaiveDate) -> bool {
 }
 
 pub fn build_ribbon_lanes(events: &[Event]) -> Vec<Vec<&Event>> {
-    let mut sorted: Vec<&Event> = events.iter().filter(|event| is_ribbon_event(event)).collect();
+    let mut sorted: Vec<&Event> = events
+        .iter()
+        .filter(|event| is_ribbon_event(event))
+        .collect();
 
     sorted.sort_by(|a, b| {
         let a_start = a.start.date_naive();
@@ -177,10 +180,7 @@ pub fn build_ribbon_lanes(events: &[Event]) -> Vec<Vec<&Event>> {
     lanes
 }
 
-pub fn load_synced_event_ids(
-    database: &'static Database,
-    source_id: Option<i64>,
-) -> HashSet<i64> {
+pub fn load_synced_event_ids(database: &'static Database, source_id: Option<i64>) -> HashSet<i64> {
     let service = EventSyncMapService::new(database.connection());
     let ids_result = match source_id {
         Some(source_id) => service.list_synced_local_event_ids_for_enabled_source(source_id),
@@ -191,6 +191,27 @@ pub fn load_synced_event_ids(
         Ok(ids) => ids,
         Err(err) => {
             log::warn!("Failed to load synced event IDs: {}", err);
+            HashSet::new()
+        }
+    }
+}
+
+pub fn load_read_only_synced_event_ids(
+    database: &'static Database,
+    source_id: Option<i64>,
+) -> HashSet<i64> {
+    let service = EventSyncMapService::new(database.connection());
+    let ids_result = match source_id {
+        Some(source_id) => {
+            service.list_read_only_synced_local_event_ids_for_enabled_source(source_id)
+        }
+        None => service.list_read_only_synced_local_event_ids_for_enabled_sources(),
+    };
+
+    match ids_result {
+        Ok(ids) => ids,
+        Err(err) => {
+            log::warn!("Failed to load read-only synced event IDs: {}", err);
             HashSet::new()
         }
     }
@@ -310,6 +331,68 @@ mod tests {
         assert!(is_synced_event(Some(42), &synced));
         assert!(!is_synced_event(Some(7), &synced));
         assert!(!is_synced_event(None, &synced));
+    }
+
+    #[test]
+    fn test_load_read_only_synced_event_ids_excludes_writable_sync_events() {
+        let db = Box::leak(Box::new(Database::new(":memory:").unwrap()));
+        db.initialize_schema().unwrap();
+
+        let conn = db.connection();
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, 'google_ics', ?2, 1, 15, ?3)",
+            params![
+                "RO",
+                "https://calendar.google.com/calendar/ical/ro/basic.ics",
+                crate::models::calendar_source::SYNC_CAPABILITY_READ_ONLY,
+            ],
+        )
+        .unwrap();
+        let read_only_source_id = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_capability)
+             VALUES (?1, 'google_ics', ?2, 1, 15, ?3)",
+            params![
+                "RW",
+                "https://calendar.google.com/calendar/ical/rw/basic.ics",
+                crate::models::calendar_source::SYNC_CAPABILITY_READ_WRITE,
+            ],
+        )
+        .unwrap();
+        let writable_source_id = conn.last_insert_rowid();
+
+        for (id, title) in [(201_i64, "RO Event"), (202_i64, "RW Event")] {
+            conn.execute(
+                "INSERT INTO events (id, title, start_datetime, end_datetime, is_all_day)
+                 VALUES (?1, ?2, ?3, ?4, 0)",
+                params![
+                    id,
+                    title,
+                    "2026-03-10T09:00:00+00:00",
+                    "2026-03-10T10:00:00+00:00"
+                ],
+            )
+            .unwrap();
+        }
+
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id)
+             VALUES (?1, 'uid-ro', ?2)",
+            params![read_only_source_id, 201_i64],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO event_sync_map (source_id, external_uid, local_event_id)
+             VALUES (?1, 'uid-rw', ?2)",
+            params![writable_source_id, 202_i64],
+        )
+        .unwrap();
+
+        let read_only_ids = load_read_only_synced_event_ids(db, None);
+        assert!(read_only_ids.contains(&201));
+        assert!(!read_only_ids.contains(&202));
     }
 
     #[test]

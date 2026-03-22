@@ -390,19 +390,28 @@ mod tests {
     fn test_parse_rrule_with_until() {
         let parsed = ParsedRRule::parse("FREQ=YEARLY;UNTIL=20251231");
         assert_eq!(parsed.frequency, RecurrenceFrequency::Yearly);
-        assert_eq!(parsed.until_date, Some(NaiveDate::from_ymd_opt(2025, 12, 31).unwrap()));
+        assert_eq!(
+            parsed.until_date,
+            Some(NaiveDate::from_ymd_opt(2025, 12, 31).unwrap())
+        );
     }
 
     #[test]
     fn test_parse_rrule_first_weekday_pattern() {
         let parsed = ParsedRRule::parse("FREQ=MONTHLY;BYDAY=1MO");
-        assert_eq!(parsed.pattern, RecurrencePattern::FirstWeekdayOfPeriod(Weekday::Monday));
+        assert_eq!(
+            parsed.pattern,
+            RecurrencePattern::FirstWeekdayOfPeriod(Weekday::Monday)
+        );
     }
 
     #[test]
     fn test_parse_rrule_last_weekday_pattern() {
         let parsed = ParsedRRule::parse("FREQ=MONTHLY;BYDAY=-1FR");
-        assert_eq!(parsed.pattern, RecurrencePattern::LastWeekdayOfPeriod(Weekday::Friday));
+        assert_eq!(
+            parsed.pattern,
+            RecurrencePattern::LastWeekdayOfPeriod(Weekday::Friday)
+        );
     }
 
     #[test]
@@ -432,7 +441,10 @@ mod tests {
             count: Some(10),
             until_date: None,
         };
-        assert_eq!(builder.build(), Some("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=10".to_string()));
+        assert_eq!(
+            builder.build(),
+            Some("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=10".to_string())
+        );
     }
 
     #[test]
@@ -462,6 +474,9 @@ mod tests {
             count: None,
             until_date: None,
         };
-        assert_eq!(builder.build(), Some("FREQ=MONTHLY;BYMONTHDAY=1".to_string()));
+        assert_eq!(
+            builder.build(),
+            Some("FREQ=MONTHLY;BYMONTHDAY=1".to_string())
+        );
     }
 }

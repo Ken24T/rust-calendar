@@ -4,10 +4,10 @@ use chrono::{DateTime, Local};
 
 use super::models::{
     CountdownAutoDismissConfig, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardTemplate, CountdownCardTemplateId, CountdownCardVisuals,
-    CountdownCategory, CountdownCategoryId, CountdownDisplayMode,
-    CountdownNotificationConfig, CountdownPersistedState, RgbaColor, DEFAULT_CATEGORY_ID,
-    DEFAULT_TEMPLATE_ID, MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
+    CountdownCardTemplate, CountdownCardTemplateId, CountdownCardVisuals, CountdownCategory,
+    CountdownCategoryId, CountdownDisplayMode, CountdownNotificationConfig,
+    CountdownPersistedState, RgbaColor, DEFAULT_CATEGORY_ID, DEFAULT_TEMPLATE_ID,
+    MAX_DAYS_FONT_SIZE, MIN_DAYS_FONT_SIZE,
 };
 use super::palette::apply_event_palette_if_needed;
 
@@ -181,7 +181,9 @@ impl CountdownService {
 
     /// Find a countdown card by its associated event ID
     pub fn find_card_by_event_id(&self, event_id: i64) -> Option<&CountdownCardState> {
-        self.cards.iter().find(|card| card.event_id == Some(event_id))
+        self.cards
+            .iter()
+            .find(|card| card.event_id == Some(event_id))
     }
 
     /// Get a set of all event IDs that have associated countdown cards
@@ -335,12 +337,13 @@ impl CountdownService {
     pub fn remove_cards_for_event(&mut self, event_id: i64) -> usize {
         let initial_count = self.cards.len();
         // Collect IDs to remove for card_order cleanup
-        let ids_to_remove: Vec<CountdownCardId> = self.cards
+        let ids_to_remove: Vec<CountdownCardId> = self
+            .cards
             .iter()
             .filter(|card| card.event_id == Some(event_id))
             .map(|card| card.id)
             .collect();
-        
+
         self.cards.retain(|card| {
             if card.event_id == Some(event_id) {
                 log::info!(
@@ -353,12 +356,12 @@ impl CountdownService {
                 true
             }
         });
-        
+
         // Remove from card_order
         for id in &ids_to_remove {
             self.card_order.retain(|&card_id| card_id != *id);
         }
-        
+
         let removed = initial_count - self.cards.len();
         if removed > 0 {
             self.dirty = true;
@@ -378,15 +381,16 @@ impl CountdownService {
 
     /// Take a snapshot of a card's editable settings for apply/cancel semantics.
     pub fn snapshot_card_settings(&self, id: CountdownCardId) -> Option<CardSettingsSnapshot> {
-        self.cards.iter().find(|card| card.id == id).map(|card| {
-            CardSettingsSnapshot {
+        self.cards
+            .iter()
+            .find(|card| card.id == id)
+            .map(|card| CardSettingsSnapshot {
                 visuals: card.visuals.clone(),
                 title_override: card.title_override.clone(),
                 auto_title_override: card.auto_title_override,
                 comment: card.comment.clone(),
                 start_at: card.start_at,
-            }
-        })
+            })
     }
 
     /// Restore a card's editable settings from a previous snapshot (cancel).
@@ -619,10 +623,7 @@ impl CountdownService {
 
     /// Add a new template.  Returns the template with an assigned ID.
     #[allow(dead_code)]
-    pub fn add_template(
-        &mut self,
-        mut template: CountdownCardTemplate,
-    ) -> &CountdownCardTemplate {
+    pub fn add_template(&mut self, mut template: CountdownCardTemplate) -> &CountdownCardTemplate {
         template.id = self.next_template_id();
         self.templates.push(template);
         self.dirty = true;
@@ -735,10 +736,28 @@ mod tests {
         let mut service = CountdownService::new();
         let target_start = Local::now() + Duration::days(3);
         let accent = RgbaColor::new(10, 150, 200, 255);
-        let card_a =
-            service.create_card(Some(1), "A", target_start, None, None, Some(accent), None, 120.0, 110.0);
-        let card_b =
-            service.create_card(Some(2), "B", target_start, None, None, Some(accent), None, 120.0, 110.0);
+        let card_a = service.create_card(
+            Some(1),
+            "A",
+            target_start,
+            None,
+            None,
+            Some(accent),
+            None,
+            120.0,
+            110.0,
+        );
+        let card_b = service.create_card(
+            Some(2),
+            "B",
+            target_start,
+            None,
+            None,
+            Some(accent),
+            None,
+            120.0,
+            110.0,
+        );
 
         assert!(service.set_use_default_title_bg(card_a, false));
         assert!(service.set_use_default_title_bg(card_b, true));
@@ -791,8 +810,12 @@ mod tests {
     fn effective_visual_defaults_uses_global_when_category_flag_set() {
         let service = CountdownService::new();
         // Default category (General) has use_global_defaults = true
-        let defaults = service.effective_visual_defaults_for(CountdownCategoryId(DEFAULT_CATEGORY_ID));
-        assert_eq!(defaults.title_bg_color, service.visual_defaults().title_bg_color);
+        let defaults =
+            service.effective_visual_defaults_for(CountdownCategoryId(DEFAULT_CATEGORY_ID));
+        assert_eq!(
+            defaults.title_bg_color,
+            service.visual_defaults().title_bg_color
+        );
     }
 
     #[test]
@@ -810,7 +833,10 @@ mod tests {
 
         let defaults = service.effective_visual_defaults_for(cat_id);
         assert_eq!(defaults.title_bg_color, custom_color);
-        assert_ne!(defaults.title_bg_color, service.visual_defaults().title_bg_color);
+        assert_ne!(
+            defaults.title_bg_color,
+            service.visual_defaults().title_bg_color
+        );
     }
 
     #[test]
@@ -831,7 +857,6 @@ mod tests {
 
     #[test]
     fn effective_visual_defaults_resolves_via_template() {
-
         let mut service = CountdownService::new();
         let tmpl_color = RgbaColor::new(42, 42, 42, 255);
         let mut tmpl = CountdownCardTemplate {
@@ -864,7 +889,6 @@ mod tests {
 
     #[test]
     fn removing_template_clears_category_references() {
-
         let mut service = CountdownService::new();
         let tmpl = CountdownCardTemplate {
             name: "Removable".to_string(),
@@ -884,12 +908,18 @@ mod tests {
         assert!(service.remove_template(tmpl_id));
 
         // Category should no longer reference the deleted template
-        let cat = service.categories().iter().find(|c| c.id == cat_id).unwrap();
+        let cat = service
+            .categories()
+            .iter()
+            .find(|c| c.id == cat_id)
+            .unwrap();
         assert_eq!(cat.template_id, None);
 
         // Falls back to global defaults
         let resolved = service.effective_visual_defaults_for(cat_id);
-        assert_eq!(resolved.title_bg_color, service.visual_defaults().title_bg_color);
+        assert_eq!(
+            resolved.title_bg_color,
+            service.visual_defaults().title_bg_color
+        );
     }
-
 }

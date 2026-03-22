@@ -270,6 +270,19 @@ assigned per-category in **Edit → Manage Countdown Categories…**.
 
 - Google Calendar sync configuration (ICS feed URL, sync interval, startup
   delay)
+- Linked writable Google sources can push local changes and pull remote changes
+- Writable CRUD requires Google OAuth with a Desktop App client ID from Google
+  Cloud
+- Writable Google sync shows source health, recent sync runs, outbound queue
+  counts, and the latest outbound error in settings
+- `Retry Failed Pushes` is for transient failures only
+- `Disconnect Broken Mapping` clears a broken remote link and keeps the event
+  locally when a synced event is stuck with `missing remote_event_id`
+
+For OAuth setup, see [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md).
+
+For operational guidance, see
+[GOOGLE_CALENDAR_STAGE2_OPERATIONS.md](GOOGLE_CALENDAR_STAGE2_OPERATIONS.md).
 
 ## Keyboard Shortcuts
 
@@ -301,5 +314,7 @@ All data is stored locally:
   (custom themes)
 - **Backups**: timestamped database copies in the backups subdirectory
 
-No data is sent to any server. The optional Google Calendar sync feature only
-reads from public ICS feed URLs that you explicitly configure.
+No data is sent to any Rust Calendar server. If you enable Google Calendar
+sync, the app communicates directly with Google services that you explicitly
+configure, either through read-only ICS URLs or through the writable Google API
+flow for a linked account.

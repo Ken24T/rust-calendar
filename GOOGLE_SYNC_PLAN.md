@@ -273,6 +273,89 @@ Branch enforcement:
 - Risk: API quota and token churn
   - Mitigation: incremental sync, backoff, and robust token lifecycle handling
 
+## Stage Status
+
+### Stage 1 Completion Audit (2026-03-06)
+
+- Status: complete
+- Branch: `feature/google-sync-stage1-enhanced-ro`
+- Latest Stage 1 release tag: `v2.4.10`
+
+Slices shipped:
+
+- [x] S1.1 Sync Health and Diagnostics (`v2.4.4`)
+- [x] S1.2 Preview / Dry-Run Sync (`v2.4.5`)
+- [x] S1.3 Selective Sync Controls (`v2.4.6`)
+- [x] S1.4 Reconciliation Safety Window (`v2.4.7`)
+- [x] S1.5 Recurrence and Instance Hardening (RO) (`v2.4.8`)
+- [x] S1.6 Read-Only UX Improvements (`v2.4.9`)
+- [x] S1.7 Security and Logging Hardening (`v2.4.10`)
+
+Stage 1 acceptance criteria checkpoint:
+
+- [x] Multi-source RO sync reliability and safe reconciliation
+- [x] Manual and scheduled sync support
+- [x] UI read-only enforcement and provenance clarity
+- [x] Diagnostics/summary visibility for operators
+- [x] Quality gates (`clippy`, `test`, `build`) for each shipped slice
+
+### Stage 2 Activation
+
+- Approved to start Stage 2 branch after Stage 1 completion review.
+
+### Stage 2 Progress (2026-03-06)
+
+- Status: complete
+- Branch: `feature/google-sync-stage2-full-crud`
+- Latest Stage 2 release tag: `v2.4.32`
+
+Slices shipped:
+
+- [x] S2.1 OAuth and Account Linking (`v2.4.11`)
+- [x] S2.2 Remote Identity and Sync Metadata (`v2.4.12`)
+- [x] S2.3 Outbound Local -> Google Writes (foundation) (`v2.4.13`)
+- [x] S2.4 Inbound Incremental Google -> Local Sync (`v2.4.14`)
+- [x] S2.5 Conflict Policy and Resolution UX (`v2.4.15`)
+- [x] S2.6 Recurrence + Exceptions CRUD Parity
+- [x] S2.7 Operational Hardening
+
+Current S2.6 slices shipped:
+
+- [x] Writable recurring series updates and occurrence delete queueing (`v2.4.16`)
+- [x] Month-view single-occurrence edit/delete parity (`v2.4.17`)
+- [x] DST-safe recurrence generation for daily/weekly/monthly/yearly series (`v2.4.18`)
+- [x] Google API inbound EXDATE preservation for recurring series (`v2.4.19`)
+- [x] Google outbound execution for recurring series updates and detached instance pushes (`v2.4.20`)
+- [x] Automatic retry/backoff scheduling for failed outbound recurrence pushes (`v2.4.21`)
+- [x] Detached instance outbound lifecycle and round-trip sync hardening (`v2.4.22`)
+- [x] Detached instance create convergence and round-trip sync hardening (`v2.4.23`)
+- [x] Detached instance delete convergence and cancellation hardening (`v2.4.24`)
+- [x] Timed and all-day recurrence exception round-trip hardening (`v2.4.25`)
+
+Current S2.7 slices shipped:
+
+- [x] Google API rate-limit handling and adaptive backoff (`v2.4.26`)
+- [x] Sync health backoff status and audit history visibility (`v2.4.27`)
+- [x] Broken mapping terminal failure and retry-queue hardening (`v2.4.28`)
+- [x] Broken delete cleanup for stale remote metadata (`v2.4.29`)
+- [x] Bulk retry skips broken-mapping failures and surfaces manual recovery (`v2.4.30`)
+- [x] Manual disconnect flow for broken non-delete mappings (`v2.4.31`)
+- [x] Recent sync-run audit history in settings (`v2.4.32`)
+
+Stage 2 acceptance criteria checkpoint:
+
+- [x] Full local CRUD propagates to Google reliably
+- [x] Remote CRUD reflects to local reliably
+- [x] Conflict policy is deterministic and user-visible
+- [x] Recurrence CRUD behavior is stable for series and instances
+- [x] OAuth/token lifecycle is production-safe
+- [x] Quality gates (`clippy`, `test`, `build`) for each shipped slice
+
+Operational closure notes:
+
+- Backoff and quota handling are surfaced in sync status and recent run history.
+- Broken mapping recovery is both practical in settings and documented in `docs/GOOGLE_CALENDAR_STAGE2_OPERATIONS.md`.
+
 ## Decision Log (Initial)
 
 - Stage 1 remains strictly RO with safety and UX hardening.

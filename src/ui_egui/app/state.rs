@@ -1,5 +1,4 @@
 use crate::services::countdown::CountdownCardGeometry;
-use crate::ui_egui::settings_dialog::SettingsDialogState;
 use crate::ui_egui::dialogs::backup_manager::BackupManagerState;
 use crate::ui_egui::dialogs::category_manager::CategoryManagerState;
 use crate::ui_egui::dialogs::countdown_category_manager::CountdownCategoryManagerState;
@@ -9,6 +8,7 @@ use crate::ui_egui::dialogs::search_dialog::SearchDialogState;
 use crate::ui_egui::dialogs::template_manager::TemplateManagerState;
 use crate::ui_egui::dialogs::theme_creator::ThemeCreatorState;
 use crate::ui_egui::dialogs::theme_dialog::ThemeDialogState;
+use crate::ui_egui::settings_dialog::SettingsDialogState;
 use chrono::NaiveDate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

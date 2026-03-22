@@ -14,11 +14,20 @@ use super::{
 };
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
+use crate::services::calendar_sync::mapping::EventSyncMapService;
 use crate::services::database::Database;
 use crate::services::event::EventService;
 use crate::services::template::TemplateService;
 
 use super::month_view::MonthViewAction;
+
+fn synced_source_name(database: &'static Database, event_id: Option<i64>) -> Option<String> {
+    let id = event_id?;
+    EventSyncMapService::new(database.connection())
+        .get_source_name_for_local_event(id)
+        .ok()
+        .flatten()
+}
 
 /// Result of context menu interactions within a month day cell.
 pub struct MonthContextMenuResult {
@@ -26,6 +35,8 @@ pub struct MonthContextMenuResult {
     pub delete_confirm_request: Option<DeleteConfirmRequest>,
     /// Template-based event creation, if triggered
     pub template_action: Option<MonthViewAction>,
+    /// Recurring instance to detach and edit as a single occurrence
+    pub occurrence_to_edit: Option<Event>,
 }
 
 /// Build a `CountdownRequest` for a month event, resolving the canonical event
@@ -92,6 +103,7 @@ pub fn render_cell_context_menu(
     );
 
     let mut delete_confirm_request: Option<DeleteConfirmRequest> = None;
+    let mut occurrence_to_edit: Option<Event> = None;
 
     // Check for pending delete request from previous frame
     let pending_delete_id = ui.ctx().memory_mut(|mem| {
@@ -108,9 +120,10 @@ pub fn render_cell_context_menu(
     }
 
     // Check for pending template selection from previous frame
-    let pending_template = ui
-        .ctx()
-        .memory_mut(|mem| mem.data.remove_temp::<i64>(popup_id.with("pending_template")));
+    let pending_template = ui.ctx().memory_mut(|mem| {
+        mem.data
+            .remove_temp::<i64>(popup_id.with("pending_template"))
+    });
 
     if response.secondary_clicked() {
         if let Some(event_id) = pointer_event
@@ -148,9 +161,9 @@ pub fn render_cell_context_menu(
         |ui| {
             ui.set_width(190.0);
 
-            let popup_event_id =
-                ui.ctx()
-                    .memory(|mem| mem.data.get_temp::<i64>(popup_event_id_key));
+            let popup_event_id = ui
+                .ctx()
+                .memory(|mem| mem.data.get_temp::<i64>(popup_event_id_key));
             let popup_event = popup_event_id
                 .and_then(|selected_id| {
                     events
@@ -163,16 +176,43 @@ pub fn render_cell_context_menu(
 
             if let Some(event) = popup_event {
                 let event_is_synced = is_synced_event(event.id, synced_event_ids);
+                let source_name = synced_source_name(database, event.id);
                 ui.label(format!("Event: {}", event.title));
                 ui.separator();
 
                 if event_is_synced {
+                    if let Some(source_name) = source_name {
+                        ui.label(
+                            egui::RichText::new(format!("Source: {}", source_name))
+                                .italics()
+                                .size(11.0),
+                        );
+                    }
                     ui.label(
                         egui::RichText::new("🔒 Synced read-only event")
                             .italics()
                             .size(11.0),
                     );
                     ui.add_enabled(false, egui::Button::new("✏ Edit"));
+                } else if event.recurrence_rule.is_some() {
+                    if ui.button("✏ Edit This Occurrence").clicked() {
+                        occurrence_to_edit = Some(event.clone());
+                        ui.ctx().memory_mut(|mem| {
+                            mem.data.remove_temp::<i64>(popup_event_id_key);
+                        });
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    if ui.button("✏ Edit All Occurrences").clicked() {
+                        if let Some(id) = event.id {
+                            *event_to_edit = Some(id);
+                            *show_event_dialog = true;
+                            *event_dialog_date = Some(date);
+                        }
+                        ui.ctx().memory_mut(|mem| {
+                            mem.data.remove_temp::<i64>(popup_event_id_key);
+                        });
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
                 } else if ui.button("✏ Edit").clicked() {
                     if let Some(id) = event.id {
                         *event_to_edit = Some(id);
@@ -198,21 +238,22 @@ pub fn render_cell_context_menu(
                         ui.separator();
                     }
                     CountdownMenuState::Available => {
-                        let categories = ui.ctx().data(|data| {
-                            data.get_temp::<CountdownCategoriesCache>(egui::Id::new(
-                                COUNTDOWN_CATEGORIES_CACHE_ID,
-                            ))
-                        })
-                        .map(|c| c.0)
-                        .unwrap_or_default();
+                        let categories = ui
+                            .ctx()
+                            .data(|data| {
+                                data.get_temp::<CountdownCategoriesCache>(egui::Id::new(
+                                    COUNTDOWN_CATEGORIES_CACHE_ID,
+                                ))
+                            })
+                            .map(|c| c.0)
+                            .unwrap_or_default();
 
                         let mut created = false;
 
                         if categories.len() <= 1 {
                             if ui.button("⏱ Create Countdown").clicked() {
-                                countdown_requests.push(countdown_request_for_month_event(
-                                    &event, database,
-                                ));
+                                countdown_requests
+                                    .push(countdown_request_for_month_event(&event, database));
                                 created = true;
                             }
                         } else {
@@ -241,15 +282,50 @@ pub fn render_cell_context_menu(
                 }
 
                 if event_is_synced {
-                    ui.add_enabled(false, egui::Button::new("🗑 Delete"));
+                    if event.recurrence_rule.is_some() {
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete This Occurrence"));
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete All Occurrences"));
+                    } else {
+                        ui.add_enabled(false, egui::Button::new("🗑 Delete"));
+                    }
+                } else if event.recurrence_rule.is_some() {
+                    if ui.button("🗑 Delete This Occurrence").clicked() {
+                        if let Some(id) = event.id {
+                            delete_confirm_request = Some(DeleteConfirmRequest {
+                                event_id: id,
+                                event_title: event.title.clone(),
+                                occurrence_only: true,
+                                occurrence_date: Some(event.start),
+                            });
+                            ui.ctx().memory_mut(|mem| {
+                                mem.data.remove_temp::<i64>(popup_event_id_key);
+                            });
+                        }
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+                    if ui.button("🗑 Delete All Occurrences").clicked() {
+                        if let Some(id) = event.id {
+                            delete_confirm_request = Some(DeleteConfirmRequest {
+                                event_id: id,
+                                event_title: event.title.clone(),
+                                occurrence_only: false,
+                                occurrence_date: None,
+                            });
+                            ui.ctx().memory_mut(|mem| {
+                                mem.data.remove_temp::<i64>(popup_event_id_key);
+                            });
+                        }
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
                 } else if ui.button("🗑 Delete").clicked() {
                     if let Some(id) = event.id {
-                        // Store delete request in temp memory for next frame
+                        delete_confirm_request = Some(DeleteConfirmRequest {
+                            event_id: id,
+                            event_title: event.title.clone(),
+                            occurrence_only: false,
+                            occurrence_date: None,
+                        });
                         ui.ctx().memory_mut(|mem| {
-                            mem.data.insert_temp(
-                                popup_id.with("pending_delete"),
-                                (id, event.title.clone()),
-                            );
                             mem.data.remove_temp::<i64>(popup_event_id_key);
                         });
                     }
@@ -302,10 +378,7 @@ pub fn render_cell_context_menu(
                             {
                                 if let Some(id) = template.id {
                                     ui.ctx().memory_mut(|mem| {
-                                        mem.data.insert_temp(
-                                            popup_id.with("pending_template"),
-                                            id,
-                                        );
+                                        mem.data.insert_temp(popup_id.with("pending_template"), id);
                                     });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
@@ -325,11 +398,12 @@ pub fn render_cell_context_menu(
     }
 
     // Build template action if one was selected
-    let template_action = pending_template
-        .map(|template_id| MonthViewAction::CreateFromTemplate(template_id, date));
+    let template_action =
+        pending_template.map(|template_id| MonthViewAction::CreateFromTemplate(template_id, date));
 
     MonthContextMenuResult {
         delete_confirm_request,
         template_action,
+        occurrence_to_edit,
     }
 }

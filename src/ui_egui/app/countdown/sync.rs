@@ -58,7 +58,7 @@ impl CalendarApp {
             match self.context.event_service().get(event_id) {
                 Ok(Some(mut event)) => {
                     event.description = body.clone();
-                    if let Err(err) = self.context.event_service().update(&event) {
+                    if let Err(err) = self.context.event_service().update_local(&event) {
                         log::error!(
                             "Failed to update event {} body from countdown settings: {err}",
                             event_id
@@ -88,9 +88,10 @@ impl CalendarApp {
     pub(crate) fn sync_cards_from_event(&mut self, event: &Event) {
         if let Some(event_id) = event.id {
             // Parse the event color from hex string
-            let event_color = event.color.as_ref().and_then(|hex| {
-                crate::services::countdown::RgbaColor::from_hex_str(hex)
-            });
+            let event_color = event
+                .color
+                .as_ref()
+                .and_then(|hex| crate::services::countdown::RgbaColor::from_hex_str(hex));
 
             let countdown_service = self.context.countdown_service_mut();
             countdown_service.sync_title_for_event(event_id, event.title.clone());

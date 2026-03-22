@@ -8,11 +8,23 @@ use egui::Color32;
 use std::collections::HashSet;
 
 use super::week_shared::{DeleteConfirmRequest, EventInteractionResult};
-use super::{countdown_menu_state, is_synced_event, CountdownMenuState, CountdownRequest, render_countdown_menu_items};
+use super::{
+    countdown_menu_state, is_synced_event, render_countdown_menu_items, CountdownMenuState,
+    CountdownRequest,
+};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
+use crate::services::calendar_sync::mapping::EventSyncMapService;
 use crate::services::database::Database;
 use crate::services::template::TemplateService;
+
+fn synced_source_name(database: &'static Database, event_id: Option<i64>) -> Option<String> {
+    let id = event_id?;
+    EventSyncMapService::new(database.connection())
+        .get_source_name_for_local_event(id)
+        .ok()
+        .flatten()
+}
 
 /// Render the context menu popup for a time-grid cell.
 ///
@@ -69,6 +81,7 @@ pub fn render_time_cell_context_menu(
                     synced_event_ids,
                     countdown_requests,
                     active_countdown_events,
+                    database,
                     &mut context_clicked_event,
                     result,
                 );
@@ -95,26 +108,45 @@ pub fn render_time_cell_context_menu(
 }
 
 /// Menu items shown when right-clicking an existing event.
+#[allow(clippy::too_many_arguments)]
 fn render_event_menu(
     ui: &mut egui::Ui,
     event: &Event,
     synced_event_ids: &HashSet<i64>,
     countdown_requests: &mut Vec<CountdownRequest>,
     active_countdown_events: &HashSet<i64>,
+    database: &'static Database,
     context_clicked_event: &mut Option<Event>,
     result: &mut EventInteractionResult,
 ) {
     let event_is_synced = is_synced_event(event.id, synced_event_ids);
+    let source_name = synced_source_name(database, event.id);
     ui.label(format!("Event: {}", event.title));
     ui.separator();
 
     if event_is_synced {
+        if let Some(source_name) = source_name {
+            ui.label(
+                egui::RichText::new(format!("Source: {}", source_name))
+                    .italics()
+                    .size(11.0),
+            );
+        }
         ui.label(
             egui::RichText::new("🔒 Synced read-only event")
                 .italics()
                 .size(11.0),
         );
         ui.add_enabled(false, egui::Button::new("✏ Edit"));
+    } else if event.recurrence_rule.is_some() {
+        if ui.button("✏ Edit This Occurrence").clicked() {
+            result.occurrence_to_edit = Some(event.clone());
+            ui.memory_mut(|mem| mem.close_popup());
+        }
+        if ui.button("✏ Edit All Occurrences").clicked() {
+            *context_clicked_event = Some(event.clone());
+            ui.memory_mut(|mem| mem.close_popup());
+        }
     } else if ui.button("✏ Edit").clicked() {
         *context_clicked_event = Some(event.clone());
         ui.memory_mut(|mem| mem.close_popup());

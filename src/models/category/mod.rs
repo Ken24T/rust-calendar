@@ -34,7 +34,11 @@ impl Category {
 
     /// Create a new category with an icon.
     #[allow(dead_code)]
-    pub fn with_icon(name: impl Into<String>, color: impl Into<String>, icon: impl Into<String>) -> Self {
+    pub fn with_icon(
+        name: impl Into<String>,
+        color: impl Into<String>,
+        icon: impl Into<String>,
+    ) -> Self {
         Self {
             id: None,
             name: name.into(),
@@ -45,7 +49,11 @@ impl Category {
     }
 
     /// Create a system category (cannot be deleted by user).
-    pub fn system(name: impl Into<String>, color: impl Into<String>, icon: impl Into<String>) -> Self {
+    pub fn system(
+        name: impl Into<String>,
+        color: impl Into<String>,
+        icon: impl Into<String>,
+    ) -> Self {
         Self {
             id: None,
             name: name.into(),
@@ -233,14 +241,14 @@ mod tests {
     fn test_default_categories() {
         let defaults = default_categories();
         assert_eq!(defaults.len(), 6);
-        
+
         // All should be system categories
         for cat in &defaults {
             assert!(cat.is_system);
             assert!(cat.icon.is_some());
             assert!(cat.validate().is_ok());
         }
-        
+
         // Check specific categories exist
         let names: Vec<&str> = defaults.iter().map(|c| c.name.as_str()).collect();
         assert!(names.contains(&"Work"));
@@ -255,7 +263,7 @@ mod tests {
         assert!(is_valid_hex_color("#FF0000FF"));
         assert!(is_valid_hex_color("#abc"));
         assert!(is_valid_hex_color("#AbCdEf"));
-        
+
         assert!(!is_valid_hex_color("FFF"));
         assert!(!is_valid_hex_color("#FF"));
         assert!(!is_valid_hex_color("#FFFF"));

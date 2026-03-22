@@ -2,6 +2,7 @@
 
 use chrono::NaiveDate;
 use egui::{Color32, Margin, RichText, Stroke, Vec2};
+use std::collections::HashMap;
 
 use crate::models::event::Event;
 use crate::services::calendar_sync::mapping::EventSyncMapService;
@@ -17,7 +18,6 @@ pub struct SearchDialogState {
     pub results: Vec<Event>,
     pub selected_event: Option<i64>,
 }
-
 
 /// Action result from the search dialog
 pub enum SearchDialogAction {
@@ -43,9 +43,23 @@ pub fn render_search_dialog(
 ) -> SearchDialogAction {
     let mut action = SearchDialogAction::None;
     let mut dialog_open = *open;
-    let synced_event_ids = EventSyncMapService::new(database.connection())
-        .list_synced_local_event_ids_for_enabled_sources()
+    let sync_map_service = EventSyncMapService::new(database.connection());
+    let synced_event_ids = sync_map_service
+        .list_read_only_synced_local_event_ids_for_enabled_sources()
         .unwrap_or_default();
+    let mut synced_source_names: HashMap<i64, String> = HashMap::new();
+
+    for event in &state.results {
+        if let Some(event_id) = event.id {
+            if synced_event_ids.contains(&event_id) {
+                if let Ok(Some(source_name)) =
+                    sync_map_service.get_source_name_for_local_event(event_id)
+                {
+                    synced_source_names.insert(event_id, source_name);
+                }
+            }
+        }
+    }
 
     egui::Window::new("🔍 Search Events")
         .open(&mut dialog_open)
@@ -108,13 +122,16 @@ pub fn render_search_dialog(
                     for event in &state.results {
                         let is_selected = state.selected_event == event.id;
                         let event_is_synced = is_synced_event(event.id, &synced_event_ids);
-                        
+                        let source_name = event
+                            .id
+                            .and_then(|id| synced_source_names.get(&id).cloned());
+
                         let frame_bg = if is_selected {
                             theme.today_background
                         } else {
                             theme.day_background
                         };
-                        
+
                         let event_color = event
                             .color
                             .as_deref()
@@ -167,6 +184,21 @@ pub fn render_search_dialog(
                                                 );
                                             }
                                         }
+
+                                        if event_is_synced {
+                                            let label = source_name
+                                                .as_deref()
+                                                .map(|name| format!("🔒 Synced from {}", name))
+                                                .unwrap_or_else(|| {
+                                                    "🔒 Synced read-only event".to_string()
+                                                });
+                                            ui.label(
+                                                RichText::new(label)
+                                                    .size(10.0)
+                                                    .italics()
+                                                    .color(theme.text_secondary),
+                                            );
+                                        }
                                     });
                                 });
                             })
@@ -175,9 +207,7 @@ pub fn render_search_dialog(
                         // Handle clicks - single click navigates to date
                         if response.clicked() {
                             state.selected_event = event.id;
-                            action = SearchDialogAction::NavigateToDate(
-                                event.start.date_naive(),
-                            );
+                            action = SearchDialogAction::NavigateToDate(event.start.date_naive());
                         }
 
                         if response.double_clicked() {
@@ -193,12 +223,18 @@ pub fn render_search_dialog(
                         // Context menu
                         response.context_menu(|ui| {
                             if ui.button("📅 Go to date").clicked() {
-                                action = SearchDialogAction::NavigateToDate(
-                                    event.start.date_naive(),
-                                );
+                                action =
+                                    SearchDialogAction::NavigateToDate(event.start.date_naive());
                                 ui.close_menu();
                             }
                             if event_is_synced {
+                                if let Some(ref source_name) = source_name {
+                                    ui.label(
+                                        RichText::new(format!("Source: {}", source_name))
+                                            .italics()
+                                            .size(11.0),
+                                    );
+                                }
                                 ui.label(
                                     RichText::new("🔒 Synced read-only event")
                                         .italics()
@@ -230,9 +266,12 @@ pub fn render_search_dialog(
             ui.horizontal(|ui| {
                 if let Some(event_id) = state.selected_event {
                     let selected_is_synced = is_synced_event(Some(event_id), &synced_event_ids);
+                    let selected_source_name = synced_source_names.get(&event_id).cloned();
 
                     if ui.button("📅 Go to date").clicked() {
-                        if let Some(event) = state.results.iter().find(|e| e.id == state.selected_event) {
+                        if let Some(event) =
+                            state.results.iter().find(|e| e.id == state.selected_event)
+                        {
                             action = SearchDialogAction::NavigateToDate(event.start.date_naive());
                         }
                     }
@@ -244,6 +283,14 @@ pub fn render_search_dialog(
                         if let Some(id) = state.selected_event {
                             action = SearchDialogAction::EditEvent(id);
                         }
+                    }
+
+                    if selected_is_synced {
+                        let label = selected_source_name
+                            .as_deref()
+                            .map(|name| format!("Read-only sync source: {}", name))
+                            .unwrap_or_else(|| "Read-only synced event".to_string());
+                        ui.label(RichText::new(label).size(10.0).italics());
                     }
 
                     if ui.button("⏱ Create Countdown").clicked() {

@@ -167,15 +167,13 @@ pub fn is_visible_on_any_monitor(
 /// Find the monitor whose centre is closest to the given point.
 /// Returns the primary (first) monitor if the list has only one entry.
 pub fn nearest_monitor(monitors: &[MonitorRect], x: f32, y: f32) -> Option<&MonitorRect> {
-    monitors
-        .iter()
-        .min_by(|a, b| {
-            let (ax, ay) = a.centre();
-            let (bx, by) = b.centre();
-            let da = (ax - x).powi(2) + (ay - y).powi(2);
-            let db = (bx - x).powi(2) + (by - y).powi(2);
-            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-        })
+    monitors.iter().min_by(|a, b| {
+        let (ax, ay) = a.centre();
+        let (bx, by) = b.centre();
+        let da = (ax - x).powi(2) + (ay - y).powi(2);
+        let db = (bx - x).powi(2) + (by - y).powi(2);
+        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+    })
 }
 
 #[cfg(test)]
@@ -227,7 +225,12 @@ mod tests {
             monitor(1920.0, 0.0, 2560.0, 1440.0),
         ];
         assert!(is_visible_on_any_monitor(
-            &monitors, 2000.0, 200.0, 800.0, 600.0, (200.0, 100.0)
+            &monitors,
+            2000.0,
+            200.0,
+            800.0,
+            600.0,
+            (200.0, 100.0)
         ));
     }
 
@@ -240,7 +243,12 @@ mod tests {
         ];
         // Window placed in the 80px gap
         assert!(!is_visible_on_any_monitor(
-            &monitors, 1920.0, 0.0, 80.0, 80.0, (200.0, 100.0)
+            &monitors,
+            1920.0,
+            0.0,
+            80.0,
+            80.0,
+            (200.0, 100.0)
         ));
     }
 

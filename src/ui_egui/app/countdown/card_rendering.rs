@@ -1,8 +1,8 @@
 //! Rendering logic for individual countdown cards within the container.
 
 use crate::services::countdown::{
-    CountdownCardState, CountdownCardVisuals, CountdownCategoryId,
-    CountdownNotificationConfig, CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
+    CountdownCardState, CountdownCardVisuals, CountdownCategoryId, CountdownNotificationConfig,
+    CountdownWarningState, RgbaColor, MAX_DAYS_FONT_SIZE,
 };
 use chrono::{DateTime, Local};
 
@@ -36,7 +36,10 @@ pub fn format_card_tooltip(card: &CountdownCardState, now: DateTime<Local>) -> S
         let minutes = (total_seconds % 3600) / 60;
 
         if days > 0 {
-            lines.push(format!("⏱ {}d {:02}h {:02}m remaining", days, hours, minutes));
+            lines.push(format!(
+                "⏱ {}d {:02}h {:02}m remaining",
+                days, hours, minutes
+            ));
         } else if hours > 0 {
             lines.push(format!("⏱ {:02}h {:02}m remaining", hours, minutes));
         } else {
@@ -47,10 +50,18 @@ pub fn format_card_tooltip(card: &CountdownCardState, now: DateTime<Local>) -> S
     }
 
     // Target time
-    lines.push(format!("🎯 Target: {}", card.start_at.format("%d %b %Y %H:%M")));
+    lines.push(format!(
+        "🎯 Target: {}",
+        card.start_at.format("%d %b %Y %H:%M")
+    ));
 
     // Comment/description if present
-    if let Some(body) = card.comment.as_ref().map(|t| t.trim()).filter(|t| !t.is_empty()) {
+    if let Some(body) = card
+        .comment
+        .as_ref()
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+    {
         lines.push(String::new()); // blank line
         lines.push(format!("📝 {}", body));
     }
@@ -76,11 +87,7 @@ fn rgba_to_color32(color: RgbaColor) -> egui::Color32 {
 }
 
 /// Resolve effective color: use default if flag is set, otherwise use card's value
-fn resolve_color(
-    card_color: RgbaColor,
-    default_color: RgbaColor,
-    use_default: bool,
-) -> RgbaColor {
+fn resolve_color(card_color: RgbaColor, default_color: RgbaColor, use_default: bool) -> RgbaColor {
     if use_default {
         default_color
     } else {
@@ -95,7 +102,13 @@ fn calculate_card_colors(
     warning_state: CountdownWarningState,
     notification_config: &CountdownNotificationConfig,
     ctx: &egui::Context,
-) -> (egui::Color32, egui::Color32, egui::Color32, egui::Color32, f32) {
+) -> (
+    egui::Color32,
+    egui::Color32,
+    egui::Color32,
+    egui::Color32,
+    f32,
+) {
     // Resolve effective colors using defaults when flags are set
     let effective_title_bg = resolve_color(
         card.visuals.title_bg_color,
@@ -188,8 +201,13 @@ pub fn render_card_content(
     };
 
     // Get colors (resolving defaults as needed)
-    let (title_bg, title_fg, body_bg, days_fg, stroke_width) =
-        calculate_card_colors(card, visual_defaults, warning_state, notification_config, ui.ctx());
+    let (title_bg, title_fg, body_bg, days_fg, stroke_width) = calculate_card_colors(
+        card,
+        visual_defaults,
+        warning_state,
+        notification_config,
+        ui.ctx(),
+    );
 
     let title_font_size = card.visuals.title_font_size.max(12.0);
     let font_size = card.visuals.days_font_size.clamp(32.0, MAX_DAYS_FONT_SIZE);
@@ -226,7 +244,8 @@ pub fn render_card_content(
         let desired_title_height = (title_font_size * 1.4).clamp(22.0, 48.0);
         let max_title_height = (total_height - CARD_MIN_COUNTDOWN_HEIGHT - CARD_SPACING).max(20.0);
         let title_height = desired_title_height.min(max_title_height);
-        let countdown_height = (total_height - title_height - CARD_SPACING).max(CARD_MIN_COUNTDOWN_HEIGHT);
+        let countdown_height =
+            (total_height - title_height - CARD_SPACING).max(CARD_MIN_COUNTDOWN_HEIGHT);
 
         // Title bar
         let title_size = egui::vec2(width, title_height);
@@ -314,11 +333,10 @@ pub fn render_card_content(
 
     // Context menu for the card
     inner.response.context_menu(|ui| {
-        if card.event_id.is_some()
-            && ui.button("📝 Edit event...").clicked() {
-                action = CardUiAction::OpenEventDialog;
-                ui.close_menu();
-            }
+        if card.event_id.is_some() && ui.button("📝 Edit event...").clicked() {
+            action = CardUiAction::OpenEventDialog;
+            ui.close_menu();
+        }
         if ui.button("⚙ Card settings...").clicked() {
             action = CardUiAction::OpenSettings;
             ui.close_menu();

@@ -17,5 +17,7 @@ materials for the Rust Calendar project.
 
 - [GOOGLE_CALENDAR_STAGE1_ROADMAP.md](GOOGLE_CALENDAR_STAGE1_ROADMAP.md) — Stage 1 roadmap for read-only ICS feed sync
 - [GOOGLE_CALENDAR_STAGE1_SLICES.md](GOOGLE_CALENDAR_STAGE1_SLICES.md) — Implementation slices (S1–S6+) for Stage 1
+- [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md) — End-user setup guide for Google OAuth and writable CRUD sync
+- [GOOGLE_CALENDAR_STAGE2_OPERATIONS.md](GOOGLE_CALENDAR_STAGE2_OPERATIONS.md) — Stage 2 writable sync operations, recovery, and audit guidance
 
 

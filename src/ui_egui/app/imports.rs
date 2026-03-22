@@ -7,15 +7,18 @@ impl CalendarApp {
     pub(super) fn handle_file_drops(&mut self, ctx: &egui::Context) {
         // Collect files outside of ctx.input to avoid borrow issues
         let dropped_files: Vec<_> = ctx.input(|i| {
-            i.raw.dropped_files.iter().filter_map(|f| f.path.clone()).collect()
+            i.raw
+                .dropped_files
+                .iter()
+                .filter_map(|f| f.path.clone())
+                .collect()
         });
-        
+
         if dropped_files.is_empty() {
             return;
         }
-        
-        for path in dropped_files {
 
+        for path in dropped_files {
             match std::fs::read_to_string(&path) {
                 Ok(ics_content) => {
                     if !(ics_content.contains("BEGIN:VCALENDAR")
@@ -47,7 +50,6 @@ impl CalendarApp {
     }
 
     pub(super) fn handle_ics_import(&mut self, events: Vec<Event>, source_label: &str) {
-
         if events.is_empty() {
             log::info!("No events found in {} import", source_label);
             return;
@@ -77,7 +79,11 @@ impl CalendarApp {
                     first_event.title
                 );
             } else {
-                match self.context.event_service().create(first_event.clone()) {
+                match self
+                    .context
+                    .event_service()
+                    .create_local(first_event.clone())
+                {
                     Ok(created_event) => {
                         self.focus_on_event(&created_event);
                         if let Some(event_id) = created_event.id {
@@ -146,7 +152,7 @@ impl CalendarApp {
                 continue;
             }
 
-            match self.context.event_service().create(event) {
+            match self.context.event_service().create_local(event) {
                 Ok(created_event) => {
                     self.focus_on_event(&created_event);
                     imported_count += 1;
