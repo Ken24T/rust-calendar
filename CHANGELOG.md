@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.33] - 2026-03-22
+
+### Added
+
+- Writable Google Calendar Stage 2 operator documentation:
+  - setup and operational guides now document OAuth connection flow, writable sync behaviour, conflict handling, and recovery paths
+  - countdown cards can now be shown or hidden from the View menu while preserving their saved positions when restored
+
+### Changed
+
+- TCTBP workflow governance is now aligned with the newer guarded SHIP, handover, status, and branch workflows used for this repository.
+- Countdown card visibility now persists across restart and restores cards to their stored geometry when re-enabled.
+
 ## [2.4.32] - 2026-03-06
 
 ### Added
