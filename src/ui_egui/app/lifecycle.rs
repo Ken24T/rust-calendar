@@ -195,12 +195,16 @@ impl CalendarApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(200));
 
             // Continue rendering countdown cards as independent desktop widgets
-            let render_result = self.countdown_ui.render_cards(
-                ctx,
-                self.context.countdown_service_mut(),
-                self.settings.default_card_width,
-                self.settings.default_card_height,
-            );
+            let render_result = if self.settings.show_countdown_cards {
+                self.countdown_ui.render_cards(
+                    ctx,
+                    self.context.countdown_service_mut(),
+                    self.settings.default_card_width,
+                    self.settings.default_card_height,
+                )
+            } else {
+                super::countdown::CountdownRenderResult::default()
+            };
 
             // Handle requests that need the main window restored
             for request in render_result.event_dialog_requests {
@@ -223,17 +227,19 @@ impl CalendarApp {
                     });
             }
 
-            self.countdown_ui
-                .render_settings_dialogs(ctx, self.context.countdown_service_mut());
+            if self.settings.show_countdown_cards {
+                self.countdown_ui
+                    .render_settings_dialogs(ctx, self.context.countdown_service_mut());
 
-            for request in self.countdown_ui.drain_delete_requests() {
-                self.restore_from_tray(ctx);
-                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                self.confirm_dialog
-                    .request(super::confirm::ConfirmAction::DeleteCountdownCard {
-                        card_id: request.card_id,
-                        card_title: request.card_title,
-                    });
+                for request in self.countdown_ui.drain_delete_requests() {
+                    self.restore_from_tray(ctx);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    self.confirm_dialog
+                        .request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                            card_id: request.card_id,
+                            card_title: request.card_title,
+                        });
+                }
             }
 
             self.refresh_countdowns(ctx);
@@ -280,12 +286,16 @@ impl CalendarApp {
             self.consume_countdown_requests(countdown_requests);
         }
 
-        let render_result = self.countdown_ui.render_cards(
-            ctx,
-            self.context.countdown_service_mut(),
-            self.settings.default_card_width,
-            self.settings.default_card_height,
-        );
+        let render_result = if self.settings.show_countdown_cards {
+            self.countdown_ui.render_cards(
+                ctx,
+                self.context.countdown_service_mut(),
+                self.settings.default_card_width,
+                self.settings.default_card_height,
+            )
+        } else {
+            super::countdown::CountdownRenderResult::default()
+        };
 
         // Handle requests to open event dialog from countdown cards
         for request in render_result.event_dialog_requests {
@@ -321,20 +331,22 @@ impl CalendarApp {
                 });
         }
 
-        self.countdown_ui
-            .render_settings_dialogs(ctx, self.context.countdown_service_mut());
+        if self.settings.show_countdown_cards {
+            self.countdown_ui
+                .render_settings_dialogs(ctx, self.context.countdown_service_mut());
 
-        // Handle delete requests from settings dialogs
-        for request in self.countdown_ui.drain_delete_requests() {
-            if self.hidden_to_tray {
-                self.restore_from_tray(ctx);
+            // Handle delete requests from settings dialogs
+            for request in self.countdown_ui.drain_delete_requests() {
+                if self.hidden_to_tray {
+                    self.restore_from_tray(ctx);
+                }
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                self.confirm_dialog
+                    .request(super::confirm::ConfirmAction::DeleteCountdownCard {
+                        card_id: request.card_id,
+                        card_title: request.card_title,
+                    });
             }
-            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            self.confirm_dialog
-                .request(super::confirm::ConfirmAction::DeleteCountdownCard {
-                    card_id: request.card_id,
-                    card_title: request.card_title,
-                });
         }
 
         self.flush_pending_event_bodies();

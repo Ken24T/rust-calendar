@@ -10,7 +10,7 @@ impl CalendarApp {
             egui::menu::bar(ui, |ui| {
                 self.render_file_menu(ui, ctx);
                 self.render_edit_menu(ui);
-                self.render_view_menu(ui);
+                self.render_view_menu(ui, ctx);
                 self.render_events_menu(ui);
                 self.render_help_menu(ui);
             });
@@ -194,7 +194,7 @@ impl CalendarApp {
         }
     }
 
-    fn render_view_menu(&mut self, ui: &mut egui::Ui) {
+    fn render_view_menu(&mut self, ui: &mut egui::Ui, ctx: &Context) {
         ui.menu_button("View", |ui| {
             // Sidebar toggle
             let mut show_sidebar = self.settings.show_sidebar;
@@ -215,6 +215,15 @@ impl CalendarApp {
                 if let Err(err) = settings_service.update(&self.settings) {
                     log::error!("Failed to update settings: {}", err);
                 }
+                ui.close_menu();
+            }
+
+            let mut show_countdown_cards = self.settings.show_countdown_cards;
+            if ui
+                .checkbox(&mut show_countdown_cards, "Show Countdown Cards")
+                .clicked()
+            {
+                self.set_countdown_cards_visible(ctx, show_countdown_cards);
                 ui.close_menu();
             }
 
@@ -404,6 +413,33 @@ impl CalendarApp {
                 }
             }
         });
+    }
+
+    fn set_countdown_cards_visible(&mut self, ctx: &Context, visible: bool) {
+        let previous = self.settings.show_countdown_cards;
+        if previous == visible {
+            return;
+        }
+
+        self.settings.show_countdown_cards = visible;
+        let settings_service = self.context.settings_service();
+        if let Err(err) = settings_service.update(&self.settings) {
+            self.settings.show_countdown_cards = previous;
+            log::error!("Failed to update settings: {}", err);
+            self.toast_manager
+                .error(format!("Failed to update settings: {}", err));
+            return;
+        }
+
+        if !visible {
+            self.countdown_ui
+                .close_all_viewports(ctx, self.context.countdown_service());
+        } else {
+            self.countdown_ui
+                .prepare_viewports_for_show(self.context.countdown_service());
+        }
+
+        ctx.request_repaint();
     }
 
     fn render_events_menu(&mut self, ui: &mut egui::Ui) {

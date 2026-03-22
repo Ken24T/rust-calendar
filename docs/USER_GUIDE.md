@@ -113,6 +113,8 @@ until an event starts. You can:
 - Display them as **individual windows** (each card is a separate, always-on-top
   window) or in a **combined container** (all cards in one resizable window) —
   switch via **View → Countdown Cards → Display mode**
+- Hide or show all countdown cards via **View → Show Countdown Cards** without
+  losing their saved window positions
 - Customise fonts, colours, and dimensions per card
 - Reset card positions via **View → Countdown Cards → Reset Card Positions**
 

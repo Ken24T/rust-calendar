@@ -790,6 +790,54 @@ impl CountdownUiState {
         std::mem::take(&mut self.pending_event_body_updates)
     }
 
+    pub(in super::super) fn close_all_viewports(
+        &mut self,
+        ctx: &Context,
+        service: &CountdownService,
+    ) {
+        for card in service.cards() {
+            let card_viewport_id = egui::ViewportId::from_hash_of(("countdown_card", card.id.0));
+            ctx.send_viewport_cmd_to(card_viewport_id, egui::ViewportCommand::Close);
+
+            let settings_viewport_id =
+                egui::ViewportId::from_hash_of(("countdown_settings", card.id.0));
+            ctx.send_viewport_cmd_to(settings_viewport_id, egui::ViewportCommand::Close);
+        }
+
+        let container_viewport_id = egui::ViewportId::from_hash_of("countdown_container");
+        ctx.send_viewport_cmd_to(container_viewport_id, egui::ViewportCommand::Close);
+
+        for category in service.categories() {
+            let category_viewport_id =
+                egui::ViewportId::from_hash_of(format!("countdown_category_{}", category.id.0));
+            ctx.send_viewport_cmd_to(category_viewport_id, egui::ViewportCommand::Close);
+        }
+
+        self.open_settings.clear();
+        self.settings_geometry.clear();
+        self.settings_needs_layout.clear();
+        self.settings_snapshots.clear();
+        self.pending_delete_requests.clear();
+    }
+
+    pub(in super::super) fn prepare_viewports_for_show(&mut self, service: &CountdownService) {
+        self.pending_geometry.clear();
+        self.geometry_samples.clear();
+        self.render_log_state.clear();
+        self.pending_delete_requests.clear();
+        self.skip_geometry_frames = 0;
+
+        self.container_layout.initialized = false;
+        self.container_drag_state = DragState::default();
+        self.category_layouts.clear();
+        self.category_drag_states.clear();
+
+        for card in service.cards() {
+            self.pending_geometry
+                .insert(card.id, PendingGeometryState::new(card.geometry));
+        }
+    }
+
     pub(super) fn clear_geometry_wait_state(&mut self, card_id: &CountdownCardId) {
         self.pending_geometry.remove(card_id);
         self.geometry_samples.remove(card_id);

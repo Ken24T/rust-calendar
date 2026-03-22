@@ -28,6 +28,7 @@ pub struct Settings {
     pub sidebar_width: f32,
     pub sync_startup_delay_minutes: i64,
     pub minimize_to_tray: bool,
+    pub show_countdown_cards: bool,
 }
 
 impl Default for Settings {
@@ -56,6 +57,7 @@ impl Default for Settings {
             sidebar_width: 180.0,
             sync_startup_delay_minutes: 15,
             minimize_to_tray: false,
+            show_countdown_cards: true,
         }
     }
 }
@@ -232,6 +234,7 @@ mod tests {
         assert!(settings.show_sidebar);
         assert_eq!(settings.current_view, "Month");
         assert_eq!(settings.sync_startup_delay_minutes, 15);
+        assert!(settings.show_countdown_cards);
     }
 
     #[test]
