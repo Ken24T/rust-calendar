@@ -307,7 +307,7 @@ impl CalendarApp {
             // Countdown Cards submenu
             ui.menu_button("⏱ Countdown Cards", |ui| {
                 let current_mode = self.context.countdown_service().display_mode();
-                
+
                 if ui
                     .selectable_label(
                         current_mode == CountdownDisplayMode::IndividualWindows,
@@ -322,7 +322,7 @@ impl CalendarApp {
                     self.countdown_ui.reset_container_state();
                     ui.close_menu();
                 }
-                
+
                 if ui
                     .selectable_label(
                         current_mode == CountdownDisplayMode::Container,
@@ -337,7 +337,7 @@ impl CalendarApp {
                         .set_display_mode(CountdownDisplayMode::Container);
                     ui.close_menu();
                 }
-                
+
                 if ui
                     .selectable_label(
                         current_mode == CountdownDisplayMode::CategoryContainers,
@@ -351,9 +351,9 @@ impl CalendarApp {
                         .set_display_mode(CountdownDisplayMode::CategoryContainers);
                     ui.close_menu();
                 }
-                
+
                 ui.separator();
-                
+
                 // Reset positions option - helpful when cards get lost on disconnected monitors
                 let card_count = self.context.countdown_service().cards().len();
                 let reset_label = if card_count > 0 {
@@ -361,7 +361,7 @@ impl CalendarApp {
                 } else {
                     "🔄 Reset Card Positions".to_string()
                 };
-                
+
                 if ui.button(&reset_label)
                     .on_hover_text("Reset all countdown cards and container to default positions on the primary monitor")
                     .clicked()

@@ -281,13 +281,13 @@ pub fn render_container_window(
                 egui::vec2(initial_geometry.width, initial_geometry.height)
             ));
             child_ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            
+
             log::info!(
                 "Container: sent viewport commands for position ({}, {}) size ({}, {})",
                 initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
             );
         }
-        
+
         // Check for close request
         let close_requested = child_ctx.input(|i| {
             i.viewport().close_requested()
@@ -312,10 +312,10 @@ pub fn render_container_window(
                 None
             }
         });
-        
+
         // Check if window has focus (indicates it's actually visible and usable)
         let has_focus = child_ctx.input(|i| i.viewport().focused.unwrap_or(false));
-        
+
         // Track if window has ever gained focus this session
         if has_focus {
             layout.has_ever_had_focus = true;
@@ -329,16 +329,16 @@ pub fn render_container_window(
                     new_geom.x, new_geom.y, new_geom.width, new_geom.height
                 );
             }
-            
+
             // Visibility check: if the window position doesn't match what we requested
             // after several frames, the window might be stuck off-screen on a secondary monitor
             if !layout.position_verified {
                 layout.visibility_check_frames += 1;
-                
+
                 if layout.visibility_check_frames >= VISIBILITY_CHECK_FRAMES {
                     // Get actual primary monitor width for multi-monitor detection
                     let primary_width = get_primary_monitor_width(child_ctx);
-                    
+
                     // Check if position is way off from what we stored (indicating OS moved it)
                     // We're more lenient now - only consider "stuck" if:
                     // 1. Position is on a secondary monitor area AND
@@ -349,9 +349,9 @@ pub fn render_container_window(
                         // This happens when the position is on a monitor that's no longer available
                         // Use dynamic primary monitor width instead of hardcoded 1920
                         let possibly_on_secondary = stored.x > primary_width || stored.x < 0.0 || stored.y < 0.0;
-                        let position_matches = (new_geom.x - stored.x).abs() < 50.0 
+                        let position_matches = (new_geom.x - stored.x).abs() < 50.0
                             && (new_geom.y - stored.y).abs() < 50.0;
-                        
+
                         // Log diagnostic info for multi-monitor debugging
                         if possibly_on_secondary {
                             log::debug!(
@@ -359,7 +359,7 @@ pub fn render_container_window(
                                 stored.x, stored.y, new_geom.x, new_geom.y, primary_width, has_focus, layout.has_ever_had_focus
                             );
                         }
-                        
+
                         // Only consider stuck if on secondary area, position matches stored,
                         // AND window has NEVER gained focus (if it did once, user can see it)
                         // This prevents false positives when user just clicked elsewhere
@@ -367,7 +367,7 @@ pub fn render_container_window(
                     } else {
                         false
                     };
-                    
+
                     if position_seems_stuck {
                         log::warn!(
                             "Container appears stuck at off-screen position ({}, {}), moving to primary monitor",
@@ -386,33 +386,33 @@ pub fn render_container_window(
                         child_ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                         actions.push(ContainerAction::GeometryChanged(safe_geom));
                     }
-                    
+
                     layout.position_verified = true;
                 }
             }
-            
+
             // Decrement skip_geometry_frames counter if active
             let skip_geometry_updates = layout.skip_geometry_frames > 0;
             if layout.skip_geometry_frames > 0 {
                 layout.skip_geometry_frames -= 1;
             }
-            
+
             // Save geometry for any reasonable position (unless skipping)
             // We previously tried to restrict to "primary monitor" but monitor layouts vary
             // Just save if the values are finite and not extremely off-screen
             if !skip_geometry_updates {
-                let should_save_geometry = new_geom.x.is_finite() 
-                    && new_geom.y.is_finite() 
-                    && new_geom.x.abs() < 10000.0 
+                let should_save_geometry = new_geom.x.is_finite()
+                    && new_geom.y.is_finite()
+                    && new_geom.x.abs() < 10000.0
                     && new_geom.y.abs() < 10000.0;
-                
+
                 let geometry_changed = container_geometry.map(|g| {
                     (g.x - new_geom.x).abs() > 1.0
                         || (g.y - new_geom.y).abs() > 1.0
                         || (g.width - new_geom.width).abs() > 1.0
                         || (g.height - new_geom.height).abs() > 1.0
                 }).unwrap_or(true);
-                
+
                 // Log geometry tracking for debugging
                 if geometry_changed {
                     log::debug!(
@@ -420,7 +420,7 @@ pub fn render_container_window(
                         container_geometry, new_geom.x, new_geom.y, new_geom.width, new_geom.height, should_save_geometry
                     );
                 }
-                
+
                 if should_save_geometry && geometry_changed {
                     actions.push(ContainerAction::GeometryChanged(new_geom));
                 }
