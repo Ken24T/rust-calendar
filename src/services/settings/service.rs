@@ -25,7 +25,7 @@ impl<'a> SettingsService<'a> {
                     current_view, default_event_duration, first_day_of_work_week, last_day_of_work_week,
                     default_event_start_time, default_card_width, default_card_height,
                     auto_create_countdown_on_import, edit_before_import, sidebar_width,
-                    sync_startup_delay_minutes, minimize_to_tray
+                          sync_startup_delay_minutes, minimize_to_tray, show_countdown_cards
              FROM settings WHERE id = 1",
                 [],
                 row_to_settings,
@@ -67,6 +67,7 @@ impl<'a> SettingsService<'a> {
                  sidebar_width = ?20, \
                  sync_startup_delay_minutes = ?21, \
                  minimize_to_tray = ?22, \
+                 show_countdown_cards = ?23, \
                  updated_at = CURRENT_TIMESTAMP \
              WHERE id = 1",
             params![
@@ -92,6 +93,7 @@ impl<'a> SettingsService<'a> {
                 settings.sidebar_width,
                 settings.sync_startup_delay_minutes,
                 settings.minimize_to_tray as i32,
+                settings.show_countdown_cards as i32,
             ],
         )
         .context("Failed to update settings")?;
@@ -186,12 +188,14 @@ mod tests {
         let mut settings = service.get().unwrap();
         settings.show_my_day = true;
         settings.show_ribbon = true;
+        settings.show_countdown_cards = false;
 
         service.update(&settings).unwrap();
 
         let updated = service.get().unwrap();
         assert!(updated.show_my_day);
         assert!(updated.show_ribbon);
+        assert!(!updated.show_countdown_cards);
     }
 
     #[test]

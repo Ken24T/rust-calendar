@@ -969,7 +969,10 @@ mod tests {
             .filter_map(|operation| operation.external_uid)
             .collect::<Vec<_>>();
 
-        assert_eq!(external_uids, vec!["uid-pending".to_string(), "uid-due".to_string()]);
+        assert_eq!(
+            external_uids,
+            vec!["uid-pending".to_string(), "uid-due".to_string()]
+        );
     }
 
     #[test]
@@ -1020,7 +1023,10 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED);
+        assert_eq!(
+            status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED
+        );
         assert!(next_retry_at.is_some());
         assert_eq!(error.as_deref(), Some("temporary outage"));
     }
@@ -1053,7 +1059,10 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(status, crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED);
+        assert_eq!(
+            status,
+            crate::models::outbound_sync_operation::OUTBOUND_STATUS_FAILED
+        );
         assert!(next_retry_at.is_none());
         assert_eq!(error.as_deref(), Some("broken mapping"));
     }

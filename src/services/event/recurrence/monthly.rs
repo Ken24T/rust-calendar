@@ -5,8 +5,7 @@ use chrono::{DateTime, Duration, Local, NaiveDate};
 use super::parser::{parse_bymonthday, parse_interval, parse_monthly_byday};
 use super::utils::{
     advance_month, all_weekdays_in_month, is_valid_occurrence, push_if_in_range,
-    resolve_local_datetime,
-    select_month_boundary, select_positional_weekday,
+    resolve_local_datetime, select_month_boundary, select_positional_weekday,
 };
 
 pub(super) fn generate(

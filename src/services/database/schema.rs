@@ -45,6 +45,7 @@ fn create_settings_table(conn: &Connection) -> Result<()> {
             default_event_start_time TEXT NOT NULL DEFAULT '08:00',
             default_card_width REAL NOT NULL DEFAULT 120.0,
             default_card_height REAL NOT NULL DEFAULT 110.0,
+            show_countdown_cards INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",
@@ -152,6 +153,13 @@ fn run_settings_migrations(conn: &Connection) -> Result<()> {
         "settings",
         "minimize_to_tray",
         "ALTER TABLE settings ADD COLUMN minimize_to_tray INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    migrations::ensure_column(
+        conn,
+        "settings",
+        "show_countdown_cards",
+        "ALTER TABLE settings ADD COLUMN show_countdown_cards INTEGER NOT NULL DEFAULT 1",
     )?;
 
     let had_time_slot = migrations::column_exists(conn, "settings", "time_slot_interval")?;
@@ -291,9 +299,9 @@ fn insert_default_settings(conn: &Connection) -> Result<()> {
             show_my_day, my_day_position_right, show_ribbon, current_view,
             default_event_duration, first_day_of_work_week, last_day_of_work_week,
             default_event_start_time, default_card_width, default_card_height,
-            sync_startup_delay_minutes
+            sync_startup_delay_minutes, show_countdown_cards
         )
-        VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 0, 0, 0, 'Month', 60, 1, 5, '08:00', 120.0, 110.0, 15)",
+        VALUES (1, 'light', 0, '12h', 'MM/DD/YYYY', 0, 0, 0, 'Month', 60, 1, 5, '08:00', 120.0, 110.0, 15, 1)",
         [],
     )
     .context("Failed to insert default settings")?;

@@ -44,6 +44,7 @@ with local-first data storage and no cloud dependencies.
 - Tear events from the calendar to create desktop countdown widgets
 - Individual floating windows, combined container, or category containers mode
 - Always-on-top, persistent countdown display
+- View-menu show/hide toggle that preserves each card's saved position when restored
 - Category containers with collapsible headers, sort modes, and quick-add
 - Four-tier visual inheritance: Global → Template → Category → Card
 - Reusable card templates (colours, fonts, default dimensions)

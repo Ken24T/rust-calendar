@@ -8,7 +8,7 @@ mod state;
 mod state_settings;
 mod sync;
 
-pub(super) use state::{CountdownUiState, OpenEventDialogRequest};
+pub(super) use state::{CountdownRenderResult, CountdownUiState, OpenEventDialogRequest};
 
 use super::CalendarApp;
 use crate::services::countdown::{

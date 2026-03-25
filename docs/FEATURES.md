@@ -41,6 +41,7 @@ A summary of the features available in Rust Calendar.
 
 - Desktop countdown widgets for upcoming events
 - Individual floating windows or combined container mode
+- View-menu show/hide toggle that restores cards to their saved positions
 - Customisable accent colours, font sizes, and dimensions
 - Always-on-top option
 - Auto-create on ICS import (optional)
