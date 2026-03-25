@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.34] - 2026-03-25
+
+### Changed
+
+- Synced `Cargo.lock` with the current application release version so local and published build metadata stay aligned after deployment.
+
 ## [2.4.33] - 2026-03-22
 
 ### Added
