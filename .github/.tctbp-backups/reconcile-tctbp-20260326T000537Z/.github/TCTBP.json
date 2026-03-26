@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 3,
+  "governance": {
+    "sourceOfTruth": "TCTBP.json",
+    "fallbackDocument": "TCTBP Agent.md"
+  },
+  "project": {
+    "defaultBranch": "main",
+    "versionFiles": ["Cargo.toml"],
+    "changelogFormat": "keep-a-changelog"
+  },
+  "activation": {
+    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please", "status", "status please", "abort"],
+    "caseInsensitive": true,
+    "branchCommand": {
+      "enabled": true,
+      "pattern": "^branch\\s+(.+)$"
+    }
+  },
+  "workflow": {
+    "shipOrder": ["preflight", "test", "problems", "bump", "commit", "changelog", "tag", "push"],
+    "handoffOrder": ["preflight", "stage", "test-gate", "commit", "ship-if-needed", "merge", "push", "verify-sync", "checkout-branch", "summary"],
+    "handbackOrder": ["preflight", "fetch", "detect-branch", "pull", "verify-sync", "verification-gate", "summary"],
+    "statusOrder": ["fetch", "report", "recommend"],
+    "abortOrder": ["inspect", "propose", "execute"],
+    "requireApproval": ["push"]
+  },
+  "statusRecommendations": {
+    "enabled": true,
+    "suggestions": ["handback", "handoff", "ship", "abort", "none"],
+    "rules": {
+      "handback": "Suggest when local branch SHA does not match origin or default branch is behind remote.",
+      "handoff": "Suggest when working tree has local changes or current branch is ahead of origin and user is moving machines.",
+      "ship": "Suggest when there are unshipped commits since last tag or version/tag drift exists.",
+      "abort": "Suggest when a partial workflow state is detected (e.g. merge in progress, bump/tag mismatch, failed prior workflow).",
+      "none": "Suggest when branch is clean, synced, and no SHIP is needed."
+    }
+  },
+  "docsInfraPolicy": {
+    "skipSteps": ["test", "clippy"],
+    "keepSteps": ["preflight", "problems-editor", "commit", "push"],
+    "filePatterns": ["*.md", "*.txt", "*.rst", "docs/**", ".github/**", "packaging/**", "LICENSE*", "CHANGELOG*", "CONTRIBUTING*", "*.toml", "*.json", "*.yaml", "*.yml"],
+    "excludeWhenCodePresent": ["*.rs"],
+    "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics (e.g. markdown lint)"
+  },
+  "build": {
+    "defaultProfile": "dev",
+    "releaseOnlyWhenRequested": true,
+    "comment": "Default to dev (debug) builds. Release builds only when user explicitly requests."
+  },
+  "versioning": {
+    "scheme": "semver",
+    "patchEveryShip": true,
+    "skipForChangeTypes": ["docs-only", "infrastructure-only"],
+    "minorOnFirstShipOfBranch": true,
+    "minorBranchPrefixes": ["feature/"],
+    "majorExplicitOnly": true
+  },
+  "tagging": {
+    "policy": "everyCommit",
+    "skipWhenNoBump": true,
+    "format": "v{version}"
+  }
+}

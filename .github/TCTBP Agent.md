@@ -1,698 +1,267 @@
-# OpenCode TCTBP Agent - Rust Calendar
+# Rust Calendar — TCTBP Agent
 
 ## Purpose
 
-This agent governs **milestone, shipping, sync, and deployment actions** for Rust Calendar. It exists to safely execute the agreed **TCTBP / SHIP workflow** with strong guard rails, auditability, and human approval at irreversible steps.
+This agent governs milestone, publishing, handover, resume, sync, status, recovery, and deployment actions for Rust Calendar.
 
-Primary objective: **no code is ever lost** while keeping local and remote repositories in a validated, recoverable state.
+Primary objective: no code is ever lost while keeping local and remote repository state validated, recoverable, and easy to resume on another machine.
 
-This agent is **not** for exploratory coding or refactoring. It is activated only when the user signals a milestone or explicit sync action, for example `ship`, `handover`, `deploy`, or `tctbp`.
+This workflow is for explicit operator actions such as `ship`, `publish`, `handover`, `resume`, `deploy`, `status`, `abort`, and `branch <name>`. It is not for normal feature implementation work.
 
-Quick reference: see [TCTBP Cheatsheet.md](TCTBP%20Cheatsheet.md) for the short operator view of triggers, expectations, and repo-specific commands.
+Quick reference: see [TCTBP Cheatsheet.md](TCTBP%20Cheatsheet.md).
 
----
+## Authoritative Precedence
 
-## Project Profile (How this agent adapts per repo)
+- `.github/TCTBP.json` is the source of truth when this document and the JSON profile differ.
+- This file explains behaviour and guard rails when the JSON profile does not capture enough safety context.
+- `.github/TCTBP Cheatsheet.md` is the short operator summary.
+- `.github/agents/TCTBP.agent.md` is the runtime entry point for explicit TCTBP trigger routing.
+- `.github/copilot-instructions.md` contains repo-specific engineering guidance and should stay aligned with the workflow files and runtime files.
 
-**Authoritative precedence:**
+## Repo Profile
 
-- `TCTBP.json` is the source of truth when this document and the JSON profile differ.
-- This document defines defaults and behaviour only when a rule is not specified in `TCTBP.json`.
+Rust Calendar is a Rust + egui desktop application with local-first storage and cross-platform Linux/Windows support.
 
-Before running SHIP steps, the agent must establish a **Project Profile** using, in order:
+Repo-specific operational values that must be preserved:
 
-1. `TCTBP.json`
-2. `AGENTS.md`, `README.md`, or `CONTRIBUTING.md` if present
-3. `Cargo.toml` and any relevant repo metadata
-4. If still unclear, ask the user to confirm commands once and then proceed
+- default branch: `main`
+- version source: `Cargo.toml` field `package.version`
+- tag format: `vX.Y.Z`
+- format gate: `cargo fmt -- --check`
+- lint gate: `cargo clippy -- -D warnings`
+- test gate: `cargo test`
+- normal build gate: `cargo build`
+- release build: `cargo build --release`
+- release build policy: use the release build for explicit installation or deployment work, not as the default SHIP gate
+- deploy target: `linux-user-local` via `bash ./packaging/install.sh`
+- user-facing docs commonly reviewed: `README.md`, `docs/USER_GUIDE.md`, `docs/FEATURES.md`, `CHANGELOG.md`, and feature-specific docs under `docs/`
+- locale: Australian English for user-facing text and comments
 
-A Project Profile defines:
+## Core Invariants
 
-- How to run **lint/static checks**
-- How to run **tests**
-- How to run **build/compile**
-- Whether a separate **release build** exists and when it should be used
-- Where and how to **bump version**
-- Tagging policy
-- Documentation impact rules and which docs must be reviewed for different change types
-- Deployment targets and post-deploy validation rules
+1. Verification must pass before irreversible actions unless `.github/TCTBP.json` explicitly allows a docs/infra-only shortcut.
+2. Problems must be zero before any commit.
+3. Protected Git actions such as push, force-push, branch deletion, history rewrite, or remote modification require explicit approval unless granted by the active workflow trigger.
+4. Tags must correspond exactly to the version committed in `Cargo.toml` and point to the commit that introduced that version.
+5. No-code-loss takes priority over workflow completion.
+6. Do not use hard reset, destructive checkout, auto-rebase, or force-push as normal workflow shortcuts.
+7. Keep versioned artefacts, workflow files, runtime files, and documentation aligned.
+8. Use the normal build gate by default; reserve release builds for install or deployment work.
 
----
+If any invariant fails, stop and explain the blocker.
 
-## Core Invariants (Never Break)
+## Supported Triggers
 
-1. **Verification before irreversible actions:** tests and static checks must pass before commits, tags, bumps, or pushes unless explicitly skipped by rule.
-2. **Problems count must be zero** before any commit, interpreted as build, lint, test, and editor diagnostics being clean.
-3. **All non-destructive actions are allowed by default.**
-4. **Protected Git actions** such as push, force-push, deleting branches, rewriting history, or modifying remotes require explicit approval unless a workflow trigger grants it for that workflow.
-5. **Pull requests are not required.** This workflow assumes a single-developer model with direct merges.
-6. **No secrets or credentials** may be introduced or committed.
-7. **User-facing text follows project locale**: Australian English.
-8. **Versioned artefacts must stay in sync.**
-9. **Tags must correspond exactly to the bumped application version and point at the commit that introduced that version.**
-10. **No-code-loss rule:** preserving existing local and remote work takes precedence over completing a sync automatically.
-11. **No destructive sync operations:** handover and ship must never use `reset --hard`, destructive checkout, auto-rebase, or force-push as normal workflow shortcuts.
+Supported workflow triggers are:
 
-If any invariant fails, the agent must **stop immediately**, explain the failure, and wait for instructions.
-
----
-
-## Activation Signal
-
-Activate this agent only when the user explicitly uses a clear cue, case-insensitive, for example:
-
-- `ship`
-- `ship please`
-- `shipping`
-- `tctbp`
-- `prepare release`
-- `deploy`
-- `deploy please`
-- `handover`
-- `handover please`
-- `status`
-- `status please`
+- `ship`, `ship please`, `shipping`, `prepare release`
+- `publish`, `publish please`
+- `deploy`, `deploy please`
+- `handover`, `handover please`
+- `resume`, `resume please`
+- `status`, `status please`
 - `abort`
 - `branch <new-branch-name>`
 
-Do **not** auto-trigger based on context or guesses.
+Do not treat a bare `tctbp` request as implicit permission to mutate repository state.
 
----
+## Publish Workflow
 
-## Docs/Infra-Only Detection
+Trigger: `publish` / `publish please`
 
-A changeset is classified as **docs-only or infrastructure-only** when **every** changed file matches one of the following patterns:
+Purpose: safely publish the current clean branch to origin without creating a release, bumping a version, creating a tag, or updating handover metadata.
 
-- `*.md`, `*.txt`, `*.rst`
-- `docs/**`
-- `.github/**`
-- `packaging/**`
-- `LICENSE*`, `CHANGELOG*`, `CONTRIBUTING*`
+Key rules:
 
-Build manifests, package metadata, and runtime configuration that can affect execution are **not** treated as docs-only by default.
+- stop if `HEAD` is detached
+- stop if the working tree is dirty
+- fetch origin before deciding whether a push is required
+- create an upstream on first publication when the branch is otherwise clean and unpublished
+- stop if the branch is behind or diverged from origin
+- never create a version bump, tag, or metadata update as part of `publish`
 
-When in doubt, treat the changeset as code.
+## Branch Workflow
 
----
+Trigger: `branch <new-branch-name>`
 
-## Branch Workflow (Convenience Command)
+Purpose: close out the current branch safely and create the next branch without losing code.
 
-### `branch <new-branch-name>`
+Key rules:
 
-Purpose: close out the current branch cleanly and start the next one.
+- stop if `HEAD` is detached
+- validate the requested branch name before mutating anything
+- stop if the target branch already exists locally or on origin
+- stop if the source branch is dirty and SHIP is declined
+- stop if the source branch is ahead, behind, diverged, or otherwise unpublished relative to its upstream
+- fast-forward local `main` when clean and behind origin
+- ask for explicit confirmation before merging a non-default branch back into `main`
+- treat merge-to-`main` as the expected default outcome, but stop if that merge is explicitly declined
+- verify the source branch tip is reachable from `main` before optional cleanup
+- require explicit approval for push and branch deletion
 
-Behaviour, local-first and remote-safe:
+Never use stash, reset, rebase, force-push, or destructive checkout as part of the branch workflow.
 
-Safety promise:
+## Handover Workflow
 
-- The workflow must preserve all existing work on the current branch, `main`, and the new branch transition.
-- If any branch transition would require guessing, discarding local changes, or reconciling diverged history automatically, stop instead of continuing.
-- Never use stash, hard reset, auto-rebase, force-push, or destructive checkout as part of this workflow.
+Trigger: `handover` / `handover please`
 
-Behaviour, local-first and no-code-loss:
+Purpose: safely checkpoint and publish the current work branch at end of day, then refresh the handover metadata branch so another machine can resume from a deterministic shared state.
 
-1. **Preflight**
-   - Report the current branch, working tree state, and upstream tracking state if one exists.
-   - Stop immediately if `HEAD` is detached; branch closeout must operate on a named branch.
-   - Validate the requested branch name before doing any other workflow step.
-   - Stop if the requested branch name is invalid, equals the default branch, already exists locally, already exists on origin, or would collide by case on a case-insensitive filesystem.
-   - Determine whether the current branch is the default branch or a non-default work branch.
+Scope:
 
-2. **Assess whether SHIP is needed on the current branch**
-   - If the current branch is non-default and has uncommitted changes or commits since the last `vX.Y.Z` tag, recommend SHIP.
-   - If agreed, run the full SHIP workflow before branching.
-
-3. **Stop if SHIP is declined while the branch is dirty**
-   - If the user declines SHIP and the current branch has uncommitted changes, stop.
-   - Do not switch branches or attempt a merge with a dirty working tree.
-
-4. **Verification gate when continuing without SHIP**
-   - If SHIP is declined and the tree is clean, run tests at minimum to confirm the codebase is not broken.
-   - Stop on failure.
-
-5. **Inspect source branch sync state when the current branch is not the default branch**
-   - If the source branch has an upstream and is diverged from it, stop and ask the user to resolve that state explicitly.
-   - If the source branch has an upstream and is behind it, stop and recommend running `handover` or another explicit sync step first.
-   - If the source branch has an upstream and is ahead of it, stop and recommend publishing that branch first by running `handover`, `ship`, or an explicit push.
-   - If the source branch has no upstream, stop and recommend creating or publishing the upstream first before using `branch <new-branch-name>`.
-
-6. **Prepare the default branch safely**
-   - Ensure the working tree is clean before checking out the default branch from `TCTBP.json`.
-   - If the default branch is dirty, stop.
-   - If the default branch is diverged from its upstream, stop.
-   - If the default branch is behind its upstream and clean, fast-forward it from origin.
-
-7. **Merge the source branch into the default branch when needed**
-   - If the current branch is already the default branch, skip the merge step and continue from the updated default branch.
-   - Otherwise merge the source branch into the default branch using a non-destructive merge.
-   - Stop on conflicts and leave the repository in a recoverable state for manual resolution.
-
-8. **Verify the branch transition before creating the next branch**
-   - Confirm the source branch tip commit is reachable from the default branch before proceeding.
-   - If that cannot be confirmed, stop.
-
-9. **Create and switch to the new branch** from the updated default branch.
-   - Stop if the new branch cannot be created or checked out safely.
-
-10. **Cleanup, optional and last**
-   Consider deleting the old branch only after the merge succeeded, the source branch tip is reachable from the default branch, and the new branch exists and is checked out. Ask the user whether to delete the old branch locally and remotely. Do not assume the old branch was a feature branch; apply the same rule to `fix/`, `docs/`, `infrastructure/`, or other work branches.
-
-11. **Remote safety**
-   Any push requires explicit approval. Any branch deletion requires explicit approval.
-
-12. **Summary**
-   Confirm the source branch, the resulting default-branch state, the new branch name, and whether any push or deletion occurred. Explicitly state whether the workflow stopped for safety, skipped the merge because the workflow started on the default branch, or completed the full transition without code loss. If the workflow stopped because the source branch was not yet published, say so explicitly and recommend the exact sync step needed before retrying.
-
-Versioning interaction:
-
-- **Minor (Y) bump occurs on the first SHIP on the new branch**, not at branch creation, and only for branch prefixes listed in `minorBranchPrefixes`.
-
----
-
-## Handover Workflow (Unified multi-machine sync and resume)
-
-Preferred trigger: `handover` / `handover please`
-
-Purpose: reconcile the current working branch with `origin` so development can stop on one machine and resume on another from the latest safely recoverable shared state.
-
-Sync scope:
-
-- `handover` syncs the **active work branch** and any **relevant local tags** created by SHIP.
-- `handover` also maintains a dedicated **handover metadata branch** used only to record the last successfully handed-over work branch.
-- It does **not** attempt to reconcile every branch in the repository.
-- It does **not** merge the active work branch into the default branch as part of normal multi-machine sync.
+- syncs the current work branch
+- syncs relevant tags when needed
+- maintains the metadata branch `tctbp/handover-state`
+- does not attempt to reconcile every branch in the repository
+- does not merge the current work branch into `main` as part of ordinary multi-machine sync
 
 Handover metadata:
 
-- Metadata branch: `tctbp/handover-state`
-- Metadata file on that branch: `.github/TCTBP_STATE.json`
-- Purpose: persist the last successfully handed-over work branch, commit SHA, and update time so another machine can resume deterministically.
-- The metadata branch is **not** a work branch and must always be excluded from branch-candidate detection.
+- metadata branch: `tctbp/handover-state`
+- metadata file: `.github/TCTBP_STATE.json`
+- metadata is refreshed after the current branch is safely published
+- the metadata branch is never treated as a work branch candidate
 
-Trusted outcome:
+Key safety rules:
 
-- If you trigger `handover` on machine A at the end of the day, it preserves and publishes the current working branch safely.
-- If you trigger `handover` on machine B the next day, it detects or confirms the target working branch, checks it out, reconciles it with `origin`, and leaves you ready to continue on that branch.
-- If there is any ambiguity about which branch represents the intended work, the workflow stops and asks rather than switching branches speculatively.
+- stop if `HEAD` is detached
+- preserve dirty unpublished work through a durable checkpoint when necessary
+- allow fast-forward only when local is clean and behind
+- stop on divergence rather than guessing
+- never auto-merge or auto-rebase as part of reconciliation
+- update the metadata branch using a secondary worktree or another non-destructive mechanism
 
-Safety principle: if completing a sync automatically could risk losing code, the workflow must stop and preserve both sides for explicit user resolution. When the branch is dirty and unpublished, preserving work means creating a durable checkpoint before verification or reconciliation can block handover, unless the user explicitly declines that checkpoint and accepts stopping with local-only state.
+## Resume Workflow
 
-Behaviour, safe and deterministic:
+Trigger: `resume` / `resume please`
 
-1. **Preflight**
-   - Report current branch explicitly.
-   - Confirm working tree state.
-   - Confirm upstream tracking status if one exists.
-   - Stop immediately if `HEAD` is detached; handover metadata must point at a named branch, not an anonymous commit.
+Purpose: restore the intended work branch at start of day by consulting handover metadata first, switching safely when needed, and reconciling only through non-destructive checkout and fast-forward operations.
 
-2. **Dirty tree decision**
-   - If the working tree has local changes on the active work branch, stay on that branch and preserve the changes through the workflow.
-   - If the working tree is dirty in a way that would require switching branches first, stop and ask the user to resolve the local state before continuing.
+Key safety rules:
 
-3. **Fetch and inspect remote state**
-   - Fetch from `origin` with tags.
-   - Determine the default branch state, the metadata branch state if present, and candidate active work branch state.
+- stop if `HEAD` is detached
+- consult metadata before arbitrary branch-recency inference
+- prefer metadata over an arbitrary clean non-default branch
+- create a local tracking branch from remote when the intended branch is published but missing locally
+- allow fast-forward only when local is clean and behind
+- stop when local is ahead, diverged, or ambiguous instead of publishing during `resume`
 
-4. **Read handover metadata when available**
-   - If `origin/tctbp/handover-state` exists, read `.github/TCTBP_STATE.json` from that branch first.
-   - If the metadata names a branch that still exists on origin, treat that branch as the preferred resume candidate when the current branch is not dirty.
-   - If the metadata is missing, stale, malformed, or refers to a branch that no longer exists, ignore it and fall back to branch inference.
-   - Never treat the metadata branch itself as a resume candidate.
-
-5. **Determine the target work branch**
-    - Use this precedence order:
-    - First, if the current branch is non-default and has uncommitted changes, it is the target branch.
-    - Otherwise, if handover metadata resolves to a valid remote work branch, use that as the target branch unless the current clean non-default branch is proven newer by branch ancestry.
-    - Otherwise, if the current branch is non-default, clean, and already tracks the intended remote work branch, it remains the target branch.
-    - Otherwise inspect remote branches sorted by most recent commit, excluding `origin/<default-branch>`, `origin/HEAD`, and `origin/tctbp/handover-state`.
-      - If a single remote work branch is the clear candidate, propose it as the target branch.
-      - Ask for confirmation before switching whenever the workflow is not already on the selected target branch.
-      - If multiple plausible candidate work branches exist, stop and ask the user which branch to resume.
-      - If no suitable target branch exists, remain on the current branch and report that no resume branch was detected.
-    - Do not let an arbitrary clean non-default branch override newer valid handover metadata just because it is currently checked out.
-    - "Confirmed newer" means the current branch tip is a descendant of the metadata commit and therefore contains that handed-over state plus additional commits. Recency by checkout time, branch name, or local intuition is not enough.
-
-6. **Switch to the target branch when needed**
-   - If not already on the confirmed target branch and the tree is clean, checkout the target branch and set up tracking if required.
-   - If branch switching would be destructive, stop.
-
-7. **Compare local and remote branch state**
-   - Determine whether the target branch is ahead, behind, up to date, or diverged from its tracked remote branch.
-   - If the target branch has no upstream, note that the workflow may create one during push.
-   - If the local branch is behind and clean, it may be fast-forwarded during reconciliation.
-   - If the local branch is behind but not clean, stop instead of attempting a mixed reconciliation.
-   - If local and remote have diverged, stop and report the divergence for explicit resolution.
-
-8. **Stage everything if local changes exist**
-   Stage all local changes, tracked and new files. Never discard or overwrite uncommitted changes during this step.
-
-9. **Create a durable checkpoint when needed**
-   If the target branch is dirty and unpublished, create a durable checkpoint before verification can block handover. The preferred checkpoint is a clearly marked non-release commit on the target branch, created only to preserve work and enable recovery. If repo policy allows publishing that checkpoint safely, publish it before continuing so another machine can resume from it. If the user declines the checkpoint and the work would remain local-only, stop and say so explicitly.
-
-10. **Test gate**
-   Run the repo verification commands from the Project Profile when a commit, reconciliation, or publish action is needed. Proceed only if required checks pass, and stop immediately on failure. If the changeset is docs-only or infrastructure-only, skip heavyweight verification steps according to `TCTBP.json`, but still run editor diagnostics.
-
-11. **Documentation impact**
-   Classify the changeset as one or more of `user-visible-feature`, `ui-or-interaction`, `config-or-settings`, `packaging-or-metadata`, `roadmap-or-status`, or `internal-only`. Review the documentation files required by `TCTBP.json`. Before committing, report either `Docs updated` with the files changed, or `No docs impact` with a short reason. If required documentation is clearly stale relative to the changeset, stop and fix it before continuing.
-
-12. **Commit everything when needed**
-   If staged changes exist, commit them automatically with a clear message. Use this commit as the durable local checkpoint before any reconciliation that could otherwise alter branch state. If a pre-verification checkpoint commit was already created and still represents the desired preserved state, reuse it rather than creating a second redundant checkpoint commit.
-
-13. **Ship if needed**
-   If release policy says SHIP is required, or versions are out of sync, run the full SHIP workflow. If changes are docs-only or infrastructure-only, skip bump and tag and continue.
-
-14. **Reconcile branch state**
-   If the tracked remote branch is ahead and local is clean, fast-forward local to the remote branch. If the tracked remote branch is ahead and local is not clean, stop. If local is ahead, prepare to publish the target branch. If local and remote are already in sync, keep the current state and continue. Never auto-merge or auto-rebase as part of reconciliation.
-
-15. **Push synced state when needed**
-   Push the target branch to `origin` when local is ahead or an upstream must be created. Push tags if a SHIP occurred or relevant tags exist. Update and push the metadata branch `tctbp/handover-state` so it records the target branch and handed-over commit. Never force-push as part of handover. Update the metadata branch using a secondary worktree or another equally non-destructive mechanism so the active work branch never has to be abandoned or risked during metadata publication.
-
-16. **Verify sync**
-   Confirm the local target branch matches `origin/<target-branch>`. Confirm the metadata branch reflects the same target branch and handed-over commit. Confirm the local default branch is not known to be behind `origin/<default-branch>` after fetch. Confirm the working directory is still on the intended target branch. If sync cannot be verified, stop and report the discrepancy.
-
-17. **Summary**
-   Render a concise four-column summary table using `Origin`, `Local`, `Status`, and `Action(s)`. Keep the table shorter than `status` and focused on the handover outcome. After the table, add a one-line completion summary that confirms the target branch, handed-over commit, version when relevant, and latest tag when relevant. Explicitly note that handover covered the active work branch, the handover metadata branch, and relevant tags only, not every branch in the repository.
-
-Approval rules:
-
-- Using the `handover` trigger grants approval to push the target branch and relevant tags for that workflow only.
-- Any other remote push still requires explicit approval.
-
----
-
-## Status Workflow (Quick state check)
+## Status Workflow
 
 Trigger: `status` / `status please`
 
-Purpose: provide a read-only operator snapshot of the current repo state.
+Purpose: provide a read-only operator snapshot of the repo.
 
 Behaviour:
 
-1. **Fetch**
-   - Run `git fetch --all --prune --tags`.
+- fetch remote state first
+- render a four-column table using `Origin`, `Local`, `Status`, and `Action(s)`
+- include branch/upstream state, head commit, default-branch state, tag state, ahead/behind counts, working tree state, version source, metadata state, and whether `resume`, `publish`, `ship`, or `handover` is recommended
+- never mutate the repo from `status`
 
-2. **Report**
-   - Render a concise four-column snapshot table.
-   - Use the columns `Origin`, `Local`, `Status`, and `Action(s)`.
-   - Include the current branch, default branch, working tree, version, tag state, ahead/behind state, and whether `ship` or `handover` is recommended.
-   - If handover metadata points at a different published branch than the current clean branch, call that out explicitly as a resume-target mismatch, not merely generic metadata staleness.
-
-3. **Recommend next steps**
-   - Provide 1 to 3 actionable recommendations with a one-line reason for each.
-   - Use this priority order when multiple are valid: `abort`, `handover`, `ship`, `none`.
-   - Never execute recommended actions automatically from `status`.
-
-No approval required. No changes made.
-
----
-
-## Abort Workflow (Partial operation recovery)
+## Abort Workflow
 
 Trigger: `abort`
 
-Purpose: inspect and recover from a partially completed SHIP, handover, or deploy operation.
+Purpose: inspect and recover safely from a partially completed workflow.
 
-Behaviour:
+Check for states such as:
 
-1. **Inspect state**
-   - Report current branch, working tree, last commit, last tag, and any in-progress merge state.
-   - Identify whether a partial operation is in progress.
-   - Check specifically for: version bumped without tag, tag created but not pushed, target branch pushed while handover metadata is stale, metadata updated while the target branch is unpublished, `main` pushed while the new branch is unpublished, the new branch pushed while `main` is unpublished, old remote branch deleted before branch transition is fully published, merge in progress, changelog updated without a matching version bump, and local-versus-remote tag drift.
+- version bumped without matching tag
+- tag created but not pushed
+- branch pushed while handover metadata is stale
+- metadata pushed while the target branch is unpublished
+- merge in progress
+- local/remote tag drift
+- changelog updated without a matching version bump
 
-2. **Propose recovery**
-   - List specific recovery actions with consequences.
-   - For each detected partial state, say what can be safely preserved, what can be safely undone, and what must not be rewritten automatically.
-   - Examples: create a preserving checkpoint before any cleanup, revert a bump commit, delete a local tag, abort a merge, push the missing branch before trusting metadata, or refresh metadata after a branch push.
-   - Never execute recovery actions without explicit user approval.
+Abort must inspect first, propose recovery second, and execute only explicitly approved actions.
 
-3. **Execute approved actions**
-   - Perform only the actions explicitly approved.
-   - History rewriting and force-push require extra confirmation.
-
-Approval rules:
-
-- All recovery actions require explicit approval.
-- Force-push and history rewriting require double confirmation.
-
----
-
-## Deploy Workflow (Runtime build and local installation)
+## Deploy Workflow
 
 Trigger: `deploy` / `deploy please`
 
-Purpose: build a runtime-ready artefact for Rust Calendar and install or update it in the target environment safely.
+Purpose: build a runtime-ready artefact or installation output and install it safely.
 
-Safety principle: deployment must preserve recoverability. Do not overwrite the only known-good runtime blindly, and do not run destructive environment changes unless the repo profile defines them explicitly.
+General rules:
 
-Behaviour, repo-specific and controlled:
+- stop if `HEAD` is detached
+- require a clean working tree
+- require a synced branch
+- use `cargo build --release` for deployment work
+- review packaging and install docs impact before mutating deployment targets
+- validate the deployed result rather than merely copying files
 
-1. **Preflight**
-   - Confirm current branch, working tree state, and working directory.
-   - Stop immediately if `HEAD` is detached; deployment must be tied to a named branch or an explicitly approved commit reference.
-   - Confirm the configured deployment target profile from `TCTBP.json`.
-   - Confirm whether deployment requires a clean and synced branch before continuing.
+Repo-specific deploy target:
 
-2. **Sync or release prerequisite**
-   - If repo policy requires a clean synced branch, stop or run handover first.
-   - If repo policy requires a shipped state before deployment, run SHIP first.
-   - Otherwise continue from the current validated commit.
+### `linux-user-local`
 
-3. **Verification gate**
-   - Run the normal verification commands from the Project Profile first.
-   - Use the release build only for deployment packaging and installation.
+- build: `cargo build --release`
+- install: `bash ./packaging/install.sh`
+- post-deploy validation: confirm `~/.local/bin/rust-calendar` and `~/.local/share/applications/rust-calendar.desktop` exist
 
-4. **Documentation impact**
-   - Review packaging, runtime, installer, or deployment documentation when the deployable artefact or install path changes.
-   - Record either `Docs updated` or `No docs impact` with a short reason.
+If the requested deployment target is not one of these explicit cases, stop and ask rather than guessing.
 
-5. **Runtime build**
-   - Run `cargo build --release`.
-   - Produce the deployable artefact defined by the repo profile.
+## SHIP Workflow
 
-6. **Preserve existing runtime when practical**
-   - Use the repo's install workflow rather than ad hoc copy commands.
-   - Do not remove the existing runtime first unless the repo profile explicitly requires it.
-   - If the deploy path would overwrite the only known-good runtime and no rollback plan or replacement strategy is defined, stop.
+Trigger: `ship` / `ship please` / `shipping` / `prepare release`
 
-7. **Deploy target steps**
-   - Execute the configured install path. For Linux local installs, run `./packaging/install.sh`.
+Purpose: create a formal shipped version only from a clean, fetched branch.
 
-8. **Post-deploy validation**
-   - Verify the deployed binary, desktop entry, and icon exist in their expected locations.
+Workflow order:
 
-9. **Summary**
-   - Summarise target profile, prerequisite actions taken, artefacts built, install steps performed, validations run, and any rollback notes.
+1. preflight
+2. verify
+3. problems
+4. docs impact
+5. bump
+6. commit
+7. changelog when present
+8. tag
+9. push
 
-Expected outcome:
+Preflight guard rails:
 
-- After a successful deploy, the runtime artefact is built using the release path and installed into the configured local desktop environment.
-- The deployment result is validated, not merely copied.
+- fetch origin when needed
+- stop if `HEAD` is detached
+- allow first publication from a clean unpublished branch
+- stop if the branch is behind or diverged from origin
+- stop if the working tree is dirty
+- render a release-focused four-column snapshot table before mutating anything
 
-Approval rules:
+Verify and build policy:
 
-- Using `deploy` grants approval to run the repo-defined deployment commands for that workflow only.
-- If deployment also triggers SHIP or handover, their normal push and sync rules still apply.
+- normal SHIP gate: `cargo fmt -- --check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build`
+- use `cargo build --release` only when the user explicitly requests installation or deployment work, or when the deploy workflow requires it
+- docs/infra-only changes may skip heavyweight code gates according to `.github/TCTBP.json`, but still require editor diagnostics and docs impact assessment
 
----
+Versioning rules:
 
-## SHIP / TCTBP Workflow
+- patch bump on every SHIP except docs-only or infrastructure-only changes
+- first SHIP on a `feature/` branch gets a minor bump instead of a patch bump
+- major bump only by explicit instruction
+- apply version changes to `Cargo.toml` before committing
 
-> SHIP = Preflight -> Verify -> Problems -> Docs Impact -> Bump -> Commit -> CHANGELOG -> Tag -> Push
+Tagging rules:
 
-### 1. Preflight
+- use `vX.Y.Z` tags
+- one tag per shipped commit
+- skip tagging when no version bump occurs
 
-- Confirm current branch
-- Confirm working tree state
-- Confirm correct working directory
-- Stop immediately if `HEAD` is detached; releases must be anchored to a named branch.
-- Fetch origin state when needed so the report uses current remote information.
-- Render a concise four-column release snapshot table before taking any mutating SHIP action.
-- Stop if the working tree is dirty, if the branch has no upstream, if the branch is behind origin, or if local and remote have diverged.
-- Do not create a release from unpublished, stale, or ambiguous branch state.
+Docs impact rules:
 
----
+- `README.md`, `docs/USER_GUIDE.md`, and `docs/FEATURES.md` for user-visible or UI changes
+- `packaging/install.sh` and `packaging/rust-calendar.desktop` for installation or packaging changes
+- `CHANGELOG.md` and roadmap docs for release/status changes
 
-### 2. Verify
+## Repo-Specific Preservation Notes
 
-Run the required verification commands from the Project Profile. This normally includes tests and may also include format, lint, and build checks depending on repo policy. Stop on failure.
+When updating these workflow files, preserve the following local choices unless the user explicitly changes them:
 
-**Skip condition:** if the changeset is docs-only or infrastructure-only, skip heavyweight verification steps according to `TCTBP.json`.
-
----
-
-### 3. Problems
-
-Ensure lint, build, and test diagnostics are clean.
-
-For docs-only or infrastructure-only changes, skip code-level checks such as `cargo clippy` but still run editor diagnostics to catch markdown, JSON, and syntax issues in changed files.
-
----
-
-### 4. Docs Impact
-
-- Classify the changeset using the documentation rules in `TCTBP.json`.
-- Determine which documentation files must be reviewed.
-- Update those docs when behaviour, configuration, packaging, or project status has changed.
-- If no docs changes are needed, explicitly record `No docs impact` with a short reason before continuing.
-- SHIP must not proceed while required documentation is stale.
-
----
-
-### 5. Bump Version
-
-**Versioning rules:**
-
-- **Z (patch)** increments on every SHIP except when the changeset is docs-only or infrastructure-only.
-- **Y (minor)** increments on the first SHIP of a new work branch, resetting Z to 0, only when the branch prefix matches `minorBranchPrefixes`, default `feature/`.
-  - Operational definition: first SHIP on a branch means no prior shipped tag exists on commits unique to the current branch since it diverged from the default branch.
-  - Non-feature prefixes such as `fix/`, `docs/`, and `infrastructure/` receive a patch bump on their first SHIP.
-- **X (major)** only by explicit instruction.
-
-Apply the bump to all files listed in `versionFiles` before committing.
-
----
-
-### 6. Commit
-
-- Stage relevant changes.
-- Propose a conventional commit message.
-
-During SHIP, the agent may proceed through bump, commit, and tag without pausing unless a core invariant fails.
-
----
-
-### 7. CHANGELOG (Optional)
-
-If `CHANGELOG.md` exists and `changelogFormat` is specified in `TCTBP.json`:
-
-- Propose an entry for the new version based on commits since the last tag.
-- Use conventional commit messages to categorise changes.
-- If format is `keep-a-changelog`, move items from `[Unreleased]` to a new `[vX.Y.Z]` heading.
-- Include the entry in the same commit as the version bump.
-
-If `CHANGELOG.md` does not exist, skip this step silently.
-
----
-
-### 8. Tag
-
-- Tag format: `vX.Y.Z`
-- One tag per shipped commit
-- Tag must point at the commit that introduced the version
-
----
-
-### Build Profile
-
-Builds performed during or after SHIP use the **dev** profile by default with `cargo build`.
-
-A release build with `cargo build --release` is only performed when the user explicitly requests it or when the deploy workflow requires it.
-
----
-
-### 9. Push (Approval Required)
-
-- Push current branch only
-- Never push to protected branches
-- Preserve the preflight guard rails from Step 1; push must not proceed if release state became unpublished, behind upstream, diverged, dirty, or otherwise ambiguous.
-
----
-
-## Permissions Expectations (Authoritative)
-
-### Allowed by Default
-
-- Local file operations
-- Tests, lint, and build
-- Commits and local tags
-- Branch switching and merging
-- Non-destructive remote reads such as fetch, logs, and diffs
-- Repo-defined non-destructive deployment checks
-
-### Require Explicit Approval
-
-- Push to any remote unless the active workflow trigger grants it
-- Delete branches
-- Force-push
-- Rewrite history
-- Hard reset or destructive checkout
-- Rebase as a sync shortcut
-- Modify remotes
-- Destructive deployment or migration steps outside the approved deploy profile
-
-**Clarification:** there is no concept of a push to a local branch. Local commits are always allowed; any `git push` that updates a remote counts as a protected action.
-
----
-
-## Failure Behaviour
-
-On any failure:
-
-- Stop immediately
-- Explain the failure
-- Propose safe recovery options
-- Prefer preserving both local and remote history over forcing convergence
-- Never rewrite history without approval
-- Suggest using the `abort` trigger for guided recovery if partial state remains
-
-**Merge conflicts:** if a workflow stops due to a merge conflict, instruct the user to resolve the conflict manually, commit the resolution, and then re-trigger the workflow to complete the remaining steps.
-
----
-
-## Documentation Impact Policy
-
-The documentation rules in `TCTBP.json` are authoritative.
-
-Minimum expectations for Rust Calendar:
-
-- **User-visible feature** changes must review user-facing docs such as `README.md`, `docs/USER_GUIDE.md`, and `docs/FEATURES.md`.
-- **UI, interaction, config, or settings** changes must review the user guide and any directly affected UI documentation.
-- **Packaging or metadata** changes must review packaging and install documentation.
-- **Roadmap or status** changes must review the relevant planning documents.
-- **Internal-only** changes may skip doc updates, but only with an explicit reason.
-
-The agent should prefer a small, accurate doc update over a broad rewrite.
-
----
-
-## Appendix: `TCTBP.json` (Canonical Reference)
-
-The authoritative JSON configuration is in `.github/TCTBP.json`. The template below is kept in sync for reference.
-
-```json
-{
-  "schemaVersion": 5,
-  "governance": {
-    "sourceOfTruth": "TCTBP.json",
-    "fallbackDocument": "TCTBP Agent.md"
-  },
-  "project": {
-    "defaultBranch": "main",
-    "versionFiles": ["Cargo.toml"],
-    "changelogFormat": "keep-a-changelog"
-  },
-  "activation": {
-    "triggers": [
-      "ship",
-      "ship please",
-      "shipping",
-      "tctbp",
-      "prepare release",
-      "deploy",
-      "deploy please",
-      "handover",
-      "handover please",
-      "status",
-      "status please",
-      "abort"
-    ],
-    "caseInsensitive": true,
-    "branchCommand": {
-      "enabled": true,
-      "pattern": "^branch\\s+(.+)$"
-    }
-  },
-  "workflow": {
-    "shipOrder": ["preflight", "test", "problems", "docs-impact", "bump", "commit", "changelog", "tag", "push"],
-    "handoverOrder": ["preflight", "fetch", "determine-target-branch", "switch-target-branch", "compare", "stage", "test-gate", "docs-impact", "commit-if-needed", "ship-if-needed", "reconcile", "push-if-needed", "verify-sync", "summary"],
-    "statusOrder": ["fetch", "report", "recommend"],
-    "abortOrder": ["inspect", "propose", "execute"],
-    "deployOrder": ["preflight", "sync-prerequisite", "verification-gate", "docs-impact", "runtime-build", "deploy-target", "post-deploy-validation", "summary"],
-    "requireApproval": ["push"]
-  },
-  "statusRecommendations": {
-    "enabled": true,
-    "suggestions": ["handover", "ship", "abort", "none"],
-    "rules": {
-      "handover": "Suggest when the working tree is dirty, the current branch is ahead or behind origin, the active work branch must be resumed on this machine, or local and remote sync should be verified before stopping or resuming work.",
-      "ship": "Suggest when there are unshipped commits since the last tag or version and tag drift exists.",
-      "abort": "Suggest when a partial workflow state is detected.",
-      "none": "Suggest when branch state is clean, synced, and no SHIP or handover is needed."
-    }
-  },
-  "docsInfraPolicy": {
-    "skipSteps": ["test", "clippy"],
-    "keepSteps": ["preflight", "problems-editor", "docs-impact", "commit", "push"],
-    "filePatterns": ["*.md", "*.txt", "*.rst", "docs/**", ".github/**", "packaging/**", "LICENSE*", "CHANGELOG*", "CONTRIBUTING*"],
-    "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics and docs impact assessment."
-  },
-  "build": {
-    "defaultProfile": "dev",
-    "releaseOnlyWhenRequested": true,
-    "comment": "Default to cargo build. Release builds run only when explicitly requested or when deploy requires them."
-  },
-  "documentation": {
-    "requireImpactAssessment": true,
-    "blockShipIfUnassessed": true,
-    "allowNoDocChangeWithReason": true,
-    "changeTypes": [
-      "user-visible-feature",
-      "ui-or-interaction",
-      "config-or-settings",
-      "packaging-or-metadata",
-      "roadmap-or-status",
-      "internal-only"
-    ],
-    "rules": [
-      {
-        "changeType": "user-visible-feature",
-        "review": ["README.md", "docs/USER_GUIDE.md", "docs/FEATURES.md"]
-      },
-      {
-        "changeType": "ui-or-interaction",
-        "review": ["README.md", "docs/USER_GUIDE.md", "docs/UI_SYSTEM.md"]
-      },
-      {
-        "changeType": "config-or-settings",
-        "review": ["README.md", "docs/USER_GUIDE.md"]
-      },
-      {
-        "changeType": "packaging-or-metadata",
-        "review": ["README.md", "Cargo.toml", "packaging/install.sh", "packaging/rust-calendar.desktop"]
-      },
-      {
-        "changeType": "roadmap-or-status",
-        "review": ["docs/README.md", "docs/FUTURE_ENHANCEMENTS.md"]
-      },
-      {
-        "changeType": "internal-only",
-        "review": []
-      }
-    ],
-    "comment": "Also review any feature-specific design or roadmap document directly affected by the change."
-  },
-  "deploy": {
-    "preferredTriggers": ["deploy", "deploy please"],
-    "purpose": "Build a runtime-ready artefact and install it safely into the configured local desktop environment.",
-    "requireCleanTree": true,
-    "requireSyncedBranch": true,
-    "requireShipFirst": false,
-    "buildCommand": "cargo build --release",
-    "migrationCommand": null,
-    "targets": {
-      "linux-user-local": {
-        "description": "Install the release binary, desktop entry, and icon into the current user's local application paths.",
-        "installCommands": ["./packaging/install.sh"],
-        "postDeployChecks": [
-          "test -x ~/.local/bin/rust-calendar",
-          "test -f ~/.local/share/applications/rust-calendar.desktop",
-          "test -f ~/.local/share/icons/hicolor/256x256/apps/rust-calendar.png"
-        ]
-      }
-    }
-  },
-  "versioning": {
-    "scheme": "semver",
-    "patchEveryShip": true,
-    "skipForChangeTypes": ["docs-only", "infrastructure-only"],
-    "minorOnFirstShipOfBranch": true,
-    "minorBranchPrefixes": ["feature/"],
-    "majorExplicitOnly": true
-  },
-  "tagging": {
-    "policy": "everyCommit",
-    "skipWhenNoBump": true,
-    "format": "v{version}"
-  }
-}
-```
+- `v`-prefixed release tags
+- `Cargo.toml` as version source
+- `cargo build` as the default SHIP build gate
+- `cargo build --release` only for explicit deployment/install work
+- Linux install packaging under `packaging/`
+- docs paths under `docs/` and `CHANGELOG.md`
+- Australian English conventions
