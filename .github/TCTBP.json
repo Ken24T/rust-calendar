@@ -1,52 +1,330 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 8,
   "governance": {
     "sourceOfTruth": "TCTBP.json",
-    "fallbackDocument": "TCTBP Agent.md"
+    "fallbackDocument": "TCTBP Agent.md",
+    "templateMode": false,
+    "templateInstructions": "This repository uses the TCTBP workflow as a repo-specific profile. Preserve Rust Calendar commands, docs paths, version source, tag format, deployment expectations, and local runtime conventions when updating these files."
   },
   "project": {
+    "name": "rust-calendar",
+    "description": "Cross-platform desktop calendar application built with Rust and egui, with local-first storage, reminders, countdown timers, and Linux desktop integration.",
     "defaultBranch": "main",
     "versionFiles": ["Cargo.toml"],
-    "changelogFormat": "keep-a-changelog"
+    "changelogFormat": "keep-a-changelog",
+    "locale": "en-AU"
+  },
+  "profile": {
+    "commands": {
+      "format": "cargo fmt -- --check",
+      "test": "cargo test",
+      "lint": "cargo clippy -- -D warnings",
+      "build": "cargo build",
+      "releaseBuild": "cargo build --release"
+    },
+    "qualityGates": {
+      "requireZeroProblems": true,
+      "requireTestsBeforeShip": true,
+      "requireLintBeforeShip": true,
+      "requireBuildBeforeShip": true
+    },
+    "versioning": {
+      "sourceOfTruth": "Cargo.toml:package.version",
+      "tagFormat": "v{version}"
+    },
+    "releaseBuildPolicy": "explicit-installation-or-deployment-only"
   },
   "activation": {
-    "triggers": ["ship", "ship please", "shipping", "tctbp", "prepare release", "handoff", "handoff please", "handback", "handback please", "status", "status please", "abort"],
+    "triggers": [
+      "ship",
+      "ship please",
+      "shipping",
+      "prepare release",
+      "publish",
+      "publish please",
+      "deploy",
+      "deploy please",
+      "handover",
+      "handover please",
+      "resume",
+      "resume please",
+      "status",
+      "status please",
+      "abort"
+    ],
     "caseInsensitive": true,
     "branchCommand": {
       "enabled": true,
-      "pattern": "^branch\\s+(.+)$"
+      "pattern": "^branch\\s+(.+)$",
+      "stopIfTargetBranchExistsLocal": true,
+      "stopIfTargetBranchExistsRemote": true,
+      "stopIfTargetBranchEqualsDefault": true,
+      "stopIfTargetBranchInvalid": true
     }
   },
+  "ship": {
+    "preferredTriggers": ["ship", "ship please", "shipping", "prepare release"],
+    "requireFetchedOriginInPreflight": true,
+    "stopIfDetachedHead": true,
+    "stopIfBranchMissingUpstream": false,
+    "allowShipFromUnpublishedBranch": true,
+    "createUpstreamOnFirstPublish": true,
+    "stopIfBranchBehindUpstream": true,
+    "stopIfBranchDiverged": true,
+    "stopIfWorkingTreeDirty": true,
+    "purpose": "Create a formal shipped version from a clean, fetched branch, allowing first-time publication from a clean unpublished branch while keeping Cargo version, tags, and remote state recoverable and unambiguous."
+  },
+  "publish": {
+    "preferredTriggers": ["publish", "publish please"],
+    "requireFetchedOriginInPreflight": true,
+    "stopIfDetachedHead": true,
+    "requireCleanTree": true,
+    "stopIfBranchMissingUpstream": false,
+    "createUpstreamOnFirstPublish": true,
+    "stopIfBranchBehindUpstream": true,
+    "stopIfBranchDiverged": true,
+    "pushTagsWhenPresent": false,
+    "purpose": "Safely publish the current clean branch to origin, including first publication when no upstream exists yet, without bumping version, creating tags, or updating handover metadata."
+  },
   "workflow": {
-    "shipOrder": ["preflight", "test", "problems", "bump", "commit", "changelog", "tag", "push"],
-    "handoffOrder": ["preflight", "stage", "test-gate", "commit", "ship-if-needed", "merge", "push", "verify-sync", "checkout-branch", "summary"],
-    "handbackOrder": ["preflight", "fetch", "detect-branch", "pull", "verify-sync", "verification-gate", "summary"],
+    "shipOrder": ["preflight", "verify", "problems", "docs-impact", "bump", "commit", "changelog", "tag", "push"],
+    "publishOrder": ["preflight", "fetch", "report", "verify-gate", "push-if-needed", "verify-sync", "summary"],
+    "branchOrder": ["preflight", "assess-ship", "verify-or-stop", "inspect-source-branch", "sync-default-branch", "confirm-merge-into-default-when-needed", "merge-source-into-default-when-needed", "verify-transition", "create-new-branch", "optional-cleanup", "summary"],
+    "handoverOrder": ["preflight", "fetch", "inspect-current-branch", "compare", "stage", "checkpoint-if-needed", "verify-gate", "docs-impact", "commit-if-needed", "reconcile", "push-if-needed", "update-handover-metadata", "verify-sync", "summary"],
+    "resumeOrder": ["preflight", "fetch", "read-handover-metadata", "determine-target-branch", "switch-target-branch", "reconcile-read-only", "verify-ready-state", "summary"],
     "statusOrder": ["fetch", "report", "recommend"],
     "abortOrder": ["inspect", "propose", "execute"],
+    "deployOrder": ["preflight", "sync-prerequisite", "verification-gate", "docs-impact", "runtime-build", "deploy-target", "post-deploy-validation", "summary"],
     "requireApproval": ["push"]
+  },
+  "shipReport": {
+    "enabled": true,
+    "stage": "preflight",
+    "format": "table",
+    "columns": ["Origin", "Local", "Status", "Action(s)"],
+    "recommendedRows": [
+      "branch-and-upstream",
+      "head-commit",
+      "last-shipped-tag",
+      "commits-ahead-behind",
+      "working-tree",
+      "version-source",
+      "docs-impact",
+      "push-readiness"
+    ],
+    "comment": "At the start of SHIP, render a concise release-focused local-versus-origin snapshot table before making changes. Use 'n/a' where a row has no meaningful origin-side value."
+  },
+  "statusReport": {
+    "enabled": true,
+    "stage": "report",
+    "format": "table",
+    "columns": ["Origin", "Local", "Status", "Action(s)"],
+    "recommendedRows": [
+      "branch-and-upstream",
+      "head-commit",
+      "default-branch-state",
+      "last-shipped-tag",
+      "commits-ahead-behind",
+      "working-tree",
+      "version-source",
+      "handover-metadata",
+      "ship-readiness",
+      "handover-readiness"
+    ],
+    "comment": "For status, render the fuller local-versus-origin operator snapshot. Include the current branch, default branch, tags, ahead/behind state, and handover relevance. Use 'n/a' where no meaningful origin-side value exists."
+  },
+  "handoverReport": {
+    "enabled": true,
+    "stage": "summary",
+    "format": "table",
+    "columns": ["Origin", "Local", "Status", "Action(s)"],
+    "recommendedRows": [
+      "current-branch-state",
+      "last-shipped-tag",
+      "metadata-branch-state",
+      "metadata-consistency",
+      "handover-baseline"
+    ],
+    "comment": "At the end of handover, render a concise five-row summary table that confirms the current branch, tag state, metadata branch publication, metadata consistency, and clean synced baseline. Keep it shorter than status and focused on the handover result."
+  },
+  "branch": {
+    "enabled": true,
+    "purpose": "Safely close out the current published branch, reconcile the default branch, and create the next work branch without losing code.",
+    "defaultBranch": "main",
+    "stopIfDetachedHead": true,
+    "validateTargetBranchNameBeforeWorkflow": true,
+    "stopIfTargetBranchExistsLocal": true,
+    "stopIfTargetBranchExistsRemote": true,
+    "stopIfTargetBranchEqualsDefault": true,
+    "stopIfTargetBranchInvalid": true,
+    "requiresCleanTreeBeforeSwitch": true,
+    "stopIfDirtyAndShipDeclined": true,
+    "stopIfSourceBranchAheadOfUpstream": true,
+    "stopIfSourceBranchDiverged": true,
+    "stopIfSourceBranchBehindUpstream": true,
+    "stopIfDefaultBranchDiverged": true,
+    "allowFastForwardDefaultBranchWhenClean": true,
+    "mergeSourceIntoDefaultWhenSourceIsNotDefault": true,
+    "requireConfirmationBeforeMergeIntoDefaultWhenSourceIsNotDefault": true,
+    "mergeIntoDefaultIsExpectedOutcome": true,
+    "defaultMergeIntoDefaultAnswer": "yes",
+    "stopIfMergeIntoDefaultDeclined": true,
+    "skipMergeWhenAlreadyOnDefaultBranch": true,
+    "useNonDestructiveMerge": true,
+    "stopOnMergeConflict": true,
+    "requireSourceBranchPublishedBeforeTransition": true,
+    "recommendHandoverWhenSourceBranchUnsynced": true,
+    "requireSourceCommitReachableFromDefaultBeforeCleanup": true,
+    "requireNewBranchCreatedBeforeCleanup": true,
+    "allowLocalBranchDeletion": true,
+    "allowRemoteBranchDeletion": true,
+    "requireExplicitApprovalForPush": true,
+    "requireExplicitApprovalForDeletion": true,
+    "neverUseStashResetOrRebase": true,
+    "summaryMustConfirmNoCodeLossGuards": true
+  },
+  "handover": {
+    "preferredTriggers": ["handover", "handover please"],
+    "purpose": "Safely checkpoint and publish the current work branch at end of day, then refresh the handover metadata branch so another machine can resume from a deterministic shared state.",
+    "syncScope": "current-work-branch-plus-handover-metadata-and-relevant-tags",
+    "metadataBranch": "tctbp/handover-state",
+    "metadataFile": ".github/TCTBP_STATE.json",
+    "stopIfDetachedHead": true,
+    "updateMetadataBranchOnSuccessfulHandover": true,
+    "metadataBranchUpdateStrategy": "secondary-worktree",
+    "createDurableCheckpointBeforeVerificationWhenDirty": true,
+    "checkpointPurpose": "Preserve unpublished dirty work before verification or reconciliation can block handover, using a clearly marked non-release checkpoint commit or other repo-approved durable checkpoint.",
+    "stopIfCheckpointDeclinedForDirtyUnpublishedWork": true,
+    "allowFastForwardWhenBehindAndClean": true,
+    "stopWhenBehindAndDirty": true,
+    "allowAutoMerge": false,
+    "allowAutoRebase": false,
+    "allowHardReset": false,
+    "allowDestructiveCheckout": false,
+    "allowForcePush": false,
+    "mergeDefaultBranchDuringHandover": false,
+    "pushCurrentBranchWhenAhead": true,
+    "pushTagsWhenPresent": true
+  },
+  "resume": {
+    "preferredTriggers": ["resume", "resume please"],
+    "purpose": "Restore the intended work branch at start of day by consulting handover metadata first, switching safely when needed, and reconciling only through non-destructive checkout and fast-forward operations.",
+    "metadataBranch": "tctbp/handover-state",
+    "metadataFile": ".github/TCTBP_STATE.json",
+    "stopIfDetachedHead": true,
+    "consultMetadataBranchBeforeBranchInference": true,
+    "preferMetadataOverCleanNonDefaultBranch": true,
+    "currentBranchMayOverrideMetadataOnlyWhenDescendantOfMetadataCommit": true,
+    "excludeBranchesFromCandidateDetection": ["origin/main", "origin/HEAD", "origin/tctbp/handover-state"],
+    "requiresConfirmationWhenSwitchingBranches": true,
+    "stopOnAmbiguousTargetBranch": true,
+    "createLocalTrackingBranchFromRemoteWhenMissing": true,
+    "allowFastForwardWhenBehindAndClean": true,
+    "stopWhenBehindAndDirty": true,
+    "stopWhenLocalAhead": true,
+    "allowAutoMerge": false,
+    "allowAutoRebase": false,
+    "allowHardReset": false,
+    "allowDestructiveCheckout": false,
+    "allowForcePush": false,
+    "pushNeverDuringResume": true
+  },
+  "abort": {
+    "preferredTriggers": ["abort"],
+    "requireExplicitApprovalForAllActions": true,
+    "requireDoubleConfirmationForHistoryRewrite": true,
+    "partialStates": [
+      "version-bumped-without-tag",
+      "tag-created-not-pushed",
+      "branch-pushed-metadata-stale",
+      "metadata-pushed-branch-unpublished",
+      "main-pushed-new-branch-unpublished",
+      "new-branch-pushed-main-unpublished",
+      "old-remote-branch-deleted-before-transition-complete",
+      "merge-in-progress",
+      "changelog-updated-without-version-bump",
+      "local-remote-tag-drift"
+    ],
+    "purpose": "Detect partial workflow states and recover safely without discarding unpublished work or rewriting history implicitly."
   },
   "statusRecommendations": {
     "enabled": true,
-    "suggestions": ["handback", "handoff", "ship", "abort", "none"],
+    "suggestions": ["resume", "publish", "handover", "ship", "abort", "none"],
     "rules": {
-      "handback": "Suggest when local branch SHA does not match origin or default branch is behind remote.",
-      "handoff": "Suggest when working tree has local changes or current branch is ahead of origin and user is moving machines.",
-      "ship": "Suggest when there are unshipped commits since last tag or version/tag drift exists.",
-      "abort": "Suggest when a partial workflow state is detected (e.g. merge in progress, bump/tag mismatch, failed prior workflow).",
-      "none": "Suggest when branch is clean, synced, and no SHIP is needed."
+      "resume": "Suggest when the current machine is not yet on the intended handed-over work branch, the metadata points at a different published branch than the current clean branch, or the safest next action is to restore the last handed-over branch before doing new work.",
+      "publish": "Suggest when the current branch is clean, ahead of origin or missing an upstream, and the user likely wants to publish the branch safely without creating release version or handover metadata side effects.",
+      "handover": "Suggest when the active work branch must be left in a durable shared state for another machine or another session, especially when branch publication and handover metadata should be refreshed together before stopping work.",
+      "ship": "Suggest when there are unshipped commits since the last tag or version and tag drift exists.",
+      "abort": "Suggest when a partial workflow state is detected.",
+      "none": "Suggest when branch state is clean, synced, and no SHIP or handover is needed."
     }
   },
   "docsInfraPolicy": {
-    "skipSteps": ["test", "clippy"],
-    "keepSteps": ["preflight", "problems-editor", "commit", "push"],
-    "filePatterns": ["*.md", "*.txt", "*.rst", "docs/**", ".github/**", "packaging/**", "LICENSE*", "CHANGELOG*", "CONTRIBUTING*", "*.toml", "*.json", "*.yaml", "*.yml"],
-    "excludeWhenCodePresent": ["*.rs"],
-    "comment": "For docs/infra-only changes: skip cargo test and clippy, keep editor diagnostics (e.g. markdown lint)"
+    "skipSteps": ["test", "lint", "build"],
+    "keepSteps": ["preflight", "problems-editor", "docs-impact", "commit", "push"],
+    "filePatterns": ["*.md", "*.txt", "*.rst", "docs/**", ".github/**", "packaging/**", "LICENSE*", "CHANGELOG*", "CONTRIBUTING*"],
+    "comment": "For docs-only or infrastructure-only changes: skip heavy verification commands, keep editor diagnostics and docs impact assessment."
   },
-  "build": {
-    "defaultProfile": "dev",
-    "releaseOnlyWhenRequested": true,
-    "comment": "Default to dev (debug) builds. Release builds only when user explicitly requests."
+  "documentation": {
+    "requireImpactAssessment": true,
+    "blockShipIfUnassessed": true,
+    "allowNoDocChangeWithReason": true,
+    "changeTypes": [
+      "user-visible-feature",
+      "ui-or-interaction",
+      "config-or-settings",
+      "packaging-or-metadata",
+      "roadmap-or-status",
+      "internal-only"
+    ],
+    "rules": [
+      {
+        "changeType": "user-visible-feature",
+        "review": ["README.md", "docs/USER_GUIDE.md", "docs/FEATURES.md", "CHANGELOG.md"]
+      },
+      {
+        "changeType": "ui-or-interaction",
+        "review": ["README.md", "docs/USER_GUIDE.md", "docs/UI_SYSTEM.md", "docs/FEATURES.md"]
+      },
+      {
+        "changeType": "config-or-settings",
+        "review": ["README.md", "docs/USER_GUIDE.md", "docs/ARCHITECTURE.md"]
+      },
+      {
+        "changeType": "packaging-or-metadata",
+        "review": ["README.md", "CONTRIBUTING.md", "packaging/install.sh", "packaging/rust-calendar.desktop", "Cargo.toml"]
+      },
+      {
+        "changeType": "roadmap-or-status",
+        "review": ["CHANGELOG.md", "docs/FUTURE_ENHANCEMENTS.md", "docs/FEATURES.md"]
+      },
+      {
+        "changeType": "internal-only",
+        "review": []
+      }
+    ],
+    "comment": "Also review any feature-specific or architecture document directly affected by the change."
+  },
+  "deploy": {
+    "preferredTriggers": ["deploy", "deploy please"],
+    "purpose": "Deploy is repo-specific and should be used only for explicit installation targets such as the local Linux desktop install under ~/.local.",
+    "stopIfDetachedHead": true,
+    "requireCleanTree": true,
+    "requireSyncedBranch": true,
+    "requireShipFirst": false,
+    "requireRollbackPlanForDestructiveDeploy": true,
+    "buildCommand": "cargo build --release",
+    "migrationCommand": null,
+    "targets": {
+      "linux-user-local": {
+        "description": "Install or update Rust Calendar for the current user under ~/.local using the packaged desktop integration.",
+        "installCommand": "bash ./packaging/install.sh",
+        "postDeployChecks": [
+          "test -x ~/.local/bin/rust-calendar",
+          "test -f ~/.local/share/applications/rust-calendar.desktop"
+        ]
+      }
+    }
   },
   "versioning": {
     "scheme": "semver",
