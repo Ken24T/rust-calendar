@@ -1,5 +1,5 @@
 {
-  "targetBranch": "main",
-  "handedOverCommit": "6fe6a960f1edde3ab87c7b0f4c5a2c15fd749a73",
-  "updatedAt": "2026-03-26T13:53:54+10:00"
+  "targetBranch": "infrastructure/reconcile-tctbp",
+  "handedOverCommit": "ad51d8624b6a9e0cb5e7067cbe87a01b46ebfdf7",
+  "updatedAt": "2026-03-27T09:38:42+10:00"
 }
