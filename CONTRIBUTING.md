@@ -21,10 +21,19 @@ This project adheres to a code of conduct that all contributors are expected to 
 - **Linux**: system dependencies:
 
   ```bash
-  # Debian/Ubuntu/Mint
-  sudo apt install build-essential libgtk-3-dev libxcb-render0-dev \
-    libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+   ./scripts/install-linux-build-deps.sh
   ```
+
+   For Debian/Ubuntu/Mint, this installs the top-level packages required for
+   Rust Calendar builds and SHIP verification: `build-essential`,
+   `libglib2.0-dev`, `libgtk-3-dev`, `libssl-dev`,
+   `libayatana-appindicator3-dev`, and `libxdo-dev`.
+
+   To inspect the apt plan first:
+
+   ```bash
+   ./scripts/install-linux-build-deps.sh --dry-run
+   ```
 
 - **Windows**: Visual Studio Build Tools with C++ development tools
 
@@ -42,6 +51,8 @@ This project adheres to a code of conduct that all contributors are expected to 
    ```powershell
    cargo build
    ```
+
+   On Linux, make sure the build dependency script has been run first.
 
 3. **Run tests**:
 

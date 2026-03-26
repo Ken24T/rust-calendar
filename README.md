@@ -95,10 +95,19 @@ with local-first data storage and no cloud dependencies.
    **Linux** (Debian/Ubuntu/Mint):
 
    ```bash
-   sudo apt install build-essential libgtk-3-dev libxcb-render0-dev \
-     libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev \
-     libayatana-appindicator3-dev libxdo-dev
+  ./scripts/install-linux-build-deps.sh
    ```
+
+  This installs the top-level packages needed for local builds and SHIP verification:
+  `build-essential`, `libglib2.0-dev`, `libgtk-3-dev`, `libssl-dev`,
+  `libayatana-appindicator3-dev`, and `libxdo-dev`. Apt pulls in the remaining
+  GTK, GLib, Cairo, Pango, GDK Pixbuf, and X11 development packages automatically.
+
+  To preview the package plan without changing the machine:
+
+  ```bash
+  ./scripts/install-linux-build-deps.sh --dry-run
+  ```
 
    **Windows**: Visual Studio Build Tools with C++ development tools
 
@@ -119,6 +128,9 @@ cargo test          # unit + integration + doc-tests
 cargo clippy        # lint (zero warnings required)
 cargo bench         # criterion benchmarks
 ```
+
+On Linux, SHIP verification also depends on the system packages installed by
+`./scripts/install-linux-build-deps.sh`.
 
 ## Project Structure
 
