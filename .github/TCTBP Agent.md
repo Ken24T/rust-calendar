@@ -6,7 +6,7 @@ This agent governs milestone, publishing, handover, resume, sync, status, recove
 
 Primary objective: no code is ever lost while keeping local and remote repository state validated, recoverable, and easy to resume on another machine.
 
-This workflow is for explicit operator actions such as `ship`, `publish`, `handover`, `resume`, `deploy`, `status`, `abort`, and `branch <name>`. It is not for normal feature implementation work.
+This workflow is for explicit operator actions such as `ship`, `publish`, `handover`, `resume`, `deploy`, `status`, `abort`, `branch`, and `branch <name>`. It is not for normal feature implementation work.
 
 Quick reference: see [TCTBP Cheatsheet.md](TCTBP%20Cheatsheet.md).
 
@@ -61,6 +61,7 @@ Supported workflow triggers are:
 - `resume`, `resume please`
 - `status`, `status please`
 - `abort`
+- `branch`
 - `branch <new-branch-name>`
 
 Do not treat a bare `tctbp` request as implicit permission to mutate repository state.
@@ -82,21 +83,24 @@ Key rules:
 
 ## Branch Workflow
 
-Trigger: `branch <new-branch-name>`
+Trigger: `branch` or `branch <new-branch-name>`
 
-Purpose: close out the current branch safely and create the next branch without losing code.
+Purpose: close out the current branch safely and either stop on `main` or create the next branch without losing code.
 
 Key rules:
 
 - stop if `HEAD` is detached
-- validate the requested branch name before mutating anything
-- stop if the target branch already exists locally or on origin
+- determine whether the request is closeout-only mode (`branch`) or next-branch mode (`branch <new-branch-name>`)
+- validate the requested branch name before mutating anything in next-branch mode
+- stop if the target branch already exists locally or on origin in next-branch mode
 - stop if the source branch is dirty and SHIP is declined
 - stop if the source branch is ahead, behind, diverged, or otherwise unpublished relative to its upstream
 - fast-forward local `main` when clean and behind origin
 - ask for explicit confirmation before merging a non-default branch back into `main`
 - treat merge-to-`main` as the expected default outcome, but stop if that merge is explicitly declined
 - verify the source branch tip is reachable from `main` before optional cleanup
+- in closeout-only mode, stop on the updated default branch once closeout is complete
+- in next-branch mode, create and switch to the requested new branch from the updated default branch
 - require explicit approval for push and branch deletion
 
 Never use stash, reset, rebase, force-push, or destructive checkout as part of the branch workflow.

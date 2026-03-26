@@ -71,10 +71,12 @@ Read-only operator snapshot of branch state, sync status, tags, version source, 
 
 Inspect and recover from a partially completed SHIP, sync, or deploy workflow.
 
-### `branch <new-branch-name>`
+### `branch` / `branch <new-branch-name>`
 
-Close out current work cleanly and start the next branch.
+Close out current work cleanly, optionally starting the next branch.
 
+- `branch` closes out the current branch and leaves the repo on the updated `main`
+- `branch <new-branch-name>` closes out the current branch and starts the next branch from the updated `main`
 - asks for explicit confirmation before merging a non-default branch back into `main`
 - requires the source branch to be published before the transition continues
 
@@ -102,4 +104,4 @@ Repo-specific docs commonly reviewed:
 - Need the local Linux install updated: use `deploy`
 - Need a quick repo state check: use `status`
 - Need to recover from a partial workflow state: use `abort`
-- Need to start the next branch: use `branch <new-branch-name>`
+- Need to close out the current branch or start the next one: use `branch` or `branch <new-branch-name>`

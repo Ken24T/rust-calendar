@@ -55,7 +55,8 @@
     "caseInsensitive": true,
     "branchCommand": {
       "enabled": true,
-      "pattern": "^branch\\s+(.+)$",
+      "pattern": "^branch(?:\\s+(.+))?$",
+      "allowCloseoutWithoutNewBranch": true,
       "stopIfTargetBranchExistsLocal": true,
       "stopIfTargetBranchExistsRemote": true,
       "stopIfTargetBranchEqualsDefault": true,
@@ -89,7 +90,7 @@
   "workflow": {
     "shipOrder": ["preflight", "verify", "problems", "docs-impact", "bump", "commit", "changelog", "tag", "push"],
     "publishOrder": ["preflight", "fetch", "report", "verify-gate", "push-if-needed", "verify-sync", "summary"],
-    "branchOrder": ["preflight", "assess-ship", "verify-or-stop", "inspect-source-branch", "sync-default-branch", "confirm-merge-into-default-when-needed", "merge-source-into-default-when-needed", "verify-transition", "create-new-branch", "optional-cleanup", "summary"],
+    "branchOrder": ["preflight", "assess-ship", "verify-or-stop", "inspect-source-branch", "sync-default-branch", "confirm-merge-into-default-when-needed", "merge-source-into-default-when-needed", "verify-transition", "create-new-branch-when-requested", "optional-cleanup", "summary"],
     "handoverOrder": ["preflight", "fetch", "inspect-current-branch", "compare", "stage", "checkpoint-if-needed", "verify-gate", "docs-impact", "commit-if-needed", "reconcile", "push-if-needed", "update-handover-metadata", "verify-sync", "summary"],
     "resumeOrder": ["preflight", "fetch", "read-handover-metadata", "determine-target-branch", "switch-target-branch", "reconcile-read-only", "verify-ready-state", "summary"],
     "statusOrder": ["fetch", "report", "recommend"],
@@ -149,8 +150,9 @@
   },
   "branch": {
     "enabled": true,
-    "purpose": "Safely close out the current published branch, reconcile the default branch, and create the next work branch without losing code.",
+    "purpose": "Safely close out the current published branch, reconcile the default branch, and either stop on the default branch or create the next work branch without losing code.",
     "defaultBranch": "main",
+    "allowCloseoutWithoutNewBranch": true,
     "stopIfDetachedHead": true,
     "validateTargetBranchNameBeforeWorkflow": true,
     "stopIfTargetBranchExistsLocal": true,
@@ -175,7 +177,7 @@
     "requireSourceBranchPublishedBeforeTransition": true,
     "recommendHandoverWhenSourceBranchUnsynced": true,
     "requireSourceCommitReachableFromDefaultBeforeCleanup": true,
-    "requireNewBranchCreatedBeforeCleanup": true,
+    "requireNewBranchCreatedBeforeCleanup": false,
     "allowLocalBranchDeletion": true,
     "allowRemoteBranchDeletion": true,
     "requireExplicitApprovalForPush": true,
