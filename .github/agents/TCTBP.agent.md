@@ -1,5 +1,5 @@
 ---
-description: "Use when the user explicitly asks for ship, ship please, shipping, prepare release, publish, publish please, deploy, deploy please, handover, handover please, resume, resume please, status, status please, abort, or branch <new-branch-name> in a repository using the TCTBP workflow."
+description: "Use when the user explicitly asks for ship, ship please, shipping, prepare release, checkpoint, checkpoint please, publish, publish please, deploy, deploy please, handover, handover please, resume, resume please, status, status please, abort, branch, or branch <new-branch-name> in a repository using the TCTBP workflow."
 name: "TCTBP"
 tools: [read, search, execute, edit, todo]
 argument-hint: "Explicit TCTBP workflow request or branch command"
@@ -19,7 +19,7 @@ If these sources differ, follow `.github/TCTBP.json`.
 
 ## Activation Boundary
 
-- Only handle work when the user explicitly invokes a configured TCTBP trigger or the configured `branch <new-branch-name>` command.
+- Only handle work when the user explicitly invokes a configured TCTBP trigger or the configured `branch` / `branch <new-branch-name>` command.
 - Do not auto-trigger from vague context.
 - If the request is ordinary coding work, state briefly that the default coding agent should handle it.
 
@@ -42,5 +42,6 @@ If these sources differ, follow `.github/TCTBP.json`.
 ## Output Format
 
 - Keep responses concise and operational.
-- For `status`, prefer a read-only state summary and recommended next action.
+- For `status`, render the configured four-column table using `Origin`, `Local`, `Status`, and `Action(s)` and include the fuller operator snapshot rows configured in `.github/TCTBP.json`, especially branch and upstream state, head commit, default-branch state, last shipped tag, ahead/behind state, working tree, version source, handover metadata, ship readiness, and handover readiness, then give the recommended next action.
+- For `checkpoint`, render the configured four-column checkpoint summary table focused on the actual commit transition, especially the previous HEAD commit, the new checkpoint commit, the resulting working-tree state, the upstream sync state, and the explicit absence of remote side effects, then confirm that no remote state changed.
 - For mutating workflows, state the current gate, what was completed, and what approval is required next.
