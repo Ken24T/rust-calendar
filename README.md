@@ -121,6 +121,30 @@ cargo build --release
 cargo run --release
 ```
 
+### Local Installation
+
+After building a release binary, you can install Rust Calendar into your local user profile.
+
+**Linux**:
+
+```bash
+./packaging/install.sh
+```
+
+**Windows** (current user, no admin rights required):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\packaging\install-windows.ps1
+```
+
+To validate an existing Windows install:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\packaging\install-windows.ps1 -Validate
+```
+
+The Windows installer places `rust-calendar.exe` under `%LOCALAPPDATA%\Programs\Rust Calendar\` and creates a Start Menu shortcut for the current user.
+
 ### Running Tests
 
 ```bash

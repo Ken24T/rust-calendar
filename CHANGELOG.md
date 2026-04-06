@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Windows deploy scaffolding for TCTBP:
+  - `packaging/install-windows.ps1` now installs Rust Calendar into the current user's profile with validation, rollback, and uninstall commands
+  - `.github/TCTBP.json` now defines a `windows-work-user` deploy target so `deploy` has a concrete Windows install profile
+
+### Changed
+
+- Deploy documentation now describes the Windows current-user target instead of treating deploy as unconfigured.
+
 ## [2.4.36] - 2026-03-26
 
 ### Added

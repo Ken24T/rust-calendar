@@ -374,7 +374,7 @@
   },
   "deploy": {
     "preferredTriggers": ["deploy", "deploy please"],
-    "purpose": "This repository builds desktop application binaries but does not yet define a repo-specific deploy or distribution target in TCTBP. Deploy should stop unless a packaging or release-distribution profile is added.",
+    "purpose": "Build a release binary and install it into a configured local runtime target without destroying the previous working runtime.",
     "stopIfDetachedHead": true,
     "requireCleanTree": true,
     "requireSyncedBranch": true,
@@ -382,7 +382,25 @@
     "requireRollbackPlanForDestructiveDeploy": true,
     "buildCommand": "cargo build --release",
     "migrationCommand": null,
-    "targets": {}
+    "defaultTarget": "windows-work-user",
+    "targets": {
+      "windows-work-user": {
+        "platform": "windows",
+        "description": "Install Rust Calendar for the current Windows user on a work machine without requiring administrator rights.",
+        "requiresAdmin": false,
+        "installCommand": "powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1",
+        "validationCommands": [
+          "powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1 -Validate"
+        ],
+        "rollbackCommand": "powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1 -Rollback",
+        "uninstallCommand": "powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1 -Uninstall",
+        "installPaths": [
+          "%LOCALAPPDATA%\\Programs\\Rust Calendar\\rust-calendar.exe",
+          "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Rust Calendar.lnk"
+        ],
+        "rollbackPlan": "The installer preserves the previous runtime as rust-calendar.exe.bak before replacing the executable."
+      }
+    }
   },
   "versioning": {
     "scheme": "semver",

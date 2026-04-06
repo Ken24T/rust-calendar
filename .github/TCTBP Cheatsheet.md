@@ -201,7 +201,7 @@ Notes:
 ### `deploy` / `deploy please`
 
 Purpose:
-Reserved for a future repo-defined distribution or install target. Rust Calendar can build release binaries, but this TCTBP runtime does not yet define a formal deploy profile beyond release-build prerequisites.
+Build and install Rust Calendar into a configured local runtime target.
 
 Attempts to:
 
@@ -217,11 +217,16 @@ Attempts to:
 
 Use when:
 
-- a future version of this repository adds a formal deploy or distribution target to `TCTBP.json`
+- you want to refresh the installed Windows runtime for the current user on this machine
 
 Repo-specific deploy target:
 
-- none currently configured
+- `windows-work-user`
+	- install: `powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1`
+	- validate: `powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1 -Validate`
+	- rollback: `powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1 -Rollback`
+	- uninstall: `powershell -ExecutionPolicy Bypass -File ./packaging/install-windows.ps1 -Uninstall`
+	- scope: current Windows user profile, no admin rights required
 
 Current deploy policy:
 
@@ -229,6 +234,7 @@ Current deploy policy:
 - `requireSyncedBranch: true`
 - `requireShipFirst: false`
 - `migrationCommand: null`
+- `defaultTarget: windows-work-user`
 
 Deploy guard rails:
 

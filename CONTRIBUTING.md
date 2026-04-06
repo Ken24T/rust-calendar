@@ -66,6 +66,14 @@ This project adheres to a code of conduct that all contributors are expected to 
    cargo run
    ```
 
+5. **Optional Windows deploy smoke check**:
+
+   ```powershell
+   cargo build --release
+   powershell -ExecutionPolicy Bypass -File .\packaging\install-windows.ps1
+   powershell -ExecutionPolicy Bypass -File .\packaging\install-windows.ps1 -Validate
+   ```
+
 ## Development Workflow
 
 ### Branching Strategy

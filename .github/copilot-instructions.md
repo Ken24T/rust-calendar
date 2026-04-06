@@ -23,7 +23,7 @@ Primary goal: a polished, performant calendar app that runs natively on Linux an
 | `tests/` | Integration and property tests |
 | `benches/` | Criterion benchmarks |
 | `assets/` | Theme definitions, icons, and other app assets |
-| `packaging/` | Linux desktop integration and local install script |
+| `packaging/` | Platform install scripts and desktop integration assets |
 | `docs/` | Architecture, feature, and planning documentation |
 | `.github/` | Copilot guidance and TCTBP runtime/workflow files |
 
@@ -92,7 +92,7 @@ For this repo, treat `cargo build` as the normal verification build and reserve 
 - Preserve the `vX.Y.Z` tag convention unless explicitly changed.
 - Keep language in Australian English for user-facing text
 - Review `README.md`, `docs/USER_GUIDE.md`, and `docs/FEATURES.md` when behaviour changes.
-- Review `packaging/install.sh` and `packaging/rust-calendar.desktop` when install behaviour changes.
+- Review `packaging/install.sh`, `packaging/install-windows.ps1`, and `packaging/rust-calendar.desktop` when install behaviour changes.
 
 ## Testing
 
