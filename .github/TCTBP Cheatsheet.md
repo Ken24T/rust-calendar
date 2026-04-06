@@ -1,4 +1,4 @@
-# Rust Calendar — TCTBP Cheatsheet
+# TCTBP Developer Cheatsheet
 
 Short operator reference for the Rust Calendar workflows.
 
@@ -9,99 +9,354 @@ Use [TCTBP Agent.md](TCTBP%20Agent.md) for the full workflow rules and guard rai
 
 - No code is ever lost while syncing local and remote state.
 - Do not use destructive shortcuts as part of normal workflow execution.
-- If a workflow hits divergence, ambiguity, failed verification, or stale release state, it should stop rather than guess.
+- If a workflow hits divergence, ambiguity, or a failed invariant, it should stop rather than guess.
 
 ## Repo Gates
 
-- Format check: `cargo fmt -- --check`
+Repo gates for this repository:
+
+- Format check: `cargo fmt --check`
 - Test: `cargo test`
 - Lint: `cargo clippy -- -D warnings`
 - Normal build gate: `cargo build`
-- Release build: `cargo build --release`
-
-## Version And Tags
-
-- Version source: `Cargo.toml` field `package.version`
-- Tag format: `vX.Y.Z`
+- Runtime or deployment build: `cargo build --release`
 
 ## Triggers
 
 ### `ship` / `ship please` / `shipping` / `prepare release`
 
+Purpose:
 Formal source release workflow.
 
-- preflights repo state
-- runs verification gates
-- assesses docs impact
-- bumps version when required
-- commits, tags, and pushes
+Attempts to:
+
+- preflight the repo state
+- show a concise origin-vs-local snapshot table before mutating anything
+- run verification gates
+- confirm zero problems
+- assess docs impact
+- bump version when required
+- commit the release changes
+- create the version tag
+- push the current branch
+
+Use when:
+
+- you want a formal shipped version
+- version and tag state needs to be updated
+- the repo should be published as a release milestone
+
+Notes:
+
+- Starts with a four-column table: `Origin`, `Local`, `Status`, `Action(s)`
+- Table should explicitly include rows such as tag state and commits ahead/behind
+- Uses the normal build gate by default, not the release build
+- Patch bump behaviour is controlled by `versioning.patchEveryShip` and `versioning.patchEveryShipForDocsInfrastructureOnly` in `TCTBP.json`
+- In this repo, docs-only and infrastructure-only ships do not bump version when no Rust code changed
+- Release build is reserved for installation or deployment scenarios
+- Stops if the branch is dirty, behind origin, or diverged from origin
+- May publish a clean branch that has no upstream yet by creating the upstream on the first ship push
+- Stops if `HEAD` is detached
+- Does not treat a bare `tctbp` request as permission to mutate repository state
 
 ### `publish` / `publish please`
 
-Safely publish the current clean branch to `origin` without release semantics.
+Purpose:
+Safely publish the current branch to `origin` without release semantics.
 
-- no version bump
-- no tag creation
-- no handover metadata update
+Attempts to:
+
+- preflight the current branch state
+- fetch and compare local versus origin
+- allow first publication by creating the upstream when needed
+- push the current branch when it is clean and ahead
+- verify that the branch is now synced
+
+Use when:
+
+- you want to sync the current branch to origin without bumping version or creating a tag
+- you want to publish a clean fresh branch before using `branch` or `branch <new-branch-name>` later
+
+Notes:
+
+- Does not bump version
+- Does not create a tag
+- Does not update handover metadata
+- Stops if the branch is dirty, behind, diverged, or detached
+
+### `checkpoint` / `checkpoint please`
+
+Purpose:
+Create a durable local-only checkpoint commit on the current branch without release or sync side effects.
+
+Attempts to:
+
+- preflight the current branch and working tree state
+- stop if `HEAD` is detached, the tree is clean, conflicts exist, or a merge/rebase/cherry-pick/revert is in progress
+- stage the current non-ignored tracked and new files
+- create a clearly marked non-release local commit
+- end with a concise four-column table showing the pre-checkpoint commit, the new checkpoint commit, resulting sync state, and explicit local-only outcome
+- confirm that nothing was pushed, tagged, or handed over
+
+Use when:
+
+- you want safer local slice checkpoints during a long session
+- you do not want to sit on uncommitted work for long
+- you want a durable local save before deciding whether to `publish`, `handover`, or `ship`
+
+Notes:
+
+- Ends with a concise four-column table: `Origin`, `Local`, `Status`, `Action(s)`
+- The table should show the actual pre-checkpoint commit and the new checkpoint commit, not only the final SHA
+- Does not push
+- Does not bump version
+- Does not create a tag
+- Does not update handover metadata
+- Does not reconcile with origin
+- May leave the branch ahead of or further diverged from origin because it is local-only
+- Handover may reuse a recent matching checkpoint commit instead of creating another one
 
 ### `handover` / `handover please`
 
-Safely checkpoint and publish the current work branch, then refresh `tctbp/handover-state` so another machine can resume deterministically.
+Purpose:
+Safely checkpoint and publish the current work branch at the end of a session, then refresh handover metadata so another machine can resume deterministically.
+
+Scope:
+
+- syncs the current work branch, a dedicated handover metadata branch, and relevant tags only
+- does not reconcile every branch in the repository
+- does not merge into `main` as part of normal machine-to-machine sync
+
+Handover metadata:
+
+- metadata branch: `tctbp/handover-state`
+- metadata file: `.github/TCTBP_STATE.json`
+- stores the last successfully handed-over work branch and commit
+- is consulted before branch-recency inference on another machine
+- is never treated as a work-branch candidate itself
+
+Attempts to:
+
+- preserve dirty work on the current branch when needed
+- create a durable checkpoint for dirty unpublished work before verification can strand it on one machine
+- fetch and inspect remote state
+- fast-forward when remote is ahead and local is clean
+- publish the current branch when local is ahead or still unpublished
+- stop on divergence or unresolved blockers
+- update the metadata branch after current-branch publication succeeds
+- push relevant tags when appropriate
+- confirm that the current branch and metadata branch are both in sync
+
+Notes:
+
+- Ends with a concise four-column table: `Origin`, `Local`, `Status`, `Action(s)`
+- Keep the handover table to five rows focused on branch sync, latest tag, metadata branch publication, metadata consistency, and final baseline state
+- Use a short completion line after the table to confirm the handed-over branch and commit
+- Update the metadata branch using a secondary worktree or another equally non-destructive method
+- May reuse a recent matching standalone `checkpoint` commit instead of creating another one
+- Stops if `HEAD` is detached
+
+Use when:
+
+- you are finishing work on one machine
+- you are finishing a work session and want another machine to resume cleanly
+- you want one trusted end-of-day sync command before stopping work
+
+Never does:
+
+- auto-rebase
+- hard reset
+- destructive checkout
+- force-push
 
 ### `resume` / `resume please`
 
-Safely restore the intended work branch at the start of a session by consulting handover metadata first.
+Purpose:
+Safely restore the intended work branch at the start of a session, preserving local unpublished work first when a safe branch switch would otherwise strand it.
+
+Attempts to:
+
+- fetch and inspect remote state
+- read the handover metadata branch first
+- prefer metadata over arbitrary branch-recency guesses
+- detect when switching would strand local unpublished work on the current branch
+- ask to preserve that local work locally before switching when that case is safe
+- create a local tracking branch from the intended remote branch when needed
+- fast-forward the selected clean branch when origin is ahead
+- stop on ambiguity, divergence, conflicts, or any case that would require publication
+
+Use when:
+
+- you are starting work on another machine
+- you want to restore the last handed-over branch safely before making new changes
+
+Notes:
+
+- May create a local-only checkpoint or rescue branch after confirmation to preserve local work before switching
+- Does not publish
+- Does not update metadata
+- Does not create a release
+- Stops if preserve-local handling would be unsafe, if switching branches would still be destructive, or if local/remote state is ambiguous
 
 ### `deploy` / `deploy please`
 
-Run an explicit install target.
+Purpose:
+Reserved for a future repo-defined distribution or install target. Rust Calendar can build release binaries, but this TCTBP runtime does not yet define a formal deploy profile beyond release-build prerequisites.
 
-Repo-specific target:
+Attempts to:
 
-- `linux-user-local`
-  - build: `cargo build --release`
-  - install: `bash ./packaging/install.sh`
-  - validate: confirm the installed binary and desktop file exist under `~/.local`
+- preflight the repo state and deploy target
+- require a clean tree and synced branch
+- optionally run `ship` first if repo policy requires it
+- run verification gates
+- assess docs impact for packaging, runtime, or install-path changes
+- run the release build path
+- execute the repo install script
+- run post-deploy validation checks
+- summarise the deployed result
+
+Use when:
+
+- a future version of this repository adds a formal deploy or distribution target to `TCTBP.json`
+
+Repo-specific deploy target:
+
+- none currently configured
+
+Current deploy policy:
+
+- `requireCleanTree: true`
+- `requireSyncedBranch: true`
+- `requireShipFirst: false`
+- `migrationCommand: null`
+
+Deploy guard rails:
+
+- detached `HEAD` should stop deploy
+- destructive replacement without rollback expectations should stop deploy
 
 ### `status` / `status please`
 
-Read-only operator snapshot of branch state, sync status, tags, version source, and recommended next steps.
+Purpose:
+Read-only operator snapshot of branch state, sync status, tags, and recommended next steps.
+
+Use when:
+
+- you want to know whether `resume`, `checkpoint`, `publish`, `handover`, `ship`, or `abort` is needed before doing anything else
+
+Notes:
+
+- This is the trigger that should show the fuller four-column table: `Origin`, `Local`, `Status`, `Action(s)`
+- Table should explicitly include branch state, default-branch state, tag state, ahead/behind counts, working tree, and whether `resume`, `checkpoint`, `publish`, `ship`, or `handover` is recommended
+- If metadata points another machine at the wrong published branch, call that out as a resume-target mismatch
 
 ### `abort`
 
+Purpose:
 Inspect and recover from a partially completed SHIP, sync, or deploy workflow.
 
-### `branch` / `branch <new-branch-name>`
+Use when:
 
-Close out current work cleanly, optionally starting the next branch.
+- a prior workflow stopped part-way through
+- version, tag, merge, or push state looks inconsistent
+- branch publication and handover metadata disagree
+- a version bump, changelog update, or tag exists without the rest of the release state
+- `main` and a newly created branch are only partially published after a branch workflow
 
-- `branch` closes out the current branch and leaves the repo on the updated `main`
-- `branch <new-branch-name>` closes out the current branch and starts the next branch from the updated `main`
-- asks for explicit confirmation before merging a non-default branch back into `main`
-- requires the source branch to be published before the transition continues
+Recovery expectations:
+
+- inspect concrete partial states before proposing action
+- preserve unpublished work before cleanup when needed
+- never rewrite history or force-push without explicit extra confirmation
+
+### `branch` and `branch <new-branch-name>`
+
+Purpose:
+Close out current work cleanly and either stop on `main` or start the next branch.
+
+Attempts to:
+
+- assess whether the current branch should be shipped first
+- stop if `HEAD` is detached
+- in next-branch mode, stop if the requested new branch name is invalid or equals `main`
+- in next-branch mode, auto-rename the requested branch to `-1`, `-2`, and so on when the requested name already exists locally, already exists remotely, or would collide by case
+- stop instead of switching if the current branch is dirty and SHIP is declined
+- recommend `checkpoint`, then `publish` or `handover`, when the current branch is dirty and you need a non-release preservation step before retrying `branch`
+- stop instead of guessing if the source branch or local `main` is diverged
+- stop if the source branch is ahead, behind, or otherwise not yet synced to its upstream
+- recommend `publish`, `handover`, or `ship` first when the source branch is not yet published or synced
+- ask for explicit confirmation before merging the current non-default branch back into `main`
+- merge the current branch into local `main` when the current branch is not already `main`
+- skip the merge step when you already start on `main`
+- in bare `branch` mode, stop on updated local `main`
+- in `branch <new-branch-name>` mode, create and switch to the resolved branch name from updated local `main`
+
+Safety expectation:
+
+- never discards local work to complete the transition
+- never uses stash, reset, rebase, force-push, or destructive checkout as part of the branch workflow
+- requires the source branch to be published before branch closeout continues
+- treats merge back to `main` as the expected default path, but stops if that merge is explicitly declined
+- only offers old-branch deletion after the merge succeeded and source reachability from `main` is confirmed; next-branch mode also requires new-branch creation first
+
+## Handover Promise
+
+When `handover` succeeds:
+
+- the current work branch has been safely reconciled with `origin`
+- the handover metadata branch points at that branch and handed-over commit
+- relevant tags have been pushed when needed
+- the next `resume` can restore the intended branch deterministically
+- if the workflow could not do that safely, it stops instead of guessing
+- no implicit merge to `main` was performed as part of that sync
 
 ## Docs Impact Reminder
+
+Review docs when the change touches:
+
+- user-visible features
+- UI or interaction
+- config or settings
+- packaging or metadata
+- roadmap or status
 
 Repo-specific docs commonly reviewed:
 
 - `README.md`
-- `docs/USER_GUIDE.md`
 - `docs/FEATURES.md`
-- `docs/UI_SYSTEM.md`
-- `CHANGELOG.md`
-- `packaging/install.sh`
-- `packaging/rust-calendar.desktop`
+- `docs/USER_GUIDE.md`
+- `docs/README.md`
+- `CONTRIBUTING.md`
 - `.github/TCTBP Agent.md`
 - `.github/TCTBP Cheatsheet.md`
 - `.github/copilot-instructions.md`
+- `CHANGELOG.md`
+
+## Deployment Notes
+
+- `cargo test`, `cargo clippy -- -D warnings`, and `cargo build` are the normal verification commands
+- `cargo build --release` is reserved for release builds or deployment-oriented packaging work
+- Deployment should validate the installed result, not just copy files
+- Use the repo-defined install or publish command instead of ad hoc copy commands
+
+## Approval Model
+
+- `ship` may create local commit and tag state as part of the workflow
+- `checkpoint` creates a local-only non-release commit and grants no push approval
+- `publish` grants approval to push the current branch for that workflow only
+- `handover` grants approval to push the current branch, metadata branch, and relevant tags for that workflow only
+- `deploy` grants approval to run the repo-defined deployment commands for that workflow only
+- Any other remote push still requires explicit approval unless already covered by the active workflow
 
 ## Quick Choice
 
 - Need a release version or tag: use `ship`
-- Need to sync a clean branch without release or metadata side effects: use `publish`
-- Need to stop on one machine and resume on another safely: use `handover`
-- Need to restore the last handed-over branch before starting work: use `resume`
-- Need the local Linux install updated: use `deploy`
+- Need a durable local-only save without publishing: use `checkpoint`
+- Need to publish the current branch without release side effects: use `publish`
+- Need to stop on one machine and resume on another safely: use `handover`, then `resume` on the next machine
+- If `resume` hits local unpublished work on the current machine, it should offer a local preserve step before switching
+- Need the local runtime installed or refreshed: use `deploy`
 - Need a quick repo state check: use `status`
-- Need to recover from a partial workflow state: use `abort`
-- Need to close out the current branch or start the next one: use `branch` or `branch <new-branch-name>`
+- Need to recover from partial workflow state: use `abort`
+- Need to close out current work and stop on `main`: use `branch`
+- Need to start the next branch: use `branch <new-branch-name>`

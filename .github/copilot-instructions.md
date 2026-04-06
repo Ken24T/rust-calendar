@@ -81,8 +81,90 @@ For this repo, treat `cargo build` as the normal verification build and reserve 
 
 ## Repo-Specific Rules
 
+- Use idiomatic Rust: `Result<T, E>`, `Option<T>`, pattern matching, iterators
+- Prefer `anyhow::Result` for application-level errors, `thiserror` for library-level error types
+- Use `log` macros (`log::info!`, `log::warn!`, `log::error!`) for runtime diagnostics
+- Keep files under approximately 300 lines; split by responsibility
+- Prefer `&Path` over `&PathBuf` in function signatures
+- Use `.clamp()` instead of `.min().max()` chains
+- Use `#[derive(...)]` where appropriate (Default, Clone, Debug, Serialize, Deserialize)
 - Keep `Cargo.toml` as the single source of truth for version.
 - Preserve the `vX.Y.Z` tag convention unless explicitly changed.
-- Use Australian English in user-facing text and comments.
+- Keep language in Australian English for user-facing text
 - Review `README.md`, `docs/USER_GUIDE.md`, and `docs/FEATURES.md` when behaviour changes.
 - Review `packaging/install.sh` and `packaging/rust-calendar.desktop` when install behaviour changes.
+
+## Testing
+
+- **Test command**: `cargo test` (runs unit, integration, and doc-tests)
+- **Test location**: Unit tests as `#[cfg(test)] mod tests` within source files or under `tests/unit/`; integration tests under `tests/`
+- **Property tests**: `proptest` under `tests/property/`
+- **Benchmarks**: `criterion` under `benches/`
+- **Test utilities**: `tempfile` for temporary directories, `mockall` for mocking, `pretty_assertions` for readable diffs
+- **Prioritise tests** for models, services, and recurrence logic over UI code
+- **All tests must pass** before any SHIP
+
+## Quality Gates (Enforced Before SHIP)
+
+1. `cargo test` — 100% pass rate
+2. `cargo clippy` — zero warnings
+3. VS Code Problems tab — zero issues (includes markdown lint)
+4. `cargo build` — clean compilation
+
+## Security and Safety Rules
+
+1. Never commit secrets, tokens, or credentials
+2. Use only local data paths via `directories::ProjectDirs`
+3. Do not introduce remote services or network calls without explicit user instruction
+4. Keep version declarations in sync (`Cargo.toml` is the single source of truth for version)
+5. SQLite database is local-only; no cloud sync
+
+## Shipping Workflow
+
+For SHIP/TCTBP activation, order, versioning, tagging, and approval rules, follow:
+
+- `.github/TCTBP.json` (authoritative)
+- `.github/TCTBP Agent.md` (behavioural guidance)
+
+Tag convention: `vX.Y.Z`
+
+SHIP cadence:
+
+- SHIP is required after each completed implementation slice by default
+- Docs-only/infrastructure-only slices are committed without version bump/tag
+
+## Branch Naming
+
+- `feature/<name>` – New features
+- `fix/<name>` – Bug fixes
+- `docs/<name>` – Documentation updates
+- `infrastructure/<name>` – Tooling and workflow changes
+
+## When Generating Code
+
+- Prefer small, focused changes over broad rewrites
+- Maintain clear boundaries between models, services, and UI
+- Add tests alongside new non-trivial logic where practical
+- Preserve local-first behaviour unless requirements change
+- Keep logging and errors actionable for debugging
+- Respect cross-platform compatibility — avoid platform-specific APIs without `#[cfg]` guards
+- Run `cargo clippy` mentally — avoid patterns that trigger common lints
+
+## TCTBP Runtime Files
+
+This repository also carries the TCTBP workflow runtime.
+
+Authoritative workflow files for milestone, sync, and branch actions are:
+
+- `.github/agents/TCTBP.agent.md`
+- `.github/TCTBP.json`
+- `.github/TCTBP Agent.md`
+- `.github/TCTBP Cheatsheet.md`
+- `.github/copilot-instructions.md`
+
+If the optional hook layer is enabled, keep these aligned as well:
+
+- `.github/hooks/tctbp-safety.json`
+- `scripts/tctbp-pretool-hook.js`
+
+When these files change, keep them aligned. Preserve the Rust project commands, `Cargo.toml` version source, documentation paths, and cross-platform assumptions while merging forward generic TCTBP improvements.
