@@ -167,3 +167,22 @@ SHIP cadence:
 - Keep logging and errors actionable for debugging
 - Respect cross-platform compatibility — avoid platform-specific APIs without `#[cfg]` guards
 - Run `cargo clippy` mentally — avoid patterns that trigger common lints
+
+## TCTBP Runtime Files
+
+This repository also carries the TCTBP workflow runtime.
+
+Authoritative workflow files for milestone, sync, and branch actions are:
+
+- `.github/agents/TCTBP.agent.md`
+- `.github/TCTBP.json`
+- `.github/TCTBP Agent.md`
+- `.github/TCTBP Cheatsheet.md`
+- `.github/copilot-instructions.md`
+
+If the optional hook layer is enabled, keep these aligned as well:
+
+- `.github/hooks/tctbp-safety.json`
+- `scripts/tctbp-pretool-hook.js`
+
+When these files change, keep them aligned. Preserve the Rust project commands, `Cargo.toml` version source, documentation paths, and cross-platform assumptions while merging forward generic TCTBP improvements.

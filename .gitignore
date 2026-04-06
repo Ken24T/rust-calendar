@@ -38,6 +38,7 @@ build.log
 # Backup files
 *.bak
 *.tmp
+.github/.tctbp-backups/
 
 # OS specific
 Thumbs.db
