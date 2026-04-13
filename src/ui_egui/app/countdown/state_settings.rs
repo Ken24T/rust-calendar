@@ -3,9 +3,7 @@ use super::render::{
 };
 use super::settings::{render_countdown_settings_ui, CountdownSettingsCommand};
 use super::state::{CountdownUiState, DeleteCardRequest};
-use crate::services::countdown::{
-    CountdownCardGeometry, CountdownCardState, CountdownService,
-};
+use crate::services::countdown::{CountdownCardGeometry, CountdownCardState, CountdownService};
 use egui::Context;
 
 use super::super::geometry::{geometry_from_viewport_info, viewport_info};
@@ -35,8 +33,7 @@ impl CountdownUiState {
                     let entry = self.settings_geometry.entry(id).or_insert(default_geometry);
                     *entry
                 };
-                let viewport_id =
-                    egui::ViewportId::from_hash_of(("countdown_settings", card.id.0));
+                let viewport_id = egui::ViewportId::from_hash_of(("countdown_settings", card.id.0));
                 let apply_layout = self.settings_needs_layout.remove(&id);
                 let settings_title = format!("Settings: {}", card.effective_title());
                 let builder = viewport_builder_for_settings(
@@ -50,18 +47,10 @@ impl CountdownUiState {
 
                 let card_clone = card.clone();
                 let defaults_clone = defaults_snapshot.clone();
-                let result = ctx.show_viewport_immediate(
-                    viewport_id,
-                    builder,
-                    move |child_ctx, class| {
-                        render_countdown_settings_ui(
-                            child_ctx,
-                            class,
-                            &card_clone,
-                            &defaults_clone,
-                        )
-                    },
-                );
+                let result =
+                    ctx.show_viewport_immediate(viewport_id, builder, move |child_ctx, class| {
+                        render_countdown_settings_ui(child_ctx, class, &card_clone, &defaults_clone)
+                    });
 
                 let viewport_info = viewport_info(ctx, viewport_id);
                 let os_close_requested = viewport_info
@@ -113,8 +102,7 @@ impl CountdownUiState {
                         // Remove any pending event body updates that were set
                         // during this preview session
                         if let Some(eid) = event_id {
-                            self.pending_event_body_updates
-                                .retain(|(id, _)| *id != eid);
+                            self.pending_event_body_updates.retain(|(id, _)| *id != eid);
                         }
                     }
                     dialogs_to_close.push(id);

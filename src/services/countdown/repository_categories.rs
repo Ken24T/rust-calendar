@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Row};
 
 use super::models::{
-    CountdownCardGeometry, CountdownCardTemplateId, CountdownCardVisuals,
-    CountdownCategory, CountdownCategoryId, ContainerSortMode, LayoutOrientation, RgbaColor,
+    ContainerSortMode, CountdownCardGeometry, CountdownCardTemplateId, CountdownCardVisuals,
+    CountdownCategory, CountdownCategoryId, LayoutOrientation, RgbaColor,
 };
 use super::repository::CountdownRepository;
 
@@ -86,8 +86,9 @@ impl<'a> CountdownRepository<'a> {
             LayoutOrientation::Landscape => "Landscape",
         };
 
-        self.conn.execute(
-            "INSERT INTO countdown_categories (
+        self.conn
+            .execute(
+                "INSERT INTO countdown_categories (
                 name, display_order,
                 container_x, container_y, container_width, container_height,
                 default_title_bg_r, default_title_bg_g, default_title_bg_b, default_title_bg_a,
@@ -113,41 +114,41 @@ impl<'a> CountdownRepository<'a> {
                 ?28, ?29,
                 ?30, ?31
             )",
-            params![
-                category.name,
-                category.display_order,
-                cont_x,
-                cont_y,
-                cont_w,
-                cont_h,
-                category.visual_defaults.title_bg_color.r,
-                category.visual_defaults.title_bg_color.g,
-                category.visual_defaults.title_bg_color.b,
-                category.visual_defaults.title_bg_color.a,
-                category.visual_defaults.title_fg_color.r,
-                category.visual_defaults.title_fg_color.g,
-                category.visual_defaults.title_fg_color.b,
-                category.visual_defaults.title_fg_color.a,
-                category.visual_defaults.title_font_size,
-                category.visual_defaults.body_bg_color.r,
-                category.visual_defaults.body_bg_color.g,
-                category.visual_defaults.body_bg_color.b,
-                category.visual_defaults.body_bg_color.a,
-                category.visual_defaults.days_fg_color.r,
-                category.visual_defaults.days_fg_color.g,
-                category.visual_defaults.days_fg_color.b,
-                category.visual_defaults.days_fg_color.a,
-                category.visual_defaults.days_font_size,
-                category.default_card_width,
-                category.default_card_height,
-                category.use_global_defaults,
-                category.is_collapsed,
-                sort_mode_str,
-                category.template_id.map(|t| t.0),
-                orientation_str,
-            ],
-        )
-        .context("Failed to insert countdown category")?;
+                params![
+                    category.name,
+                    category.display_order,
+                    cont_x,
+                    cont_y,
+                    cont_w,
+                    cont_h,
+                    category.visual_defaults.title_bg_color.r,
+                    category.visual_defaults.title_bg_color.g,
+                    category.visual_defaults.title_bg_color.b,
+                    category.visual_defaults.title_bg_color.a,
+                    category.visual_defaults.title_fg_color.r,
+                    category.visual_defaults.title_fg_color.g,
+                    category.visual_defaults.title_fg_color.b,
+                    category.visual_defaults.title_fg_color.a,
+                    category.visual_defaults.title_font_size,
+                    category.visual_defaults.body_bg_color.r,
+                    category.visual_defaults.body_bg_color.g,
+                    category.visual_defaults.body_bg_color.b,
+                    category.visual_defaults.body_bg_color.a,
+                    category.visual_defaults.days_fg_color.r,
+                    category.visual_defaults.days_fg_color.g,
+                    category.visual_defaults.days_fg_color.b,
+                    category.visual_defaults.days_fg_color.a,
+                    category.visual_defaults.days_font_size,
+                    category.default_card_width,
+                    category.default_card_height,
+                    category.use_global_defaults,
+                    category.is_collapsed,
+                    sort_mode_str,
+                    category.template_id.map(|t| t.0),
+                    orientation_str,
+                ],
+            )
+            .context("Failed to insert countdown category")?;
 
         let id = self.conn.last_insert_rowid();
         Ok(CountdownCategoryId(id))
@@ -244,10 +245,7 @@ impl<'a> CountdownRepository<'a> {
 
         let rows = self
             .conn
-            .execute(
-                "DELETE FROM countdown_categories WHERE id = ?",
-                [id.0],
-            )
+            .execute("DELETE FROM countdown_categories WHERE id = ?", [id.0])
             .context("Failed to delete countdown category")?;
 
         Ok(rows > 0)

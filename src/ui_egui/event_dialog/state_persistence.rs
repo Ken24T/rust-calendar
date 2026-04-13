@@ -48,10 +48,7 @@ impl EventDialogState {
         // events consistent so event_display_end_date works uniformly.
         let (start_time, end_date, end_time) = if self.all_day {
             let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-            let exclusive_end = self
-                .end_date
-                .succ_opt()
-                .unwrap_or(self.end_date);
+            let exclusive_end = self.end_date.succ_opt().unwrap_or(self.end_date);
             (midnight, exclusive_end, midnight)
         } else {
             (self.start_time, self.end_date, self.end_time)
@@ -170,17 +167,16 @@ impl EventDialogState {
     /// Call this when the dialog is opened or when dates change
     pub fn check_warnings(&mut self, database: &Database) {
         self.warning_messages.clear();
-        
+
         let today = Local::now().date_naive();
-        
+
         // Warning: Event date is more than 5 years in the past
         let five_years_ago = today.with_year(today.year() - 5).unwrap_or(today);
         if self.date < five_years_ago {
-            self.warning_messages.push(
-                "This event is more than 5 years in the past".to_string()
-            );
+            self.warning_messages
+                .push("This event is more than 5 years in the past".to_string());
         }
-        
+
         // Warning: All-day event with non-midnight times
         if self.all_day {
             let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
@@ -189,7 +185,7 @@ impl EventDialogState {
                 // This is handled at save time by using date boundaries
             }
         }
-        
+
         // Warning: Overlap detection
         if let Ok((start_dt, end_dt)) = self.start_end_datetimes() {
             let service = EventService::new(database.connection());
@@ -213,13 +209,11 @@ impl EventDialogState {
                         start_dt < event_end && end_dt > event_start
                     })
                     .collect();
-                
+
                 if !other_overlapping.is_empty() {
                     if other_overlapping.len() == 1 {
-                        self.warning_messages.push(format!(
-                            "Overlaps with \"{}\"",
-                            other_overlapping[0].title
-                        ));
+                        self.warning_messages
+                            .push(format!("Overlaps with \"{}\"", other_overlapping[0].title));
                     } else {
                         self.warning_messages.push(format!(
                             "Overlaps with {} other events",

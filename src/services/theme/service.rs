@@ -27,7 +27,7 @@ impl<'a> ThemeService<'a> {
             .iter()
             .map(|p| p.name().to_string())
             .collect();
-        
+
         // Add custom themes that aren't preset names
         for theme in custom_themes {
             if !CalendarTheme::is_builtin(&theme) {
@@ -74,7 +74,10 @@ impl<'a> ThemeService<'a> {
 
     /// Get a theme with its preview colors for display in dialogs
     #[allow(dead_code)]
-    pub fn get_theme_with_preview(&self, name: &str) -> Result<(CalendarTheme, [egui::Color32; 4])> {
+    pub fn get_theme_with_preview(
+        &self,
+        name: &str,
+    ) -> Result<(CalendarTheme, [egui::Color32; 4])> {
         let theme = self.get_theme(name)?;
         let preview = theme.preview_colors();
         Ok((theme, preview))
@@ -135,14 +138,16 @@ impl<'a> ThemeService<'a> {
         let content = std::fs::read_to_string(path)?;
         let theme = CalendarTheme::from_toml(&content)
             .map_err(|e| anyhow!("Failed to parse theme: {}", e))?;
-        
+
         let name = theme.name.clone();
-        
+
         // Don't allow importing with a preset name
         if CalendarTheme::is_builtin(&name) {
-            return Err(anyhow!("Cannot import a theme with a built-in theme name. Please rename the theme."));
+            return Err(anyhow!(
+                "Cannot import a theme with a built-in theme name. Please rename the theme."
+            ));
         }
-        
+
         self.save_theme(&theme, &name)?;
         Ok(name)
     }
@@ -152,7 +157,7 @@ impl<'a> ThemeService<'a> {
         if CalendarTheme::is_builtin(new_name) {
             return Err(anyhow!("Cannot use a built-in theme name"));
         }
-        
+
         let mut theme = self.get_theme(source_name)?;
         theme.name = new_name.to_string();
         self.save_theme(&theme, new_name)?;
@@ -241,7 +246,7 @@ mod tests {
         // All presets should be retrievable
         let theme = service.get_theme("Nord").unwrap();
         assert!(theme.is_dark);
-        
+
         let theme = service.get_theme("Solarized Light").unwrap();
         assert!(!theme.is_dark);
     }
@@ -252,10 +257,10 @@ mod tests {
         let service = ThemeService::new(&db);
 
         service.duplicate_theme("Nord", "My Nord").unwrap();
-        
+
         let themes = service.list_themes().unwrap();
         assert!(themes.contains(&"My Nord".to_string()));
-        
+
         let theme = service.get_theme("My Nord").unwrap();
         assert!(theme.is_dark);
     }

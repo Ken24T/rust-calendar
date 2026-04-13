@@ -228,7 +228,12 @@ mod tests {
             monitor(1920.0, 0.0, 2560.0, 1440.0),
         ];
         assert!(is_visible_on_any_monitor(
-            &monitors, 2000.0, 200.0, 800.0, 600.0, (200.0, 100.0)
+            &monitors,
+            2000.0,
+            200.0,
+            800.0,
+            600.0,
+            (200.0, 100.0)
         ));
     }
 
@@ -241,7 +246,12 @@ mod tests {
         ];
         // Window placed in the 80px gap
         assert!(!is_visible_on_any_monitor(
-            &monitors, 1920.0, 0.0, 80.0, 80.0, (200.0, 100.0)
+            &monitors,
+            1920.0,
+            0.0,
+            80.0,
+            80.0,
+            (200.0, 100.0)
         ));
     }
 

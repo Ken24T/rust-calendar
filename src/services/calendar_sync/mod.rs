@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-pub mod mapping;
-pub mod fetcher;
 pub mod engine;
+pub mod fetcher;
+pub mod mapping;
 pub mod scheduler;
 
 use anyhow::{anyhow, Context, Result};
@@ -89,8 +89,10 @@ impl<'a> CalendarSourceService<'a> {
             .id
             .ok_or_else(|| anyhow!("Calendar source ID is required for update"))?;
 
-        let rows_affected = self.conn.execute(
-            "UPDATE calendar_sources
+        let rows_affected = self
+            .conn
+            .execute(
+                "UPDATE calendar_sources
              SET name = ?1,
                  source_type = ?2,
                  ics_url = ?3,
@@ -98,17 +100,17 @@ impl<'a> CalendarSourceService<'a> {
                  poll_interval_minutes = ?5,
                  updated_at = ?6
              WHERE id = ?7",
-            params![
-                source.name,
-                source.source_type,
-                source.ics_url,
-                source.enabled as i32,
-                source.poll_interval_minutes,
-                Local::now().to_rfc3339(),
-                id,
-            ],
-        )
-        .context("Failed to update calendar source")?;
+                params![
+                    source.name,
+                    source.source_type,
+                    source.ics_url,
+                    source.enabled as i32,
+                    source.poll_interval_minutes,
+                    Local::now().to_rfc3339(),
+                    id,
+                ],
+            )
+            .context("Failed to update calendar source")?;
 
         if rows_affected == 0 {
             return Err(anyhow!("Calendar source with id {} not found", id));

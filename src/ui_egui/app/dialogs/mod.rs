@@ -71,12 +71,16 @@ impl CalendarApp {
             let service = self.context.event_service();
             if let Ok(Some(event)) = service.get(event_id) {
                 let mut state = EventDialogState::from_event(&event, &self.settings);
-                
+
                 // Auto-link countdown card if one exists for this event
-                if let Some(card) = self.context.countdown_service().find_card_by_event_id(event_id) {
+                if let Some(card) = self
+                    .context
+                    .countdown_service()
+                    .find_card_by_event_id(event_id)
+                {
                     state.link_countdown_card(card.id, card.visuals.clone());
                 }
-                
+
                 self.event_dialog_state = Some(state);
             } else {
                 self.event_dialog_state = Some(EventDialogState::new_event(
@@ -116,7 +120,10 @@ impl CalendarApp {
 
         // Capture old event state before rendering (for undo on updates)
         let old_event: Option<Event> = {
-            let state = self.event_dialog_state.as_ref().expect("dialog state just checked");
+            let state = self
+                .event_dialog_state
+                .as_ref()
+                .expect("dialog state just checked");
             if let Some(event_id) = state.event_id {
                 // This is an edit - fetch the current state before any changes
                 self.context.event_service().get(event_id).ok().flatten()
@@ -125,7 +132,15 @@ impl CalendarApp {
             }
         };
 
-        let (saved_event, card_changes, auto_create_card, countdown_category, was_new_event, event_saved, delete_request) = {
+        let (
+            saved_event,
+            card_changes,
+            auto_create_card,
+            countdown_category,
+            was_new_event,
+            event_saved,
+            delete_request,
+        ) = {
             // Snapshot categories for the dropdown before borrowing state
             let countdown_categories: Vec<_> = self
                 .context
@@ -157,10 +172,9 @@ impl CalendarApp {
             let now = Local::now();
             let event_end_dt = state.end_date.and_time(state.end_time);
             let event_ends_in_future = event_end_dt > now.naive_local();
-            
-            let auto_create_card = state.create_countdown 
-                && state.event_id.is_none()
-                && event_ends_in_future;
+
+            let auto_create_card =
+                state.create_countdown && state.event_id.is_none() && event_ends_in_future;
             let countdown_category = if auto_create_card {
                 Some(state.countdown_category_id)
             } else {
@@ -214,7 +228,8 @@ impl CalendarApp {
 
             if was_new_event {
                 self.focus_on_event(event);
-                self.toast_manager.success(format!("Created \"{}\"", event.title));
+                self.toast_manager
+                    .success(format!("Created \"{}\"", event.title));
             } else {
                 self.toast_manager.success("Event saved");
             }
@@ -377,10 +392,7 @@ impl CalendarApp {
             return;
         }
 
-        let result = render_export_range_dialog(
-            ctx,
-            &mut self.state.export_dialog_state,
-        );
+        let result = render_export_range_dialog(ctx, &mut self.state.export_dialog_state);
 
         match result {
             ExportDialogResult::None => {}

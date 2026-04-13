@@ -150,7 +150,17 @@ mod tests {
     fn sync_title_updates_matching_cards() {
         let mut svc = CountdownService::new();
         let t = Local::now() + Duration::days(5);
-        svc.create_card(Some(10), "Old Name", t, None, None, None, None, 120.0, 110.0);
+        svc.create_card(
+            Some(10),
+            "Old Name",
+            t,
+            None,
+            None,
+            None,
+            None,
+            120.0,
+            110.0,
+        );
         svc.mark_clean();
 
         svc.sync_title_for_event(10, "New Name");
@@ -177,7 +187,17 @@ mod tests {
         let mut svc = CountdownService::new();
         let t = Local::now() + Duration::days(5);
         let accent = RgbaColor::new(100, 50, 200, 255);
-        svc.create_card(Some(10), "Evt", t, None, None, Some(accent), None, 120.0, 110.0);
+        svc.create_card(
+            Some(10),
+            "Evt",
+            t,
+            None,
+            None,
+            Some(accent),
+            None,
+            120.0,
+            110.0,
+        );
         svc.mark_clean();
 
         let new_color = RgbaColor::new(200, 100, 50, 255);

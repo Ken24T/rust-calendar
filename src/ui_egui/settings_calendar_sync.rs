@@ -195,12 +195,10 @@ pub fn render_calendar_sync_section(
                     state.new_source_name.clear();
                     state.new_source_url.clear();
                     state.new_source_poll_interval = 15;
-                    state.source_status_message =
-                        Some(format!("Added source '{}'", created.name));
+                    state.source_status_message = Some(format!("Added source '{}'", created.name));
                 }
                 Err(err) => {
-                    state.source_error_message =
-                        Some(format!("Failed to add source: {}", err));
+                    state.source_error_message = Some(format!("Failed to add source: {}", err));
                 }
             }
         }
@@ -231,10 +229,7 @@ pub fn render_calendar_sync_section(
             ui.horizontal(|ui| {
                 ui.checkbox(&mut draft.enabled, "Enabled");
                 ui.label("Name:");
-                ui.add_sized(
-                    [140.0, 20.0],
-                    egui::TextEdit::singleline(&mut draft.name),
-                );
+                ui.add_sized([140.0, 20.0], egui::TextEdit::singleline(&mut draft.name));
             });
 
             ui.horizontal(|ui| {
@@ -282,8 +277,7 @@ pub fn render_calendar_sync_section(
                     }
                 }
 
-                let sync_in_progress =
-                    state.source_sync_in_progress_id == Some(source_id);
+                let sync_in_progress = state.source_sync_in_progress_id == Some(source_id);
                 let any_sync_in_progress = state.source_sync_in_progress_id.is_some();
                 let sync_button_text = if sync_in_progress {
                     "Syncing..."
@@ -299,8 +293,7 @@ pub fn render_calendar_sync_section(
                     state.source_sync_in_progress_id = Some(source_id);
 
                     let source_name = draft.name.clone();
-                    state.source_status_message =
-                        Some(format!("Syncing '{}'...", source_name));
+                    state.source_status_message = Some(format!("Syncing '{}'...", source_name));
 
                     let db_path = database.path().to_string();
                     let (tx, rx) = mpsc::channel();
@@ -308,8 +301,7 @@ pub fn render_calendar_sync_section(
 
                     thread::spawn(move || {
                         let result = (|| -> Result<(String, SyncRunResult), String> {
-                            let db =
-                                Database::new(&db_path).map_err(|err| err.to_string())?;
+                            let db = Database::new(&db_path).map_err(|err| err.to_string())?;
                             let engine = CalendarSyncEngine::new(db.connection())
                                 .map_err(|err| err.to_string())?;
                             let summary = engine
@@ -329,8 +321,7 @@ pub fn render_calendar_sync_section(
                     match source_service.delete(source_id) {
                         Ok(_) => {
                             deleted_source_ids.push(source_id);
-                            state.source_status_message =
-                                Some("Source deleted".to_string());
+                            state.source_status_message = Some("Source deleted".to_string());
                         }
                         Err(err) => {
                             state.source_error_message =
@@ -347,10 +338,7 @@ pub fn render_calendar_sync_section(
                 ui.label(format!("Last sync: {}", last_sync_at));
             }
             if let Some(last_error) = &source.last_error {
-                ui.colored_label(
-                    Color32::LIGHT_RED,
-                    format!("Last error: {}", last_error),
-                );
+                ui.colored_label(Color32::LIGHT_RED, format!("Last error: {}", last_error));
             }
         });
 

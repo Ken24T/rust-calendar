@@ -108,9 +108,10 @@ pub fn render_cell_context_menu(
     }
 
     // Check for pending template selection from previous frame
-    let pending_template = ui
-        .ctx()
-        .memory_mut(|mem| mem.data.remove_temp::<i64>(popup_id.with("pending_template")));
+    let pending_template = ui.ctx().memory_mut(|mem| {
+        mem.data
+            .remove_temp::<i64>(popup_id.with("pending_template"))
+    });
 
     if response.secondary_clicked() {
         if let Some(event_id) = pointer_event
@@ -148,9 +149,9 @@ pub fn render_cell_context_menu(
         |ui| {
             ui.set_width(190.0);
 
-            let popup_event_id =
-                ui.ctx()
-                    .memory(|mem| mem.data.get_temp::<i64>(popup_event_id_key));
+            let popup_event_id = ui
+                .ctx()
+                .memory(|mem| mem.data.get_temp::<i64>(popup_event_id_key));
             let popup_event = popup_event_id
                 .and_then(|selected_id| {
                     events
@@ -198,21 +199,22 @@ pub fn render_cell_context_menu(
                         ui.separator();
                     }
                     CountdownMenuState::Available => {
-                        let categories = ui.ctx().data(|data| {
-                            data.get_temp::<CountdownCategoriesCache>(egui::Id::new(
-                                COUNTDOWN_CATEGORIES_CACHE_ID,
-                            ))
-                        })
-                        .map(|c| c.0)
-                        .unwrap_or_default();
+                        let categories = ui
+                            .ctx()
+                            .data(|data| {
+                                data.get_temp::<CountdownCategoriesCache>(egui::Id::new(
+                                    COUNTDOWN_CATEGORIES_CACHE_ID,
+                                ))
+                            })
+                            .map(|c| c.0)
+                            .unwrap_or_default();
 
                         let mut created = false;
 
                         if categories.len() <= 1 {
                             if ui.button("⏱ Create Countdown").clicked() {
-                                countdown_requests.push(countdown_request_for_month_event(
-                                    &event, database,
-                                ));
+                                countdown_requests
+                                    .push(countdown_request_for_month_event(&event, database));
                                 created = true;
                             }
                         } else {
@@ -302,10 +304,7 @@ pub fn render_cell_context_menu(
                             {
                                 if let Some(id) = template.id {
                                     ui.ctx().memory_mut(|mem| {
-                                        mem.data.insert_temp(
-                                            popup_id.with("pending_template"),
-                                            id,
-                                        );
+                                        mem.data.insert_temp(popup_id.with("pending_template"), id);
                                     });
                                 }
                                 ui.memory_mut(|mem| mem.close_popup());
@@ -325,8 +324,8 @@ pub fn render_cell_context_menu(
     }
 
     // Build template action if one was selected
-    let template_action = pending_template
-        .map(|template_id| MonthViewAction::CreateFromTemplate(template_id, date));
+    let template_action =
+        pending_template.map(|template_id| MonthViewAction::CreateFromTemplate(template_id, date));
 
     MonthContextMenuResult {
         delete_confirm_request,

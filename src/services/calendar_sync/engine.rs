@@ -56,8 +56,13 @@ impl<'a> CalendarSyncEngine<'a> {
         match result {
             Ok(success) => Ok(success),
             Err(err) => {
-                let redacted_error = Self::sanitize_error_message(&err.to_string(), &source.ics_url);
-                let _ = source_service.update_sync_status(source_id, Some("failed"), Some(&redacted_error));
+                let redacted_error =
+                    Self::sanitize_error_message(&err.to_string(), &source.ics_url);
+                let _ = source_service.update_sync_status(
+                    source_id,
+                    Some("failed"),
+                    Some(&redacted_error),
+                );
                 Err(anyhow!(redacted_error))
             }
         }
@@ -87,7 +92,11 @@ impl<'a> CalendarSyncEngine<'a> {
         Ok(batch)
     }
 
-    fn apply_imported(&self, source_id: i64, imported_events: Vec<ImportedIcsEvent>) -> Result<SyncRunResult> {
+    fn apply_imported(
+        &self,
+        source_id: i64,
+        imported_events: Vec<ImportedIcsEvent>,
+    ) -> Result<SyncRunResult> {
         let mut result = SyncRunResult {
             source_id,
             ..SyncRunResult::default()
@@ -167,9 +176,9 @@ impl<'a> CalendarSyncEngine<'a> {
                             id: None,
                             source_id,
                             external_uid: uid.to_string(),
-                            local_event_id: created_event.id.ok_or_else(|| {
-                                anyhow!("Created event missing ID for mapping")
-                            })?,
+                            local_event_id: created_event
+                                .id
+                                .ok_or_else(|| anyhow!("Created event missing ID for mapping"))?,
                             external_last_modified: imported.raw_last_modified.clone(),
                             external_etag_hash: None,
                             last_seen_at: Some(chrono::Local::now().to_rfc3339()),

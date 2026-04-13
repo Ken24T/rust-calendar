@@ -210,11 +210,8 @@ pub fn draw_resize_preview(
         event_color.b(),
         140,
     );
-    ui.painter().rect_stroke(
-        preview_rect,
-        3.0,
-        egui::Stroke::new(2.0, border_color),
-    );
+    ui.painter()
+        .rect_stroke(preview_rect, 3.0, egui::Stroke::new(2.0, border_color));
 
     // Draw accent bar on left side
     let bar_rect = Rect::from_min_size(

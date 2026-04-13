@@ -84,12 +84,7 @@ pub struct ResizeContext {
 
 impl ResizeContext {
     /// Create a new resize context from an event
-    pub fn new(
-        event: &Event,
-        handle: ResizeHandle,
-        view: ResizeView,
-        rect: Rect,
-    ) -> Option<Self> {
+    pub fn new(event: &Event, handle: ResizeHandle, view: ResizeView, rect: Rect) -> Option<Self> {
         let event_id = event.id?;
         Some(Self {
             event_id,
@@ -106,11 +101,7 @@ impl ResizeContext {
 
     /// Create a resize context from an event (without requiring rect upfront)
     /// Used when we know we're on a resize handle but don't need the rect
-    pub fn from_event(
-        event: &Event,
-        handle: ResizeHandle,
-        view: ResizeView,
-    ) -> Option<Self> {
+    pub fn from_event(event: &Event, handle: ResizeHandle, view: ResizeView) -> Option<Self> {
         Self::new(event, handle, view, Rect::NOTHING)
     }
 
@@ -118,7 +109,7 @@ impl ResizeContext {
     pub fn hovered_times(&self) -> Option<(DateTime<Local>, DateTime<Local>)> {
         let new_start = self.calculate_new_start()?;
         let new_end = self.calculate_new_end()?;
-        
+
         // Validate: start must be before end, with minimum 15 min duration
         let min_duration = chrono::Duration::minutes(15);
         if new_end - new_start >= min_duration {
@@ -141,7 +132,9 @@ impl ResizeContext {
                         chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
                         chrono::LocalResult::None => {
                             // Time doesn't exist - try one hour later
-                            let adjusted = self.original_start.date_naive()
+                            let adjusted = self
+                                .original_start
+                                .date_naive()
                                 .and_time(time + chrono::Duration::hours(1));
                             adjusted.and_local_timezone(Local).single()
                         }
@@ -158,7 +151,8 @@ impl ResizeContext {
                         chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
                         chrono::LocalResult::None => {
                             // Time doesn't exist - try one hour later
-                            let adjusted = date.and_time(self.original_start.time() + chrono::Duration::hours(1));
+                            let adjusted = date
+                                .and_time(self.original_start.time() + chrono::Duration::hours(1));
                             adjusted.and_local_timezone(Local).single()
                         }
                     }
@@ -181,7 +175,9 @@ impl ResizeContext {
                         chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
                         chrono::LocalResult::None => {
                             // Time doesn't exist - try one hour later
-                            let adjusted = self.original_end.date_naive()
+                            let adjusted = self
+                                .original_end
+                                .date_naive()
                                 .and_time(time + chrono::Duration::hours(1));
                             adjusted.and_local_timezone(Local).single()
                         }
@@ -198,7 +194,8 @@ impl ResizeContext {
                         chrono::LocalResult::Ambiguous(dt, _) => Some(dt),
                         chrono::LocalResult::None => {
                             // Time doesn't exist - try one hour later
-                            let adjusted = date.and_time(self.original_end.time() + chrono::Duration::hours(1));
+                            let adjusted = date
+                                .and_time(self.original_end.time() + chrono::Duration::hours(1));
                             adjusted.and_local_timezone(Local).single()
                         }
                     }
@@ -320,15 +317,15 @@ impl HandleRects {
     pub fn for_timed_event_in_slot(event_rect: Rect, show_top: bool, show_bottom: bool) -> Self {
         // Height of the hit zone at each edge
         let zone_height = HANDLE_SIZE + 4.0; // Handle size plus small padding
-        
+
         // Add extra padding to catch drag starts that slip just outside the event
         const EDGE_PADDING: f32 = 6.0;
-        
+
         // Hit zone is centered on the event, narrower than full width to avoid
         // confusion with event drag operations. Use min of event width and constant.
         let hit_width = event_rect.width().min(HANDLE_HIT_WIDTH);
         let center_x = event_rect.center().x;
-        
+
         Self {
             top: if show_top {
                 // Centered hit zone at top edge, extending slightly above
@@ -342,7 +339,10 @@ impl HandleRects {
             bottom: if show_bottom {
                 // Centered hit zone at bottom edge, extending slightly below
                 Some(Rect::from_min_size(
-                    Pos2::new(center_x - hit_width / 2.0, event_rect.bottom() - zone_height),
+                    Pos2::new(
+                        center_x - hit_width / 2.0,
+                        event_rect.bottom() - zone_height,
+                    ),
                     Vec2::new(hit_width, zone_height + EDGE_PADDING),
                 ))
             } else {
@@ -362,7 +362,7 @@ impl HandleRects {
     pub fn for_multiday_event(event_rect: Rect) -> Self {
         let handle_height = event_rect.height().min(20.0);
         let handle_width = event_rect.width().min(30.0);
-        
+
         Self {
             top: Some(Rect::from_center_size(
                 Pos2::new(event_rect.center().x, event_rect.top()),
@@ -393,16 +393,19 @@ impl HandleRects {
     /// - show_right: true if this is the last day of the event (show right handle)
     pub fn for_ribbon_event_in_day(event_rect: Rect, show_left: bool, show_right: bool) -> Self {
         let handle_height = event_rect.height().min(20.0);
-        
+
         // Add some horizontal padding for easier grabbing
         const EDGE_PADDING: f32 = 4.0;
-        
+
         Self {
             top: None,
             bottom: None,
             left: if show_left {
                 Some(Rect::from_center_size(
-                    Pos2::new(event_rect.left() - EDGE_PADDING / 2.0, event_rect.center().y),
+                    Pos2::new(
+                        event_rect.left() - EDGE_PADDING / 2.0,
+                        event_rect.center().y,
+                    ),
                     Vec2::new(HANDLE_SIZE + EDGE_PADDING, handle_height),
                 ))
             } else {
@@ -410,7 +413,10 @@ impl HandleRects {
             },
             right: if show_right {
                 Some(Rect::from_center_size(
-                    Pos2::new(event_rect.right() + EDGE_PADDING / 2.0, event_rect.center().y),
+                    Pos2::new(
+                        event_rect.right() + EDGE_PADDING / 2.0,
+                        event_rect.center().y,
+                    ),
                     Vec2::new(HANDLE_SIZE + EDGE_PADDING, handle_height),
                 ))
             } else {
@@ -472,7 +478,7 @@ mod tests {
     fn test_handle_rects_for_timed_event() {
         let rect = Rect::from_min_size(Pos2::new(100.0, 100.0), Vec2::new(200.0, 50.0));
         let handles = HandleRects::for_timed_event(rect);
-        
+
         assert!(handles.top.is_some());
         assert!(handles.bottom.is_some());
         assert!(handles.left.is_none());
@@ -483,7 +489,7 @@ mod tests {
     fn test_handle_rects_for_ribbon_event() {
         let rect = Rect::from_min_size(Pos2::new(100.0, 100.0), Vec2::new(200.0, 20.0));
         let handles = HandleRects::for_ribbon_event(rect);
-        
+
         assert!(handles.top.is_none());
         assert!(handles.bottom.is_none());
         assert!(handles.left.is_some());
@@ -494,15 +500,15 @@ mod tests {
     fn test_handle_hit_test() {
         let rect = Rect::from_min_size(Pos2::new(100.0, 100.0), Vec2::new(200.0, 50.0));
         let handles = HandleRects::for_timed_event(rect);
-        
+
         // Test top handle hit
         let top_center = Pos2::new(200.0, 100.0); // center x, top y
         assert_eq!(handles.hit_test(top_center), Some(ResizeHandle::Top));
-        
+
         // Test bottom handle hit
         let bottom_center = Pos2::new(200.0, 150.0); // center x, bottom y
         assert_eq!(handles.hit_test(bottom_center), Some(ResizeHandle::Bottom));
-        
+
         // Test miss
         let miss = Pos2::new(200.0, 125.0); // center, middle
         assert_eq!(handles.hit_test(miss), None);

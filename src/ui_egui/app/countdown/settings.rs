@@ -324,7 +324,10 @@ pub(super) fn render_countdown_settings_ui(
                             if delete_clicked {
                                 result
                                     .commands
-                                    .push(CountdownSettingsCommand::RequestDeleteCard(card.id, card.event_title.clone()));
+                                    .push(CountdownSettingsCommand::RequestDeleteCard(
+                                        card.id,
+                                        card.event_title.clone(),
+                                    ));
                                 result.close_requested = true;
                             }
                             if ui.button("Cancel").clicked() {

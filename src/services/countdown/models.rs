@@ -2,8 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
 /// Warning state for countdown cards based on time remaining
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum CountdownWarningState {
     /// More than 1 day remaining
     #[default]
@@ -17,7 +16,6 @@ pub enum CountdownWarningState {
     /// Event has started (time <= 0)
     Starting,
 }
-
 
 /// Configuration for countdown card notifications
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -106,17 +104,22 @@ impl CountdownCardGeometry {
         // Allow positions within ±10000 pixels to support multi-monitor setups
         self.x.abs() < 10000.0 && self.y.abs() < 10000.0
     }
-    
+
     /// Sanitize this geometry to ensure it's visible on at least one monitor.
     /// The `monitors` parameter is a list of (x, y, width, height) tuples for
     /// each connected monitor.  If the geometry doesn't overlap any monitor by
     /// at least 200×100 px, it is repositioned to `default_pos`.
-    pub fn sanitize_for_monitors(&self, monitors: &[(f32, f32, f32, f32)], default_pos: (f32, f32)) -> Self {
+    pub fn sanitize_for_monitors(
+        &self,
+        monitors: &[(f32, f32, f32, f32)],
+        default_pos: (f32, f32),
+    ) -> Self {
         // Basic validity check first (NaN, infinite, tiny)
         if !self.is_plausible() {
             log::warn!(
                 "Geometry {:?} is not plausible, resetting to default position {:?}",
-                self, default_pos
+                self,
+                default_pos
             );
             return Self {
                 x: default_pos.0.max(0.0),
@@ -140,8 +143,7 @@ impl CountdownCardGeometry {
             let v = overlap_bottom - overlap_top;
 
             // For small windows, require proportional overlap instead
-            h >= min_overlap_x.min(self.width * 0.5)
-                && v >= min_overlap_y.min(self.height * 0.5)
+            h >= min_overlap_x.min(self.width * 0.5) && v >= min_overlap_y.min(self.height * 0.5)
         });
 
         if visible {
@@ -152,7 +154,9 @@ impl CountdownCardGeometry {
         log::warn!(
             "Geometry {:?} is not visible on any of {} monitor(s), \
              resetting to default position {:?}",
-            self, monitors.len(), default_pos
+            self,
+            monitors.len(),
+            default_pos
         );
         Self {
             x: default_pos.0.max(0.0),
@@ -394,8 +398,7 @@ impl CountdownCardState {
 }
 
 /// Display mode for countdown cards
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum CountdownDisplayMode {
     /// Each card in its own separate window
     #[default]
@@ -488,7 +491,6 @@ pub struct CountdownCategory {
     pub container_geometry: Option<CountdownCardGeometry>,
 
     // -- Template-based visual inheritance --
-
     /// Optional template that supplies visual defaults for cards in this
     /// category.  `None` means "use global defaults" (equivalent to the
     /// old `use_global_defaults = true`).
@@ -502,7 +504,6 @@ pub struct CountdownCategory {
     // -- Legacy fields kept for migration / backwards compatibility --
     // These are populated when loading old data and converted to a template
     // on first save.  New code should not write to them.
-
     /// **Deprecated** — use `template_id` instead.
     #[serde(default)]
     pub visual_defaults: CountdownCardVisuals,
@@ -554,7 +555,6 @@ impl Default for CountdownCategory {
         }
     }
 }
-
 
 /// Serializable container for persisting card state between sessions.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -693,11 +693,7 @@ mod tests {
     #[test]
     fn test_card_order_serialization() {
         let state = CountdownPersistedState {
-            card_order: vec![
-                CountdownCardId(1),
-                CountdownCardId(3),
-                CountdownCardId(2),
-            ],
+            card_order: vec![CountdownCardId(1), CountdownCardId(3), CountdownCardId(2)],
             ..CountdownPersistedState::default()
         };
 

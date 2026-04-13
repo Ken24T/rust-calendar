@@ -4,9 +4,7 @@ use crate::models::event::Event;
 use crate::services::calendar_sync::CalendarSourceService;
 use crate::ui_egui::views::week_view::WeekView;
 use crate::ui_egui::views::workweek_view::WorkWeekView;
-use crate::ui_egui::views::{
-    AutoFocusRequest, CountdownCategoriesCache, CountdownRequest,
-};
+use crate::ui_egui::views::{AutoFocusRequest, CountdownCategoriesCache, CountdownRequest};
 use chrono::Local;
 use std::collections::HashSet;
 
@@ -233,7 +231,6 @@ impl CalendarApp {
             self.pending_focus = focus_request;
         });
     }
-
 
     pub(super) fn focus_on_event(&mut self, event: &Event) {
         self.current_date = event.start.date_naive();

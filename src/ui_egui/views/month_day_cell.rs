@@ -120,8 +120,11 @@ impl MonthView {
         if response.hovered() {
             ui.painter()
                 .rect_stroke(rect, 2.0, Stroke::new(2.0, palette.hover_border));
-            ui.painter()
-                .rect_filled(rect, 2.0, Color32::from_rgba_unmultiplied(100, 150, 200, 30));
+            ui.painter().rect_filled(
+                rect,
+                2.0,
+                Color32::from_rgba_unmultiplied(100, 150, 200, 30),
+            );
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
 
@@ -132,17 +135,17 @@ impl MonthView {
         } else {
             palette.text
         };
-        
+
         // Define clickable area for the day number (don't allocate, just check pointer)
         let day_number_rect = Rect::from_min_size(
             Pos2::new(rect.left() + 2.0, rect.top() + 2.0),
             Vec2::new(30.0, 20.0),
         );
-        
+
         let pointer_pos = ui.input(|i| i.pointer.hover_pos());
         let day_number_hovered = pointer_pos.is_some_and(|pos| day_number_rect.contains(pos));
         let day_number_clicked = response.clicked() && day_number_hovered;
-        
+
         // Underline on hover to indicate clickability
         if day_number_hovered {
             ui.painter().line_segment(
@@ -153,7 +156,7 @@ impl MonthView {
                 Stroke::new(1.0, text_color),
             );
         }
-        
+
         ui.painter().text(
             Pos2::new(rect.left() + 5.0, rect.top() + 5.0),
             egui::Align2::LEFT_TOP,
@@ -161,7 +164,7 @@ impl MonthView {
             egui::FontId::proportional(14.0),
             text_color,
         );
-        
+
         // Return action if day number clicked
         if day_number_clicked {
             return (MonthViewAction::SwitchToDayView(date), None, None);
@@ -170,17 +173,17 @@ impl MonthView {
         let mut event_hitboxes: Vec<(Rect, Event)> = Vec::new();
         let mut y_offset = 24.0;
         let now = Local::now();
-        
+
         for &event in events.iter().take(3) {
             let event_is_synced = is_synced_event(event.id, synced_event_ids);
             let is_past = event.end < now;
-            
+
             let base_color = event
                 .color
                 .as_deref()
                 .and_then(parse_color)
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
-            
+
             // Dim past events with stronger dimming for visibility (matching week view)
             let event_color = if is_past {
                 Color32::from_rgba_unmultiplied(
@@ -210,12 +213,17 @@ impl MonthView {
             };
 
             // Build title text with location icon and category badge if present
-            let location_icon = if event.location.as_ref().map(|l| !l.is_empty()).unwrap_or(false) {
+            let location_icon = if event
+                .location
+                .as_ref()
+                .map(|l| !l.is_empty())
+                .unwrap_or(false)
+            {
                 "📍"
             } else {
                 ""
             };
-            
+
             let title_text = if let Some(category) = &event.category {
                 format!(
                     "{}{}{} [{}]",
@@ -245,10 +253,7 @@ impl MonthView {
             );
 
             ui.painter().text(
-                Pos2::new(
-                    event_rect.left() + 3.0,
-                    event_rect.center().y,
-                ),
+                Pos2::new(event_rect.left() + 3.0, event_rect.center().y),
                 egui::Align2::LEFT_CENTER,
                 single_line_title,
                 font_id,
@@ -258,7 +263,8 @@ impl MonthView {
             y_offset += 18.0;
         }
 
-        let pointer_pos = response.interact_pointer_pos()
+        let pointer_pos = response
+            .interact_pointer_pos()
             .or_else(|| ui.input(|i| i.pointer.hover_pos()));
         let pointer_hit = pointer_pos.and_then(|pos| {
             event_hitboxes
@@ -283,10 +289,10 @@ impl MonthView {
                     3.0,
                     Stroke::new(2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 180)),
                 );
-                
+
                 // Show pointer cursor
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                
+
                 let tooltip_text = super::week_shared::format_event_tooltip(
                     hovered_event,
                     is_synced_event(hovered_event.id, synced_event_ids),
@@ -308,28 +314,33 @@ impl MonthView {
                 Pos2::new(rect.left() + 3.0, rect.top() + y_offset),
                 Vec2::new(rect.width() - 6.0, 14.0),
             );
-            
+
             // Check hover/click via pointer position (don't use allocate_rect as it breaks Grid)
             let pointer_pos = ui.input(|i| i.pointer.hover_pos());
             let is_hovered = pointer_pos.is_some_and(|pos| more_rect.contains(pos));
-            
+
             // Highlight on hover
             if is_hovered {
                 ui.painter().rect_filled(
                     more_rect,
                     2.0,
-                    Color32::from_rgba_unmultiplied(palette.today_border.r(), palette.today_border.g(), palette.today_border.b(), 50),
+                    Color32::from_rgba_unmultiplied(
+                        palette.today_border.r(),
+                        palette.today_border.g(),
+                        palette.today_border.b(),
+                        50,
+                    ),
                 );
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
-            
+
             // Draw text with underline on hover
             let text_color = if is_hovered {
                 palette.text
             } else {
                 Color32::GRAY
             };
-            
+
             ui.painter().text(
                 Pos2::new(rect.left() + 5.0, rect.top() + y_offset),
                 egui::Align2::LEFT_TOP,
@@ -337,11 +348,13 @@ impl MonthView {
                 egui::FontId::proportional(10.0),
                 text_color,
             );
-            
+
             if is_hovered {
                 // Underline on hover
                 let text_width = ui.fonts(|f| {
-                    f.glyph_width(&egui::FontId::proportional(10.0), ' ') * more_text.len() as f32 * 0.6
+                    f.glyph_width(&egui::FontId::proportional(10.0), ' ')
+                        * more_text.len() as f32
+                        * 0.6
                 });
                 ui.painter().line_segment(
                     [
@@ -350,23 +363,28 @@ impl MonthView {
                     ],
                     egui::Stroke::new(1.0, text_color),
                 );
-                
+
                 // Show tooltip with hidden events using egui's popup system
                 let tooltip_id = egui::Id::new("more_events_tooltip").with(date);
-                egui::containers::popup::show_tooltip(ui.ctx(), egui::LayerId::new(egui::Order::Tooltip, tooltip_id), tooltip_id, |ui| {
-                    ui.label(egui::RichText::new("Hidden events:").strong());
-                    for event in events.iter().skip(3) {
-                        let time_str = if event.all_day {
-                            "All day".to_string()
-                        } else {
-                            event.start.format("%H:%M").to_string()
-                        };
-                        ui.label(format!("• {} - {}", time_str, event.title));
-                    }
-                    ui.label(egui::RichText::new("\nClick to view day").small().weak());
-                });
+                egui::containers::popup::show_tooltip(
+                    ui.ctx(),
+                    egui::LayerId::new(egui::Order::Tooltip, tooltip_id),
+                    tooltip_id,
+                    |ui| {
+                        ui.label(egui::RichText::new("Hidden events:").strong());
+                        for event in events.iter().skip(3) {
+                            let time_str = if event.all_day {
+                                "All day".to_string()
+                            } else {
+                                event.start.format("%H:%M").to_string()
+                            };
+                            ui.label(format!("• {} - {}", time_str, event.title));
+                        }
+                        ui.label(egui::RichText::new("\nClick to view day").small().weak());
+                    },
+                );
             }
-            
+
             // Check if clicked on "+X more"
             if response.clicked() && is_hovered {
                 more_clicked = true;
@@ -424,14 +442,22 @@ impl MonthView {
 
         // Single left-click anywhere in day cell switches to default view for that date
         if response.clicked() {
-            return (MonthViewAction::SwitchToDefaultView(date), None, delete_confirm_request);
+            return (
+                MonthViewAction::SwitchToDefaultView(date),
+                None,
+                delete_confirm_request,
+            );
         }
-        
+
         // Handle "+X more" click to switch to day view
         if more_clicked {
-            return (MonthViewAction::SwitchToDayView(date), None, delete_confirm_request);
+            return (
+                MonthViewAction::SwitchToDayView(date),
+                None,
+                delete_confirm_request,
+            );
         }
-        
+
         (MonthViewAction::None, None, delete_confirm_request)
     }
 }

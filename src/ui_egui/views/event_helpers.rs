@@ -138,7 +138,10 @@ pub fn event_covers_date(event: &Event, date: NaiveDate) -> bool {
 }
 
 pub fn build_ribbon_lanes(events: &[Event]) -> Vec<Vec<&Event>> {
-    let mut sorted: Vec<&Event> = events.iter().filter(|event| is_ribbon_event(event)).collect();
+    let mut sorted: Vec<&Event> = events
+        .iter()
+        .filter(|event| is_ribbon_event(event))
+        .collect();
 
     sorted.sort_by(|a, b| {
         let a_start = a.start.date_naive();
@@ -177,10 +180,7 @@ pub fn build_ribbon_lanes(events: &[Event]) -> Vec<Vec<&Event>> {
     lanes
 }
 
-pub fn load_synced_event_ids(
-    database: &'static Database,
-    source_id: Option<i64>,
-) -> HashSet<i64> {
+pub fn load_synced_event_ids(database: &'static Database, source_id: Option<i64>) -> HashSet<i64> {
     let service = EventSyncMapService::new(database.connection());
     let ids_result = match source_id {
         Some(source_id) => service.list_synced_local_event_ids_for_enabled_source(source_id),

@@ -11,12 +11,12 @@ use egui::{Align, Color32, CursorIcon, Rect, Sense, Vec2};
 use std::collections::HashSet;
 
 use super::{
-    countdown_menu_state, is_synced_event,
-    AutoFocusRequest, CountdownMenuState, CountdownRequest, render_countdown_menu_items,
+    countdown_menu_state, is_synced_event, render_countdown_menu_items, AutoFocusRequest,
+    CountdownMenuState, CountdownRequest,
 };
 use crate::models::event::Event;
 use crate::services::database::Database;
-use crate::ui_egui::resize::{HandleRects, ResizeContext, ResizeManager, ResizeView, draw_handles};
+use crate::ui_egui::resize::{draw_handles, HandleRects, ResizeContext, ResizeManager, ResizeView};
 
 // Re-export items from extracted modules so existing consumers compile unchanged.
 pub use super::event_rendering::{format_event_tooltip, parse_color};
@@ -93,7 +93,7 @@ pub fn maybe_focus_slot(
 
 /// Render an event in the all-day ribbon area.
 /// Returns the interaction result and the event rect (for resize handle tracking).
-/// 
+///
 /// Parameters:
 /// - `show_left_handle`: True if this is the first day of the event (can resize start date)
 /// - `show_right_handle`: True if this is the last day of the event (can resize end date)
@@ -107,9 +107,17 @@ pub fn render_ribbon_event(
     synced_event_ids: &HashSet<i64>,
 ) -> EventInteractionResult {
     render_ribbon_event_with_handles(
-        ui, event, countdown_requests, active_countdown_events, _database, synced_event_ids,
-        true, true, None,
-    ).0
+        ui,
+        event,
+        countdown_requests,
+        active_countdown_events,
+        _database,
+        synced_event_ids,
+        true,
+        true,
+        None,
+    )
+    .0
 }
 
 /// Extended ribbon event renderer with resize handle support.
@@ -128,16 +136,16 @@ pub fn render_ribbon_event_with_handles(
 ) -> (EventInteractionResult, Option<Rect>) {
     let mut result = EventInteractionResult::default();
     let is_synced = is_synced_event(event.id, synced_event_ids);
-    
+
     let now = Local::now();
     let is_past = event.end < now;
-    
+
     let base_color = event
         .color
         .as_deref()
         .and_then(parse_color)
         .unwrap_or(Color32::from_rgb(100, 150, 200));
-    
+
     // Dim past events with stronger dimming for visibility
     let event_color = if is_past {
         Color32::from_rgba_unmultiplied(
@@ -149,7 +157,7 @@ pub fn render_ribbon_event_with_handles(
     } else {
         base_color
     };
-    
+
     // Text color for past events
     let text_color = if is_past {
         Color32::from_rgba_unmultiplied(255, 255, 255, 150)
@@ -168,8 +176,16 @@ pub fn render_ribbon_event_with_handles(
     let rounding = egui::Rounding {
         nw: if show_left_handle { corner_radius } else { 0.0 },
         sw: if show_left_handle { corner_radius } else { 0.0 },
-        ne: if show_right_handle { corner_radius } else { 0.0 },
-        se: if show_right_handle { corner_radius } else { 0.0 },
+        ne: if show_right_handle {
+            corner_radius
+        } else {
+            0.0
+        },
+        se: if show_right_handle {
+            corner_radius
+        } else {
+            0.0
+        },
     };
 
     // Adjust horizontal inner margin so multi-day ribbons extend to column
@@ -207,22 +223,19 @@ pub fn render_ribbon_event_with_handles(
                     .map(|id| active_countdown_events.contains(&id))
                     .unwrap_or(false);
                 if has_countdown {
-                    ui.label(
-                        egui::RichText::new("⏱")
-                            .color(text_color)
-                            .size(10.0),
-                    );
+                    ui.label(egui::RichText::new("⏱").color(text_color).size(10.0));
                 }
-                
+
                 // Show location icon if event has a location
-                if event.location.as_ref().map(|l| !l.is_empty()).unwrap_or(false) {
-                    ui.label(
-                        egui::RichText::new("📍")
-                            .color(text_color)
-                            .size(10.0),
-                    );
+                if event
+                    .location
+                    .as_ref()
+                    .map(|l| !l.is_empty())
+                    .unwrap_or(false)
+                {
+                    ui.label(egui::RichText::new("📍").color(text_color).size(10.0));
                 }
-                
+
                 let display_title = if is_synced {
                     format!("🔒 {}", event.title)
                 } else {
@@ -232,10 +245,13 @@ pub fn render_ribbon_event_with_handles(
                 let title_width = ui.available_width().max(0.0);
                 ui.add_sized(
                     Vec2::new(title_width, 12.0),
-                    egui::Label::new(egui::RichText::new(display_title).color(text_color).size(11.0))
-                        .truncate(),
+                    egui::Label::new(
+                        egui::RichText::new(display_title)
+                            .color(text_color)
+                            .size(11.0),
+                    )
+                    .truncate(),
                 );
-
             });
         })
         .response;
@@ -257,7 +273,9 @@ pub fn render_ribbon_event_with_handles(
         } else {
             tooltip
         };
-        response.interact(Sense::click_and_drag()).on_hover_text(tooltip)
+        response
+            .interact(Sense::click_and_drag())
+            .on_hover_text(tooltip)
     } else {
         let response = response.interact(Sense::click_and_drag());
         if is_synced {
@@ -375,22 +393,23 @@ pub fn render_ribbon_event_with_handles(
 
     // Get the event rect for resize handle tracking
     let event_rect = interactive_response.rect;
-    
+
     // Draw resize handles if applicable (not past, not recurring, handles enabled)
     let can_resize = !is_synced
         && !is_past
         && event.recurrence_rule.is_none()
         && (show_left_handle || show_right_handle);
-    
+
     let mut on_resize_handle = false;
     if can_resize {
-        let handles = HandleRects::for_ribbon_event_in_day(event_rect, show_left_handle, show_right_handle);
-        
+        let handles =
+            HandleRects::for_ribbon_event_in_day(event_rect, show_left_handle, show_right_handle);
+
         // Check for hover on handles
         let pointer_pos = ui.input(|i| i.pointer.hover_pos());
         let hovered_handle = pointer_pos.and_then(|pos| handles.hit_test(pos));
         on_resize_handle = hovered_handle.is_some();
-        
+
         // Draw handles when hovering over the event
         if interactive_response.hovered() || hovered_handle.is_some() {
             let handle_color = event
@@ -400,23 +419,21 @@ pub fn render_ribbon_event_with_handles(
                 .unwrap_or(Color32::from_rgb(100, 150, 200));
             draw_handles(ui, &handles, hovered_handle, handle_color);
         }
-        
+
         // Set cursor for resize handles
         if let Some(handle) = hovered_handle {
             ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
         }
-        
+
         // Detect drag start on handles to initiate resize
         if interactive_response.drag_started() {
             let drag_start_pos = interactive_response.interact_pointer_pos();
             if let Some(pos) = drag_start_pos {
                 if let Some(handle) = handles.hit_test(pos) {
                     // Start resize operation
-                    if let Some(resize_context) = ResizeContext::from_event(
-                        event,
-                        handle,
-                        ResizeView::Ribbon,
-                    ) {
+                    if let Some(resize_context) =
+                        ResizeContext::from_event(event, handle, ResizeView::Ribbon)
+                    {
                         ResizeManager::begin(ui.ctx(), resize_context);
                         ui.output_mut(|out| out.cursor_icon = handle.cursor_icon());
                     }
@@ -424,7 +441,7 @@ pub fn render_ribbon_event_with_handles(
             }
         }
     }
-    
+
     // Pointer cursor when hovering over ribbon event (not on resize handles)
     if interactive_response.hovered() && !on_resize_handle {
         ui.output_mut(|out| out.cursor_icon = CursorIcon::PointingHand);

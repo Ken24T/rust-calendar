@@ -27,7 +27,7 @@ impl CalendarApp {
             .show(ctx, |ui| {
                 ui.set_min_width(300.0);
                 ui.set_max_width(400.0);
-                
+
                 egui::Frame::none()
                     .inner_margin(egui::Margin::symmetric(15.0, 10.0))
                     .show(ui, |ui| {
@@ -35,34 +35,34 @@ impl CalendarApp {
                             // App icon/title
                             ui.heading("📅 Rust Calendar");
                             ui.add_space(5.0);
-                            
+
                             // Version
                             ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                             ui.add_space(10.0);
-                            
+
                             ui.separator();
                             ui.add_space(10.0);
-                            
+
                             // Description
                             ui.label(env!("CARGO_PKG_DESCRIPTION"));
                             ui.add_space(10.0);
-                            
+
                             // Author
                             ui.label(format!("Author: {}", env!("CARGO_PKG_AUTHORS")));
                             ui.add_space(5.0);
-                            
+
                             // License
                             ui.label(format!("License: {}", env!("CARGO_PKG_LICENSE")));
                             ui.add_space(10.0);
-                            
+
                             ui.separator();
                             ui.add_space(10.0);
-                            
+
                             // System info
                             ui.label(egui::RichText::new("System Information").strong());
                             ui.add_space(5.0);
                         });
-                        
+
                         // Grid needs to be outside vertical_centered to align properly
                         egui::Grid::new("about_system_info")
                             .num_columns(2)
@@ -71,34 +71,31 @@ impl CalendarApp {
                                 ui.label("Rust Version:");
                                 ui.label(env!("CARGO_PKG_RUST_VERSION", "stable"));
                                 ui.end_row();
-                                
+
                                 ui.label("Target:");
                                 ui.label(std::env::consts::ARCH);
                                 ui.end_row();
-                                
+
                                 ui.label("OS:");
                                 ui.label(std::env::consts::OS);
                                 ui.end_row();
-                                
+
                                 ui.label("GUI Framework:");
                                 ui.label("egui/eframe 0.28");
                                 ui.end_row();
                             });
-                        
+
                         ui.add_space(15.0);
-                        
+
                         ui.vertical_centered(|ui| {
                             // Repository link
-                            ui.hyperlink_to(
-                                "🔗 GitHub Repository",
-                                env!("CARGO_PKG_REPOSITORY"),
-                            );
+                            ui.hyperlink_to("🔗 GitHub Repository", env!("CARGO_PKG_REPOSITORY"));
                         });
-                        
+
                         ui.add_space(5.0);
                     });
             });
-        
+
         if !dialog_open {
             self.state.show_about_dialog = false;
         }

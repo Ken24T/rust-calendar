@@ -8,7 +8,10 @@ use egui::Color32;
 use std::collections::HashSet;
 
 use super::week_shared::{DeleteConfirmRequest, EventInteractionResult};
-use super::{countdown_menu_state, is_synced_event, CountdownMenuState, CountdownRequest, render_countdown_menu_items};
+use super::{
+    countdown_menu_state, is_synced_event, render_countdown_menu_items, CountdownMenuState,
+    CountdownRequest,
+};
 use crate::models::event::Event;
 use crate::models::template::EventTemplate;
 use crate::services::database::Database;

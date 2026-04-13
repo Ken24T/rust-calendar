@@ -19,10 +19,10 @@ pub struct EventColors {
 impl Default for EventColors {
     fn default() -> Self {
         Self {
-            default: Color32::from_rgb(100, 149, 237),  // Cornflower blue
-            work: Color32::from_rgb(0, 122, 204),       // Blue
-            personal: Color32::from_rgb(22, 130, 93),   // Green
-            holiday: Color32::from_rgb(221, 177, 0),    // Gold
+            default: Color32::from_rgb(100, 149, 237), // Cornflower blue
+            work: Color32::from_rgb(0, 122, 204),      // Blue
+            personal: Color32::from_rgb(22, 130, 93),  // Green
+            holiday: Color32::from_rgb(221, 177, 0),   // Gold
             birthday: Color32::from_rgb(244, 135, 113), // Coral
         }
     }
@@ -246,7 +246,7 @@ impl CalendarTheme {
         visuals.override_text_color = Some(self.text_primary);
 
         ctx.set_visuals(visuals);
-        
+
         // Also adjust spacing/interaction to reduce gaps between panels
         let mut style = (*ctx.style()).clone();
         style.spacing.window_margin = egui::Margin::ZERO;
@@ -326,23 +326,26 @@ birthday = "{}"
 
     /// Import theme from TOML format
     pub fn from_toml(toml_str: &str) -> Result<Self, String> {
-        let value: toml::Value = toml::from_str(toml_str)
-            .map_err(|e| format!("Failed to parse TOML: {}", e))?;
+        let value: toml::Value =
+            toml::from_str(toml_str).map_err(|e| format!("Failed to parse TOML: {}", e))?;
 
         let theme = value.get("theme").ok_or("Missing [theme] section")?;
         let colors = value.get("colors").ok_or("Missing [colors] section")?;
 
-        let name = theme.get("name")
+        let name = theme
+            .get("name")
             .and_then(|v| v.as_str())
             .ok_or("Missing theme name")?
             .to_string();
 
-        let is_dark = theme.get("is_dark")
+        let is_dark = theme
+            .get("is_dark")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
         let get_color = |section: &toml::Value, key: &str, default: Color32| -> Color32 {
-            section.get(key)
+            section
+                .get(key)
                 .and_then(|v| v.as_str())
                 .and_then(|s| Self::hex_to_color(s).ok())
                 .unwrap_or(default)
@@ -460,7 +463,7 @@ mod tests {
         let theme = CalendarTheme::nord();
         let toml = theme.to_toml();
         let parsed = CalendarTheme::from_toml(&toml).unwrap();
-        
+
         assert_eq!(parsed.name, theme.name);
         assert_eq!(parsed.is_dark, theme.is_dark);
         assert_eq!(parsed.app_background, theme.app_background);

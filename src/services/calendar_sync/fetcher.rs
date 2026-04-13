@@ -97,7 +97,8 @@ impl IcsFetcher {
             ));
         }
 
-        let content = String::from_utf8(bytes.to_vec()).context("ICS response is not valid UTF-8")?;
+        let content =
+            String::from_utf8(bytes.to_vec()).context("ICS response is not valid UTF-8")?;
 
         if !(content.contains("BEGIN:VCALENDAR") || content.contains("BEGIN:VEVENT")) {
             return Err(anyhow!("Response does not appear to be valid ICS content"));

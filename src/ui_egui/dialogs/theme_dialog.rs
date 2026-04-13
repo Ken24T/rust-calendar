@@ -61,7 +61,10 @@ pub enum ThemeDialogAction {
     CreateTheme,
     EditTheme(String),
     DeleteTheme(String),
-    DuplicateTheme { source: String, new_name: String },
+    DuplicateTheme {
+        source: String,
+        new_name: String,
+    },
     ExportTheme(String),
     ImportTheme,
     Close,
@@ -75,7 +78,8 @@ fn render_color_swatches(ui: &mut egui::Ui, colors: [Color32; 4]) {
         for color in colors {
             let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
             ui.painter().rect_filled(rect, 2.0, color);
-            ui.painter().rect_stroke(rect, 2.0, Stroke::new(0.5, Color32::GRAY));
+            ui.painter()
+                .rect_stroke(rect, 2.0, Stroke::new(0.5, Color32::GRAY));
         }
     });
 }
@@ -107,7 +111,10 @@ pub fn render_theme_dialog(
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.label(format!("Are you sure you want to delete '{}'?", theme_to_delete));
+                ui.label(format!(
+                    "Are you sure you want to delete '{}'?",
+                    theme_to_delete
+                ));
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
                     if ui.button("Delete").clicked() {
@@ -142,10 +149,10 @@ pub fn render_theme_dialog(
                     ui.text_edit_singleline(&mut state.duplicate_name);
                 });
                 ui.add_space(10.0);
-                
-                let name_valid = !state.duplicate_name.trim().is_empty() 
+
+                let name_valid = !state.duplicate_name.trim().is_empty()
                     && !CalendarTheme::is_builtin(&state.duplicate_name);
-                
+
                 ui.horizontal(|ui| {
                     ui.add_enabled_ui(name_valid, |ui| {
                         if ui.button("Duplicate").clicked() {
@@ -160,11 +167,16 @@ pub fn render_theme_dialog(
                         show_duplicate = false;
                     }
                 });
-                
-                if !name_valid && !state.duplicate_name.is_empty()
-                    && CalendarTheme::is_builtin(&state.duplicate_name) {
-                        ui.colored_label(ui.visuals().error_fg_color, "Cannot use a built-in theme name");
-                    }
+
+                if !name_valid
+                    && !state.duplicate_name.is_empty()
+                    && CalendarTheme::is_builtin(&state.duplicate_name)
+                {
+                    ui.colored_label(
+                        ui.visuals().error_fg_color,
+                        "Cannot use a built-in theme name",
+                    );
+                }
             });
         if !show_duplicate {
             state.duplicate_source = None;
@@ -198,7 +210,7 @@ pub fn render_theme_dialog(
 
                             ui.horizontal(|ui| {
                                 render_color_swatches(ui, colors);
-                                
+
                                 let label = if is_current {
                                     RichText::new(format!("{} {}", preset.icon(), name))
                                         .strong()
@@ -208,16 +220,16 @@ pub fn render_theme_dialog(
                                 };
 
                                 let response = ui.selectable_label(is_current, label);
-                                
+
                                 // Live preview on hover
                                 // Allow preview even for current theme if we're already previewing something else
-                                let should_preview = response.hovered() 
+                                let should_preview = response.hovered()
                                     && state.preview_theme.as_deref() != Some(name)
                                     && (!is_current || state.preview_theme.is_some());
                                 if should_preview {
                                     action = ThemeDialogAction::PreviewTheme(name.to_string());
                                 }
-                                
+
                                 if response.clicked() && !is_current {
                                     action = ThemeDialogAction::ApplyTheme(name.to_string());
                                 }
@@ -251,7 +263,11 @@ pub fn render_theme_dialog(
                     .collect();
 
                 if custom_themes.is_empty() {
-                    ui.label(RichText::new("No custom themes yet. Create one or import from a file.").weak().italics());
+                    ui.label(
+                        RichText::new("No custom themes yet. Create one or import from a file.")
+                            .weak()
+                            .italics(),
+                    );
                 } else {
                     egui::ScrollArea::vertical()
                         .max_height(200.0)
@@ -261,7 +277,8 @@ pub fn render_theme_dialog(
 
                                 ui.horizontal(|ui| {
                                     // Color swatches (from cache if available)
-                                    if let Some(colors) = state.custom_theme_colors.get(*theme_name) {
+                                    if let Some(colors) = state.custom_theme_colors.get(*theme_name)
+                                    {
                                         render_color_swatches(ui, *colors);
                                     } else {
                                         // Placeholder swatches
@@ -278,40 +295,53 @@ pub fn render_theme_dialog(
                                     };
 
                                     let response = ui.selectable_label(is_current, label);
-                                    
+
                                     // Live preview on hover
                                     // Allow preview even for current theme if we're already previewing something else
-                                    let should_preview = response.hovered() 
-                                        && state.preview_theme.as_deref() != Some(theme_name.as_str())
+                                    let should_preview = response.hovered()
+                                        && state.preview_theme.as_deref()
+                                            != Some(theme_name.as_str())
                                         && (!is_current || state.preview_theme.is_some());
                                     if should_preview {
-                                        action = ThemeDialogAction::PreviewTheme(theme_name.to_string());
+                                        action =
+                                            ThemeDialogAction::PreviewTheme(theme_name.to_string());
                                     }
-                                    
+
                                     if response.clicked() && !is_current {
-                                        action = ThemeDialogAction::ApplyTheme(theme_name.to_string());
+                                        action =
+                                            ThemeDialogAction::ApplyTheme(theme_name.to_string());
                                     }
 
                                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                         // Delete button
-                                        if ui.small_button("🗑").on_hover_text("Delete").clicked() {
+                                        if ui.small_button("🗑").on_hover_text("Delete").clicked()
+                                        {
                                             state.delete_confirm = Some(theme_name.to_string());
                                         }
 
                                         // Export button
-                                        if ui.small_button("📤").on_hover_text("Export").clicked() {
-                                            action = ThemeDialogAction::ExportTheme(theme_name.to_string());
+                                        if ui.small_button("📤").on_hover_text("Export").clicked()
+                                        {
+                                            action = ThemeDialogAction::ExportTheme(
+                                                theme_name.to_string(),
+                                            );
                                         }
 
                                         // Duplicate button
-                                        if ui.small_button("📋").on_hover_text("Duplicate").clicked() {
+                                        if ui
+                                            .small_button("📋")
+                                            .on_hover_text("Duplicate")
+                                            .clicked()
+                                        {
                                             state.duplicate_source = Some(theme_name.to_string());
                                             state.duplicate_name = format!("{} Copy", theme_name);
                                         }
 
                                         // Edit button
                                         if ui.small_button("✏").on_hover_text("Edit").clicked() {
-                                            action = ThemeDialogAction::EditTheme(theme_name.to_string());
+                                            action = ThemeDialogAction::EditTheme(
+                                                theme_name.to_string(),
+                                            );
                                         }
                                     });
                                 });

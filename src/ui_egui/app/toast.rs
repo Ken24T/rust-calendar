@@ -131,7 +131,7 @@ impl Toast {
     pub fn opacity(&self) -> f32 {
         let elapsed = self.created_at.elapsed();
         let fade_start = self.duration.saturating_sub(Duration::from_millis(500));
-        
+
         if elapsed >= self.duration {
             0.0
         } else if elapsed >= fade_start {
@@ -250,7 +250,9 @@ impl ToastManager {
                         .show(ui, |ui| {
                             ui.set_min_width(toast_width - 24.0);
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new(toast.level.icon()).color(text_color).strong());
+                                ui.label(
+                                    RichText::new(toast.level.icon()).color(text_color).strong(),
+                                );
                                 ui.label(RichText::new(&toast.message).color(text_color));
                             });
                         });

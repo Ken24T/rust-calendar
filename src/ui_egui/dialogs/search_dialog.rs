@@ -18,7 +18,6 @@ pub struct SearchDialogState {
     pub selected_event: Option<i64>,
 }
 
-
 /// Action result from the search dialog
 pub enum SearchDialogAction {
     /// No action
@@ -108,13 +107,13 @@ pub fn render_search_dialog(
                     for event in &state.results {
                         let is_selected = state.selected_event == event.id;
                         let event_is_synced = is_synced_event(event.id, &synced_event_ids);
-                        
+
                         let frame_bg = if is_selected {
                             theme.today_background
                         } else {
                             theme.day_background
                         };
-                        
+
                         let event_color = event
                             .color
                             .as_deref()
@@ -175,9 +174,7 @@ pub fn render_search_dialog(
                         // Handle clicks - single click navigates to date
                         if response.clicked() {
                             state.selected_event = event.id;
-                            action = SearchDialogAction::NavigateToDate(
-                                event.start.date_naive(),
-                            );
+                            action = SearchDialogAction::NavigateToDate(event.start.date_naive());
                         }
 
                         if response.double_clicked() {
@@ -193,9 +190,8 @@ pub fn render_search_dialog(
                         // Context menu
                         response.context_menu(|ui| {
                             if ui.button("📅 Go to date").clicked() {
-                                action = SearchDialogAction::NavigateToDate(
-                                    event.start.date_naive(),
-                                );
+                                action =
+                                    SearchDialogAction::NavigateToDate(event.start.date_naive());
                                 ui.close_menu();
                             }
                             if event_is_synced {
@@ -232,7 +228,9 @@ pub fn render_search_dialog(
                     let selected_is_synced = is_synced_event(Some(event_id), &synced_event_ids);
 
                     if ui.button("📅 Go to date").clicked() {
-                        if let Some(event) = state.results.iter().find(|e| e.id == state.selected_event) {
+                        if let Some(event) =
+                            state.results.iter().find(|e| e.id == state.selected_event)
+                        {
                             action = SearchDialogAction::NavigateToDate(event.start.date_naive());
                         }
                     }

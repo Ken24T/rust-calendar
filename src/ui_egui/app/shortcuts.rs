@@ -1,12 +1,12 @@
-use super::CalendarApp;
 use super::state::ViewType;
+use super::CalendarApp;
 
 impl CalendarApp {
     pub(super) fn handle_keyboard_shortcuts(&mut self, ctx: &egui::Context) {
         // Check if we're interacting with a text input
         // This prevents view shortcuts from firing while typing
         let is_typing = ctx.wants_keyboard_input();
-        
+
         ctx.input(|i| {
             if i.key_pressed(egui::Key::Escape) {
                 if self.show_event_dialog {
@@ -66,8 +66,8 @@ impl CalendarApp {
             }
 
             // Ctrl+Y or Ctrl+Shift+Z to redo
-            if (i.modifiers.ctrl && i.key_pressed(egui::Key::Y)) 
-                || (i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Z)) 
+            if (i.modifiers.ctrl && i.key_pressed(egui::Key::Y))
+                || (i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Z))
             {
                 self.perform_redo();
             }
@@ -85,7 +85,7 @@ impl CalendarApp {
                 || self.state.date_picker_state.is_open
                 || self.state.template_manager_state.is_open
                 || self.state.show_export_range_dialog;
-                
+
             if !any_dialog_open {
                 // D for Day view
                 if i.key_pressed(egui::Key::D) && !i.modifiers.ctrl {

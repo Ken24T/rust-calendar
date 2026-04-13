@@ -15,17 +15,20 @@ impl CalendarApp {
         // Mini calendar needs: 7 cols × 18px + 6 gaps × 2px + padding ≈ 150px
         const SIDEBAR_MIN_WIDTH: f32 = 150.0;
         const SIDEBAR_MAX_WIDTH: f32 = 300.0;
-        
+
         // Use persisted width from settings, clamped to valid range
-        let width = self.settings.sidebar_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
-        
+        let width = self
+            .settings
+            .sidebar_width
+            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
+
         // Use unique IDs for left and right panels
         let panel_id = if self.settings.my_day_position_right {
             "sidebar_right"
         } else {
             "sidebar_left"
         };
-        
+
         // Build the panel - use exact_width to force our size
         // Use a frame with no outer margin and no stroke to prevent gaps between panels
         // Inner margin provides padding for content
@@ -33,18 +36,18 @@ impl CalendarApp {
             .outer_margin(egui::Margin::ZERO)
             .inner_margin(egui::Margin {
                 left: 8.0,
-                right: 0.0,  // No right margin - central panel will provide its padding
+                right: 0.0, // No right margin - central panel will provide its padding
                 top: 8.0,
                 bottom: 8.0,
             })
             .stroke(egui::Stroke::NONE);
-        
+
         let panel = if self.settings.my_day_position_right {
             egui::SidePanel::right(panel_id)
         } else {
             egui::SidePanel::left(panel_id)
         };
-        
+
         // Use exact_width which disables egui's built-in resizing
         // Set min/max to same value to prevent any resize margin allocation
         let response = panel
@@ -57,11 +60,11 @@ impl CalendarApp {
             .show(ctx, |ui| {
                 self.render_sidebar_content(ui);
             });
-        
+
         // Manual resize handle on the panel edge
         let panel_rect = response.response.rect;
         let resize_grab_width = 4.0; // Fixed grab width
-        
+
         let resize_rect = if self.settings.my_day_position_right {
             // Resize handle on the left edge of right panel
             egui::Rect::from_x_y_ranges(
@@ -75,26 +78,28 @@ impl CalendarApp {
                 panel_rect.y_range(),
             )
         };
-        
+
         let resize_id = egui::Id::new(panel_id).with("__resize");
-        
+
         // Check for pointer interaction directly
         let pointer_pos = ctx.input(|i| i.pointer.interact_pos());
-        let is_hovering = pointer_pos.map(|p| resize_rect.contains(p)).unwrap_or(false);
+        let is_hovering = pointer_pos
+            .map(|p| resize_rect.contains(p))
+            .unwrap_or(false);
         let is_dragging = ctx.is_being_dragged(resize_id);
         let drag_started = is_hovering && ctx.input(|i| i.pointer.any_pressed());
         let drag_released = ctx.input(|i| i.pointer.any_released());
-        
+
         // Start drag
         if drag_started && !is_dragging {
             ctx.set_dragged_id(resize_id);
         }
-        
+
         // Show resize cursor when hovering or dragging
         if is_hovering || is_dragging {
             ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
         }
-        
+
         // Handle drag to resize
         if is_dragging {
             if let Some(pos) = pointer_pos {
@@ -104,13 +109,13 @@ impl CalendarApp {
                 } else {
                     pos.x - screen.left()
                 };
-                
+
                 let clamped_width = new_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH);
                 if (clamped_width - self.settings.sidebar_width).abs() > 0.5 {
                     self.settings.sidebar_width = clamped_width;
                 }
             }
-            
+
             // Draw resize indicator line
             let x = if self.settings.my_day_position_right {
                 panel_rect.left()
@@ -119,11 +124,14 @@ impl CalendarApp {
             };
             ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, resize_id))
                 .line_segment(
-                    [egui::pos2(x, panel_rect.top()), egui::pos2(x, panel_rect.bottom())],
+                    [
+                        egui::pos2(x, panel_rect.top()),
+                        egui::pos2(x, panel_rect.bottom()),
+                    ],
                     egui::Stroke::new(2.0, ctx.style().visuals.selection.bg_fill),
                 );
         }
-        
+
         // Stop dragging and save on release
         if drag_released && is_dragging {
             ctx.stop_dragging();
@@ -135,7 +143,7 @@ impl CalendarApp {
     fn render_sidebar_content(&mut self, ui: &mut egui::Ui) {
         // Clip content to panel width to prevent content from forcing panel wider
         ui.set_clip_rect(ui.available_rect_before_wrap());
-        
+
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -158,15 +166,25 @@ impl CalendarApp {
 
         // Header with month navigation
         ui.horizontal(|ui| {
-            if ui.small_button("◀").on_hover_text("Previous month").clicked() {
+            if ui
+                .small_button("◀")
+                .on_hover_text("Previous month")
+                .clicked()
+            {
                 self.current_date = shift_month(self.current_date, -1);
             }
 
             // Center the month label between the arrows
             let header = viewing_date.format("%B %Y").to_string();
             let available_width = ui.available_width() - 20.0; // Reserve space for right arrow
-            ui.add_space((available_width - ui.text_style_height(&egui::TextStyle::Body) * header.len() as f32 * 0.5).max(0.0) / 2.0);
-            if ui.selectable_label(false, RichText::new(&header).strong())
+            ui.add_space(
+                (available_width
+                    - ui.text_style_height(&egui::TextStyle::Body) * header.len() as f32 * 0.5)
+                    .max(0.0)
+                    / 2.0,
+            );
+            if ui
+                .selectable_label(false, RichText::new(&header).strong())
                 .on_hover_text("Go to today")
                 .clicked()
             {
@@ -185,14 +203,14 @@ impl CalendarApp {
 
         // Day of week headers and calendar grid
         let day_names = ["S", "M", "T", "W", "T", "F", "S"];
-        
+
         let available = ui.available_width();
 
         egui::Grid::new("sidebar_mini_calendar")
             .num_columns(7)
             .spacing([1.0, 1.0])
-            .min_col_width(0.0)  // Let columns be as small as needed
-            .max_col_width(available / 7.0)  // Distribute available width
+            .min_col_width(0.0) // Let columns be as small as needed
+            .max_col_width(available / 7.0) // Distribute available width
             .show(ui, |ui| {
                 // Header row
                 for name in &day_names {
@@ -215,7 +233,9 @@ impl CalendarApp {
                         let day_str = format!("{}", current.day());
 
                         let text = if is_today {
-                            RichText::new(&day_str).strong().color(Color32::from_rgb(50, 150, 50))
+                            RichText::new(&day_str)
+                                .strong()
+                                .color(Color32::from_rgb(50, 150, 50))
                         } else if !is_current_month {
                             RichText::new(&day_str).weak()
                         } else {
@@ -244,7 +264,7 @@ impl CalendarApp {
         let today = Local::now().date_naive();
         let selected_date = self.current_date;
         let is_today = selected_date == today;
-        
+
         let events = self.get_events_for_date(selected_date);
 
         // Show different header based on whether viewing today or another date
@@ -273,7 +293,11 @@ impl CalendarApp {
                         self.render_sidebar_event_item(ui, event, !is_today);
                     }
                     if events.len() > 5 {
-                        ui.label(RichText::new(format!("...and {} more", events.len() - 5)).weak().small());
+                        ui.label(
+                            RichText::new(format!("...and {} more", events.len() - 5))
+                                .weak()
+                                .small(),
+                        );
                     }
                 });
         }
@@ -309,22 +333,22 @@ impl CalendarApp {
             .unwrap_or(Color32::from_rgb(100, 150, 200));
 
         let available_width = ui.available_width();
-        
+
         ui.horizontal(|ui| {
             ui.set_max_width(available_width);
-            
+
             // Color indicator
             let (rect, _) = ui.allocate_exact_size(egui::vec2(4.0, 16.0), egui::Sense::hover());
             ui.painter().rect_filled(rect, 2.0, event_color);
 
             ui.vertical(|ui| {
                 ui.set_max_width(available_width - 10.0);
-                
+
                 // Event title (clickable) - truncate to fit
                 let title_response = ui.add(
                     egui::Label::new(RichText::new(&event.title).small())
                         .sense(egui::Sense::click())
-                        .truncate()
+                        .truncate(),
                 );
                 if title_response.clicked() {
                     // Navigate to the event date

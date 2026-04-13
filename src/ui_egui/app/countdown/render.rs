@@ -290,7 +290,7 @@ pub(super) fn render_countdown_card_ui(
                 |countdown_ui| {
                     let duration = card.start_at.signed_duration_since(now);
                     let total_hours = duration.num_hours();
-                    
+
                     // Show HH:MM if less than 24 hours, otherwise show days
                     let countdown_text = if (0..24).contains(&total_hours) {
                         let hours = total_hours;
@@ -337,11 +337,10 @@ pub(super) fn render_countdown_card_ui(
         });
 
         inner.response.context_menu(|ui| {
-            if card.event_id.is_some()
-                && ui.button("📝 Edit event...").clicked() {
-                    action = CountdownCardUiAction::OpenEventDialog;
-                    ui.close_menu();
-                }
+            if card.event_id.is_some() && ui.button("📝 Edit event...").clicked() {
+                action = CountdownCardUiAction::OpenEventDialog;
+                ui.close_menu();
+            }
             if ui.button("⚙ Card settings...").clicked() {
                 action = CountdownCardUiAction::OpenSettings;
                 ui.close_menu();

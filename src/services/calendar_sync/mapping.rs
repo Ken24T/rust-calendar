@@ -44,7 +44,11 @@ impl<'a> EventSyncMapService<'a> {
         Ok(mapping)
     }
 
-    pub fn get_by_source_and_uid(&self, source_id: i64, external_uid: &str) -> Result<Option<EventSyncMap>> {
+    pub fn get_by_source_and_uid(
+        &self,
+        source_id: i64,
+        external_uid: &str,
+    ) -> Result<Option<EventSyncMap>> {
         let result = self.conn.query_row(
             "SELECT id, source_id, external_uid, local_event_id,
                     external_last_modified, external_etag_hash, last_seen_at
@@ -417,7 +421,9 @@ mod tests {
         };
         service.create(mapping).unwrap();
 
-        service.delete_by_source_and_uid(source_id, "uid-del").unwrap();
+        service
+            .delete_by_source_and_uid(source_id, "uid-del")
+            .unwrap();
         assert!(service
             .get_by_source_and_uid(source_id, "uid-del")
             .unwrap()

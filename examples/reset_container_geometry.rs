@@ -9,7 +9,7 @@ use std::path::PathBuf;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let should_reset = args.len() > 1 && args[1] == "reset";
-    
+
     // In debug mode, database is in current directory
     // In release mode, it's in APPDATA
     let debug_path = PathBuf::from("calendar.db");
@@ -18,7 +18,7 @@ fn main() {
         .unwrap_or_else(|_| PathBuf::from("."))
         .join("rust-calendar")
         .join("calendar.db");
-    
+
     let db_path = if debug_path.exists() {
         debug_path
     } else {
@@ -58,7 +58,7 @@ fn main() {
     if should_reset {
         // Reset to primary monitor position
         println!("\nResetting container geometry to (100, 100, 200, 400)...");
-        
+
         conn.execute(
             "UPDATE countdown_settings SET container_geometry_x = 100, container_geometry_y = 100, container_geometry_width = 200, container_geometry_height = 400 WHERE id = 1",
             [],

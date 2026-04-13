@@ -120,11 +120,7 @@ pub fn render_event_in_slot(
 /// is still active in this time range.
 ///
 /// Returns the bounding rectangle of the rendered continuation block.
-pub fn render_event_continuation(
-    ui: &mut egui::Ui,
-    slot_rect: Rect,
-    event: &Event,
-) -> Rect {
+pub fn render_event_continuation(ui: &mut egui::Ui, slot_rect: Rect, event: &Event) -> Rect {
     let now = Local::now();
     let is_past = event.end < now;
 

@@ -161,9 +161,11 @@ impl CalendarApp {
                 .filter(is_ribbon_event)
                 .collect::<Vec<_>>();
 
-            let all_events = filter_events_by_category(all_events, self.active_category_filter.as_deref());
+            let all_events =
+                filter_events_by_category(all_events, self.active_category_filter.as_deref());
             if self.show_synced_events_only {
-                let synced_event_ids = load_synced_event_ids(self.context.database(), synced_source_id);
+                let synced_event_ids =
+                    load_synced_event_ids(self.context.database(), synced_source_id);
                 all_events
                     .into_iter()
                     .filter(|event| is_synced_event(event.id, &synced_event_ids))
@@ -233,9 +235,11 @@ impl CalendarApp {
                     .filter(is_ribbon_event)
                     .collect::<Vec<_>>();
 
-                let all_events = filter_events_by_category(all_events, self.active_category_filter.as_deref());
+                let all_events =
+                    filter_events_by_category(all_events, self.active_category_filter.as_deref());
                 if self.show_synced_events_only {
-                    let synced_event_ids = load_synced_event_ids(self.context.database(), synced_source_id);
+                    let synced_event_ids =
+                        load_synced_event_ids(self.context.database(), synced_source_id);
                     all_events
                         .into_iter()
                         .filter(|event| is_synced_event(event.id, &synced_event_ids))
@@ -296,7 +300,7 @@ impl CalendarApp {
             self.show_synced_events_only,
             synced_source_id,
         );
-        
+
         // Handle month view actions
         match result.action {
             MonthViewAction::SwitchToDayView(date) => {
@@ -311,7 +315,7 @@ impl CalendarApp {
                     "Week" => ViewType::Week,
                     "WorkWeek" => ViewType::WorkWeek,
                     "Month" => ViewType::Day, // If already in Month, go to Day
-                    _ => ViewType::Day, // Default fallback
+                    _ => ViewType::Day,       // Default fallback
                 };
             }
             MonthViewAction::CreateFromTemplate(template_id, date) => {
@@ -319,7 +323,7 @@ impl CalendarApp {
             }
             MonthViewAction::None => {}
         }
-        
+
         // Handle delete confirmation request
         if let Some(request) = result.delete_confirm_request {
             self.handle_delete_confirm_request(request);

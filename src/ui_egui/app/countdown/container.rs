@@ -1,18 +1,16 @@
 //! Container mode for countdown cards - displays all cards in a single resizable window.
 
+pub use super::card_rendering::format_card_tooltip;
 use super::card_rendering::{render_card_content, CardUiAction};
 use super::container_layout::{
-    calculate_insertion_indicator_rect,
-    CARD_PADDING, CONTAINER_MIN_HEIGHT, CONTAINER_MIN_WIDTH, MIN_CARD_HEIGHT, MIN_CARD_WIDTH,
-    VISIBILITY_CHECK_FRAMES,
+    calculate_insertion_indicator_rect, CARD_PADDING, CONTAINER_MIN_HEIGHT, CONTAINER_MIN_WIDTH,
+    MIN_CARD_HEIGHT, MIN_CARD_WIDTH, VISIBILITY_CHECK_FRAMES,
 };
-pub use super::card_rendering::format_card_tooltip;
 pub use super::container_layout::{ContainerLayout, DragState};
 
 use crate::services::countdown::{
     ContainerSortMode, CountdownCardGeometry, CountdownCardId, CountdownCardState,
-    CountdownCardVisuals, CountdownCategoryId, CountdownNotificationConfig,
-    LayoutOrientation,
+    CountdownCardVisuals, CountdownCategoryId, CountdownNotificationConfig, LayoutOrientation,
 };
 use chrono::{DateTime, Local};
 use std::collections::HashMap;
@@ -52,7 +50,9 @@ pub enum ContainerAction {
 /// Get the primary monitor width from context, with fallback to 1920
 fn get_primary_monitor_width(ctx: &egui::Context) -> f32 {
     ctx.input(|input| {
-        input.raw.viewports
+        input
+            .raw
+            .viewports
             .values()
             .filter_map(|info| info.monitor_size)
             .next()
@@ -178,7 +178,7 @@ pub fn render_container_window(
             // Determine current orientation from stored geometry
             let aspect_ratio = stored.width / stored.height;
             let is_horizontal = aspect_ratio > 1.5;
-            
+
             if is_horizontal {
                 // Landscape: grow/shrink width when cards change
                 let width_change = (default_card_width + CARD_PADDING) * card_count_diff;
@@ -225,7 +225,7 @@ pub fn render_container_window(
 
     // Set position/size on first render OR when card count changes
     let needs_resize = !layout.initialized || card_count_changed;
-    
+
     // Log the geometry being used
     if !layout.initialized {
         log::info!(
@@ -234,7 +234,7 @@ pub fn render_container_window(
             initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
         );
     }
-    
+
     // Only set position/size in the builder on first render or when resizing
     // Otherwise, let the OS/user control the window position to prevent shaking during drag
     let builder = if needs_resize {
@@ -257,9 +257,12 @@ pub fn render_container_window(
     if needs_resize {
         log::info!(
             "Container setting position to ({}, {}) size ({}, {})",
-            initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
+            initial_geometry.x,
+            initial_geometry.y,
+            initial_geometry.width,
+            initial_geometry.height
         );
-        
+
         // Push geometry change when resizing due to card count change
         if card_count_changed {
             actions.push(ContainerAction::GeometryChanged(initial_geometry));
@@ -278,13 +281,13 @@ pub fn render_container_window(
                 egui::vec2(initial_geometry.width, initial_geometry.height)
             ));
             child_ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            
+
             log::info!(
                 "Container: sent viewport commands for position ({}, {}) size ({}, {})",
                 initial_geometry.x, initial_geometry.y, initial_geometry.width, initial_geometry.height
             );
         }
-        
+
         // Check for close request
         let close_requested = child_ctx.input(|i| {
             i.viewport().close_requested()
@@ -309,10 +312,10 @@ pub fn render_container_window(
                 None
             }
         });
-        
+
         // Check if window has focus (indicates it's actually visible and usable)
         let has_focus = child_ctx.input(|i| i.viewport().focused.unwrap_or(false));
-        
+
         // Track if window has ever gained focus this session
         if has_focus {
             layout.has_ever_had_focus = true;
@@ -326,29 +329,29 @@ pub fn render_container_window(
                     new_geom.x, new_geom.y, new_geom.width, new_geom.height
                 );
             }
-            
+
             // Visibility check: if the window position doesn't match what we requested
             // after several frames, the window might be stuck off-screen on a secondary monitor
             if !layout.position_verified {
                 layout.visibility_check_frames += 1;
-                
+
                 if layout.visibility_check_frames >= VISIBILITY_CHECK_FRAMES {
                     // Get actual primary monitor width for multi-monitor detection
                     let primary_width = get_primary_monitor_width(child_ctx);
-                    
+
                     // Check if position is way off from what we stored (indicating OS moved it)
                     // We're more lenient now - only consider "stuck" if:
                     // 1. Position is on a secondary monitor area AND
-                    // 2. We've been trying to show for multiple frames AND  
+                    // 2. We've been trying to show for multiple frames AND
                     // 3. Window has NEVER gained focus this session (not just currently unfocused)
                     let position_seems_stuck = if let Some(stored) = container_geometry {
                         // Window reports being at stored position but we can't see/interact with it
                         // This happens when the position is on a monitor that's no longer available
                         // Use dynamic primary monitor width instead of hardcoded 1920
                         let possibly_on_secondary = stored.x > primary_width || stored.x < 0.0 || stored.y < 0.0;
-                        let position_matches = (new_geom.x - stored.x).abs() < 50.0 
+                        let position_matches = (new_geom.x - stored.x).abs() < 50.0
                             && (new_geom.y - stored.y).abs() < 50.0;
-                        
+
                         // Log diagnostic info for multi-monitor debugging
                         if possibly_on_secondary {
                             log::debug!(
@@ -356,7 +359,7 @@ pub fn render_container_window(
                                 stored.x, stored.y, new_geom.x, new_geom.y, primary_width, has_focus, layout.has_ever_had_focus
                             );
                         }
-                        
+
                         // Only consider stuck if on secondary area, position matches stored,
                         // AND window has NEVER gained focus (if it did once, user can see it)
                         // This prevents false positives when user just clicked elsewhere
@@ -364,7 +367,7 @@ pub fn render_container_window(
                     } else {
                         false
                     };
-                    
+
                     if position_seems_stuck {
                         log::warn!(
                             "Container appears stuck at off-screen position ({}, {}), moving to primary monitor",
@@ -383,33 +386,33 @@ pub fn render_container_window(
                         child_ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                         actions.push(ContainerAction::GeometryChanged(safe_geom));
                     }
-                    
+
                     layout.position_verified = true;
                 }
             }
-            
+
             // Decrement skip_geometry_frames counter if active
             let skip_geometry_updates = layout.skip_geometry_frames > 0;
             if layout.skip_geometry_frames > 0 {
                 layout.skip_geometry_frames -= 1;
             }
-            
+
             // Save geometry for any reasonable position (unless skipping)
             // We previously tried to restrict to "primary monitor" but monitor layouts vary
             // Just save if the values are finite and not extremely off-screen
             if !skip_geometry_updates {
-                let should_save_geometry = new_geom.x.is_finite() 
-                    && new_geom.y.is_finite() 
-                    && new_geom.x.abs() < 10000.0 
+                let should_save_geometry = new_geom.x.is_finite()
+                    && new_geom.y.is_finite()
+                    && new_geom.x.abs() < 10000.0
                     && new_geom.y.abs() < 10000.0;
-                
+
                 let geometry_changed = container_geometry.map(|g| {
                     (g.x - new_geom.x).abs() > 1.0
                         || (g.y - new_geom.y).abs() > 1.0
                         || (g.width - new_geom.width).abs() > 1.0
                         || (g.height - new_geom.height).abs() > 1.0
                 }).unwrap_or(true);
-                
+
                 // Log geometry tracking for debugging
                 if geometry_changed {
                     log::debug!(
@@ -417,7 +420,7 @@ pub fn render_container_window(
                         container_geometry, new_geom.x, new_geom.y, new_geom.width, new_geom.height, should_save_geometry
                     );
                 }
-                
+
                 if should_save_geometry && geometry_changed {
                     actions.push(ContainerAction::GeometryChanged(new_geom));
                 }
@@ -726,7 +729,11 @@ fn render_container_header(
         }
 
         // Card count badge
-        let count_text = format!("{} card{}", card_count, if card_count == 1 { "" } else { "s" });
+        let count_text = format!(
+            "{} card{}",
+            card_count,
+            if card_count == 1 { "" } else { "s" }
+        );
         ui.label(
             egui::RichText::new(count_text)
                 .size(11.0)

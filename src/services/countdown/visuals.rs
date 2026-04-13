@@ -270,7 +270,9 @@ mod tests {
         let mut svc = CountdownService::new();
         svc.set_default_days_font_size(99.0);
         svc.reset_default_days_font_size();
-        assert!((svc.visual_defaults().days_font_size - default_days_font_size()).abs() < f32::EPSILON);
+        assert!(
+            (svc.visual_defaults().days_font_size - default_days_font_size()).abs() < f32::EPSILON
+        );
     }
 
     #[test]

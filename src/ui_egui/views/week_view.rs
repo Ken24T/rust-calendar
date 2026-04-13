@@ -75,7 +75,8 @@ impl WeekView {
         // Calculate column width once at the top level for consistency across header, ribbon, and grid
         let scrollbar_width = 16.0;
         let available_width = ui.available_width();
-        let available_for_cols = available_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_width;
+        let available_for_cols =
+            available_width - TIME_LABEL_WIDTH - total_spacing - scrollbar_width;
         let col_width = available_for_cols / 7.0;
 
         // Week header with day names
@@ -117,7 +118,7 @@ impl WeekView {
                     let is_today = date == today;
                     let weekday_idx = date.weekday().num_days_from_sunday();
                     let is_weekend = weekday_idx == 0 || weekday_idx == 6;
-                    
+
                     // Use header colors for the day header cells
                     let cell_bg = if is_today {
                         day_strip_palette.today_cell_bg
@@ -191,7 +192,10 @@ impl WeekView {
                     let ribbon_height = (ribbon_lanes.len() as f32 * 18.0).max(18.0);
 
                     // Use allocate_exact_size with matching height for consistent spacing
-                    ui.allocate_exact_size(Vec2::new(TIME_LABEL_WIDTH, ribbon_height), egui::Sense::hover());
+                    ui.allocate_exact_size(
+                        Vec2::new(TIME_LABEL_WIDTH, ribbon_height),
+                        egui::Sense::hover(),
+                    );
 
                     ui.add_space(COLUMN_SPACING);
 
@@ -208,29 +212,31 @@ impl WeekView {
                                         Vec2::new(col_width, 18.0),
                                         egui::Layout::left_to_right(egui::Align::Min),
                                         |lane_ui| {
-                                            if let Some(event) = lane
-                                                .iter()
-                                                .copied()
-                                                .find(|event| super::event_covers_date(event, *date))
+                                            if let Some(event) =
+                                                lane.iter().copied().find(|event| {
+                                                    super::event_covers_date(event, *date)
+                                                })
                                             {
                                                 let event_start_date = event.start.date_naive();
-                                                let event_end_date = super::event_display_end_date(event);
+                                                let event_end_date =
+                                                    super::event_display_end_date(event);
 
                                                 if event_start_date != event_end_date {
                                                     let is_first_day = event_start_date == *date;
                                                     let is_last_day = event_end_date == *date;
 
-                                                    let (ribbon_result, _event_rect) = render_ribbon_event_with_handles(
-                                                        lane_ui,
-                                                        event,
-                                                        countdown_requests,
-                                                        active_countdown_events,
-                                                        database,
-                                                        &synced_event_ids,
-                                                        is_first_day,
-                                                        is_last_day,
-                                                        Some(*date),
-                                                    );
+                                                    let (ribbon_result, _event_rect) =
+                                                        render_ribbon_event_with_handles(
+                                                            lane_ui,
+                                                            event,
+                                                            countdown_requests,
+                                                            active_countdown_events,
+                                                            database,
+                                                            &synced_event_ids,
+                                                            is_first_day,
+                                                            is_last_day,
+                                                            Some(*date),
+                                                        );
                                                     result.merge(ribbon_result);
                                                 } else {
                                                     let ribbon_result = render_ribbon_event(
@@ -249,7 +255,7 @@ impl WeekView {
                                 }
                             },
                         );
-                        
+
                         // Track resize hover for this column using the response rect
                         let col_rect = col_response.response.rect;
                         if ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Ribbon) {
@@ -274,27 +280,36 @@ impl WeekView {
                             ui.add_space(COLUMN_SPACING);
                         }
                     }
-                    
+
                     // Handle ribbon resize completion (mouse release)
                     let primary_released = ui.input(|i| i.pointer.primary_released());
-                    if primary_released && ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Ribbon) {
-                        if let Some(resize_ctx) = ResizeManager::finish_for_view(ui.ctx(), ResizeView::Ribbon) {
+                    if primary_released
+                        && ResizeManager::is_active_for_view(ui.ctx(), ResizeView::Ribbon)
+                    {
+                        if let Some(resize_ctx) =
+                            ResizeManager::finish_for_view(ui.ctx(), ResizeView::Ribbon)
+                        {
                             log::info!(
                                 "Ribbon resize finished: handle={:?}, hovered_date={:?}",
                                 resize_ctx.handle,
                                 resize_ctx.hovered_date
                             );
                             // Calculate new dates based on handle
-                            if let (Some(new_start), Some(mut new_end)) = (resize_ctx.calculate_new_start(), resize_ctx.calculate_new_end()) {
+                            if let (Some(new_start), Some(mut new_end)) = (
+                                resize_ctx.calculate_new_start(),
+                                resize_ctx.calculate_new_end(),
+                            ) {
                                 let event_service = EventService::new(database.connection());
-                                if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id) {
+                                if let Ok(Some(mut event)) = event_service.get(resize_ctx.event_id)
+                                {
                                     // For all-day events, the hovered column is the
                                     // inclusive last visible date.  Convert to
                                     // exclusive end (iCal convention: midnight of
                                     // the following day).
                                     if event.all_day {
                                         if let Some(next) = new_end.date_naive().succ_opt() {
-                                            let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+                                            let midnight =
+                                                NaiveTime::from_hms_opt(0, 0, 0).unwrap();
                                             if let Some(dt) = next
                                                 .and_time(midnight)
                                                 .and_local_timezone(Local)
@@ -310,7 +325,8 @@ impl WeekView {
                                     if let Err(err) = event_service.update(&event) {
                                         log::error!(
                                             "Failed to resize ribbon event {}: {}",
-                                            resize_ctx.event_id, err
+                                            resize_ctx.event_id,
+                                            err
                                         );
                                     } else {
                                         result.moved_events.push(event);

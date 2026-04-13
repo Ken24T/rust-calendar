@@ -6,8 +6,7 @@
 use chrono::{DateTime, Local};
 
 use super::models::{
-    CountdownAutoDismissConfig, CountdownCardId, CountdownNotificationConfig,
-    CountdownWarningState,
+    CountdownAutoDismissConfig, CountdownCardId, CountdownNotificationConfig, CountdownWarningState,
 };
 use super::service::CountdownService;
 
@@ -79,9 +78,9 @@ impl CountdownService {
                 // (e.g., notify when going from Normal->Approaching, but not Approaching->Normal)
                 let should_notify = match (old_state, new_state) {
                     (None, CountdownWarningState::Normal) => false, // Initial state, not urgent
-                    (None, _) => true, // Initial state and it's urgent
+                    (None, _) => true,                              // Initial state and it's urgent
                     (Some(old), new) if new as u8 > old as u8 => true, // Urgency increased
-                    _ => false,        // Urgency decreased or stayed same
+                    _ => false, // Urgency decreased or stayed same
                 };
 
                 if should_notify {

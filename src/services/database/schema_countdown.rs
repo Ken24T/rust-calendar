@@ -446,8 +446,7 @@ fn migrate_category_visuals_to_templates(conn: &Connection) -> Result<()> {
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
-    for r in &rows
-    {
+    for r in &rows {
         let tmpl_name = format!("{} (migrated)", r.cat_name);
 
         // Check if a template with this name already exists (idempotent)
@@ -464,7 +463,9 @@ fn migrate_category_visuals_to_templates(conn: &Connection) -> Result<()> {
 
         log::info!(
             "Migrating category '{}' (id={}) visual defaults to template '{}'",
-            r.cat_name, r.cat_id, tmpl_name
+            r.cat_name,
+            r.cat_id,
+            tmpl_name
         );
 
         conn.execute(
