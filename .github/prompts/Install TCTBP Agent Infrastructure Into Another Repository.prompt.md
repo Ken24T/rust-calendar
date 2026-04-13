@@ -11,7 +11,7 @@ Use this prompt inside a repository that already contains the TCTBP runtime when
 
 ## Goal
 
-Apply the TCTBP template set to a target repository safely so that Copilot can choose the correct path for one of three cases:
+Apply the current repository's TCTBP runtime surface to a target repository safely so that Copilot can choose the correct path for one of three cases:
 
 - a brand new repository with no TCTBP files yet
 - an existing repository that has some TCTBP workflow files but no custom agent runtime
@@ -85,7 +85,7 @@ Also inspect the target repository's real operating context before editing, usin
 - deploy or install scripts
 - docs, runbooks, and architecture notes that the workflow references
 
-Do not infer repo-specific settings from the source repository when the target repository already contains stronger local evidence.
+Do not infer repo-specific settings from the current source repository when the target repository already contains stronger local evidence.
 
 ## Target Files To Create Or Update
 
@@ -125,7 +125,7 @@ If `Target repository state` is `NEW_REPOSITORY`:
 1. Treat the target repository as not yet configured for TCTBP.
 2. Create any missing `.github/agents`, `.github/hooks`, `.github/prompts`, and `scripts` folders as required.
 3. Install the full TCTBP runtime surface in the target repository.
-4. Adapt the canonical files to the target repository using the target repo's actual project details.
+4. Adapt the source files to the target repository using the target repo's actual project details.
 5. Replace placeholders or unresolved values only when the target repository contains enough evidence.
 6. If key values are missing, leave them explicitly unresolved or ask for clarification rather than guessing.
 
@@ -147,7 +147,7 @@ If `Target repository state` is `EXISTING_REPOSITORY_WITH_AGENT`:
 
 1. Read the target repository's existing TCTBP runtime files first if they exist, including the local custom agent entry point, prompt, and optional hook files.
 2. Preserve repo-specific values such as commands, version files, docs paths, deploy targets, locale, and intentional workflow deviations.
-3. Merge forward generic improvements from the source repository instead of blindly overwriting local files.
+3. Merge forward generic improvements from the current source repository instead of blindly overwriting local files.
 4. Replace older onboarding or update prompt files with the single consolidated application prompt.
 5. If `Backup mode` requests backups, create them before editing.
 6. Prefer a dedicated branch when the target repository is already under version control.
@@ -155,7 +155,7 @@ If `Target repository state` is `EXISTING_REPOSITORY_WITH_AGENT`:
 
 ## What Must Be Customised In The Target Repository
 
-Do not leave canonical-repo-specific values behind. Customise at least these categories:
+Do not leave source-repo-specific values behind. Customise at least these categories:
 
 - project name and description
 - default branch name
@@ -166,7 +166,7 @@ Do not leave canonical-repo-specific values behind. Customise at least these cat
 - locale or writing conventions
 - branch naming preferences if the target repo uses them
 
-Update the custom agent description so it refers to the target repository rather than the canonical TCTBP repository.
+Update the custom agent description so it refers to the target repository rather than the source repository.
 
 When installing or refreshing prompts in the target repository, keep only the single consolidated application prompt instead of leaving multiple prompts that overlap in purpose.
 
@@ -189,13 +189,13 @@ If `Include hook layer` is `NO`:
 2. Read the current local versions of every managed target file before editing when they exist.
 3. Inspect the target repository structure, commands, version files, deployment scripts, and documentation paths before editing.
 4. Classify what you find before making edits:
-   - generic canonical improvements to merge forward
+   - generic source improvements to merge forward
    - repo-specific local settings to preserve exactly
    - conflicts or intentional deviations that require judgement
 5. Determine whether the target repo is a new install, an install of missing agent runtime, or an update of existing agent runtime.
 6. If the target repository is already under git and a preferred install/update branch was provided, create or switch to that branch before editing when safe.
 7. Create the required files and folders in the target repo.
-8. Preserve repo-specific settings while applying the canonical runtime model.
+8. Preserve repo-specific settings while applying the current runtime model.
 9. Keep these target files aligned with each other after editing:
    - `.gitignore`
    - `.github/agents/TCTBP.agent.md`
@@ -219,8 +219,8 @@ If `Include hook layer` is `NO`:
 
 Do not:
 
-- leave references instructing the target repo to depend on any external source repo at runtime
-- copy repo-specific commands or paths from the canonical repo into the target repo without adaptation
+- leave references instructing the target repo to depend on the source repo at runtime
+- copy repo-specific commands or paths from the source repo into the target repo without adaptation
 - overwrite existing target-repo workflow files wholesale without review
 - guess unknown commands, version files, deploy steps, or docs paths
 - install the hook layer without also installing its supporting script
@@ -230,7 +230,7 @@ Do not:
 
 When finished, report:
 
-1. which source ref from this repository was used
+1. which source ref from the current repository was used
 2. which target repository path was updated
 3. which files were created or updated in the target repo
 4. which repo-specific values were intentionally customised or preserved
@@ -241,15 +241,15 @@ When finished, report:
 ## Example Invocation
 
 ```text
-reconcile-tctbp <ABSOLUTE_TARGET_REPO_PATH>
+reconcile-tctbp /absolute/path/to/target-repo
 
-Source TCTBP repository path: <ABSOLUTE_SOURCE_TCTBP_REPO_PATH_OR_CURRENT_REPO>
-Target repository path: <ABSOLUTE_TARGET_REPO_PATH>
+Source TCTBP repository path: /path/to/current/source-repo
+Target repository path: /absolute/path/to/target-repo
 Target repository state: AUTO
-Preferred install/update branch in target repo: chore/apply-tctbp
+Preferred install/update branch in target repo: infrastructure/reconcile-tctbp
 Include hook layer: YES
 Backup mode for existing repo: BRANCH_AND_FILE_BACKUPS
-Canonical ref to use from this TCTBP repo: main
+Source ref to use from this repository: main
 Any repo-specific settings that must be preserved exactly: build commands, deploy target names, docs paths
 Any intentional local workflow deviations that must not be normalised away: none known
 ```

@@ -116,6 +116,17 @@ Notes:
 - May leave the branch ahead of or further diverged from origin because it is local-only
 - Handover may reuse a recent matching checkpoint commit instead of creating another one
 
+### `checkpoint` / `checkpoint please`
+
+Create a durable local-only checkpoint commit on the current branch without release or sync side effects.
+
+- stops if `HEAD` is detached, the tree is clean, conflicts exist, or a merge/rebase/cherry-pick/revert is in progress
+- stages current tracked and non-ignored untracked changes
+- creates a clearly marked non-release local commit
+- ends with a concise four-column table covering the previous HEAD, new checkpoint commit, resulting working-tree state, sync state, and explicit local-only outcome
+- emits that checkpoint table as a standalone Markdown block with a blank line before and after it
+- does not push, create a tag, or update handover metadata
+
 ### `handover` / `handover please`
 
 Purpose:
@@ -169,10 +180,14 @@ Never does:
 - destructive checkout
 - force-push
 
+- can reuse a recent matching standalone `checkpoint` commit instead of creating another one
+- ends with a concise four-column table emitted as a standalone Markdown block with a blank line before and after it
+- adds a one-line completion summary after the table
+
 ### `resume` / `resume please`
 
 Purpose:
-Safely restore the intended work branch at the start of a session, preserving local unpublished work first when a safe branch switch would otherwise strand it.
+Safely restore the intended work branch at the start of a session by consulting handover metadata first, preserving local unpublished work first when a safe branch switch would otherwise strand it.
 
 Attempts to:
 
@@ -255,6 +270,9 @@ Notes:
 - This is the trigger that should show the fuller four-column table: `Origin`, `Local`, `Status`, `Action(s)`
 - Table should explicitly include branch state, default-branch state, tag state, ahead/behind counts, working tree, and whether `resume`, `checkpoint`, `publish`, `ship`, or `handover` is recommended
 - If metadata points another machine at the wrong published branch, call that out as a resume-target mismatch
+
+- first user-visible output block must be the fuller four-column table using `Origin`, `Local`, `Status`, and `Action(s)`
+- emit that status table as a standalone Markdown block with a blank line before and after it
 
 ### `abort`
 
@@ -357,12 +375,12 @@ Repo-specific docs commonly reviewed:
 ## Quick Choice
 
 - Need a release version or tag: use `ship`
-- Need a durable local-only save without publishing: use `checkpoint`
-- Need to publish the current branch without release side effects: use `publish`
+- Need a durable local-only save before deciding whether to publish or hand over: use `checkpoint`
+- Need to publish or sync a clean current branch without release or metadata side effects: use `publish`
 - Need to stop on one machine and resume on another safely: use `handover`, then `resume` on the next machine
 - If `resume` hits local unpublished work on the current machine, it should offer a local preserve step before switching
 - Need the local runtime installed or refreshed: use `deploy`
 - Need a quick repo state check: use `status`
-- Need to recover from partial workflow state: use `abort`
+- Need to recover from a partial workflow state: use `abort`
 - Need to close out current work and stop on `main`: use `branch`
 - Need to start the next branch: use `branch <new-branch-name>`

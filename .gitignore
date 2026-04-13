@@ -38,7 +38,9 @@ build.log
 # Backup files
 *.bak
 *.tmp
-.github/.tctbp-backups/
+
+# Local TCTBP reconcile backups
+/.github/.tctbp-backups/
 
 # OS specific
 Thumbs.db

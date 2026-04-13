@@ -162,7 +162,7 @@
       "ship-readiness",
       "handover-readiness"
     ],
-    "comment": "For status, render the fuller local-versus-origin operator snapshot. Include the current branch, default branch, tags, ahead/behind state, and handover relevance. Use 'n/a' where no meaningful origin-side value exists."
+    "comment": "For status, the first user-visible output block must be the fuller local-versus-origin comparison table using exactly the configured columns `Origin`, `Local`, `Status`, and `Action(s)`. Emit it as a standalone Markdown table block with a blank line before and after the table. Do not replace the table with prose, do not place prose on the same line as the table header, and do not emit a status-only reply without the table. Include the current branch, default branch, tags, ahead/behind state, and handover relevance. Use 'n/a' where no meaningful origin-side value exists."
   },
   "handoverReport": {
     "enabled": true,
@@ -176,7 +176,7 @@
       "metadata-consistency",
       "handover-baseline"
     ],
-    "comment": "At the end of handover, render a concise five-row summary table that confirms the current branch, tag state, metadata branch publication, metadata consistency, and clean synced baseline. Keep it shorter than status and focused on the handover result."
+    "comment": "At the end of handover, render a concise five-row summary table that confirms the current branch, tag state, metadata branch publication, metadata consistency, and clean synced baseline. Emit it as a standalone Markdown table block with a blank line before and after the table. Keep it shorter than status and focused on the handover result."
   },
   "checkpointReport": {
     "enabled": true,
@@ -190,7 +190,7 @@
       "upstream-sync-state",
       "remote-side-effects"
     ],
-    "comment": "At the end of checkpoint, render a concise summary table focused on the actual commit transition and the resulting local-only baseline. Include the previous HEAD commit, the new checkpoint commit, the resulting working-tree state, the branch sync state, and an explicit confirmation that remote state did not change. Use 'n/a' where no meaningful origin-side value exists."
+    "comment": "At the end of checkpoint, render a concise summary table focused on the actual commit transition and the resulting local-only baseline. Emit it as a standalone Markdown table block with a blank line before and after the table. Include the previous HEAD commit, the new checkpoint commit, the resulting working-tree state, the branch sync state, and an explicit confirmation that remote state did not change. Use 'n/a' where no meaningful origin-side value exists."
   },
   "branch": {
     "enabled": true,

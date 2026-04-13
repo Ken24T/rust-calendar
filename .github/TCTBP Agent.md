@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This agent governs **milestone, checkpointing, publishing, handover, resume, sync, and deployment actions** for the Rust Calendar repository. It exists to safely execute the agreed **TCTBP / SHIP workflow** with strong guard rails, auditability, and human approval at irreversible steps.
+This agent governs **milestone, checkpointing, publishing, handover, resume, sync, status, recovery, and deployment actions** for the Rust Calendar repository. It exists to safely execute the agreed **TCTBP / SHIP workflow** with strong guard rails, auditability, and human approval at irreversible steps.
 
 Primary objective: **no code is ever lost** while keeping local and remote repositories in a validated, recoverable state.
 
-This agent is **not** for exploratory coding or refactoring. It is activated only when the user signals a milestone or explicit sync action, for example `ship`, `checkpoint`, `publish`, `handover`, `resume`, or `deploy`.
+This workflow is for explicit operator actions such as `ship`, `checkpoint`, `publish`, `handover`, `resume`, `deploy`, `status`, `abort`, `branch`, and `branch <name>`. It is **not** for exploratory coding, refactoring, or normal feature implementation work.
 
 Quick reference: see [TCTBP Cheatsheet.md](TCTBP%20Cheatsheet.md) for the short operator view of triggers, expectations, and the live repo profile.
 
@@ -36,6 +36,7 @@ A Project Profile defines:
 - Tagging policy
 - Documentation impact rules and which docs must be reviewed for different change types
 - Deployment targets and post-deploy validation rules
+- Use the normal build gate by default; reserve release builds for install or deployment work
 
 ---
 
@@ -100,6 +101,25 @@ A changeset is classified as **docs-only or infrastructure-only** when **every**
 If any changed file matches `*.rs`, treat the changeset as code.
 
 When in doubt, treat the changeset as code.
+
+## Checkpoint Workflow
+
+Trigger: `checkpoint` / `checkpoint please`
+
+Purpose: create a durable local-only checkpoint commit on the current branch without changing version, tags, metadata, or remote state.
+
+Key rules:
+
+- stop if `HEAD` is detached
+- stop if the working tree is clean
+- stop if the working tree has unresolved conflicts or if a merge, rebase, cherry-pick, or revert is in progress
+- stage the current non-ignored tracked and untracked changes on the current branch
+- create a clearly marked local-only commit using the configured checkpoint message prefix
+- do not run heavyweight verification gates as a blocker for this workflow
+- if diagnostics are already available, they may be reported for awareness only
+- end with a concise four-column table covering the previous `HEAD`, new checkpoint commit, resulting working-tree state, upstream sync state, and explicit local-only outcome
+- emit that checkpoint table as a standalone Markdown block with a blank line before and after it
+- never push, create a tag, bump version, update handover metadata, or change branches as part of `checkpoint`
 
 ---
 
@@ -326,6 +346,9 @@ Trusted outcome:
 
 - If you trigger `handover` at the end of the day, it preserves and publishes the current working branch safely.
 - It then updates the metadata branch so `resume` can restore the intended branch on another machine.
+- It may reuse a recent matching standalone `checkpoint` commit instead of creating a redundant preserve step.
+- It updates the metadata branch using a secondary worktree or another equally non-destructive mechanism.
+- It ends with a concise four-column handover summary table and a short completion line confirming the handed-over branch and commit.
 - If publishing or metadata refresh cannot be completed safely, the workflow stops and preserves the existing recoverable state.
 
 Safety principle: if completing a sync automatically could risk losing code, the workflow must stop and preserve both sides for explicit user resolution.
@@ -343,6 +366,12 @@ Behaviour, safe and deterministic:
    - Fetch from `origin` with tags.
    - Determine the current branch state and the metadata branch state if present.
 
+3. **Compare local and remote branch state**
+   - Determine whether the current branch is ahead, behind, up to date, diverged, or unpublished.
+   - If the branch has no upstream, note that handover may create one during push.
+   - If the local branch is behind and clean, it may be fast-forwarded during reconciliation.
+   - If the local branch is behind but not clean, stop instead of attempting a mixed reconciliation.
+   - If local and remote have diverged, stop and report the divergence for explicit resolution.
 3. **Compare local and remote branch state**
    - Determine whether the current branch is ahead, behind, up to date, diverged, or unpublished.
    - If the branch has no upstream, note that handover may create one during push.
@@ -502,6 +531,13 @@ Behaviour:
 
 1. **Fetch**
    - Run `git fetch --all --prune --tags`.
+
+Additional status rules:
+
+- the first user-visible output block must be a four-column table using `Origin`, `Local`, `Status`, and `Action(s)`
+- emit that status table as a standalone Markdown block with a blank line before and after it
+- include branch/upstream state, head commit, default-branch state, tag state, ahead/behind counts, working tree state, version source, metadata state, and whether `resume`, `checkpoint`, `publish`, `ship`, or `handover` is recommended
+- never mutate the repo from `status`
 
 2. **Report**
    - Render a concise four-column snapshot table.
