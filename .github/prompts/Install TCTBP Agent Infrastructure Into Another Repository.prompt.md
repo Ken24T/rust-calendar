@@ -1,5 +1,5 @@
 ---
-description: "Use when the user explicitly asks for reconcile-tctbp <absolute-target-repo-path> so the current TCTBP-enabled repository can inspect another repository, detect whether it is new, missing the agent runtime, or already using the agent runtime, and then reconcile that repository's TCTBP state safely."
+description: "Use when the user explicitly asks for reconcile-tctbp <absolute-target-repo-path> so the current repository can inspect another repository, detect whether it is new, missing the agent runtime, or already using the agent runtime, and then reconcile that repository's TCTBP state safely."
 name: "reconcile-tctbp"
 argument-hint: "Absolute target repository path, plus optional source ref, target state or AUTO, backup mode, and whether to include the hook layer"
 agent: "agent"
@@ -32,6 +32,8 @@ The target repository is the source of repo-specific commands, paths, deployment
 ## Required Inputs
 
 Fill in these values before using the prompt.
+
+Absolute paths may use Windows or POSIX syntax. Preserve the target repository's existing path style instead of rewriting it.
 
 ```text
 Source TCTBP repository path: <ABSOLUTE_CURRENT_REPOSITORY_PATH_OR_OTHER_SOURCE_REPO>
@@ -244,7 +246,7 @@ reconcile-tctbp /absolute/path/to/target-repo
 Source TCTBP repository path: /path/to/current/source-repo
 Target repository path: /absolute/path/to/target-repo
 Target repository state: AUTO
-Preferred install/update branch in target repo: chore/apply-tctbp
+Preferred install/update branch in target repo: infrastructure/reconcile-tctbp
 Include hook layer: YES
 Backup mode for existing repo: BRANCH_AND_FILE_BACKUPS
 Source ref to use from this repository: main

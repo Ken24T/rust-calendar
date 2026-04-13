@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "governance": {
     "sourceOfTruth": "TCTBP.json",
     "fallbackDocument": "TCTBP Agent.md",
@@ -118,7 +118,7 @@
     "checkpointOrder": ["preflight", "inspect", "stage", "commit", "summary"],
     "branchOrder": ["preflight", "assess-ship", "verify-or-stop", "inspect-source-branch", "sync-default-branch", "confirm-merge-into-default-when-needed", "merge-source-into-default-when-needed", "verify-transition", "create-new-branch-when-requested", "optional-cleanup", "summary"],
     "handoverOrder": ["preflight", "fetch", "inspect-current-branch", "compare", "stage", "checkpoint-if-needed", "verify-gate", "docs-impact", "commit-if-needed", "reconcile", "push-if-needed", "update-handover-metadata", "verify-sync", "summary"],
-    "resumeOrder": ["preflight", "fetch", "read-handover-metadata", "determine-target-branch", "switch-target-branch", "reconcile-read-only", "verify-ready-state", "summary"],
+    "resumeOrder": ["preflight", "fetch", "read-handover-metadata", "determine-target-branch", "classify-preserve-local-need", "preserve-local-if-needed", "switch-target-branch", "reconcile-read-only", "verify-ready-state", "summary"],
     "statusOrder": ["fetch", "report", "recommend"],
     "abortOrder": ["inspect", "propose", "execute"],
     "deployOrder": ["preflight", "sync-prerequisite", "verification-gate", "docs-impact", "runtime-build", "deploy-target", "post-deploy-validation", "summary"],
@@ -158,7 +158,7 @@
       "ship-readiness",
       "handover-readiness"
     ],
-    "comment": "For status, render the fuller local-versus-origin operator snapshot. Include the current branch, default branch, tags, ahead/behind state, and handover relevance. Use 'n/a' where no meaningful origin-side value exists."
+    "comment": "For status, the first user-visible output block must be the fuller local-versus-origin comparison table using exactly the configured columns `Origin`, `Local`, `Status`, and `Action(s)`. Emit it as a standalone Markdown table block with a blank line before and after the table. Do not replace the table with prose, do not place prose on the same line as the table header, and do not emit a status-only reply without the table. Include the current branch, default branch, tags, ahead/behind state, and handover relevance. Use 'n/a' where no meaningful origin-side value exists."
   },
   "handoverReport": {
     "enabled": true,
@@ -172,7 +172,7 @@
       "metadata-consistency",
       "handover-baseline"
     ],
-    "comment": "At the end of handover, render a concise five-row summary table that confirms the current branch, tag state, metadata branch publication, metadata consistency, and clean synced baseline. Keep it shorter than status and focused on the handover result."
+    "comment": "At the end of handover, render a concise five-row summary table that confirms the current branch, tag state, metadata branch publication, metadata consistency, and clean synced baseline. Emit it as a standalone Markdown table block with a blank line before and after the table. Keep it shorter than status and focused on the handover result."
   },
   "checkpointReport": {
     "enabled": true,
@@ -186,7 +186,7 @@
       "upstream-sync-state",
       "remote-side-effects"
     ],
-    "comment": "At the end of checkpoint, render a concise summary table focused on the actual commit transition and the resulting local-only baseline. Include the previous HEAD commit, the new checkpoint commit, the resulting working-tree state, the branch sync state, and an explicit confirmation that remote state did not change. Use 'n/a' where no meaningful origin-side value exists."
+    "comment": "At the end of checkpoint, render a concise summary table focused on the actual commit transition and the resulting local-only baseline. Emit it as a standalone Markdown table block with a blank line before and after the table. Include the previous HEAD commit, the new checkpoint commit, the resulting working-tree state, the branch sync state, and an explicit confirmation that remote state did not change. Use 'n/a' where no meaningful origin-side value exists."
   },
   "branch": {
     "enabled": true,
@@ -250,7 +250,7 @@
   },
   "resume": {
     "preferredTriggers": ["resume", "resume please"],
-    "purpose": "Restore the intended work branch at start of day by consulting handover metadata first, switching safely when needed, and reconciling only through non-destructive checkout and fast-forward operations.",
+    "purpose": "Restore the intended work branch at start of day by consulting handover metadata first, preserving current local unpublished work when a safe branch switch would otherwise strand it, and reconciling only through non-destructive checkout and fast-forward operations.",
     "metadataBranch": "tctbp/handover-state",
     "metadataFile": ".github/TCTBP_STATE.json",
     "stopIfDetachedHead": true,
@@ -258,12 +258,20 @@
     "preferMetadataOverCleanNonDefaultBranch": true,
     "currentBranchMayOverrideMetadataOnlyWhenDescendantOfMetadataCommit": true,
     "excludeBranchesFromCandidateDetection": ["origin/main", "origin/HEAD", "origin/tctbp/handover-state"],
+    "detectPreserveLocalWorkWhenSwitchWouldStrandChanges": true,
+    "preserveLocalWorkBeforeSwitchWhenSafeAndNeeded": true,
+    "preserveLocalWorkRequiresExplicitConfirmation": true,
+    "preserveLocalWorkUsingCheckpointWhenDirty": true,
+    "preserveLocalWorkUsingRescueBranchWhenCurrentBranchIsAheadAndPublished": true,
+    "stopWhenPreserveLocalWorkWouldRequirePublish": true,
+    "stopWhenCurrentBranchDiverged": true,
+    "stopWhenCurrentBranchHasConflicts": true,
     "requiresConfirmationWhenSwitchingBranches": true,
     "stopOnAmbiguousTargetBranch": true,
     "createLocalTrackingBranchFromRemoteWhenMissing": true,
     "allowFastForwardWhenBehindAndClean": true,
-    "stopWhenBehindAndDirty": true,
-    "stopWhenLocalAhead": true,
+    "stopWhenSelectedBranchBehindAndDirty": true,
+    "stopWhenSelectedBranchLocalAhead": true,
     "allowAutoMerge": false,
     "allowAutoRebase": false,
     "allowHardReset": false,
@@ -293,7 +301,7 @@
     "enabled": true,
     "suggestions": ["resume", "checkpoint", "publish", "handover", "ship", "abort", "none"],
     "rules": {
-      "resume": "Suggest when the current machine is not yet on the intended handed-over work branch, the metadata points at a different published branch than the current clean branch, or the safest next action is to restore the last handed-over branch before doing new work.",
+      "resume": "Suggest when the current machine is not yet on the intended handed-over work branch, the metadata points at a different published branch than the current branch, or the safest next action is to restore the last handed-over branch after preserving local unpublished work when needed.",
       "checkpoint": "Suggest when the working tree is dirty and the safest immediate step is to preserve local progress with a local-only non-release commit before continuing or before deciding whether to publish or hand over.",
       "publish": "Suggest when the current branch is clean, ahead of origin or missing an upstream, and the user likely wants to publish the branch safely without creating release version or handover metadata side effects.",
       "handover": "Suggest when the active work branch must be left in a durable shared state for another machine or another session, especially when branch publication and handover metadata should be refreshed together before stopping work.",

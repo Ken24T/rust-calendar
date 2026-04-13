@@ -98,6 +98,7 @@ Key rules:
 - do not run heavyweight verification gates as a blocker for this workflow
 - if diagnostics are already available, they may be reported for awareness only
 - end with a concise four-column table covering the previous `HEAD`, new checkpoint commit, resulting working-tree state, upstream sync state, and explicit local-only outcome
+- emit that checkpoint table as a standalone Markdown block with a blank line before and after it
 - never push, create a tag, bump version, update handover metadata, or change branches as part of `checkpoint`
 
 ## Branch Workflow
@@ -146,25 +147,32 @@ Key safety rules:
 
 - stop if `HEAD` is detached
 - preserve dirty unpublished work through a durable checkpoint when necessary
+- a recent matching standalone `checkpoint` commit may be reused instead of creating another one
 - allow fast-forward only when local is clean and behind
 - stop on divergence rather than guessing
 - never auto-merge or auto-rebase as part of reconciliation
 - update the metadata branch using a secondary worktree or another non-destructive mechanism
+- end with a concise four-column handover summary table emitted as a standalone Markdown block with a blank line before and after it
+- add a short completion line after the table confirming the handed-over branch and commit
 
 ## Resume Workflow
 
 Trigger: `resume` / `resume please`
 
-Purpose: restore the intended work branch at start of day by consulting handover metadata first, switching safely when needed, and reconciling only through non-destructive checkout and fast-forward operations.
+Purpose: restore the intended work branch at start of day by consulting handover metadata first, preserving current local unpublished work when a safe branch switch would otherwise strand it, and reconciling only through non-destructive checkout and fast-forward operations.
 
 Key safety rules:
 
 - stop if `HEAD` is detached
 - consult metadata before arbitrary branch-recency inference
 - prefer metadata over an arbitrary clean non-default branch
+- detect when switching to the handed-over branch would strand current local unpublished work
+- ask for confirmation before creating any local-only preserve step during `resume`
+- preserve dirty current-branch work with a local checkpoint before switching when that is safe
+- preserve a clean-but-ahead current branch with a local rescue branch before switching when that is safe
 - create a local tracking branch from remote when the intended branch is published but missing locally
 - allow fast-forward only when local is clean and behind
-- stop when local is ahead, diverged, or ambiguous instead of publishing during `resume`
+- stop when preserve-local handling would require publication, when the selected branch is ahead or diverged, or when the state is otherwise ambiguous
 
 ## Status Workflow
 
@@ -175,7 +183,8 @@ Purpose: provide a read-only operator snapshot of the repo.
 Behaviour:
 
 - fetch remote state first
-- render a four-column table using `Origin`, `Local`, `Status`, and `Action(s)`
+- the first user-visible output block must be a four-column table using `Origin`, `Local`, `Status`, and `Action(s)`
+- emit that status table as a standalone Markdown block with a blank line before and after it
 - include branch/upstream state, head commit, default-branch state, tag state, ahead/behind counts, working tree state, version source, metadata state, and whether `resume`, `checkpoint`, `publish`, `ship`, or `handover` is recommended
 - never mutate the repo from `status`
 
