@@ -789,7 +789,7 @@ mod tests {
 
     #[test]
     fn effective_visual_defaults_uses_global_when_category_flag_set() {
-        let mut service = CountdownService::new();
+        let service = CountdownService::new();
         // Default category (General) has use_global_defaults = true
         let defaults = service.effective_visual_defaults_for(CountdownCategoryId(DEFAULT_CATEGORY_ID));
         assert_eq!(defaults.title_bg_color, service.visual_defaults().title_bg_color);
