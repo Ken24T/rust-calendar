@@ -6,6 +6,8 @@ use crate::services::event::EventService;
 use std::collections::HashSet;
 
 impl CalendarApp {
+    /// Synchronize countdown card titles with their associated events from the database.
+    /// Also removes orphaned cards whose events no longer exist.
     pub(crate) fn hydrate_countdown_titles_from_events(
         countdown_service: &mut CountdownService,
         database: &'static Database,
@@ -26,16 +28,27 @@ impl CalendarApp {
         }
 
         let event_service = EventService::new(database.connection());
+        let mut orphaned_event_ids = Vec::new();
+
         for event_id in event_ids {
             match event_service.get(event_id) {
                 Ok(Some(event)) => {
+                    let location_label = event
+                        .location
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|loc| !loc.is_empty())
+                        .map(|loc| loc.to_string());
+
                     countdown_service.sync_title_for_event(event_id, event.title.clone());
+                    countdown_service.sync_title_override_for_event(event_id, location_label);
                 }
                 Ok(None) => {
                     log::warn!(
-                        "Countdown card references missing event id {} while syncing titles",
+                        "Countdown card references missing event id {}; will remove orphaned card(s)",
                         event_id
                     );
+                    orphaned_event_ids.push(event_id);
                 }
                 Err(err) => {
                     log::error!(
@@ -45,6 +58,14 @@ impl CalendarApp {
                     );
                 }
             }
+        }
+
+        if !orphaned_event_ids.is_empty() {
+            let removed = countdown_service.remove_cards_for_events(&orphaned_event_ids);
+            log::info!(
+                "Removed {} orphaned countdown card(s) for deleted events",
+                removed
+            );
         }
     }
 
@@ -87,7 +108,13 @@ impl CalendarApp {
 
     pub(crate) fn sync_cards_from_event(&mut self, event: &Event) {
         if let Some(event_id) = event.id {
-            // Parse the event color from hex string
+            let location_label = event
+                .location
+                .as_deref()
+                .map(str::trim)
+                .filter(|loc| !loc.is_empty())
+                .map(|loc| loc.to_string());
+
             let event_color = event
                 .color
                 .as_ref()
@@ -95,6 +122,7 @@ impl CalendarApp {
 
             let countdown_service = self.context.countdown_service_mut();
             countdown_service.sync_title_for_event(event_id, event.title.clone());
+            countdown_service.sync_title_override_for_event(event_id, location_label);
             countdown_service.sync_comment_for_event(event_id, event.description.clone());
             countdown_service.sync_event_color_for_event(event_id, event_color);
             countdown_service.sync_start_at_for_event(event_id, event.start);

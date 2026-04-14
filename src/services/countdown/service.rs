@@ -369,6 +369,47 @@ impl CountdownService {
         removed
     }
 
+    /// Remove all countdown cards that reference any of the given event IDs.
+    /// Used to clean up orphaned cards when their source events no longer exist.
+    pub fn remove_cards_for_events(&mut self, event_ids: &[i64]) -> usize {
+        if event_ids.is_empty() {
+            return 0;
+        }
+
+        let event_ids: std::collections::HashSet<i64> = event_ids.iter().copied().collect();
+        let initial_count = self.cards.len();
+        let ids_to_remove: Vec<CountdownCardId> = self
+            .cards
+            .iter()
+            .filter(|card| card.event_id.is_some_and(|event_id| event_ids.contains(&event_id)))
+            .map(|card| card.id)
+            .collect();
+
+        self.cards.retain(|card| {
+            if let Some(event_id) = card.event_id {
+                if event_ids.contains(&event_id) {
+                    log::info!(
+                        "remove_cards_for_events: removing card {:?} for deleted event {}",
+                        card.id,
+                        event_id
+                    );
+                    return false;
+                }
+            }
+            true
+        });
+
+        for id in &ids_to_remove {
+            self.card_order.retain(|&card_id| card_id != *id);
+        }
+
+        let removed = initial_count - self.cards.len();
+        if removed > 0 {
+            self.dirty = true;
+        }
+        removed
+    }
+
     pub fn set_title_override(&mut self, id: CountdownCardId, title: Option<String>) -> bool {
         if let Some(card) = self.cards.iter_mut().find(|card| card.id == id) {
             card.title_override = title;
