@@ -3,6 +3,7 @@ use egui::{Color32, Margin, Sense, Stroke, Vec2};
 use std::collections::HashSet;
 
 use super::palette::{CalendarCellPalette, DayStripPalette};
+use super::utils::{days_in_month, get_short_day_names};
 use super::week_shared::DeleteConfirmRequest;
 use super::{filter_events_by_category, filter_events_by_sync_scope, CountdownRequest};
 use crate::models::event::Event;
@@ -87,7 +88,7 @@ impl MonthView {
         let synced_event_ids = super::load_read_only_synced_event_ids(database, synced_source_id);
 
         // Day of week headers - use Grid to match column widths below
-        let day_names = Self::get_day_names(settings.first_day_of_week);
+        let day_names = get_short_day_names(settings.first_day_of_week);
         let spacing = 2.0;
         let show_week_numbers = settings.show_week_numbers;
         let week_col_extra = if show_week_numbers {
@@ -170,7 +171,7 @@ impl MonthView {
             - settings.first_day_of_week as i32
             + 7)
             % 7;
-        let days_in_month = Self::get_days_in_month(current_date.year(), current_date.month());
+        let days_in_month = days_in_month(current_date.year(), current_date.month()) as i32;
 
         // Calculate how many weeks are needed for this month
         // Total cells needed = days before month start + days in month
@@ -321,8 +322,8 @@ impl MonthView {
             .unwrap();
 
         // Get last day of month
-        let days_in_month = Self::get_days_in_month(date.year(), date.month());
-        let end_of_month = date.with_day(days_in_month as u32).unwrap();
+        let month_days = days_in_month(date.year(), date.month());
+        let end_of_month = date.with_day(month_days).unwrap();
         let end = Local
             .from_local_datetime(&end_of_month.and_hms_opt(23, 59, 59).unwrap())
             .single()
@@ -331,26 +332,5 @@ impl MonthView {
         event_service
             .expand_recurring_events(start, end)
             .unwrap_or_default()
-    }
-
-    fn get_days_in_month(year: i32, month: u32) -> i32 {
-        NaiveDate::from_ymd_opt(
-            if month == 12 { year + 1 } else { year },
-            if month == 12 { 1 } else { month + 1 },
-            1,
-        )
-        .unwrap()
-        .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
-        .num_days() as i32
-    }
-
-    fn get_day_names(first_day_of_week: u8) -> Vec<&'static str> {
-        let all_days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        let start = first_day_of_week as usize;
-        let mut result = Vec::with_capacity(7);
-        for i in 0..7 {
-            result.push(all_days[(start + i) % 7]);
-        }
-        result
     }
 }

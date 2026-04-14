@@ -381,7 +381,10 @@ impl CountdownService {
         let ids_to_remove: Vec<CountdownCardId> = self
             .cards
             .iter()
-            .filter(|card| card.event_id.is_some_and(|event_id| event_ids.contains(&event_id)))
+            .filter(|card| {
+                card.event_id
+                    .is_some_and(|event_id| event_ids.contains(&event_id))
+            })
             .map(|card| card.id)
             .collect();
 

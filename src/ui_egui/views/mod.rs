@@ -65,6 +65,7 @@ pub mod quarter_view;
 mod time_grid;
 mod time_grid_cell;
 mod time_grid_context_menu;
+pub mod utils;
 pub mod week_shared;
 pub mod week_view;
 pub mod workweek_view;
