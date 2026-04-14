@@ -7,15 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.37] - 2026-04-14
+
 ### Added
 
 - Windows deploy scaffolding for TCTBP:
   - `packaging/install-windows.ps1` now installs Rust Calendar into the current user's profile with validation, rollback, and uninstall commands
   - `.github/TCTBP.json` now defines a `windows-work-user` deploy target so `deploy` has a concrete Windows install profile
+- System tray implementation planning documentation under `docs/` for the cross-platform tray rollout.
 
 ### Changed
 
 - Deploy documentation now describes the Windows current-user target instead of treating deploy as unconfigured.
+- TCTBP workflow documentation, machine-readable profile, and prompt/runtime support are reconciled around the guarded publish, handover, resume, status, abort, branch, and deploy flows.
+- Shared calendar-view utilities are now centralised across week, month, and quarter views to reduce duplication and keep display formatting consistent.
+
+### Fixed
+
+- Week and work-week column headers now stay aligned with the scroll area, including layouts without week numbers and cases where scrollbar width changes.
 
 ## [2.4.36] - 2026-03-26
 

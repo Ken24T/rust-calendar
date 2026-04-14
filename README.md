@@ -171,7 +171,7 @@ rust-calendar/
 ├── benches/             # Criterion performance benchmarks
 ├── assets/themes/       # Theme definitions (dark.toml, light.toml)
 ├── docs/                # Architecture, design, and planning documents
-├── packaging/           # Linux desktop integration (.desktop file)
+├── packaging/           # Linux desktop assets and Windows install scripts
 └── Cargo.toml           # Project configuration
 ```
 

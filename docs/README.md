@@ -9,6 +9,7 @@ materials for the Rust Calendar project.
 - [FEATURES.md](FEATURES.md) — Concise feature summary
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Application architecture, module layout, and data flow
 - [MODULARITY.md](MODULARITY.md) — Code organisation guidelines and file size limits
+- [SYSTEM_TRAY_IMPLEMENTATION.md](SYSTEM_TRAY_IMPLEMENTATION.md) — System tray design and implementation plan
 - [TESTING.md](TESTING.md) — Testing philosophy, patterns, and coverage requirements
 - [UI_SYSTEM.md](UI_SYSTEM.md) — UI system overview: views, customisation, shortcuts
 - [FUTURE_ENHANCEMENTS.md](FUTURE_ENHANCEMENTS.md) — Planned future improvements
