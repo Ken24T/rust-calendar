@@ -66,6 +66,9 @@ const DROP_ZONE_HEIGHT: f32 = 32.0;
 const DROP_ZONE_BUTTON_SPACING: f32 = 4.0;
 const DROP_ZONE_MAX_BUTTON_WIDTH: f32 = 180.0;
 
+/// Height of the container window when collapsed (header toolbar only).
+const COLLAPSED_CONTAINER_HEIGHT: f32 = 48.0;
+
 /// Check whether `pos` lands on a cross-category drop-zone button.
 ///
 /// Returns `Some(target_category_id)` if the position is inside one of the
@@ -223,8 +226,22 @@ pub fn render_container_window(
 
     let viewport_id = egui::ViewportId::from_hash_of(viewport_id_suffix);
 
-    // Set position/size on first render OR when card count changes
-    let needs_resize = !layout.initialized || card_count_changed;
+    // Detect collapse/expand transitions for the builder
+    let expanding = layout.was_collapsed && !is_collapsed;
+    let collapsing = !layout.was_collapsed && is_collapsed;
+
+    log::debug!(
+        "Container '{}': is_collapsed={}, was_collapsed={}, expanding={}, collapsing={}",
+        window_title,
+        is_collapsed,
+        layout.was_collapsed,
+        expanding,
+        collapsing
+    );
+
+    // Set position/size on first render or when card count changes only
+    let needs_reposition = !layout.initialized || card_count_changed;
+    let needs_resize = needs_reposition;
 
     // Log the geometry being used
     if !layout.initialized {
@@ -235,8 +252,8 @@ pub fn render_container_window(
         );
     }
 
-    // Only set position/size in the builder on first render or when resizing
-    // Otherwise, let the OS/user control the window position to prevent shaking during drag
+    // Only set position/size in the builder on first render or when resizing.
+    // Collapse/expand resize is handled via ViewportCommand below.
     let builder = if needs_resize {
         egui::ViewportBuilder::default()
             .with_title(window_title)
@@ -253,8 +270,49 @@ pub fn render_container_window(
             .with_min_inner_size(egui::vec2(container_min_width, container_min_height))
     };
 
-    // Log on first render or resize
-    if needs_resize {
+    // Compute the collapsed / expanded size for viewport commands
+    let collapse_size = {
+        let w = container_geometry.map(|g| g.width).unwrap_or(default_width);
+        let size = egui::vec2(w, COLLAPSED_CONTAINER_HEIGHT);
+        log::debug!(
+            "Container '{}': collapse_size=({}, {}), container_geometry={:?}",
+            window_title,
+            size.x,
+            size.y,
+            container_geometry
+        );
+        Some(size)
+    };
+    let expand_size = if expanding {
+        let w = container_geometry.map(|g| g.width).unwrap_or(default_width);
+        // Use stored height only if it looks like a real expanded size, not the collapsed height
+        let h = container_geometry
+            .map(|g| g.height)
+            .filter(|&h| h > COLLAPSED_CONTAINER_HEIGHT + 10.0)
+            .unwrap_or_else(|| {
+                let n = cards.len().max(1) as f32;
+                (default_card_height * n + CARD_PADDING * (n + 1.0))
+                    .clamp(CONTAINER_MIN_HEIGHT, 600.0)
+            });
+        let size = egui::vec2(w, h);
+        log::debug!(
+            "Container '{}': expand_size=({}, {}), stored_geom={:?}, cards={}",
+            window_title,
+            size.x,
+            size.y,
+            container_geometry,
+            cards.len()
+        );
+        Some(size)
+    } else {
+        None
+    };
+
+    // Track collapse state for next frame's transition detection
+    layout.was_collapsed = is_collapsed;
+
+    // Log on first render or card-count-triggered resize
+    if needs_reposition {
         log::info!(
             "Container setting position to ({}, {}) size ({}, {})",
             initial_geometry.x,
@@ -421,7 +479,7 @@ pub fn render_container_window(
                     );
                 }
 
-                if should_save_geometry && geometry_changed {
+                if should_save_geometry && geometry_changed && !is_collapsed {
                     actions.push(ContainerAction::GeometryChanged(new_geom));
                 }
             }
@@ -443,7 +501,7 @@ pub fn render_container_window(
                     );
                 }
 
-                // If collapsed, skip card rendering entirely
+                // If collapsed, skip card rendering (builder already shrinks the window)
                 if is_collapsed {
                     return;
                 }
@@ -691,6 +749,30 @@ pub fn render_container_window(
                 }
             });
     });
+
+    // Send collapse/expand resize from the parent context, targeting the viewport by ID.
+    // This must be done outside show_viewport_immediate for reliable resize of existing viewports.
+    if is_collapsed {
+        if let Some(size) = collapse_size {
+            log::info!(
+                "Container '{}': SENDING collapse InnerSize({}, {}) to viewport {:?}",
+                window_title,
+                size.x,
+                size.y,
+                viewport_id
+            );
+            ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::InnerSize(size));
+        }
+    } else if let Some(size) = expand_size {
+        log::info!(
+            "Container '{}': SENDING expand InnerSize({}, {}) to viewport {:?}",
+            window_title,
+            size.x,
+            size.y,
+            viewport_id
+        );
+        ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::InnerSize(size));
+    }
 
     // Mark as initialized after first render
     if !layout.initialized {

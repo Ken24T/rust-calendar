@@ -52,6 +52,8 @@ pub struct ContainerLayout {
     pub has_ever_had_focus: bool,
     /// Number of frames to skip geometry change detection (used after reset)
     pub skip_geometry_frames: u32,
+    /// Whether the container was collapsed in the previous frame
+    pub was_collapsed: bool,
 }
 
 impl Default for ContainerLayout {
@@ -68,6 +70,7 @@ impl Default for ContainerLayout {
             position_verified: false,
             has_ever_had_focus: false,
             skip_geometry_frames: 0,
+            was_collapsed: false,
         }
     }
 }
