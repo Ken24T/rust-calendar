@@ -640,7 +640,8 @@
     "capabilities": [
       "inspection.local-v1",
       "workflow-catalogue.core-v1",
-      "reason-codes.core-v1"
+      "reason-codes.core-v1",
+      "version-files.multi-format-v1"
     ],
     "schema": "schemas/tctbp-adviser-inspection-v1.schema.json",
     "compatibility": "Readers reject unsupported major versions, ignore unknown additive fields, and degrade by missing capability."

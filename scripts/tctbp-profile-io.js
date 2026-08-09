@@ -57,7 +57,107 @@ function updateJsonFileRaw(filePath, replacements) {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
-// ── Version reading ─────────────────────────────────────────────────────────
+// ── Version reading & writing (multi-format: JSON / TOML / plain text) ──────
+
+/**
+ * Detects the version-file format from raw content. Version files are
+ * stack-agnostic: JSON (package.json), TOML (Cargo.toml), or a short
+ * plain-text file (VERSION). Anything else is unsupported.
+ */
+function detectVersionFileFormat(content) {
+  if (!content) return null;
+  const trimmed = content.trim();
+  if (trimmed.startsWith("{")) return "json";
+  if (/^\s*\[package\]\s*$/m.test(content)) return "toml";
+  if (trimmed.length > 0 && trimmed.length <= 64) return "plain";
+  return null;
+}
+
+/** Reads the `version = "x.y.z"` value from the `[package]` table of a TOML file. */
+function parseTomlPackageVersion(content) {
+  const packageMatch = content.match(/^\s*\[package\]\s*$/m);
+  if (!packageMatch) return null;
+  const afterPackage = content.slice(packageMatch.index + packageMatch[0].length);
+  const nextTable = afterPackage.match(/^\s*\[[^\]]+\]\s*$/m);
+  const section = nextTable ? afterPackage.slice(0, nextTable.index) : afterPackage;
+  const versionLine = section.match(/^\s*version\s*=\s*"([^"]+)"\s*$/m);
+  return versionLine ? versionLine[1] : null;
+}
+
+/** Returns the TOML content with the `[package]` version replaced, or null if not found. */
+function renderTomlPackageVersion(content, version) {
+  const packageMatch = content.match(/^\s*\[package\]\s*$/m);
+  if (!packageMatch) return null;
+  const afterPackage = content.slice(packageMatch.index + packageMatch[0].length);
+  const nextTable = afterPackage.match(/^\s*\[[^\]]+\]\s*$/m);
+  const section = nextTable ? afterPackage.slice(0, nextTable.index) : afterPackage;
+  const versionLine = section.match(/^(\s*version\s*=\s*)"[^"]*"(\r?\n?)$/m);
+  if (!versionLine) return null;
+  const absoluteStart = packageMatch.index + packageMatch[0].length + versionLine.index;
+  const updatedLine = `${versionLine[1]}"${version}"${versionLine[2] || ""}`;
+  return content.slice(0, absoluteStart) + updatedLine + content.slice(absoluteStart + versionLine[0].length);
+}
+
+/** Reads the version from a file, detecting its format. Never exits the process. */
+function readVersionFile(filePath) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, "utf8");
+  } catch (error) {
+    return { ok: false, error: `Could not read ${filePath}: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const format = detectVersionFileFormat(content);
+  if (format === "json") {
+    try {
+      const json = JSON.parse(content);
+      if (typeof json.version === "string") return { ok: true, format, version: json.version };
+      return { ok: false, error: `No string 'version' field in ${filePath}.` };
+    } catch (error) {
+      return { ok: false, error: `Could not parse ${filePath} as JSON: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+  if (format === "toml") {
+    const version = parseTomlPackageVersion(content);
+    return version === null
+      ? { ok: false, error: `No 'version' field under [package] in ${filePath}.` }
+      : { ok: true, format, version };
+  }
+  if (format === "plain") {
+    return { ok: true, format, version: content.trim().split(/\r?\n/)[0].trim() };
+  }
+  return { ok: false, error: `Unsupported version file format: ${filePath}.` };
+}
+
+/**
+ * Writes a new version into a version file, preserving its format and as much
+ * of the original formatting as possible. Returns { ok, format } or { ok:false, error }.
+ */
+function writeVersionFile(filePath, version, oldVersion) {
+  const current = readVersionFile(filePath);
+  if (!current.ok) return current;
+  if (current.format === "json") {
+    if (typeof oldVersion === "string") {
+      // Raw string replacement preserves the file's existing formatting.
+      updateJsonFileRaw(filePath, { [`"version": "${oldVersion}"`]: `"version": "${version}"` });
+    } else {
+      const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      parsed.version = version;
+      fs.writeFileSync(filePath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+    }
+    return { ok: true, format: "json" };
+  }
+  if (current.format === "toml") {
+    const rendered = renderTomlPackageVersion(fs.readFileSync(filePath, "utf8"), version);
+    if (rendered === null) return { ok: false, error: `No 'version' field under [package] in ${filePath}.` };
+    fs.writeFileSync(filePath, rendered, "utf8");
+    return { ok: true, format: "toml" };
+  }
+  if (current.format === "plain") {
+    fs.writeFileSync(filePath, `${version}\n`, "utf8");
+    return { ok: true, format: "plain" };
+  }
+  return { ok: false, error: `Unsupported version file format: ${filePath}.` };
+}
 
 function readVersionSource(config) {
   const relativePath =
@@ -72,33 +172,17 @@ function readVersionSource(config) {
     };
   }
 
-  const absolutePath = resolveRepoPath(relativePath);
-
-  // Try JSON first (package.json, etc.)
-  const json = maybeReadJsonFile(absolutePath);
-  if (json && typeof json.version === "string") {
+  const result = readVersionFile(resolveRepoPath(relativePath));
+  if (!result.ok) {
     return {
       path: relativePath,
-      version: json.version
+      version: "unknown",
+      error: result.error
     };
   }
-
-  // Fall back to plain-text version file (VERSION, etc.)
-  try {
-    const text = fs.readFileSync(absolutePath, "utf8").trim();
-    if (text.length > 0 && text.length < 64) {
-      return {
-        path: relativePath,
-        version: text.split(/\r?\n/)[0].trim()
-      };
-    }
-  } catch (_error) {
-    // File doesn't exist or can't be read; fall through.
-  }
-
   return {
     path: relativePath,
-    version: "unknown"
+    version: result.version
   };
 }
 
@@ -177,17 +261,22 @@ function resolveTarget(targets, targetArg) {
 }
 
 module.exports = {
+  detectVersionFileFormat,
   getReleaseTagGlob,
   getReleaseTagPattern,
   loadPolicy,
   maybeReadJsonFile,
   parseSemVer,
+  parseTomlPackageVersion,
   policyPath,
   readJsonFile,
+  readVersionFile,
   readVersionSource,
+  renderTomlPackageVersion,
   repoRoot,
   resolveRepoPath,
   resolveTarget,
   stepSemVer,
-  updateJsonFileRaw
+  updateJsonFileRaw,
+  writeVersionFile
 };

@@ -65,17 +65,22 @@ module.exports = {
   sumRemovedLines: promotionSafety.sumRemovedLines,
 
   // Profile I/O and semver
+  detectVersionFileFormat: profileIO.detectVersionFileFormat,
   getReleaseTagGlob: profileIO.getReleaseTagGlob,
   getReleaseTagPattern: profileIO.getReleaseTagPattern,
   loadPolicy: profileIO.loadPolicy,
   maybeReadJsonFile: profileIO.maybeReadJsonFile,
   parseSemVer: profileIO.parseSemVer,
+  parseTomlPackageVersion: profileIO.parseTomlPackageVersion,
   readJsonFile: profileIO.readJsonFile,
+  readVersionFile: profileIO.readVersionFile,
   readVersionSource: profileIO.readVersionSource,
+  renderTomlPackageVersion: profileIO.renderTomlPackageVersion,
   resolveRepoPath: profileIO.resolveRepoPath,
   resolveTarget: profileIO.resolveTarget,
   stepSemVer: profileIO.stepSemVer,
   updateJsonFileRaw: profileIO.updateJsonFileRaw,
+  writeVersionFile: profileIO.writeVersionFile,
 
   // Branch model
   resolveBranchModel: branchModel.resolveBranchModel,
