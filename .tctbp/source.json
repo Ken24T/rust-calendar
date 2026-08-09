@@ -1,7 +1,7 @@
 {
   "sourceRepository": "Ken24T/TCTBP-Web",
-  "sourceRevision": "fec633156f48fed22f4875d9e7e748c59acb7ce5",
-  "sourceVersion": "0.2.0",
+  "sourceRevision": "20d8a229e01e63f947c88b01bb13d838cf50d9cc",
+  "sourceVersion": "0.3.0",
   "installedSchemaVersion": 11,
   "adviserContract": {
     "major": 1,
