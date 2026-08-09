@@ -1077,8 +1077,8 @@ mod tests {
 
     fn create_source(conn: &Connection, name: &str, enabled: bool) -> i64 {
         conn.execute(
-            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes)
-             VALUES (?1, ?2, ?3, ?4, 15)",
+            "INSERT INTO calendar_sources (name, source_type, ics_url, enabled, poll_interval_minutes, sync_past_days, sync_future_days)
+             VALUES (?1, ?2, ?3, ?4, 15, 3650, 3650)",
             params![
                 name,
                 "google_ics",

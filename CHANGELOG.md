@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.38] - 2026-06-23
+
+### Fixed
+
+- Countdown container viewport now physically shrinks and expands when collapsing, matching the visual state to the actual layout footprint.
+- Test helper sync window widened in the calendar sync engine to avoid spurious date-dependent test failures.
+
 ## [2.4.37] - 2026-04-14
 
 ### Added
