@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+const fs = require("fs");
 const readline = require("readline");
 const {
+  detectVersionFileFormat,
   fail,
   fetchOrigin,
   formatSyncStatus,
@@ -19,7 +21,6 @@ const {
   logItem,
   logSection,
   printSummaryTable,
-  readJsonFile,
   readVersionSource,
   resolveRepoPath,
   runCommand,
@@ -29,7 +30,7 @@ const {
   stepSemVer,
   stopIfBehindOrDiverged,
   summariseWorkingTree,
-  updateJsonFileRaw
+  writeVersionFile
 } = require("./tctbp-core");
 
 const options = parseArgs(process.argv.slice(2));
@@ -75,8 +76,13 @@ async function main(config, cliOptions) {
   const originSha = remoteExists ? getShortRef(`refs/remotes/origin/${branch}`) : null;
   const localSha = getHeadCommit(true);
   const versionSource = readVersionSource(config);
-  const versionSourceJson = readJsonFile(resolveRepoPath(versionSource.path));
-  const oldVersion = String(versionSourceJson.version);
+  if (versionSource.version === "unknown" || versionSource.version === "n/a") {
+    fail(
+      `Ship stopped because the version source ${versionSource.path} could not be read`
+      + (versionSource.error ? `: ${versionSource.error}` : " (expected JSON, TOML, or a short plain-text version file).")
+    );
+  }
+  const oldVersion = versionSource.version;
   const newVersion = stepSemVer(oldVersion, cliOptions.bump);
   const tag = formatReleaseTag(config, newVersion);
   const currentTag = getReachableReleaseTag(config);
@@ -151,19 +157,26 @@ async function main(config, cliOptions) {
     }
   }
 
-  runShipGates(false);
+  runShipGates(config, false);
 
   const versionFiles = Array.isArray(config.project && config.project.versionFiles) ? config.project.versionFiles : ["package.json"];
 
   for (const vf of versionFiles) {
     const vfPath = resolveRepoPath(vf);
-    updateJsonFileRaw(vfPath, {
-      [`"version": "${oldVersion}"`]: `"version": "${newVersion}"`
-    });
+    const bumped = writeVersionFile(vfPath, newVersion, oldVersion);
+    if (!bumped.ok) {
+      fail(`Ship stopped while bumping ${vf}: ${bumped.error}`);
+    }
   }
 
   if (config.profile && config.profile.versioning && config.profile.versioning.formatAfterBump) {
-    runCommand("npx", ["prettier", "--write", ...versionFiles], false, "Format bumped version files");
+    // Prettier only understands the JSON/plain formats; skip TOML files.
+    const jsonFiles = versionFiles.filter(
+      (vf) => detectVersionFileFormat(fs.readFileSync(resolveRepoPath(vf), "utf8")) === "json"
+    );
+    if (jsonFiles.length > 0) {
+      runCommand("npx", ["prettier", "--write", ...jsonFiles], false, "Format bumped version files");
+    }
   }
 
   runMutableGit(["add", ...versionFiles], false, "Stage bumped release files");
