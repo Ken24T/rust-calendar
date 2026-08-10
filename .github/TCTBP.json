@@ -11,9 +11,9 @@
   "governance": {
     "sourceOfTruth": "TCTBP.json",
     "fallbackDocument": "TCTBP Agent.md",
-    "templateMode": true,
+    "templateMode": false,
     "templateType": "web",
-    "templateInstructions": "This repository is the canonical source for the TCTBP-Web templates and runner architecture. Replace repo-specific values in downstream projects. Scaffolded projects receive a populated non-template profile."
+    "templateInstructions": "This repository uses the TCTBP workflow as a repo-specific profile. Preserve Rust Calendar commands, docs paths, version source, tag format, status-report tables, deployment expectations, and local runtime conventions when updating these files."
   },
   "project": {
     "name": "rust-calendar",

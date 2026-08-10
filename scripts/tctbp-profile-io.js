@@ -64,38 +64,63 @@ function updateJsonFileRaw(filePath, replacements) {
  * stack-agnostic: JSON (package.json), TOML (Cargo.toml), or a short
  * plain-text file (VERSION). Anything else is unsupported.
  */
+const TOML_VERSION_TABLES = {
+  package: /^\s*\[package\]\s*$/m,
+  "workspace.package": /^\s*\[workspace\.package\]\s*$/m,
+};
+
 function detectVersionFileFormat(content) {
   if (!content) return null;
   const trimmed = content.trim();
   if (trimmed.startsWith("{")) return "json";
-  if (/^\s*\[package\]\s*$/m.test(content)) return "toml";
+  if (/^\s*\[(?:package|workspace\.package)\]\s*$/m.test(content)) return "toml";
   if (trimmed.length > 0 && trimmed.length <= 64) return "plain";
   return null;
 }
 
-/** Reads the `version = "x.y.z"` value from the `[package]` table of a TOML file. */
-function parseTomlPackageVersion(content) {
-  const packageMatch = content.match(/^\s*\[package\]\s*$/m);
-  if (!packageMatch) return null;
-  const afterPackage = content.slice(packageMatch.index + packageMatch[0].length);
-  const nextTable = afterPackage.match(/^\s*\[[^\]]+\]\s*$/m);
-  const section = nextTable ? afterPackage.slice(0, nextTable.index) : afterPackage;
+/** Reads the `version = "x.y.z"` value from a named TOML table, or null. */
+function parseTomlTableVersion(content, tableName) {
+  const pattern = TOML_VERSION_TABLES[tableName];
+  if (!pattern) return null;
+  const tableMatch = content.match(pattern);
+  if (!tableMatch) return null;
+  const afterTable = content.slice(tableMatch.index + tableMatch[0].length);
+  const nextTable = afterTable.match(/^\s*\[[^\]]+\]\s*$/m);
+  const section = nextTable ? afterTable.slice(0, nextTable.index) : afterTable;
   const versionLine = section.match(/^\s*version\s*=\s*"([^"]+)"\s*$/m);
   return versionLine ? versionLine[1] : null;
 }
 
-/** Returns the TOML content with the `[package]` version replaced, or null if not found. */
-function renderTomlPackageVersion(content, version) {
-  const packageMatch = content.match(/^\s*\[package\]\s*$/m);
-  if (!packageMatch) return null;
-  const afterPackage = content.slice(packageMatch.index + packageMatch[0].length);
-  const nextTable = afterPackage.match(/^\s*\[[^\]]+\]\s*$/m);
-  const section = nextTable ? afterPackage.slice(0, nextTable.index) : afterPackage;
+/**
+ * Reads the Cargo version from a TOML file: `[package]`, or the workspace root
+ * `[workspace.package]` (workspace-inherited member versions).
+ */
+function parseTomlPackageVersion(content) {
+  return parseTomlTableVersion(content, "package") ?? parseTomlTableVersion(content, "workspace.package");
+}
+
+/** Returns the TOML content with a named table's version replaced, or null. */
+function renderTomlTableVersion(content, tableName, version) {
+  const pattern = TOML_VERSION_TABLES[tableName];
+  if (!pattern) return null;
+  const tableMatch = content.match(pattern);
+  if (!tableMatch) return null;
+  const afterTable = content.slice(tableMatch.index + tableMatch[0].length);
+  const nextTable = afterTable.match(/^\s*\[[^\]]+\]\s*$/m);
+  const section = nextTable ? afterTable.slice(0, nextTable.index) : afterTable;
   const versionLine = section.match(/^(\s*version\s*=\s*)"[^"]*"(\r?\n?)$/m);
   if (!versionLine) return null;
-  const absoluteStart = packageMatch.index + packageMatch[0].length + versionLine.index;
+  const absoluteStart = tableMatch.index + tableMatch[0].length + versionLine.index;
   const updatedLine = `${versionLine[1]}"${version}"${versionLine[2] || ""}`;
   return content.slice(0, absoluteStart) + updatedLine + content.slice(absoluteStart + versionLine[0].length);
+}
+
+/**
+ * Returns the TOML content with the Cargo version replaced (`[package]` or
+ * workspace root `[workspace.package]`), or null when neither is present.
+ */
+function renderTomlPackageVersion(content, version) {
+  return renderTomlTableVersion(content, "package", version) ?? renderTomlTableVersion(content, "workspace.package", version);
 }
 
 /** Reads the `name = "..."` value from the `[package]` table of a TOML file. */
@@ -107,6 +132,18 @@ function parseTomlPackageName(content) {
   const section = nextTable ? afterPackage.slice(0, nextTable.index) : afterPackage;
   const nameLine = section.match(/^\s*name\s*=\s*"([^"]+)"\s*$/m);
   return nameLine ? nameLine[1] : null;
+}
+
+/** Reads the `members = [...]` paths from the `[workspace]` table of a TOML file. */
+function parseTomlWorkspaceMembers(content) {
+  const workspaceMatch = content.match(/^\s*\[workspace\]\s*$/m);
+  if (!workspaceMatch) return [];
+  const afterWorkspace = content.slice(workspaceMatch.index + workspaceMatch[0].length);
+  const nextTable = afterWorkspace.match(/^\s*\[[^\]]+\]\s*$/m);
+  const section = nextTable ? afterWorkspace.slice(0, nextTable.index) : afterWorkspace;
+  const membersMatch = section.match(/^\s*members\s*=\s*\[([\s\S]*?)\]\s*$/m);
+  if (!membersMatch) return [];
+  return [...membersMatch[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
 }
 
 /**
@@ -138,6 +175,35 @@ function renderCargoLockPackageVersion(content, packageName, version) {
 }
 
 /**
+ * Rewrites the `version = "x.y.z"` of every `[[package]]` block whose `name` is
+ * in `packageNames` inside a Cargo.lock file. Used for workspace roots whose
+ * members share an inherited `[workspace.package]` version. Returns the updated
+ * content, or null when none of the names are present.
+ */
+function renderCargoLockVersions(content, packageNames, version) {
+  const nameSet = new Set(packageNames);
+  const blockPattern = /\[\[package\]\][\s\S]*?(?=(?:\r?\n)\[\[package\]\]|(?:\r?\n)\[[a-zA-Z@]|$)/g;
+  const matching = [];
+  let match;
+  while ((match = blockPattern.exec(content)) !== null) {
+    const nameMatch = match[0].match(/^\s*name\s*=\s*"([^"]+)"\s*$/m);
+    if (nameMatch !== null && nameSet.has(nameMatch[1])) {
+      matching.push({ start: match.index, text: match[0] });
+    }
+  }
+  if (matching.length === 0) return null;
+  let result = content;
+  for (let i = matching.length - 1; i >= 0; i--) {
+    const versionMatch = matching[i].text.match(/^(\s*version\s*=\s*)"[^"]*"(\r?\n?)$/m);
+    if (!versionMatch) continue;
+    const updatedLine = `${versionMatch[1]}"${version}"${versionMatch[2] || ""}`;
+    const absoluteStart = matching[i].start + versionMatch.index;
+    result = result.slice(0, absoluteStart) + updatedLine + result.slice(absoluteStart + versionMatch[0].length);
+  }
+  return result;
+}
+
+/**
  * After a Cargo.toml version bump, keeps the sibling Cargo.lock in sync by
  * rewriting the matching `[[package]]` version so the next `cargo` invocation
  * does not dirty the working tree. No-op for non-Cargo version files and for
@@ -153,16 +219,33 @@ function syncCargoLockVersion(versionFilePath, newVersion) {
   }
   const tomlContent = fs.readFileSync(versionFilePath, "utf8");
   const packageName = parseTomlPackageName(tomlContent);
-  if (packageName === null) {
-    return { ok: false, updated: false, path: lockPath, error: `No 'name' under [package] in ${versionFilePath}.` };
+  const workspaceMembers = parseTomlWorkspaceMembers(tomlContent);
+  if (packageName === null && workspaceMembers.length === 0) {
+    return { ok: false, updated: false, path: lockPath, error: `No 'name' under [package] or members under [workspace] in ${versionFilePath}.` };
   }
   const lockContent = fs.readFileSync(lockPath, "utf8");
-  const rendered = renderCargoLockPackageVersion(lockContent, packageName, newVersion);
-  if (rendered === null) {
-    return { ok: true, updated: false, path: null };
+  if (packageName !== null) {
+    const rendered = renderCargoLockPackageVersion(lockContent, packageName, newVersion);
+    if (rendered !== null) {
+      fs.writeFileSync(lockPath, rendered, "utf8");
+      return { ok: true, updated: true, path: lockPath };
+    }
   }
-  fs.writeFileSync(lockPath, rendered, "utf8");
-  return { ok: true, updated: true, path: lockPath };
+  if (workspaceMembers.length > 0) {
+    const rootDir = path.dirname(versionFilePath);
+    const memberNames = workspaceMembers
+      .map((member) => {
+        const memberToml = path.join(rootDir, member, "Cargo.toml");
+        return fs.existsSync(memberToml) ? parseTomlPackageName(fs.readFileSync(memberToml, "utf8")) : null;
+      })
+      .filter((name) => name !== null);
+    const rendered = renderCargoLockVersions(lockContent, memberNames, newVersion);
+    if (rendered !== null) {
+      fs.writeFileSync(lockPath, rendered, "utf8");
+      return { ok: true, updated: true, path: lockPath };
+    }
+  }
+  return { ok: true, updated: false, path: null };
 }
 
 /** Reads the version from a file, detecting its format. Never exits the process. */
@@ -227,29 +310,74 @@ function writeVersionFile(filePath, version, oldVersion) {
 }
 
 function readVersionSource(config) {
-  const relativePath =
+  const configured =
     config && config.profile && config.profile.versioning && typeof config.profile.versioning.sourceOfTruth === "string"
       ? config.profile.versioning.sourceOfTruth
       : null;
 
-  if (!relativePath) {
+  if (!configured) {
     return {
       path: "n/a",
       version: "n/a"
     };
   }
 
-  const result = readVersionFile(resolveRepoPath(relativePath));
-  if (!result.ok) {
+  // Support the "path:dotted.key" sourceOfTruth form used by Cargo projects,
+  // e.g. "Cargo.toml:package.version" or "Cargo.toml:workspace.package.version".
+  const separator = configured.indexOf(":");
+  const relativePath = separator === -1 ? configured : configured.slice(0, separator);
+  const dottedKey = separator === -1 ? null : configured.slice(separator + 1);
+  const filePath = resolveRepoPath(relativePath);
+
+  if (dottedKey === null) {
+    const result = readVersionFile(filePath);
+    if (!result.ok) {
+      return {
+        path: relativePath,
+        version: "unknown",
+        error: result.error
+      };
+    }
+    return {
+      path: relativePath,
+      version: result.version
+    };
+  }
+
+  let content;
+  try {
+    content = fs.readFileSync(filePath, "utf8");
+  } catch (error) {
     return {
       path: relativePath,
       version: "unknown",
-      error: result.error
+      error: `Could not read ${relativePath}: ${error instanceof Error ? error.message : String(error)}`
     };
+  }
+  if (detectVersionFileFormat(content) !== "toml") {
+    return {
+      path: relativePath,
+      version: "unknown",
+      error: `Dotted version key '${dottedKey}' is only supported for TOML version files.`
+    };
+  }
+  const byKey = (tableName) => parseTomlTableVersion(content, tableName);
+  if (dottedKey === "package.version" || dottedKey === "workspace.package.version") {
+    const tableName = dottedKey === "package.version" ? "package" : "workspace.package";
+    const version = byKey(tableName);
+    if (version === null) {
+      return {
+        path: relativePath,
+        version: "unknown",
+        error: `No 'version' under [${tableName}] in ${relativePath}.`
+      };
+    }
+    return { path: relativePath, version };
   }
   return {
     path: relativePath,
-    version: result.version
+    version: "unknown",
+    error: `Unsupported dotted version key '${dottedKey}' in sourceOfTruth.`
   };
 }
 
@@ -336,11 +464,14 @@ module.exports = {
   parseSemVer,
   parseTomlPackageName,
   parseTomlPackageVersion,
+  parseTomlTableVersion,
+  parseTomlWorkspaceMembers,
   policyPath,
   readJsonFile,
   readVersionFile,
   readVersionSource,
   renderCargoLockPackageVersion,
+  renderCargoLockVersions,
   renderTomlPackageVersion,
   repoRoot,
   resolveRepoPath,
