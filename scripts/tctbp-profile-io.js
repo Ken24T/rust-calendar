@@ -98,6 +98,73 @@ function renderTomlPackageVersion(content, version) {
   return content.slice(0, absoluteStart) + updatedLine + content.slice(absoluteStart + versionLine[0].length);
 }
 
+/** Reads the `name = "..."` value from the `[package]` table of a TOML file. */
+function parseTomlPackageName(content) {
+  const packageMatch = content.match(/^\s*\[package\]\s*$/m);
+  if (!packageMatch) return null;
+  const afterPackage = content.slice(packageMatch.index + packageMatch[0].length);
+  const nextTable = afterPackage.match(/^\s*\[[^\]]+\]\s*$/m);
+  const section = nextTable ? afterPackage.slice(0, nextTable.index) : afterPackage;
+  const nameLine = section.match(/^\s*name\s*=\s*"([^"]+)"\s*$/m);
+  return nameLine ? nameLine[1] : null;
+}
+
+/**
+ * Rewrites the `version = "x.y.z"` of the `[[package]]` block whose `name`
+ * matches `packageName` inside a Cargo.lock file. Prefers the block without a
+ * `source` line (the local root package, which is how Cargo represents a
+ * workspace member). Returns the updated content, or null when the package
+ * cannot be found.
+ */
+function renderCargoLockPackageVersion(content, packageName, version) {
+  const blockPattern = /\[\[package\]\][\s\S]*?(?=(?:\r?\n)\[\[package\]\]|(?:\r?\n)\[[a-zA-Z@]|$)/g;
+  const candidates = [];
+  let match;
+  while ((match = blockPattern.exec(content)) !== null) {
+    candidates.push({ start: match.index, text: match[0] });
+  }
+  const matching = candidates.filter((candidate) => {
+    const nameMatch = candidate.text.match(/^\s*name\s*=\s*"([^"]+)"\s*$/m);
+    return nameMatch !== null && nameMatch[1] === packageName;
+  });
+  const local = matching.filter((candidate) => !/\bsource\s*=/.test(candidate.text));
+  const target = (local.length > 0 ? local : matching)[0];
+  if (!target) return null;
+  const versionMatch = target.text.match(/^(\s*version\s*=\s*)"[^"]*"(\r?\n?)$/m);
+  if (!versionMatch) return null;
+  const updatedLine = `${versionMatch[1]}"${version}"${versionMatch[2] || ""}`;
+  const absoluteStart = target.start + versionMatch.index;
+  return content.slice(0, absoluteStart) + updatedLine + content.slice(absoluteStart + versionMatch[0].length);
+}
+
+/**
+ * After a Cargo.toml version bump, keeps the sibling Cargo.lock in sync by
+ * rewriting the matching `[[package]]` version so the next `cargo` invocation
+ * does not dirty the working tree. No-op for non-Cargo version files and for
+ * repos without a lockfile. Returns { ok, updated, path } or { ok:false, error }.
+ */
+function syncCargoLockVersion(versionFilePath, newVersion) {
+  if (path.basename(versionFilePath) !== "Cargo.toml") {
+    return { ok: true, updated: false, path: null };
+  }
+  const lockPath = path.join(path.dirname(versionFilePath), "Cargo.lock");
+  if (!fs.existsSync(lockPath)) {
+    return { ok: true, updated: false, path: null };
+  }
+  const tomlContent = fs.readFileSync(versionFilePath, "utf8");
+  const packageName = parseTomlPackageName(tomlContent);
+  if (packageName === null) {
+    return { ok: false, updated: false, path: lockPath, error: `No 'name' under [package] in ${versionFilePath}.` };
+  }
+  const lockContent = fs.readFileSync(lockPath, "utf8");
+  const rendered = renderCargoLockPackageVersion(lockContent, packageName, newVersion);
+  if (rendered === null) {
+    return { ok: true, updated: false, path: null };
+  }
+  fs.writeFileSync(lockPath, rendered, "utf8");
+  return { ok: true, updated: true, path: lockPath };
+}
+
 /** Reads the version from a file, detecting its format. Never exits the process. */
 function readVersionFile(filePath) {
   let content;
@@ -267,16 +334,19 @@ module.exports = {
   loadPolicy,
   maybeReadJsonFile,
   parseSemVer,
+  parseTomlPackageName,
   parseTomlPackageVersion,
   policyPath,
   readJsonFile,
   readVersionFile,
   readVersionSource,
+  renderCargoLockPackageVersion,
   renderTomlPackageVersion,
   repoRoot,
   resolveRepoPath,
   resolveTarget,
   stepSemVer,
+  syncCargoLockVersion,
   updateJsonFileRaw,
   writeVersionFile
 };
