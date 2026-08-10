@@ -30,6 +30,7 @@ const {
   stepSemVer,
   stopIfBehindOrDiverged,
   summariseWorkingTree,
+  syncCargoLockVersion,
   writeVersionFile
 } = require("./tctbp-core");
 
@@ -160,12 +161,20 @@ async function main(config, cliOptions) {
   runShipGates(config, false);
 
   const versionFiles = Array.isArray(config.project && config.project.versionFiles) ? config.project.versionFiles : ["package.json"];
+  const stagedFiles = [...versionFiles];
 
   for (const vf of versionFiles) {
     const vfPath = resolveRepoPath(vf);
     const bumped = writeVersionFile(vfPath, newVersion, oldVersion);
     if (!bumped.ok) {
       fail(`Ship stopped while bumping ${vf}: ${bumped.error}`);
+    }
+    const lock = syncCargoLockVersion(vfPath, newVersion);
+    if (!lock.ok) {
+      fail(`Ship stopped while syncing ${lock.path}: ${lock.error}`);
+    }
+    if (lock.updated) {
+      stagedFiles.push(lock.path);
     }
   }
 
@@ -179,7 +188,7 @@ async function main(config, cliOptions) {
     }
   }
 
-  runMutableGit(["add", ...versionFiles], false, "Stage bumped release files");
+  runMutableGit(["add", ...stagedFiles], false, "Stage bumped release files and any synced lockfiles");
   runMutableGit(["commit", "-m", cliOptions.message || `chore(release): ${tag}`], false, "Create the release commit");
   runMutableGit(["tag", tag], false, `Create release tag ${tag}`);
   runMutableGit(["push", remote, "HEAD"], false, `Push ${branch} to ${remote}`);
