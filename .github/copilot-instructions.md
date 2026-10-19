@@ -1,5 +1,15 @@
 # Rust Calendar – Copilot Instructions
 
+## Shared code and documentation policy
+
+This repository adopts shared-development-policy 1.0.0. Read
+`.github/DEVELOPMENT_POLICY.md` and its machine-readable companion
+`.github/development-policy.json` for code, configuration and documentation work.
+Use `node scripts/check-modularity.cjs --changed` for advisory size signals.
+Record design reviews for new or materially changed large files in change notes.
+File size alone never requires a split or grants approval to commit or publish.
+Existing correctness, security, Git and approval protections remain in force.
+
 ## Project Overview
 
 Rust Calendar is a cross-platform desktop calendar application built with Rust and egui.
@@ -84,7 +94,7 @@ For this repo, treat `cargo build` as the normal verification build and reserve 
 - Use idiomatic Rust: `Result<T, E>`, `Option<T>`, pattern matching, iterators
 - Prefer `anyhow::Result` for application-level errors, `thiserror` for library-level error types
 - Use `log` macros (`log::info!`, `log::warn!`, `log::error!`) for runtime diagnostics
-- Keep files under approximately 300 lines; split by responsibility
+- Follow the shared code and documentation policy; review size in context.
 - Prefer `&Path` over `&PathBuf` in function signatures
 - Use `.clamp()` instead of `.min().max()` chains
 - Use `#[derive(...)]` where appropriate (Default, Clone, Debug, Serialize, Deserialize)

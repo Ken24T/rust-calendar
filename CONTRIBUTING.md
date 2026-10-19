@@ -134,7 +134,7 @@ We use a feature branch workflow:
 
 ### Modularity
 
-**File Size**: Keep files under 300 lines. See [MODULARITY.md](docs/MODULARITY.md) for details.
+**Modularity review**: Follow the [shared code and documentation policy](.github/DEVELOPMENT_POLICY.md). See [MODULARITY.md](docs/MODULARITY.md) for Rust examples.
 
 **Single Responsibility**: Each module should have one clear purpose.
 

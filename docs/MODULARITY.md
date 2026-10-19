@@ -17,17 +17,15 @@ Each module, file, and function should have one clear, well-defined purpose.
 // Contains Frequency, RecurrenceRule, Calculator, Exceptions all in one file
 ```
 
-### 2. File Size Limits
+### 2. Shared size and modularity review
 
-**Strict Limits:**
-- Maximum 300 lines per file (including tests if embedded)
-- Target 150-200 lines for most files
-- If a file exceeds 250 lines, consider splitting it
-
-**When to Split:**
-- Multiple structs/enums in one file → Split into separate files
-- Large impl blocks → Split into trait implementations or submodules
-- Many related functions → Group into logical submodules
+The repository follows `.github/DEVELOPMENT_POLICY.md` for code, configuration
+and documentation. Around 300 physical lines prompts a structural check;
+new or materially changed files at 600 lines receive a recorded design review.
+These are advisory review signals, not file-size limits. Embedded tests and
+cohesive Rust types are assessed in context; split at useful responsibility
+boundaries rather than at a count. The examples below illustrate possible
+boundaries and do not mandate one file per type or implementation.
 
 ### 3. Module Organization
 
@@ -131,8 +129,8 @@ impl EventService {
 ### 5. Function Complexity
 
 **Guidelines:**
-- Maximum 50 lines per function
-- Target 10-20 lines for most functions
+- Review long functions for responsibility, dependencies and testability
+- Prefer focused functions without imposing an arbitrary length
 - Maximum 4 levels of nesting
 - If a function does more than one thing, split it
 
@@ -364,9 +362,9 @@ pub enum Frequency {
 
 Before committing any code, verify:
 
-- [ ] No file exceeds 300 lines
+- [ ] Changed large files have a recorded design review under the shared policy
 - [ ] Each file has a single, clear purpose
-- [ ] No function exceeds 50 lines
+- [ ] Functions have cohesive responsibilities and understandable side effects
 - [ ] Maximum nesting depth is 4 levels
 - [ ] All public items have documentation
 - [ ] Each module has corresponding tests
@@ -375,32 +373,19 @@ Before committing any code, verify:
 - [ ] Error types are appropriately scoped
 - [ ] Module exports are minimal and intentional
 
-## Refactoring Triggers
+## Refactoring review signals
 
-Refactor immediately when:
+Mixed responsibilities, hidden shared state, difficult testing, complex control
+flow or substantial growth prompt a review. Counts of methods, functions,
+imports and lines are context, not automatic refactoring instructions. Record
+whether keeping, extracting or scheduling follow-up improves the design.
 
-1. A file reaches 250+ lines
-2. A function reaches 40+ lines
-3. A struct has more than 10 methods
-4. Cyclomatic complexity exceeds 10
-5. You're scrolling to find code
-6. You need a comment saying "This does X and Y and Z"
-7. You're adding the 3rd similar function (extract pattern)
+## Review tooling
 
-## Tools to Enforce Modularity
-
-```toml
-# .cargo/config.toml
-[build]
-rustflags = ["-D", "warnings"]
-
-# Use clippy lints
-[lints.clippy]
-too_many_lines = "warn"          # Warn on files >200 lines
-cognitive_complexity = "warn"     # Warn on complex functions
-module_inception = "warn"         # Warn on deep nesting
-```
+`node scripts/check-modularity.cjs --changed` reports the shared advisory signals
+without changing files or weakening Cargo, Clippy or other quality checks.
+Existing compiler and language-specific correctness checks remain applicable.
 
 ---
 
-**Remember**: Small, focused modules are easier to test, understand, maintain, and reuse. When in doubt, split it out!
+**Remember**: Small, focused modules are easier to test, understand, maintain, and reuse. Use a recorded design review to choose useful boundaries.
